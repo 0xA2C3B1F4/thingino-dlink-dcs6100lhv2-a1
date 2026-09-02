@@ -12,12 +12,15 @@ from installer.final_bundle import (
     DATA_FLASH_SPAN,
     SYSTEM_FLASH_SPAN,
     build_final_bundle,
+    build_universal_final_bundle,
     derive_final_layout,
     final_kernel_command_line,
     final_bundle_images,
     render_final_kernel_fragment,
     validate_final_bundle,
+    validate_universal_final_bundle,
 )
+from installer.install_policy import universal_physical_write_policy
 from installer.layout import TARGET
 from installer.mtd3_split import Mtd3SplitError
 from installer.fake_mtd import FakeNor, FinalInstaller
@@ -92,6 +95,8 @@ class FinalBundleTests(unittest.TestCase):
             )
             self.assertEqual(bundle.manifest["preserved_mtd"], [0, 4, 5])
             self.assertEqual(bundle.manifest["schema_version"], 2)
+            self.assertEqual(bundle.manifest["artifact_scope"], "device-personalized")
+            self.assertNotIn("physical_write_policy", bundle.manifest)
             self.assertEqual(
                 bundle.manifest["image_kind"], "dcs6100-mtd3-split-v1"
             )
@@ -162,6 +167,37 @@ class FinalBundleTests(unittest.TestCase):
                 installer.nor.snapshot()[layout.data_offset : layout.data_offset + layout.data_span],
                 b"\xff" * layout.data_span,
             )
+
+    def test_universal_bundle_is_identical_across_camera_provisioning(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            private_key, public_key = self._keys(Path(directory_name))
+            inputs = self._images()
+            common = {
+                key: value
+                for key, value in inputs.items()
+                if key != "data_jffs2"
+            }
+            first = build_universal_final_bundle(
+                **common,
+                signing_key=private_key,
+            )
+            second = build_universal_final_bundle(
+                **common,
+                signing_key=private_key,
+            )
+            self.assertEqual(first, second)
+            bundle = validate_universal_final_bundle(first, public_key=public_key)
+            self.assertEqual(bundle.manifest["artifact_scope"], "model-universal")
+            self.assertEqual(
+                bundle.manifest["physical_write_policy"],
+                universal_physical_write_policy(),
+            )
+            self.assertEqual(bundle.members["images/data.jffs2"], b"")
+            with self.assertRaisesRegex(BundleError, "not model-universal"):
+                validate_universal_final_bundle(
+                    build_final_bundle(**inputs, signing_key=private_key),
+                    public_key=public_key,
+                )
 
     def test_layout_is_fixed_across_firmware_sizes(self) -> None:
         small = derive_final_layout(4096)

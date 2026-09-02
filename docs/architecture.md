@@ -16,6 +16,43 @@ Browser or API client
 Prudynt H.264 encoders -- Annex-B RSS rings -- Raptor rwd -- DTLS-SRTP
 ```
 
+## Universal firmware and camera-private state
+
+The immutable model layer contains the signed A1 kernel, permanent bootstrap,
+closed unprovisioned system SquashFS, model media closure, and Raptor runtime.
+It contains no camera recovery identity, WPA configuration, hostname, SSH key,
+management credential, API key, or writable data image. One exact model build
+is content-addressed and reusable.
+
+The camera layer contains four separate private objects: recovery evidence, a
+signed audit sidecar, an exact-span JFFS2 overlay image, and a signed
+authorization. The authorization binds the universal firmware and stage-2
+hashes to one camera identity, recovery session, data action, sidecar,
+provisioning ID, and JFFS2 digest. A second non-emitted key derived from complete
+preserved mtd0/mtd4/mtd5 bytes HMACs the fixed binary consumed by Stage 1.
+Per-camera objects never feed a compiler or change universal firmware bytes.
+
+The initial universal root is deliberately closed: root is locked, private
+configuration paths are absent, and network-facing init scripts are installed
+non-executable with reviewed archived copies. On the host, provisioning applies
+the same validated configuration transformations to an OverlayFS upper tree
+and runs locked `mkfs.jffs2` twice. Both 1,507,328-byte results must be identical
+and pass `jffs2dump -c`.
+
+Stage 1 loads exact stage 2 and provisioning bytes into bounded RAM snapshots,
+then verifies their hashes, the HMAC, live camera identity, and data action
+before passivating the active bootstrap. For `initialize`, it commits the stock
+mtd3 backup and checkpoint through readback-plus-rename transactions. The
+universal checkpoint additionally binds the exact authorization binary and
+provisioning digest, so a retry cannot substitute different same-camera
+credentials. Stage 1 writes and reads back the complete JFFS2 data region,
+writes and verifies the immutable
+system and kernel tail, and activates the first kernel eraseblock last. The
+active selector is therefore one-use under the removable-media transaction;
+this is not represented as clone-resistant cryptographic anti-replay. After
+successful activation, Stage 1 passivates the remaining camera files best
+effort. Physical power-loss behavior remains a release gate.
+
 ## Prudynt owns media
 
 Prudynt is the only owner of IMP, ISP, frame sources, encoders, JPEG, OSD,

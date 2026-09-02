@@ -1,7 +1,16 @@
 # Recovery
 
 Recovery is device-specific. A backup from one camera must never be used on
-another camera.
+another camera. This remains true when both cameras install the same
+model-universal firmware SHA-256: firmware reuse never makes recovery material
+portable.
+
+The recovery gate derives a public camera identity and a separate, non-emitted
+camera authorization key from complete mtd0/mtd4/mtd5 snapshots. The signed
+per-camera authorization names the public identity. Its fixed Stage-1 binary is
+HMAC-bound with the private key derivation and exact JFFS2 digest, so a camera-A
+authorization, audit sidecar, or provisioning data image cannot authorize
+camera B. The HMAC key is excluded from JSON, CLI output, logs, and firmware.
 
 ## Required private recovery material
 

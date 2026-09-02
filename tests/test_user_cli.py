@@ -207,6 +207,56 @@ class UserCliTests(unittest.TestCase):
                 ]
             )
 
+    def test_universal_cli_separates_model_build_from_camera_inputs(self) -> None:
+        parser = user_cli.build_parser()
+        model = parser.parse_args(
+            [
+                "local-build",
+                "build-universal",
+                "--vendor-bundle-dir",
+                "vendor",
+                "--media-closure-dir",
+                "media",
+                "--raptor-rwd-artifact",
+                "raptor.tar",
+                "--signing-key",
+                "release.pem",
+            ]
+        )
+        self.assertEqual(model.local_build_command, "build-universal")
+        self.assertFalse(hasattr(model, "private_config_dir"))
+        provision = parser.parse_args(
+            [
+                "universal",
+                "provision",
+                "--functional-recovery-dir",
+                "functional",
+                "--preserved-readback-dir",
+                "functional/preserved",
+                "--universal-bundle",
+                "thingino-universal.tgb",
+                "--universal-public-key",
+                "release.pub",
+                "--private-config-dir",
+                "private",
+                "--session-dir",
+                "session",
+                "--signing-key",
+                "authorization.pem",
+                "--unsquashfs",
+                "/tools/unsquashfs",
+                "--mkfs-jffs2",
+                "/tools/mkfs.jffs2",
+                "--output",
+                "camera.tps",
+                "--data-output",
+                "camera.jffs2",
+            ]
+        )
+        self.assertEqual(provision.universal_command, "provision")
+        self.assertEqual(provision.functional_recovery_dir, Path("functional"))
+        self.assertIsNone(provision.recovery_dir)
+
     def test_local_build_prepare_defaults_to_two_clean_builds(self) -> None:
         parser = user_cli.build_parser()
         arguments = parser.parse_args(

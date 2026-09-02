@@ -39,6 +39,19 @@ from .full_backup import (
     capture_functional_backup_from_uartless_collector,
     validate_complete_backup,
 )
+from .camera_authorization import (
+    CameraAuthorizationError,
+    create_camera_authorization,
+)
+from .final_bundle import BundleError, validate_universal_final_bundle
+from .provisioning import (
+    ProvisioningError,
+    create_provisioning_sidecar,
+    read_private_provisioning_data,
+    recovery_session_identity,
+    require_provisioning_signing_key,
+    validate_provisioning_sidecar,
+)
 from .layout import TARGET
 from .live_ram import (
     LiveRamError,
@@ -70,6 +83,7 @@ from .local_build_run import (
     LocalBuildRunError,
     build_local_install_set,
     build_local_recovery_assets,
+    build_local_universal_install_set,
 )
 from .media import (
     MediaError,
@@ -131,6 +145,7 @@ from .runtime_candidate import (
     runtime_candidate_status,
     stage_runtime_candidate,
 )
+from .stage2 import build_stage2
 from .sd_package import (
     PackageError,
     atomic_write,
@@ -637,6 +652,26 @@ def _local_build_build(arguments: argparse.Namespace) -> dict[str, object]:
     return implementation(sys.modules[__name__], arguments)
 
 
+def _local_build_build_universal(
+    arguments: argparse.Namespace,
+) -> dict[str, object]:
+    from .user_cli_build import _local_build_build_universal as implementation
+
+    return implementation(sys.modules[__name__], arguments)
+
+
+def _universal_provision(arguments: argparse.Namespace) -> dict[str, object]:
+    from .user_cli_universal import _universal_provision as implementation
+
+    return implementation(sys.modules[__name__], arguments)
+
+
+def _universal_authorize(arguments: argparse.Namespace) -> dict[str, object]:
+    from .user_cli_universal import _universal_authorize as implementation
+
+    return implementation(sys.modules[__name__], arguments)
+
+
 def _build_personal_mtd3(arguments: argparse.Namespace) -> dict[str, object]:
     from .user_cli_build import _build_personal_mtd3 as implementation
 
@@ -903,6 +938,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         document = arguments.handler(arguments)
     except (
+        BundleError,
+        CameraAuthorizationError,
         CandidateLogError,
         CollectorBuildError,
         DevelopmentInstallError,
@@ -918,6 +955,7 @@ def main(argv: list[str] | None = None) -> int:
         PackageError,
         PreflightError,
         PrivateConfigError,
+        ProvisioningError,
         RecoveryError,
         RecoveryGateError,
         RecoveryApHostError,

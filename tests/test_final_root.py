@@ -849,6 +849,65 @@ class FinalRootTests(unittest.TestCase):
             with self.assertRaisesRegex(final_root.FinalRootError, "unsafe"):
                 final_root._install_media_closure(root, closure)
 
+    def test_universal_tree_is_closed_and_contains_no_camera_secrets(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            root = Path(directory_name)
+            (root / "etc/init.d").mkdir(parents=True)
+            (root / "etc/dropbear").mkdir(parents=True)
+            (root / "root/.ssh").mkdir(parents=True)
+            (root / "etc/shadow").write_text(
+                "root:$6$old$hash:1:2:3:4:5:6:7\n", encoding="utf-8"
+            )
+            for relative in final_root.UNIVERSAL_DISABLED_INIT:
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"#!/bin/sh\n")
+            for relative in (
+                "etc/wpa_supplicant.conf",
+                "etc/thingino-api.key",
+                "etc/dropbear/dropbear_ed25519_host_key",
+                "etc/dcs6100-personal-image.json",
+                "root/.ssh/authorized_keys",
+            ):
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"private-camera-value")
+            final_root._sanitize_universal_secret_paths(root)
+            final_root._disable_universal_network_services(root)
+            marker = {
+                "artifact_scope": "model-universal",
+                "contains_device_secrets": False,
+                "provisioning_required": True,
+                "schema_version": 1,
+                "target": "DCS-6100LHV2-A1",
+            }
+            (root / final_root.UNIVERSAL_MARKER).write_text(
+                __import__("json").dumps(
+                    marker, sort_keys=True, separators=(",", ":")
+                )
+                + "\n",
+                encoding="ascii",
+            )
+            final_root._validate_universal_tree(root)
+            self.assertIn("root:!:", (root / "etc/shadow").read_text())
+            self.assertEqual(
+                (root / "etc/hostname").read_text(),
+                final_root.UNIVERSAL_HOSTNAME + "\n",
+            )
+            self.assertFalse((root / "etc/wpa_supplicant.conf").exists())
+            for relative in final_root.UNIVERSAL_DISABLED_INIT:
+                self.assertTrue((root / relative).is_file())
+                self.assertEqual((root / relative).stat().st_mode & 0o111, 0)
+            self.assertEqual(
+                {
+                    entry.name
+                    for entry in (
+                        root / "usr/share/thingino-provisioning/init"
+                    ).iterdir()
+                },
+                {Path(path).name for path in final_root.UNIVERSAL_DISABLED_INIT},
+            )
+
     def test_runtime_gate_requires_glibc_imp114_and_normal_hardware_osd(self) -> None:
         with tempfile.TemporaryDirectory() as directory_name:
             root = Path(directory_name)

@@ -5,11 +5,13 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
 from pathlib import Path
 
+from .install_policy import universal_physical_write_policy
 from .layout import TARGET
 from .media_preflight import (
     MediaError,
@@ -298,6 +300,28 @@ def _validate_install_manifest(
         if artifacts.get(name) != expected:
             raise MediaError(f"install-set manifest does not bind {name}")
     if schema == 2:
+        artifact_scope = manifest.get("artifact_scope")
+        if artifact_scope is not None and artifact_scope not in {
+            "device-personalized",
+            "model-universal",
+        }:
+            raise MediaError("install-set artifact scope is invalid")
+        if artifact_scope == "model-universal":
+            firmware_identity = manifest.get("universal_firmware_sha256")
+            if (
+                manifest.get("provisioning") != "separate-per-camera-audit-and-jffs2"
+                or not isinstance(firmware_identity, str)
+                or re.fullmatch(r"[0-9a-f]{64}", firmware_identity) is None
+                or stage2_payload.data_mode != "initialize"
+                or manifest.get("physical_write_policy")
+                != universal_physical_write_policy()
+            ):
+                raise MediaError("model-universal install-set binding is invalid")
+        elif artifact_scope == "device-personalized" and (
+            manifest.get("provisioning") != "embedded-device-personalization"
+            or manifest.get("universal_firmware_sha256") is not None
+        ):
+            raise MediaError("personalized install-set binding is invalid")
         expected_layout = {
             "abi": "dcs6100lhv2-a1-mtd3-split-v1",
             "parent_physical_mtd": 3,
@@ -442,6 +466,8 @@ def validate_install_set(
             STAGE2_FILENAME,
             "stage1-bootstrap.squashfs",
         }
+        if manifest.get("artifact_scope") == "model-universal":
+            expected_names.add("thingino-universal.tgb")
         if not isinstance(artifacts, dict) or set(artifacts) != expected_names:
             raise MediaError("install-set manifest artifact allowlist changed")
         if artifacts.get("stage1-bootstrap.squashfs") != {

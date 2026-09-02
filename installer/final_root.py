@@ -47,6 +47,17 @@ from .vendor_bundle import VendorBundle, load_vendor_bundle
 
 KERNEL_RELEASE = "3.10.14__isvp_swan_1.0__"
 OUTPUT_NAME = "system.private.squashfs"
+UNIVERSAL_OUTPUT_NAME = "system.universal.squashfs"
+UNIVERSAL_HOSTNAME = "dcs6100-unprovisioned"
+UNIVERSAL_MARKER = "etc/dcs6100-universal-image.json"
+UNIVERSAL_DISABLED_INIT = (
+    "etc/init.d/S30dropbear",
+    "etc/init.d/S38wpa_supplicant",
+    "etc/init.d/S40network",
+    "etc/init.d/S60uhttpd",
+    "etc/init.d/S94onvif-httpd",
+    "etc/init.d/S95thingino-control",
+)
 TOKEN_PATTERN = re.compile(rb"[0-9a-f]{64}\n")
 SHA512_CRYPT_PATTERN = re.compile(r"\$6\$[./0-9A-Za-z]{1,16}\$[./0-9A-Za-z]{86}")
 TEMPLATE_ROOT = Path(__file__).with_name("templates")
@@ -508,6 +519,269 @@ def prepare_final_root(
         )
         base_path.unlink()
         shutil.rmtree(root)
+        os.chmod(work, 0o700)
+        for path in work.iterdir():
+            path.chmod(0o600)
+        os.replace(work, output_dir)
+    except BaseException:
+        shutil.rmtree(work, ignore_errors=True)
+        raise
+    return manifest
+
+
+def _lock_universal_root_account(path: Path) -> None:
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError) as exc:
+        raise FinalRootError("universal root shadow file is invalid") from exc
+    roots = [index for index, line in enumerate(lines) if line.startswith("root:")]
+    if len(roots) != 1:
+        raise FinalRootError("universal root lacks one root account")
+    fields = lines[roots[0]].split(":")
+    if len(fields) != 9:
+        raise FinalRootError("universal root account has invalid framing")
+    fields[1] = "!"
+    lines[roots[0]] = ":".join(fields)
+    _write_private(path, ("\n".join(lines) + "\n").encode("utf-8"))
+
+
+def _disable_universal_network_services(root: Path) -> None:
+    archive = root / "usr/share/thingino-provisioning/init"
+    archive.mkdir(mode=0o755, parents=True, exist_ok=True)
+    for relative in UNIVERSAL_DISABLED_INIT:
+        source = root / relative
+        if not source.is_file() or source.is_symlink():
+            raise FinalRootError(f"universal root lacks init input: {relative}")
+        destination = archive / source.name
+        if destination.exists():
+            raise FinalRootError("universal init archive is not empty")
+        shutil.copyfile(source, destination)
+        destination.chmod(0o755)
+        source.chmod(0o644)
+
+
+def _sanitize_universal_secret_paths(root: Path) -> None:
+    for relative in (
+        "etc/wpa_supplicant.conf",
+        "etc/thingino-api.key",
+        "etc/dropbear/dropbear_ed25519_host_key",
+        "etc/dcs6100-personal-image.json",
+        "root/.ssh/authorized_keys",
+    ):
+        path = root / relative
+        if path.is_symlink():
+            raise FinalRootError(f"universal secret path is a symlink: {relative}")
+        if path.exists():
+            if path.is_dir():
+                shutil.rmtree(path)
+            else:
+                path.unlink()
+    _lock_universal_root_account(root / "etc/shadow")
+    _write_private(root / "etc/hostname", (UNIVERSAL_HOSTNAME + "\n").encode("ascii"))
+
+
+def _validate_universal_tree(root: Path) -> None:
+    marker = root / UNIVERSAL_MARKER
+    try:
+        document = json.loads(marker.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise FinalRootError("universal root marker is invalid") from exc
+    expected = {
+        "artifact_scope": "model-universal",
+        "contains_device_secrets": False,
+        "provisioning_required": True,
+        "schema_version": 1,
+        "target": "DCS-6100LHV2-A1",
+    }
+    if document != expected:
+        raise FinalRootError("universal root marker changed")
+    for relative in (
+        "etc/wpa_supplicant.conf",
+        "etc/thingino-api.key",
+        "etc/dropbear/dropbear_ed25519_host_key",
+        "etc/dcs6100-personal-image.json",
+        "root/.ssh/authorized_keys",
+    ):
+        if (root / relative).exists() or (root / relative).is_symlink():
+            raise FinalRootError(f"universal root retained private runtime path: {relative}")
+    for relative in UNIVERSAL_DISABLED_INIT:
+        path = root / relative
+        if path.is_symlink() or not path.is_file() or path.stat().st_mode & 0o111:
+            raise FinalRootError(f"universal network service is executable: {relative}")
+    rwd = root / "etc/init.d/S96rwd"
+    if rwd.exists() and (
+        rwd.is_symlink() or not rwd.is_file() or rwd.stat().st_mode & 0o111
+    ):
+        raise FinalRootError("universal Raptor service is executable")
+    shadow = (root / "etc/shadow").read_text(encoding="utf-8")
+    root_lines = [line for line in shadow.splitlines() if line.startswith("root:")]
+    if len(root_lines) != 1 or root_lines[0].split(":", 2)[1] not in {"!", "*"}:
+        raise FinalRootError("universal root account is not locked")
+    if (root / "etc/hostname").read_bytes() != (UNIVERSAL_HOSTNAME + "\n").encode("ascii"):
+        raise FinalRootError("universal root hostname changed")
+    archive = root / "usr/share/thingino-provisioning/init"
+    if {entry.name for entry in archive.iterdir()} != {
+        Path(path).name for path in UNIVERSAL_DISABLED_INIT
+    }:
+        raise FinalRootError("universal root init archive changed")
+
+
+def prepare_universal_final_root(
+    *,
+    base_rootfs: bytes,
+    vendor_bundle: VendorBundle,
+    media_closure: MediaClosure,
+    output_dir: Path,
+    mksquashfs: Path,
+    unsquashfs: Path,
+    output_size: int | None = None,
+) -> dict[str, object]:
+    """Build one closed, unprovisioned system image reusable across A1 cameras."""
+
+    payload_limit = TARGET.partition(3).size - FOOTER_SIZE
+    if output_size is not None and not 0 < output_size <= payload_limit:
+        raise FinalRootError("requested universal-root output size is invalid")
+    validate_squashfs(base_rootfs)
+    if output_dir.exists() or output_dir.is_symlink():
+        raise FinalRootError("refusing to reuse a universal final-root output directory")
+    output_dir.parent.mkdir(parents=True, exist_ok=True)
+    work = Path(tempfile.mkdtemp(prefix=f".{output_dir.name}.", dir=output_dir.parent))
+    try:
+        root = work / "root"
+        base_path = work / "base.squashfs"
+        output = work / UNIVERSAL_OUTPUT_NAME
+        base_path.write_bytes(base_rootfs)
+        _extract_base_root(unsquashfs=unsquashfs, source=base_path, destination=root)
+        _remove_unsafe_paths(root)
+        _require_proven_media_runtime(root, require_vendor=False)
+        native_media = _snapshot_native_media(root)
+        _install_vendor_bundle(root, vendor_bundle)
+        _require_native_media_unchanged(root, native_media)
+        _require_proven_media_runtime(root)
+        media_provenance = _install_media_closure(root, media_closure)
+        _require_proven_media_runtime(root)
+        _configure_media_first_init(root)
+        _configure_no_default_route(root)
+        _sanitize_universal_secret_paths(root)
+        _disable_universal_network_services(root)
+
+        def patch_onvif(document: dict[str, object]) -> None:
+            server = document.get("server")
+            if not isinstance(server, dict):
+                raise FinalRootError("universal ONVIF lacks server configuration")
+            server["username"] = ""
+            server["password"] = ""
+
+        def patch_thingino(document: dict[str, object]) -> None:
+            gpio = document.get("gpio")
+            if not isinstance(gpio, dict):
+                raise FinalRootError("universal Thingino lacks GPIO configuration")
+            gpio["ircut"] = "50 49"
+            document["enable_updates"] = False
+            document["hostname"] = UNIVERSAL_HOSTNAME
+            document["control"] = {"enabled": False}
+
+        def patch_prudynt(document: dict[str, object]) -> None:
+            _configure_prudynt_media(document)
+            _configure_prudynt_jpeg_idle(document)
+            _configure_prudynt_http_ingress(document)
+            rtsp = _require_section(document, "rtsp")
+            rtsp["username"] = ""
+            rtsp["password"] = ""
+
+        _patch_json(root / "etc/onvif.json", patch_onvif)
+        _patch_json(root / "etc/thingino.json", patch_thingino)
+        _patch_json(root / "etc/prudynt.json", patch_prudynt)
+        runtime_config = (root / "etc/prudynt.json").read_bytes()
+        runtime_config_sha256 = hashlib.sha256(runtime_config).hexdigest()
+        media_provenance["runtime_config_source_sha256"] = media_provenance[
+            "runtime_config_sha256"
+        ]
+        media_provenance["runtime_config_sha256"] = runtime_config_sha256
+        runtime_entries = [
+            entry
+            for entry in media_provenance["files"]
+            if entry["path"] == "etc/prudynt.json"
+        ]
+        if len(runtime_entries) != 1:
+            raise FinalRootError("universal media provenance lacks Prudynt config")
+        runtime_entry = runtime_entries[0]
+        runtime_entry["source_sha256"] = runtime_entry["sha256"]
+        runtime_entry["sha256"] = runtime_config_sha256
+        runtime_entry["size"] = len(runtime_config)
+        _write_private(
+            root / "etc/dlink-media-closure.private.json",
+            (json.dumps(media_provenance, indent=2, sort_keys=True) + "\n").encode(),
+        )
+        marker = {
+            "artifact_scope": "model-universal",
+            "contains_device_secrets": False,
+            "provisioning_required": True,
+            "schema_version": 1,
+            "target": "DCS-6100LHV2-A1",
+        }
+        _write_private(
+            root / UNIVERSAL_MARKER,
+            (json.dumps(marker, sort_keys=True, separators=(",", ":")) + "\n").encode("ascii"),
+        )
+        for name in ("thingino-health", "dlink-media-verify", "dlink-runtime-snapshot"):
+            _write_executable(root / f"usr/sbin/{name}", (TEMPLATE_ROOT / name).read_bytes())
+        _validate_universal_tree(root)
+        _run(
+            [
+                str(mksquashfs),
+                str(root),
+                str(output),
+                "-comp",
+                "xz",
+                "-b",
+                "262144",
+                "-noappend",
+                "-no-tailends",
+                "-all-root",
+                "-no-xattrs",
+                "-no-progress",
+                "-repro-time",
+                str(SOURCE_DATE_EPOCH),
+            ],
+            "universal final-root build",
+        )
+        raw = output.read_bytes()
+        validate_squashfs(raw)
+        if len(raw) > payload_limit:
+            raise FinalRootError("universal final-root exceeds mtd3 SquashFS payload")
+        if output_size is not None:
+            if output_size < len(raw):
+                raise FinalRootError("requested universal-root size is smaller than SquashFS")
+            if output_size != len(raw):
+                raw += b"\0" * (output_size - len(raw))
+                output.write_bytes(raw)
+            validate_squashfs(raw, partition_limit=payload_limit)
+        audit_root = work / "audit-root"
+        _extract_base_root(unsquashfs=unsquashfs, source=output, destination=audit_root)
+        _validate_universal_tree(audit_root)
+        manifest = {
+            "artifact_scope": "model-universal",
+            "contains_device_secrets": False,
+            "provisioning_required": True,
+            "schema_version": 1,
+            "source_sha256": hashlib.sha256(base_rootfs).hexdigest(),
+            "system": {
+                "filename": UNIVERSAL_OUTPUT_NAME,
+                "sha256": hashlib.sha256(raw).hexdigest(),
+                "size": len(raw),
+            },
+            "target": {"hardware_revision": "A1", "model": "DCS-6100LHV2"},
+            "vendor_bundle_sha256": vendor_bundle.bundle_sha256,
+            "media_closure_sha256": media_closure.closure_sha256,
+        }
+        atomic_write(
+            work / "final-root.universal.json",
+            (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode(),
+        )
+        base_path.unlink()
+        shutil.rmtree(root)
+        shutil.rmtree(audit_root)
         os.chmod(work, 0o700)
         for path in work.iterdir():
             path.chmod(0o600)

@@ -27,6 +27,7 @@ enum {
     SYSCALL_MOUNT = 4021,
     SYSCALL_PAUSE = 4029,
     SYSCALL_SYNC = 4036,
+    SYSCALL_RENAME = 4038,
     SYSCALL_MKDIR = 4039,
     SYSCALL_IOCTL = 4054,
     SYSCALL_UMOUNT2 = 4052,
@@ -58,14 +59,22 @@ enum {
     MTD_WRITE_SIZE = 0x100,
     ACTIVATION_SIZE = 0x10000,
     COPY_SIZE = 0x10000,
+    CAMERA_AUTHORIZATION_SIZE = 256,
+    CAMERA_AUTHORIZATION_DIGEST_OFFSET = 160,
 };
 
 /* MIPS O32: _IOC_WRITE=4 and _IOC_DIRSHIFT=29. */
 #define MEMERASE ((long)0x80084d02UL)
 
 #define STOCK_USERDATA_BACKUP_PATH "/card/STOCKM3.BIN"
+#define STOCK_USERDATA_BACKUP_PART_PATH "/card/STOCKM3.PART"
 #define RECOVERY_CHECKPOINT_PATH "/card/STOCKM3.OK"
+#define RECOVERY_CHECKPOINT_PART_PATH "/card/STOCKM3.OK.PART"
+#if REQUIRE_CAMERA_AUTHORIZATION
+#define RECOVERY_CHECKPOINT_SIZE 144
+#else
 #define RECOVERY_CHECKPOINT_SIZE 80
+#endif
 #define INSTALLER_LOGICAL_SYSTEM_MTD "/dev/mtd3"
 #define INSTALLER_LOGICAL_DATA_MTD "/dev/mtd4"
 
@@ -116,10 +125,23 @@ struct sha256_context {
 static u8 io_buffer[COPY_SIZE] __attribute__((aligned(16)));
 static u8 activation_buffer[ACTIVATION_SIZE] __attribute__((aligned(16)));
 static u8 module_buffer[MMC_MODULE_SIZE] __attribute__((aligned(16)));
+static u8 stage2_buffer[STAGE2_EXPECTED_SIZE] __attribute__((aligned(16)));
+#if REQUIRE_CAMERA_AUTHORIZATION
+static u8 provisioning_buffer[DATA_FLASH_SPAN] __attribute__((aligned(16)));
+static u8 camera_authorization[CAMERA_AUTHORIZATION_SIZE] __attribute__((aligned(16)));
+#endif
 static struct mtd_info_user mtd_info;
 static int status_leds_ready;
 static const u8 recovery_checkpoint_magic[8] = {
+#if REQUIRE_CAMERA_AUTHORIZATION
+    'D', 'C', 'S', '6', 'R', 'C', '0', '2'};
+#else
     'D', 'C', 'S', '6', 'R', 'C', '0', '1'};
+#endif
+#if REQUIRE_CAMERA_AUTHORIZATION
+static const u8 camera_authorization_magic[16] = {
+    'D', 'C', 'S', '6', 'A', 'U', 'T', 'H', 'V', '1', 0, 0, 0, 0, 0, 0};
+#endif
 
 /* Clang may lower an ABI structure copy to this symbol even with -nostdlib. */
 void *memcpy(void *destination, const void *source, size_t length)
@@ -513,19 +535,179 @@ static void digest_path(const char *path, u32 length, u8 output[32])
     close_checked(descriptor);
 }
 
+#if REQUIRE_CAMERA_AUTHORIZATION
+static u32 read_be32(const u8 *value)
+{
+    return ((u32)value[0] << 24) | ((u32)value[1] << 16) |
+        ((u32)value[2] << 8) | (u32)value[3];
+}
+
+static void update_camera_identity_partition(
+    struct sha256_context *context,
+    u8 mtd,
+    const char *path,
+    u32 length)
+{
+    u8 prefix[9];
+    u32 remaining = length;
+    long descriptor;
+    u32 index;
+    prefix[0] = mtd;
+    for (index = 0; index < 8; ++index)
+        prefix[1 + index] = (u8)((u64)length >> (56 - index * 8));
+    sha256_update(context, prefix, sizeof(prefix));
+    descriptor = call2(SYSCALL_OPEN, (long)path, O_RDONLY);
+    if (descriptor < 0)
+        FAIL("STAGE1 FAIL camera_identity_open\n");
+    while (remaining) {
+        u32 amount = remaining < COPY_SIZE ? remaining : COPY_SIZE;
+        read_exact(descriptor, io_buffer, amount);
+        sha256_update(context, io_buffer, amount);
+        remaining -= amount;
+    }
+    if (call3(SYSCALL_READ, descriptor, (long)io_buffer, 1) != 0)
+        FAIL("STAGE1 FAIL camera_identity_size\n");
+    close_checked(descriptor);
+}
+
+static void digest_camera_binding(
+    const u8 *domain, u32 domain_size, u8 output[32])
+{
+    static const u8 model[] = "DCS-6100LHV2";
+    static const u8 revision[] = "A1";
+    static const u8 nor_size[8] = {0, 0, 0, 0, 1, 0, 0, 0};
+    struct sha256_context context;
+    sha256_init(&context);
+    sha256_update(&context, domain, domain_size);
+    sha256_update(&context, model, sizeof(model));
+    sha256_update(&context, revision, sizeof(revision));
+    sha256_update(&context, nor_size, sizeof(nor_size));
+    update_camera_identity_partition(&context, 0, "/dev/mtd0", 0x00040000);
+    update_camera_identity_partition(&context, 4, "/dev/mtd5", 0x00180000);
+    update_camera_identity_partition(&context, 5, "/dev/mtd6", 0x00040000);
+    sha256_final(&context, output);
+}
+
+static void hmac_sha256(
+    const u8 key[32], const u8 *input, u32 length, u8 output[32])
+{
+    struct sha256_context context;
+    u8 pad[64];
+    u8 inner[32];
+    u32 index;
+    for (index = 0; index < 64; ++index)
+        pad[index] = (index < 32 ? key[index] : 0) ^ 0x36;
+    sha256_init(&context);
+    sha256_update(&context, pad, sizeof(pad));
+    sha256_update(&context, input, length);
+    sha256_final(&context, inner);
+    for (index = 0; index < 64; ++index)
+        pad[index] = (index < 32 ? key[index] : 0) ^ 0x5c;
+    sha256_init(&context);
+    sha256_update(&context, pad, sizeof(pad));
+    sha256_update(&context, inner, sizeof(inner));
+    sha256_final(&context, output);
+}
+
+#endif
+
+static void verify_camera_authorization(void)
+{
+#if REQUIRE_CAMERA_AUTHORIZATION
+    static const u8 identity_domain[] =
+        "thingino-dcs6100-camera-identity-v1";
+    static const u8 authorization_domain[] =
+        "thingino-dcs6100-camera-authorization-key-v1";
+    u8 digest[32];
+    u8 identity[32];
+    u8 authorization_key[32];
+    u32 provisioning_size;
+    u32 index;
+    int universal_nonzero = 0;
+    long descriptor = call2(
+        SYSCALL_OPEN, (long)CAMERA_AUTHORIZATION_PATH, O_RDONLY);
+    if (descriptor < 0)
+        FAIL("STAGE1 FAIL camera_authorization_missing\n");
+    read_exact(descriptor, camera_authorization, CAMERA_AUTHORIZATION_SIZE);
+    if (call3(SYSCALL_READ, descriptor, (long)io_buffer, 1) != 0)
+        FAIL("STAGE1 FAIL camera_authorization_size\n");
+    close_checked(descriptor);
+    if (!bytes_equal(camera_authorization, camera_authorization_magic, 16) ||
+        read_be32(camera_authorization + 16) != 1 ||
+        read_be32(camera_authorization + 20) != CAMERA_AUTHORIZATION_SIZE)
+        FAIL("STAGE1 FAIL camera_authorization_header\n");
+    for (index = 192; index < CAMERA_AUTHORIZATION_SIZE; ++index)
+        if (camera_authorization[index] != 0)
+            FAIL("STAGE1 FAIL camera_authorization_reserved\n");
+    digest_camera_binding(
+        identity_domain, sizeof(identity_domain), identity);
+    digest_camera_binding(
+        authorization_domain, sizeof(authorization_domain), authorization_key);
+    for (index = 0; index < 32; ++index) {
+        io_buffer[index] =
+            camera_authorization[CAMERA_AUTHORIZATION_DIGEST_OFFSET + index];
+        camera_authorization[CAMERA_AUTHORIZATION_DIGEST_OFFSET + index] = 0;
+    }
+    hmac_sha256(
+        authorization_key,
+        camera_authorization,
+        CAMERA_AUTHORIZATION_SIZE,
+        digest);
+    if (!bytes_equal(digest, io_buffer, 32))
+        FAIL("STAGE1 FAIL camera_authorization_hmac\n");
+    for (index = 0; index < 32; ++index)
+        camera_authorization[CAMERA_AUTHORIZATION_DIGEST_OFFSET + index] =
+            io_buffer[index];
+    if (!bytes_equal(identity, camera_authorization + 24, 32))
+        FAIL("STAGE1 FAIL camera_authorization_device\n");
+    for (index = 56; index < 88; ++index)
+        universal_nonzero |= camera_authorization[index];
+    if (!universal_nonzero)
+        FAIL("STAGE1 FAIL camera_authorization_firmware\n");
+    if (!bytes_equal(
+            STAGE2_EXPECTED_SHA256, camera_authorization + 88, 32))
+        FAIL("STAGE1 FAIL camera_authorization_stage2\n");
+    provisioning_size = read_be32(camera_authorization + 152);
+    if (provisioning_size != DATA_FLASH_SPAN)
+        FAIL("STAGE1 FAIL camera_authorization_provisioning_size\n");
+    if (read_be32(camera_authorization + 156) != DATA_ACTION)
+        FAIL("STAGE1 FAIL camera_authorization_data_action\n");
+    descriptor = call2(SYSCALL_OPEN, (long)PROVISIONING_PATH, O_RDONLY);
+    if (descriptor < 0)
+        FAIL("STAGE1 FAIL provisioning_missing\n");
+    read_exact(descriptor, provisioning_buffer, DATA_FLASH_SPAN);
+    if (call3(SYSCALL_READ, descriptor, (long)io_buffer, 1) != 0)
+        FAIL("STAGE1 FAIL provisioning_size\n");
+    close_checked(descriptor);
+    {
+        struct sha256_context context;
+        sha256_init(&context);
+        sha256_update(&context, provisioning_buffer, DATA_FLASH_SPAN);
+        sha256_final(&context, digest);
+    }
+    if (!bytes_equal(digest, camera_authorization + 120, 32))
+        FAIL("STAGE1 FAIL camera_authorization_provisioning\n");
+    EMIT("STAGE1 camera_authorization_and_provisioning_snapshotted\n");
+#endif
+}
+
 static void verify_file(void)
 {
+    struct sha256_context context;
     u8 digest[32];
     long descriptor = call2(SYSCALL_OPEN, (long)STAGE2_PATH, O_RDONLY);
     if (descriptor < 0)
         FAIL("STAGE1 FAIL stage2_missing\n");
-    digest_descriptor(descriptor, STAGE2_EXPECTED_SIZE, digest);
+    read_exact(descriptor, stage2_buffer, STAGE2_EXPECTED_SIZE);
     if (call3(SYSCALL_READ, descriptor, (long)io_buffer, 1) != 0)
         FAIL("STAGE1 FAIL stage2_size\n");
     close_checked(descriptor);
+    sha256_init(&context);
+    sha256_update(&context, stage2_buffer, STAGE2_EXPECTED_SIZE);
+    sha256_final(&context, digest);
     if (!bytes_equal(digest, STAGE2_EXPECTED_SHA256, 32))
         FAIL("STAGE1 FAIL stage2_digest\n");
-    EMIT("STAGE1 stage2_verified\n");
+    EMIT("STAGE1 stage2_snapshotted_and_verified\n");
 }
 
 static void remove_consumed_bootstrap(void)
@@ -695,26 +877,26 @@ static void copy_stage2_to_mtd(
     u32 payload_size)
 {
     u32 remaining = payload_size;
-    long source = call2(SYSCALL_OPEN, (long)STAGE2_PATH, O_RDONLY);
+    u32 source_offset = file_offset;
     long destination = call2(SYSCALL_OPEN, (long)mtd_path, O_RDWR);
-    if (source < 0 || destination < 0)
+    if (destination < 0 || file_offset + payload_size < file_offset ||
+        file_offset + payload_size > STAGE2_EXPECTED_SIZE)
         FAIL("STAGE1 FAIL copy_open\n");
-    seek_checked(source, file_offset);
     seek_checked(destination, mtd_offset);
     while (remaining) {
         u32 amount = remaining < COPY_SIZE ? remaining : COPY_SIZE;
         u32 write_amount =
             (amount + MTD_WRITE_SIZE - 1) & ~(MTD_WRITE_SIZE - 1);
         u32 padding;
-        read_exact(source, io_buffer, amount);
+        memcpy(io_buffer, stage2_buffer + source_offset, amount);
         for (padding = amount; padding < write_amount; padding++)
             io_buffer[padding] = 0xff;
         write_mtd_pages(destination, io_buffer, write_amount);
+        source_offset += amount;
         remaining -= amount;
     }
     if (call1(SYSCALL_SYNC, 0) != 0)
         FAIL("STAGE1 FAIL sync\n");
-    close_checked(source);
     close_checked(destination);
 }
 
@@ -722,23 +904,42 @@ static void verify_stage2_matches_mtd(
     u32 file_offset, const char *mtd_path, u32 mtd_offset, u32 length)
 {
     u32 remaining = length;
-    long source = call2(SYSCALL_OPEN, (long)STAGE2_PATH, O_RDONLY);
+    u32 source_offset = file_offset;
     long destination = call2(SYSCALL_OPEN, (long)mtd_path, O_RDONLY);
-    if (source < 0 || destination < 0)
+    if (destination < 0 || file_offset + length < file_offset ||
+        file_offset + length > STAGE2_EXPECTED_SIZE)
         FAIL("STAGE1 FAIL compare_open\n");
-    seek_checked(source, file_offset);
     seek_checked(destination, mtd_offset);
     while (remaining) {
-        u32 amount = remaining < (COPY_SIZE / 2) ? remaining : (COPY_SIZE / 2);
-        read_exact(source, io_buffer, amount);
-        read_exact(destination, io_buffer + COPY_SIZE / 2, amount);
-        if (!bytes_equal(io_buffer, io_buffer + COPY_SIZE / 2, amount))
+        u32 amount = remaining < COPY_SIZE ? remaining : COPY_SIZE;
+        read_exact(destination, io_buffer, amount);
+        if (!bytes_equal(stage2_buffer + source_offset, io_buffer, amount))
             FAIL("STAGE1 FAIL compare_readback\n");
+        source_offset += amount;
         remaining -= amount;
     }
-    close_checked(source);
     close_checked(destination);
 }
+
+#if REQUIRE_CAMERA_AUTHORIZATION
+static void write_provisioning_to_data(void)
+{
+    long descriptor = call2(
+        SYSCALL_OPEN, (long)INSTALLER_LOGICAL_DATA_MTD, O_RDWR);
+    if (descriptor < 0)
+        FAIL("STAGE1 FAIL provisioning_data_open\n");
+    write_mtd_pages(descriptor, provisioning_buffer, DATA_FLASH_SPAN);
+    if (call1(SYSCALL_SYNC, 0) != 0)
+        FAIL("STAGE1 FAIL provisioning_data_sync\n");
+    close_checked(descriptor);
+    verify_region(
+        INSTALLER_LOGICAL_DATA_MTD,
+        DATA_FLASH_SPAN,
+        DATA_FLASH_SPAN,
+        camera_authorization + 120);
+    EMIT("STAGE1 provisioning_data_written_and_verified\n");
+}
+#endif
 
 static void append_mtd_to_backup(
     const char *mtd_path, long backup, u32 length)
@@ -776,11 +977,10 @@ static int mtd_matches_backup(
     return matches;
 }
 
-static int stock_userdata_backup_matches_current_nor(void)
+static int stock_userdata_backup_matches_current_nor(const char *path)
 {
     int matches;
-    long backup = call2(
-        SYSCALL_OPEN, (long)STOCK_USERDATA_BACKUP_PATH, O_RDONLY);
+    long backup = call2(SYSCALL_OPEN, (long)path, O_RDONLY);
     if (backup < 0)
         FAIL("STAGE1 FAIL backup_readback_open\n");
     matches = mtd_matches_backup(
@@ -794,12 +994,11 @@ static int stock_userdata_backup_matches_current_nor(void)
     return matches;
 }
 
-static void digest_stock_userdata_backup(u8 digest[32])
+static void digest_stock_userdata_backup(const char *path, u8 digest[32])
 {
     struct sha256_context context;
     u32 remaining = SYSTEM_FLASH_SPAN + DATA_FLASH_SPAN;
-    long backup = call2(
-        SYSCALL_OPEN, (long)STOCK_USERDATA_BACKUP_PATH, O_RDONLY);
+    long backup = call2(SYSCALL_OPEN, (long)path, O_RDONLY);
     if (backup < 0)
         FAIL("STAGE1 FAIL backup_digest_open\n");
     sha256_init(&context);
@@ -834,17 +1033,34 @@ static void build_recovery_checkpoint(
         checkpoint[16 + index] = backup_digest[index];
         checkpoint[48 + index] = STAGE2_EXPECTED_SHA256[index];
     }
+#if REQUIRE_CAMERA_AUTHORIZATION
+    {
+        struct sha256_context context;
+        u8 authorization_digest[32];
+        sha256_init(&context);
+        sha256_update(
+            &context, camera_authorization, CAMERA_AUTHORIZATION_SIZE);
+        sha256_final(&context, authorization_digest);
+        for (index = 0; index < 32; ++index) {
+            checkpoint[80 + index] = authorization_digest[index];
+            checkpoint[112 + index] = camera_authorization[120 + index];
+        }
+    }
+#endif
 }
 
 static void write_recovery_checkpoint(const u8 backup_digest[32])
 {
     u8 checkpoint[RECOVERY_CHECKPOINT_SIZE];
     long descriptor;
+    long result = call1(SYSCALL_UNLINK, (long)RECOVERY_CHECKPOINT_PART_PATH);
+    if (result != 0 && result != -ENOENT)
+        FAIL("STAGE1 FAIL recovery_checkpoint_part_cleanup\n");
     build_recovery_checkpoint(backup_digest, checkpoint);
     descriptor = call3(
         SYSCALL_OPEN,
-        (long)RECOVERY_CHECKPOINT_PATH,
-        O_WRONLY | O_CREAT | O_TRUNC,
+        (long)RECOVERY_CHECKPOINT_PART_PATH,
+        O_WRONLY | O_CREAT | O_EXCL,
         0600);
     if (descriptor < 0)
         FAIL("STAGE1 FAIL recovery_checkpoint_create\n");
@@ -854,7 +1070,7 @@ static void write_recovery_checkpoint(const u8 backup_digest[32])
     close_checked(descriptor);
 
     descriptor = call2(
-        SYSCALL_OPEN, (long)RECOVERY_CHECKPOINT_PATH, O_RDONLY);
+        SYSCALL_OPEN, (long)RECOVERY_CHECKPOINT_PART_PATH, O_RDONLY);
     if (descriptor < 0)
         FAIL("STAGE1 FAIL recovery_checkpoint_readback_open\n");
     read_exact(descriptor, io_buffer, RECOVERY_CHECKPOINT_SIZE);
@@ -862,7 +1078,13 @@ static void write_recovery_checkpoint(const u8 backup_digest[32])
         call3(SYSCALL_READ, descriptor, (long)io_buffer, 1) != 0)
         FAIL("STAGE1 FAIL recovery_checkpoint_readback\n");
     close_checked(descriptor);
-    EMIT("STAGE1 recovery_checkpoint_written\n");
+    if (call2(
+            SYSCALL_RENAME,
+            (long)RECOVERY_CHECKPOINT_PART_PATH,
+            (long)RECOVERY_CHECKPOINT_PATH) != 0 ||
+        call1(SYSCALL_SYNC, 0) != 0)
+        FAIL("STAGE1 FAIL recovery_checkpoint_commit\n");
+    EMIT("STAGE1 recovery_checkpoint_committed\n");
 }
 
 static void validate_recovery_checkpoint(const u8 backup_digest[32])
@@ -884,14 +1106,14 @@ static void validate_recovery_checkpoint(const u8 backup_digest[32])
 static void export_stock_userdata_backup(void)
 {
     u8 backup_digest[32];
-    long backup = call3(
-        SYSCALL_OPEN,
-        (long)STOCK_USERDATA_BACKUP_PATH,
-        O_WRONLY | O_CREAT | O_EXCL,
-        0600);
-    if (backup == -EEXIST) {
-        digest_stock_userdata_backup(backup_digest);
-        if (stock_userdata_backup_matches_current_nor()) {
+    long existing = call2(
+        SYSCALL_OPEN, (long)STOCK_USERDATA_BACKUP_PATH, O_RDONLY);
+    long backup;
+    if (existing >= 0) {
+        close_checked(existing);
+        digest_stock_userdata_backup(STOCK_USERDATA_BACKUP_PATH, backup_digest);
+        if (stock_userdata_backup_matches_current_nor(
+                STOCK_USERDATA_BACKUP_PATH)) {
             write_recovery_checkpoint(backup_digest);
             EMIT("STAGE1 stock_userdata_backup_reused\n");
         } else {
@@ -900,6 +1122,19 @@ static void export_stock_userdata_backup(void)
         }
         return;
     }
+    if (existing != -ENOENT)
+        FAIL("STAGE1 FAIL backup_open\n");
+    {
+        long cleanup = call1(
+            SYSCALL_UNLINK, (long)STOCK_USERDATA_BACKUP_PART_PATH);
+        if (cleanup != 0 && cleanup != -ENOENT)
+            FAIL("STAGE1 FAIL backup_part_cleanup\n");
+    }
+    backup = call3(
+        SYSCALL_OPEN,
+        (long)STOCK_USERDATA_BACKUP_PART_PATH,
+        O_WRONLY | O_CREAT | O_EXCL,
+        0600);
     if (backup < 0)
         FAIL("STAGE1 FAIL backup_create\n");
     append_mtd_to_backup(
@@ -909,11 +1144,20 @@ static void export_stock_userdata_backup(void)
         FAIL("STAGE1 FAIL backup_sync\n");
     close_checked(backup);
 
-    if (!stock_userdata_backup_matches_current_nor())
+    if (!stock_userdata_backup_matches_current_nor(
+            STOCK_USERDATA_BACKUP_PART_PATH))
         FAIL("STAGE1 FAIL backup_readback\n");
-    digest_stock_userdata_backup(backup_digest);
+    digest_stock_userdata_backup(
+        STOCK_USERDATA_BACKUP_PART_PATH, backup_digest);
+    if (call2(
+            SYSCALL_RENAME,
+            (long)STOCK_USERDATA_BACKUP_PART_PATH,
+            (long)STOCK_USERDATA_BACKUP_PATH) != 0 ||
+        call1(SYSCALL_SYNC, 0) != 0)
+        FAIL("STAGE1 FAIL backup_commit\n");
+    digest_stock_userdata_backup(STOCK_USERDATA_BACKUP_PATH, backup_digest);
     write_recovery_checkpoint(backup_digest);
-    EMIT("STAGE1 stock_userdata_backup_exported\n");
+    EMIT("STAGE1 stock_userdata_backup_committed\n");
 }
 
 static void load_mmc_and_mount_card(void)
@@ -962,6 +1206,30 @@ static void load_mmc_and_mount_card(void)
     EMIT("STAGE1 sd_mounted\n");
 }
 
+#if REQUIRE_CAMERA_AUTHORIZATION
+static void passivate_camera_install_files(void)
+{
+    const char *paths[4];
+    u32 index;
+    int complete = 1;
+    paths[0] = PROVISIONING_PATH;
+    paths[1] = CAMERA_AUTHORIZATION_PATH;
+    paths[2] = CAMERA_AUTHORIZATION_MANIFEST_PATH;
+    paths[3] = CAMERA_AUTHORIZATION_SIGNATURE_PATH;
+    for (index = 0; index < 4; ++index) {
+        long result = call1(SYSCALL_UNLINK, (long)paths[index]);
+        if (result != 0 && result != -ENOENT)
+            complete = 0;
+    }
+    if (call1(SYSCALL_SYNC, 0) != 0)
+        complete = 0;
+    if (complete)
+        EMIT("STAGE1 camera_install_files_passivated\n");
+    else
+        EMIT("STAGE1 camera_install_files_cleanup_pending\n");
+}
+#endif
+
 static void install_stage2(void)
 {
     long descriptor;
@@ -970,6 +1238,7 @@ static void install_stage2(void)
     EMIT("STAGE1 install_started\n");
     load_mmc_and_mount_card();
     verify_file();
+    verify_camera_authorization();
     remove_consumed_bootstrap();
     if (DATA_ACTION == DATA_ACTION_INITIALIZE)
         export_stock_userdata_backup();
@@ -993,7 +1262,13 @@ static void install_stage2(void)
         erase_range(descriptor, 0, DATA_FLASH_SPAN);
         close_checked(descriptor);
         verify_erased(INSTALLER_LOGICAL_DATA_MTD, 0, DATA_FLASH_SPAN);
+#if REQUIRE_CAMERA_AUTHORIZATION
+        if (DATA_ACTION != DATA_ACTION_INITIALIZE)
+            FAIL("STAGE1 FAIL universal_data_action\n");
+        write_provisioning_to_data();
+#else
         EMIT("STAGE1 final_data_reset\n");
+#endif
     }
 
     descriptor = call2(
@@ -1041,12 +1316,10 @@ static void install_stage2(void)
         0x001c0000 - FINAL_KERNEL_SIZE);
     EMIT("STAGE1 final_kernel_tail_written\n");
 
-    descriptor = call2(SYSCALL_OPEN, (long)STAGE2_PATH, O_RDONLY);
-    if (descriptor < 0)
-        FAIL("STAGE1 FAIL activation_source\n");
-    seek_checked(descriptor, STAGE2_KERNEL_OFFSET);
-    read_exact(descriptor, activation_buffer, ACTIVATION_SIZE);
-    close_checked(descriptor);
+    memcpy(
+        activation_buffer,
+        stage2_buffer + STAGE2_KERNEL_OFFSET,
+        ACTIVATION_SIZE);
     verify_kernel_before_activation();
     descriptor = call2(SYSCALL_OPEN, (long)"/dev/mtd1", O_RDWR);
     if (descriptor < 0)
@@ -1060,6 +1333,9 @@ static void install_stage2(void)
     verify_region("/dev/mtd1", FINAL_KERNEL_SIZE, 0x001c0000, FINAL_KERNEL_SHA256);
     set_status_leds_checked(1, 0);
     EMIT("STAGE1 activation_written_and_verified\n");
+#if REQUIRE_CAMERA_AUTHORIZATION
+    passivate_camera_install_files();
+#endif
 
     call1(SYSCALL_SYNC, 0);
     EMIT("STAGE1 rebooting_final\n");

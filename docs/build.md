@@ -170,7 +170,84 @@ physical partitions read-only. The stock restorer uses
 and mtd3 writable. Their kernels, effective configs, and matching MMC modules
 are private recovery inputs, not public firmware artifacts.
 
-## What configure asks
+## Build one reusable A1 firmware
+
+The model-universal path is separate from the older personalized configure
+path. It accepts only model inputs and one stable model signing key:
+
+```bash
+thingino-dlink local-build build-universal \
+  --build-root /path/to/two-build-workspace \
+  --vendor-bundle-dir /private/model/vendor-bundle \
+  --media-closure-dir /private/model/media-closure \
+  --raptor-rwd-artifact /private/model/raptor-rwd.tar.gz \
+  --signing-key /private/model/release-ed25519.pem
+```
+
+The vendor and media directories are private because redistribution is not yet
+cleared, but their public catalogs fix the accepted runtime bytes. A second
+camera acquisition may be used as compatibility evidence only; it must
+normalize to the same catalog identities and must not select different model
+bytes. The signing key is also a model input: changing it intentionally changes
+the signed bundle.
+
+The command has no arguments for camera recovery, WPA, recovery session,
+management credential, API key, hostname, or SSH identity. It creates a
+`model-universal` install set and `thingino-universal.tgb` with an empty data
+member. The immutable system has a locked root account, no private Wi-Fi/API/
+SSH files, and non-executable network-facing startup scripts. Two clean builds
+must remain byte-identical.
+
+For each camera, create separate audit, data, and authorization artifacts after
+its own recovery boundary passes. On macOS the repository wrapper executes the
+locked builder image offline; Linux may instead supply its reviewed regular
+`mkfs.jffs2` binary directly:
+
+```bash
+export DCS6100_BUILDER_IMAGE=the-locked-image-id
+thingino-dlink universal provision \
+  --functional-recovery-dir /private/camera/functional-recovery \
+  --preserved-readback-dir /private/camera/functional-recovery/preserved \
+  --universal-bundle /model/thingino-universal.tgb \
+  --universal-public-key /model/release.pub \
+  --private-config-dir /private/camera/install-config \
+  --session-dir /private/camera/recovery-session \
+  --signing-key /private/camera/authorization.pem \
+  --unsquashfs /path/to/unsquashfs \
+  --mkfs-jffs2 ./scripts/run_container_mkfs_jffs2.sh \
+  --output /private/camera/provisioning.private.zip \
+  --data-output /private/camera/provisioning.data.jffs2
+
+thingino-dlink universal authorize \
+  --functional-recovery-dir /private/camera/functional-recovery \
+  --preserved-readback-dir /private/camera/functional-recovery/preserved \
+  --universal-bundle /model/thingino-universal.tgb \
+  --universal-public-key /model/release.pub \
+  --provisioning /private/camera/provisioning.private.zip \
+  --provisioning-data /private/camera/provisioning.data.jffs2 \
+  --provisioning-public-key /private/camera/authorization.pub \
+  --session-dir /private/camera/recovery-session \
+  --signing-key /private/camera/authorization.pem \
+  --output-dir /private/camera/authorization
+```
+
+Both provisioning files contain secrets and remain mode 0600. The data image
+is a complete deterministic OverlayFS upper JFFS2, not an immutable firmware
+member. It is built twice with fixed little-endian 32 KiB erase/256-byte page
+geometry, exact 1,507,328-byte padding, fake time, root ownership, and CRC scan.
+The signed authorization binds camera identity, universal bundle, exact stage
+2, data action, recovery session, audit sidecar, provisioning ID, and data-image
+digest. Its fixed binary form uses a camera-keyed HMAC derived from the already
+validated, never-written mtd0/mtd4/mtd5 contents. Neither per-camera artifact
+is a compiler input, so two cameras reference the same universal firmware
+SHA-256.
+
+Physical provisioning write/readback and interruption acceptance are still
+blocked release gates. Consequently no guided staging command exposes this new
+path yet. Host artifact success must not be interpreted as installation
+support.
+
+## Legacy personalized configure inputs
 
 Press Enter to accept a displayed default. A custom path may be absolute or
 relative to the directory where the command is run; it is resolved and saved
@@ -255,9 +332,9 @@ Verification checks the exact commits, trees, submodule identity, remotes, and
 clean state. Preparation exports the verified trees without Git metadata,
 checks every profile input hash, and applies the ordered patches offline.
 
-## Local device-specific inputs
+## Local private and model inputs
 
-The normal build also needs:
+The legacy personalized build also needs:
 
 - `/lib/libimp.so`, `/lib/libalog.so`, and `/lib/libsysutils.so` acquired from
   the owner's matching DCS-6100LHV2 A1 stock mtd3;

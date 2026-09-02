@@ -303,6 +303,27 @@ class LocalBuildRunTests(unittest.TestCase):
                 {"builds": 2, "byte_identical": True},
             )
 
+    def test_universal_build_wrapper_cannot_receive_camera_private_inputs(self) -> None:
+        with mock.patch.object(
+            local_build_run,
+            "_build_local_install_set",
+            return_value={"artifact_scope": "model-universal"},
+        ) as build:
+            result = local_build_run.build_local_universal_install_set(
+                build_root=Path("/build"),
+                vendor_bundle_dir=Path("/model/vendor"),
+                media_closure_dir=Path("/model/media"),
+                raptor_rwd_artifact=Path("/model/raptor.tar"),
+                signing_key=Path("/model/release.pem"),
+            )
+        self.assertEqual(result["artifact_scope"], "model-universal")
+        values = build.call_args.kwargs
+        self.assertIsNone(values["private_config_dir"])
+        self.assertIsNone(values["expected_wpa_config_path"])
+        self.assertIsNone(values["session_dir"])
+        self.assertEqual(values["data_mode"], "initialize")
+        self.assertEqual(values["artifact_scope"], "model-universal")
+
     def test_build_rejects_a_single_build_workspace(self) -> None:
         with mock.patch.object(
             local_build_run,

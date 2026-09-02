@@ -63,6 +63,15 @@ def stage_verified_install_set(facade: object,
         raise MediaError("exact physical-device confirmation does not match preflight")
     if root.resolve(strict=True) != preflight.mount_root:
         raise MediaError("staging root changed after preflight")
+    root_identity = root.stat(follow_symlinks=False)
+    if (
+        getattr(preflight, "mount_device_id", 0)
+        and (
+            root_identity.st_dev != preflight.mount_device_id
+            or root_identity.st_ino != preflight.mount_inode
+        )
+    ):
+        raise MediaError("staging media identity changed after preflight")
     validate_sd_root(root)
 
     stage2_temporary = root / ".thingino-stage2-upload.part"

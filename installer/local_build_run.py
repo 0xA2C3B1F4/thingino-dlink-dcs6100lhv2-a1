@@ -23,7 +23,11 @@ from .collector.kernel import (
 )
 from .download_cache import DownloadCacheError, validate_download_cache_archive
 from .final_bundle import render_final_kernel_fragment
-from .final_root import FinalRootError, prepare_from_private_directory
+from .final_root import (
+    FinalRootError,
+    prepare_from_private_directory,
+    prepare_universal_final_root,
+)
 from .local_build import LocalBuildError, local_build_workspace_status
 from .local_build_acquire import LocalBuildAcquireError, acquire_locked_public_inputs
 from .media_closure import MediaClosureError, load_media_closure
@@ -38,6 +42,7 @@ from .sd_package import (
 from .stage1.build import (
     Stage1BuildError,
     build_install_set,
+    build_universal_install_set,
     render_installer_kernel_fragment,
     validate_mmc_module,
 )
@@ -828,19 +833,25 @@ def build_local_recovery_assets(*, build_root: Path) -> dict[str, object]:
         raise
 
 
-def build_local_install_set(
+def _build_local_install_set(
     *,
     build_root: Path,
     vendor_bundle_dir: Path,
     media_closure_dir: Path,
-    private_config_dir: Path,
-    expected_wpa_config_path: Path,
-    session_dir: Path,
+    private_config_dir: Path | None,
+    expected_wpa_config_path: Path | None,
+    session_dir: Path | None,
     raptor_rwd_artifact: Path,
-    data_mode: str = "initialize",
+    data_mode: str,
+    artifact_scope: str,
+    signing_key: Path | None,
 ) -> dict[str, object]:
-    """Build and inspect one private install set without consulting release gates."""
+    """Build one explicitly personalized or model-universal install set."""
 
+    if artifact_scope not in {"device-personalized", "model-universal"}:
+        raise LocalBuildRunError("local build artifact scope is invalid")
+    if artifact_scope == "model-universal" and data_mode != "initialize":
+        raise LocalBuildRunError("model-universal build requires initialize data mode")
     if data_mode not in {"initialize", "preserve", "factory-reset"}:
         raise LocalBuildRunError("data mode is invalid")
     try:
@@ -856,13 +867,36 @@ def build_local_install_set(
 
     root = _project_root().resolve(strict=True)
     build_root = Path(str(workspace["build_root"]))
-    vendor_bundle_dir = _directory(vendor_bundle_dir, "private vendor bundle")
-    media_closure_dir = _directory(media_closure_dir, "private media closure")
-    private_config_dir = _directory(private_config_dir, "private install configuration")
-    session_dir = _directory(session_dir, "private recovery session")
-    expected_wpa_config_path = _regular(
-        expected_wpa_config_path, "independent WPA configuration"
-    )
+    vendor_bundle_dir = _directory(vendor_bundle_dir, "model vendor bundle")
+    media_closure_dir = _directory(media_closure_dir, "model media closure")
+    if artifact_scope == "device-personalized":
+        if (
+            private_config_dir is None
+            or expected_wpa_config_path is None
+            or session_dir is None
+            or signing_key is not None
+        ):
+            raise LocalBuildRunError("personalized build inputs are incomplete")
+        private_config_dir = _directory(
+            private_config_dir, "private install configuration"
+        )
+        session_dir = _directory(session_dir, "private recovery session")
+        expected_wpa_config_path = _regular(
+            expected_wpa_config_path, "independent WPA configuration"
+        )
+    else:
+        if any(
+            value is not None
+            for value in (
+                private_config_dir,
+                expected_wpa_config_path,
+                session_dir,
+            )
+        ) or signing_key is None:
+            raise LocalBuildRunError(
+                "model-universal build accepts no camera inputs and requires signing"
+            )
+        signing_key = _regular(signing_key, "model-universal signing key", limit=64 * 1024)
     raptor_rwd_artifact = _regular(
         raptor_rwd_artifact,
         "Raptor RWD artifact",
@@ -988,24 +1022,42 @@ def build_local_install_set(
             workspace=workspace_a,
             builder_image=builder_image,
         )
-        private_root = run_dir / "private-final-root"
-        prepare_from_private_directory(
-            base_rootfs_path=build_a / "thingino-base.squashfs",
-            private_config_dir=private_config_dir,
-            expected_wpa_config_path=expected_wpa_config_path,
-            vendor_bundle_dir=vendor_bundle_dir,
-            media_closure_dir=media_closure_dir,
-            session_dir=session_dir,
-            output_dir=private_root,
-            mksquashfs=mksquashfs,
-            unsquashfs=unsquashfs,
-        )
+        if artifact_scope == "model-universal":
+            prepared_root = run_dir / "universal-final-root"
+            prepare_universal_final_root(
+                base_rootfs=(build_a / "thingino-base.squashfs").read_bytes(),
+                vendor_bundle=load_vendor_bundle(vendor_bundle_dir),
+                media_closure=media_closure,
+                output_dir=prepared_root,
+                mksquashfs=mksquashfs,
+                unsquashfs=unsquashfs,
+            )
+            prepared_system_name = "system.universal.squashfs"
+            prepared_manifest_name = "final-root.universal.json"
+        else:
+            assert private_config_dir is not None
+            assert expected_wpa_config_path is not None
+            assert session_dir is not None
+            prepared_root = run_dir / "private-final-root"
+            prepare_from_private_directory(
+                base_rootfs_path=build_a / "thingino-base.squashfs",
+                private_config_dir=private_config_dir,
+                expected_wpa_config_path=expected_wpa_config_path,
+                vendor_bundle_dir=vendor_bundle_dir,
+                media_closure_dir=media_closure_dir,
+                session_dir=session_dir,
+                output_dir=prepared_root,
+                mksquashfs=mksquashfs,
+                unsquashfs=unsquashfs,
+            )
+            prepared_system_name = "system.private.squashfs"
+            prepared_manifest_name = "final-root.private.json"
 
         raptor = _raptor_module(root)
         raptor_root = run_dir / "raptor-final-root"
         raptor_result = raptor.build_persistent_root(
-            base_rootfs_path=private_root / "system.private.squashfs",
-            base_provenance_path=private_root / "final-root.private.json",
+            base_rootfs_path=prepared_root / prepared_system_name,
+            base_provenance_path=prepared_root / prepared_manifest_name,
             artifact_path=raptor_rwd_artifact,
             artifact_sha256=_sha256(raptor_rwd_artifact),
             supervisor_path=root / "components/raptor-rwd/S13prudynt-rwd",
@@ -1015,10 +1067,15 @@ def build_local_install_set(
             unsquashfs=unsquashfs,
             static_rwd_tls=True,
             split_mtd3=True,
+            artifact_scope=artifact_scope,
         )
         if not isinstance(raptor_result, dict) or "raptor_rwd" not in raptor_result:
             raise LocalBuildRunError("Raptor overlay lacks raptor_rwd provenance")
-        system_rootfs = raptor_root / "system.private.squashfs"
+        system_rootfs = raptor_root / (
+            "system.universal.squashfs"
+            if artifact_scope == "model-universal"
+            else "system.private.squashfs"
+        )
         system = read_snapshot(system_rootfs)
         fragments = run_dir / "kernel-fragments"
         fragments.mkdir(mode=0o700)
@@ -1063,32 +1120,60 @@ def build_local_install_set(
             log_path=run_dir / "logs/split-kernels.log",
         )
         install_set = run_dir / "install-set"
-        build_install_set(
-            installer_kernel=read_snapshot(split_result / "installer-kernel.uimage"),
-            final_kernel=read_snapshot(split_result / "final-kernel.uimage"),
-            final_linux_config=read_snapshot(split_result / "final-linux.config"),
-            system=system,
-            mmc_module=read_snapshot(split_result / "installer-jzmmc_v12.ko"),
-            output_dir=install_set,
-            clang=_tool("clang"),
-            lld=_tool("ld.lld"),
-            mksquashfs=mksquashfs,
-            unsquashfs=unsquashfs,
-            data_mode=data_mode,
-        )
+        install_arguments = {
+            "installer_kernel": read_snapshot(
+                split_result / "installer-kernel.uimage"
+            ),
+            "final_kernel": read_snapshot(split_result / "final-kernel.uimage"),
+            "final_linux_config": read_snapshot(
+                split_result / "final-linux.config"
+            ),
+            "system": system,
+            "mmc_module": read_snapshot(split_result / "installer-jzmmc_v12.ko"),
+            "output_dir": install_set,
+            "clang": _tool("clang"),
+            "lld": _tool("ld.lld"),
+            "mksquashfs": mksquashfs,
+            "unsquashfs": unsquashfs,
+        }
+        if artifact_scope == "model-universal":
+            assert signing_key is not None
+            try:
+                universal_root_manifest = json.loads(
+                    (raptor_root / "final-root.universal.json").read_text(
+                        encoding="utf-8"
+                    )
+                )
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+                raise LocalBuildRunError(
+                    "universal Raptor provenance is invalid"
+                ) from exc
+            build_universal_install_set(
+                **install_arguments,
+                universal_root_manifest=universal_root_manifest,
+                signing_key=signing_key,
+            )
+        else:
+            build_install_set(**install_arguments, data_mode=data_mode)
         inspection = _inspect_install_set(
             root,
             install_set,
             run_dir / "logs/inspect-install-set.json",
         )
         run_manifest = {
+            "artifact_scope": artifact_scope,
             "build_count": 2,
             "data_mode": data_mode,
             "download_cache": download_identity,
             "install_set": "install-set",
             "inspection": inspection,
-            "private": True,
+            "private": artifact_scope == "device-personalized",
             "project_head": head,
+            "provisioning": (
+                "separate-per-camera-sidecar"
+                if artifact_scope == "model-universal"
+                else "embedded-device-personalization"
+            ),
             "public_firmware_release_gate_consulted": False,
             "raptor_rwd_overlay": True,
             "reproducibility": reproducibility,
@@ -1098,7 +1183,12 @@ def build_local_install_set(
             "thingino_toolchain": toolchain_identity,
         }
         atomic_write(
-            run_dir / "local-build-run.private.json",
+            run_dir
+            / (
+                "local-build-run.universal.json"
+                if artifact_scope == "model-universal"
+                else "local-build-run.private.json"
+            ),
             (json.dumps(run_manifest, indent=2, sort_keys=True) + "\n").encode(),
             mode=0o600,
         )
@@ -1118,6 +1208,7 @@ def build_local_install_set(
         raise LocalBuildRunError(str(exc)) from exc
 
     return {
+        "artifact_scope": artifact_scope,
         "build_count": 2,
         "build_root": str(build_root),
         "data_mode": data_mode,
@@ -1130,4 +1221,60 @@ def build_local_install_set(
         "run_dir": str(run_dir),
         "schema_version": 2,
         "status": "host-built and inspected; live installation not authorized",
+        "universal_firmware": (
+            str(install_set / "thingino-universal.tgb")
+            if artifact_scope == "model-universal"
+            else None
+        ),
     }
+
+
+def build_local_install_set(
+    *,
+    build_root: Path,
+    vendor_bundle_dir: Path,
+    media_closure_dir: Path,
+    private_config_dir: Path,
+    expected_wpa_config_path: Path,
+    session_dir: Path,
+    raptor_rwd_artifact: Path,
+    data_mode: str = "initialize",
+) -> dict[str, object]:
+    """Legacy personalized build; its bytes must not be shared as universal."""
+
+    return _build_local_install_set(
+        build_root=build_root,
+        vendor_bundle_dir=vendor_bundle_dir,
+        media_closure_dir=media_closure_dir,
+        private_config_dir=private_config_dir,
+        expected_wpa_config_path=expected_wpa_config_path,
+        session_dir=session_dir,
+        raptor_rwd_artifact=raptor_rwd_artifact,
+        data_mode=data_mode,
+        artifact_scope="device-personalized",
+        signing_key=None,
+    )
+
+
+def build_local_universal_install_set(
+    *,
+    build_root: Path,
+    vendor_bundle_dir: Path,
+    media_closure_dir: Path,
+    raptor_rwd_artifact: Path,
+    signing_key: Path,
+) -> dict[str, object]:
+    """Build once for A1 cameras; authorization and provisioning stay separate."""
+
+    return _build_local_install_set(
+        build_root=build_root,
+        vendor_bundle_dir=vendor_bundle_dir,
+        media_closure_dir=media_closure_dir,
+        private_config_dir=None,
+        expected_wpa_config_path=None,
+        session_dir=None,
+        raptor_rwd_artifact=raptor_rwd_artifact,
+        data_mode="initialize",
+        artifact_scope="model-universal",
+        signing_key=signing_key,
+    )

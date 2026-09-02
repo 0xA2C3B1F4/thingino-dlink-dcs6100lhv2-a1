@@ -20,10 +20,13 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
     _local_build_acquire = getattr(facade, '_local_build_acquire')
     _local_build_bootstrap = getattr(facade, '_local_build_bootstrap')
     _local_build_build = getattr(facade, '_local_build_build')
+    _local_build_build_universal = getattr(facade, '_local_build_build_universal')
     _local_build_configure = getattr(facade, '_local_build_configure')
     _local_build_prepare = getattr(facade, '_local_build_prepare')
     _local_build_recovery_assets = getattr(facade, '_local_build_recovery_assets')
     _local_build_status = getattr(facade, '_local_build_status')
+    _universal_authorize = getattr(facade, '_universal_authorize')
+    _universal_provision = getattr(facade, '_universal_provision')
     _preflight = getattr(facade, '_preflight')
     _prepare_card = getattr(facade, '_prepare_card')
     _private_config_inspect = getattr(facade, '_private_config_inspect')
@@ -330,6 +333,67 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
         help="advanced override; must match a saved plan when one is used",
     )
     local_build_build.set_defaults(handler=_local_build_build)
+    local_build_universal = local_build_commands.add_parser("build-universal")
+    _add_common(local_build_universal, inherited=True)
+    local_build_universal.add_argument("--build-root", type=Path)
+    local_build_universal.add_argument(
+        "--vendor-bundle-dir", type=Path, required=True
+    )
+    local_build_universal.add_argument(
+        "--media-closure-dir", type=Path, required=True
+    )
+    local_build_universal.add_argument(
+        "--raptor-rwd-artifact", type=Path, required=True
+    )
+    local_build_universal.add_argument("--signing-key", type=Path, required=True)
+    local_build_universal.set_defaults(handler=_local_build_build_universal)
+
+    universal = commands.add_parser("universal")
+    universal_commands = universal.add_subparsers(
+        dest="universal_command", required=True
+    )
+
+    def add_recovery_inputs(parser: argparse.ArgumentParser) -> None:
+        recovery = parser.add_mutually_exclusive_group(required=True)
+        recovery.add_argument("--recovery-dir", type=Path)
+        recovery.add_argument("--functional-recovery-dir", type=Path)
+        parser.add_argument("--preserved-readback-dir", type=Path, required=True)
+
+    universal_provision = universal_commands.add_parser("provision")
+    _add_common(universal_provision, inherited=True)
+    add_recovery_inputs(universal_provision)
+    universal_provision.add_argument("--universal-bundle", type=Path, required=True)
+    universal_provision.add_argument(
+        "--universal-public-key", type=Path, required=True
+    )
+    universal_provision.add_argument("--private-config-dir", type=Path, required=True)
+    universal_provision.add_argument("--session-dir", type=Path, required=True)
+    universal_provision.add_argument("--signing-key", type=Path, required=True)
+    universal_provision.add_argument("--unsquashfs", type=Path, required=True)
+    universal_provision.add_argument("--mkfs-jffs2", type=Path, required=True)
+    universal_provision.add_argument("--output", type=Path, required=True)
+    universal_provision.add_argument("--data-output", type=Path, required=True)
+    universal_provision.set_defaults(handler=_universal_provision)
+
+    universal_authorize = universal_commands.add_parser("authorize")
+    _add_common(universal_authorize, inherited=True)
+    add_recovery_inputs(universal_authorize)
+    universal_authorize.add_argument("--universal-bundle", type=Path, required=True)
+    universal_authorize.add_argument(
+        "--universal-public-key", type=Path, required=True
+    )
+    universal_authorize.add_argument("--provisioning", type=Path, required=True)
+    universal_authorize.add_argument("--provisioning-data", type=Path, required=True)
+    universal_authorize.add_argument(
+        "--provisioning-public-key", type=Path, required=True
+    )
+    universal_authorize.add_argument("--session-dir", type=Path, required=True)
+    universal_authorize.add_argument("--signing-key", type=Path, required=True)
+    universal_authorize.add_argument("--output-dir", type=Path, required=True)
+    universal_authorize.add_argument(
+        "--data-action", choices=("initialize",), default="initialize"
+    )
+    universal_authorize.set_defaults(handler=_universal_authorize)
 
     runtime = commands.add_parser("runtime-candidate")
     runtime_commands = runtime.add_subparsers(dest="runtime_command", required=True)

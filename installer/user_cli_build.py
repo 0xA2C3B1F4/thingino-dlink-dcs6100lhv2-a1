@@ -282,6 +282,32 @@ def _local_build_build(facade: object, arguments: argparse.Namespace) -> dict[st
         result=result,
     )
 
+def _local_build_build_universal(
+    facade: object, arguments: argparse.Namespace
+) -> dict[str, object]:
+    _document = getattr(facade, "_document")
+    build = getattr(facade, "build_local_universal_install_set")
+    resolve = getattr(facade, "resolve_local_build_workspace")
+    build_root = resolve(
+        build_root=arguments.build_root,
+        work_dir=arguments.work_dir,
+    )
+    result = build(
+        build_root=build_root,
+        vendor_bundle_dir=arguments.vendor_bundle_dir,
+        media_closure_dir=arguments.media_closure_dir,
+        raptor_rwd_artifact=arguments.raptor_rwd_artifact,
+        signing_key=arguments.signing_key,
+    )
+    return _document(
+        "local-build build-universal",
+        ok=True,
+        phase="local-build-model-universal-install-set-inspected",
+        next_command="thingino-dlink universal provision",
+        result=result,
+    )
+
+
 def _build_personal_mtd3(facade: object, arguments: argparse.Namespace) -> dict[str, object]:
     _document = getattr(facade, '_document')
     _load_config = getattr(facade, '_load_config')

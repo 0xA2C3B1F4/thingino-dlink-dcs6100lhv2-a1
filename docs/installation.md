@@ -220,13 +220,52 @@ sizes, SHA-256 values and MIPS ABI against
 `profiles/dlink-dcs6100lhv2-a1/vendor-closure.json`, then writes the accepted
 metadata to `vendor-bundle.private.json`.
 
-During setup, you provide the station-network details. The installer generates
-management and API credentials locally for that installation. You select the
-SSH public key.
+For the model-universal build, these catalog-locked bytes are model inputs and
+must normalize identically across compatible A1 acquisitions. Camera-specific
+station details, management/API credentials, and SSH material belong only to
+the separate provisioning sidecar. The legacy personalized build still embeds
+those values and must not be reused on another camera.
+
+## Reusing one firmware on multiple cameras
+
+Build `thingino-universal.tgb` once. For camera A and camera B, independently:
+
+1. capture and validate that camera's own recovery and preserved readback;
+2. create its private audit sidecar and exact-span JFFS2 overlay image;
+3. create its signed camera authorization; and
+4. verify that both authorizations name the same universal firmware SHA-256
+   while their camera, session, sidecar, data, and authorization identities
+   differ.
+
+The authorization also contains a fixed 256-byte `INSTALL.AUTH.BIN`. Its HMAC
+key is derived independently inside the host recovery gate and Stage 1 from the
+same camera's complete preserved mtd0/mtd4/mtd5 bytes; the key is not printed or
+written into the authorization. Before any final write, Stage 1 loads exact
+stage 2 and the full 1,507,328-byte `THINGINO.PROVISION` JFFS2 into bounded RAM,
+then verifies camera identity, HMAC, compiled stage-2 SHA-256, `initialize`, and
+the data image SHA-256. A sidecar, data image, or authorization swapped between
+cameras therefore fails before bootstrap removal and before NOR erase.
+
+The immutable universal root initially has no usable private credential or
+network startup. Private values are not members of the signed universal bundle.
+After authorization, Stage 1 commits a read-back stock-mtd3 backup and
+checkpoint, writes and verifies the complete private data overlay, writes the
+system and kernel tail, and writes the final kernel activation eraseblock last.
+It removes the active bootstrap before writes and passivates the per-camera card
+files after verified activation. This provides crash/retry and one-active-card
+transaction semantics; it is not clone-resistant anti-replay.
+
+The complete physical write declaration is stock-updater mtd1+mtd2, followed by
+Stage-1 final mtd1 and physical mtd3. Physical mtd0/mtd4/mtd5 remain preserved.
+The SD transaction also creates `STOCKM3.BIN` and `STOCKM3.OK` and consumes its
+active selector and camera files. No staging operation may hide any part of
+that declaration. Physical interruption, successful provisioned boot, and
+second-camera acceptance remain open release gates, so no guided universal
+staging command is exposed yet.
 
 ## Data actions
 
-The final install set binds exactly one mtd3 data action:
+The legacy personalized install set binds exactly one mtd3 data action:
 
 - `initialize` creates the first private stock-mtd3 backup and checkpoint,
   installs the fixed system, and erases the new data region;
@@ -257,10 +296,11 @@ not make an artifact public or authorize a write.
 
 ## Local install set and supported host systems
 
-The firmware build and its device-specific inputs stay on your computer. After
-`python3 -m installer inspect-install-set` accepts the exact
-local output, stage it on macOS, Linux, or Windows with
-`thingino-dlink stage-install-set`. The command validates the install set,
+The legacy personalized firmware build and its device-specific inputs stay on
+your computer. After `python3 -m installer inspect-install-set` accepts the
+exact local output, stage that legacy development set on macOS, Linux, or
+Windows with `thingino-dlink stage-install-set`. This command is not the
+model-universal staging path. It validates the install set,
 requires the expected `initialize`, `preserve`, or `factory-reset` data action,
 requires `--recovery-dir` and `--preserved-readback-dir` to pass before media
 staging,

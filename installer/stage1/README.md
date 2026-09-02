@@ -32,8 +32,11 @@ pages, pads only the final partial page with erased `0xff`, and retains a
 conservative 64 KiB final-kernel activation span. The MIPS O32 `MEMERASE`
 request uses the architecture's `0x80084d02` ioctl value.
 
-PID 1 mounts the FAT card and verifies the exact stage-2 file. Before any final
-write, it requires the compiled stock-matching bootstrap pathname to be absent
+PID 1 mounts the FAT card, loads the exact stage-2 file into a bounded RAM
+snapshot, and verifies it. Model-universal mode also loads the complete
+per-camera JFFS2 into a separate bounded RAM snapshot and verifies its
+camera-keyed authorization. Before any final write, it requires the compiled
+stock-matching bootstrap pathname to be absent
 or removes only that exact path and syncs FAT. The normal stock flow stops after
 flashing the bootstrap, so the host deactivates the verified matching name
 before rebooting into stage 1. An already absent path is therefore an expected,
@@ -42,17 +45,22 @@ For an `initialize` install, PID 1 exports the original physical stock mtd3 as
 private `STOCKM3.BIN` and verifies that backup against NOR before the first
 final write. On a pre-write retry, it may reuse an existing file only after
 comparing its complete system and data regions against the still-current NOR
-and proving exact end-of-file.
-A partial or oversized backup is terminal. A complete backup that differs from
+and proving exact end-of-file. New backups and checkpoints use private `.PART`
+names, complete readback, sync, rename, and directory sync before becoming
+committed names.
+A partial or oversized committed backup is terminal. An interrupted `.PART`
+backup is discarded before NOR writes and recreated. A complete backup that differs from
 current NOR is terminal unless the exact recovery checkpoint already exists;
 this does not recover an installation interrupted before that checkpoint.
 
 After proving that `STOCKM3.BIN` exactly matches current NOR, PID 1 writes and
-reads back fixed 80-byte `STOCKM3.OK`. The record binds its magic/version, the
-backup size and SHA-256, and the compiled stage-2 size and SHA-256. On a later
-boot where NOR no longer matches the backup, only an exact backup/checkpoint
-pair permits re-running that same bounded final install. The record contains no
-command, path, partition, offset, or replacement digest supplied by the card.
+reads back `STOCKM3.OK`. Legacy personalized mode retains the 80-byte `DCS6RC01`
+record binding backup and compiled stage 2. Model-universal mode uses the
+144-byte `DCS6RC02` record and additionally binds the exact camera authorization
+binary SHA-256 and provisioning JFFS2 SHA-256. On a later boot where NOR no
+longer matches the backup, only the exact backup/checkpoint/authorization/data
+tuple permits re-running that same bounded final install. The record contains no
+command, path, partition, or offset supplied by the card.
 It is a consistency/corruption gate, not authentication against malicious
 removable media, and it does not restore stock firmware.
 
@@ -61,8 +69,11 @@ private backup/checkpoint and erases the new data region. `preserve` hashes the
 complete data region before writing system and requires an identical complete
 readback afterward. `factory-reset` is an explicit data-only erase combined
 with the bound system/kernel installation. No mode silently reformats a corrupt
-JFFS2 region. PID 1 writes and verifies system, writes and verifies the kernel
-tail, and writes the first 64 KiB activation block last.
+JFFS2 region. In universal `initialize`, PID 1 erases, writes, and verifies the
+complete authorized JFFS2 before system. It then writes and verifies system,
+writes and verifies the kernel tail, and writes the first 64 KiB activation
+block last. All final write bytes come from the earlier RAM snapshots rather
+than reopened removable-media paths.
 
 The host fake-NOR model uses the same reported 32 KiB physical erase sectors
 and 256-byte write pages as PID 1. Its interruption tests stop after selected

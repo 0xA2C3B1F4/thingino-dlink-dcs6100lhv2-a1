@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status_date": "2026-08-31",
+  "status_date": "2026-09-02",
   "scopes": [
     {
       "id": "source-publication",
@@ -75,6 +75,18 @@
           "status": "blocked",
           "requirement": "A supported pre-write RAM path captures two complete original partition sets, and interrupted write, corrupt data, reset, reinstall, final-layout recovery, and same-device stock restoration pass on physical hardware with complete readback.",
           "evidence": ["docs/recovery.md", "profiles/dlink-dcs6100lhv2-a1/uartless-release-gate.json"]
+        },
+        {
+          "id": "universal-artifact-isolation",
+          "status": "closed",
+          "requirement": "The model-universal build API accepts no camera private configuration, emits empty data provisioning, and two camera authorizations reference identical firmware bytes.",
+          "evidence": ["installer/camera_authorization.py", "installer/final_root.py", "installer/install_policy.py", "installer/provisioning.py", "installer/provisioning_data.py", "tests/test_universal_artifacts.py"]
+        },
+        {
+          "id": "on-camera-provisioning-acceptance",
+          "status": "blocked",
+          "requirement": "The separate exact-span camera JFFS2 is physically written and read back, its active removable-media transaction is passivated, and power interruption is accepted without changing the signed universal firmware artifact.",
+          "evidence": ["docs/installation.md", "docs/status.md"]
         },
         {
           "id": "second-camera",
