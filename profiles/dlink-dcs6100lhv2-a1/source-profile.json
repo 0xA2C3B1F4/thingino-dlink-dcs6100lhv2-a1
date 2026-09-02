@@ -822,6 +822,10 @@
         {
             "sha256": "b7970424562eafb90b0d90f80fb742d3d3ed66fe168085dc9a777639543aa96a",
             "source": "patches/thingino/0022-accept-verified-stage1-mtd-handoff.patch"
+        },
+        {
+            "sha256": "fe53b784e329bbe848a810bd3fde0d155c86b1298ccfd93221546ae21ae67bb3",
+            "source": "patches/thingino/0023-pin-exfat-nofuse-source-archive.patch"
         }
   ]
 }

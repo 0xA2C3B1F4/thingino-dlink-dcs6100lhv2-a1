@@ -309,6 +309,7 @@
     "patches/thingino/0020-overlay-refuse-implicit-data-format.patch",
     "patches/thingino/0021-harden-dlink-sd-automount.patch",
     "patches/thingino/0022-accept-verified-stage1-mtd-handoff.patch",
+    "patches/thingino/0023-pin-exfat-nofuse-source-archive.patch",
     "patches/uhttpd/0007-proxy-thingino-control.patch",
     "patches/uhttpd/0008-disable-cgi-and-proxy-onvif.patch",
     "patches/uhttpd/0009-remove-request-script-runtime.patch",

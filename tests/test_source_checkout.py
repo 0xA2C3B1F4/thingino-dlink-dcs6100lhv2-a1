@@ -193,6 +193,16 @@ class SourceCheckoutTests(unittest.TestCase):
         self.assertIn("sha256sum -c -", build)
         self.assertIn("$toolchain_input", firmware_fetch)
         self.assertIn("sha256sum -c -", firmware_fetch)
+        self.assertIn("GIT_ASKPASS=/bin/false", firmware_fetch)
+        self.assertIn("GIT_CONFIG_COUNT=1", firmware_fetch)
+        self.assertIn("GIT_CONFIG_GLOBAL=/dev/null", firmware_fetch)
+        self.assertIn("GIT_CONFIG_KEY_0=http.version", firmware_fetch)
+        self.assertIn("GIT_CONFIG_NOSYSTEM=1", firmware_fetch)
+        self.assertIn("GIT_CONFIG_VALUE_0=HTTP/1.1", firmware_fetch)
+        self.assertIn("GIT_TERMINAL_PROMPT=0", firmware_fetch)
+        self.assertEqual(firmware_fetch.count('retry_network_fetch "locked'), 2)
+        self.assertIn('if [ "$attempt" -ge 3 ]', firmware_fetch)
+        self.assertIn('echo "$label failed after $attempt attempts"', firmware_fetch)
 
     def test_builder_containerfiles_match_locked_platform_digests(self) -> None:
         for architecture in ("amd64", "arm64"):

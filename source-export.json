@@ -1213,6 +1213,10 @@
       "sha256": "b7970424562eafb90b0d90f80fb742d3d3ed66fe168085dc9a777639543aa96a",
       "source": "patches/thingino/0022-accept-verified-stage1-mtd-handoff.patch"
     },
+    "patches/thingino/0023-pin-exfat-nofuse-source-archive.patch": {
+      "sha256": "fe53b784e329bbe848a810bd3fde0d155c86b1298ccfd93221546ae21ae67bb3",
+      "source": "patches/thingino/0023-pin-exfat-nofuse-source-archive.patch"
+    },
     "patches/uhttpd/0007-proxy-thingino-control.patch": {
       "sha256": "4b23ad48ad82a5559355597372792d35b8b0dcfd3b2053c24b0214ab939fd8e7",
       "source": "patches/uhttpd/0007-proxy-thingino-control.patch"
@@ -1262,7 +1266,7 @@
       "source": "profiles/dlink-dcs6100lhv2-a1/defconfig"
     },
     "profiles/dlink-dcs6100lhv2-a1/download-cache.json": {
-      "sha256": "f87a8aac6544b714e69b5b8dc2f26156acaf2ed201663e089caa16d8e51307a5",
+      "sha256": "8a09971d1eca67c52dd99f48bc797fad2f12eb7235965112586ebabdb85c9659",
       "source": "profiles/dlink-dcs6100lhv2-a1/download-cache.json"
     },
     "profiles/dlink-dcs6100lhv2-a1/kernel.fragment": {
@@ -1282,7 +1286,7 @@
       "source": "profiles/dlink-dcs6100lhv2-a1/recovery-ap-kernel.fragment"
     },
     "profiles/dlink-dcs6100lhv2-a1/source-profile.json": {
-      "sha256": "b3a099363d43afad6e9eae09b6d8e5d10dce1d0917abdd2da2891348e12b95a7",
+      "sha256": "05358c873fd2395f58bd859e66e3ba03f0ccbaaf1ad57712455e48591c4316fa",
       "source": "profiles/dlink-dcs6100lhv2-a1/source-profile.json"
     },
     "profiles/dlink-dcs6100lhv2-a1/stock-restore-kernel.fragment": {
@@ -1374,7 +1378,7 @@
       "source": "scripts/container_build_thingino_toolchain.sh"
     },
     "scripts/container_fetch_thingino_downloads.sh": {
-      "sha256": "c171b3aa48f702cc0772f01842effab75d86b933222278ed9de937ed9a04b776",
+      "sha256": "31f03c4edb10a14c8be96ca29e777851fdcc06c2ce121956f4815326ffea714e",
       "source": "scripts/container_fetch_thingino_downloads.sh"
     },
     "scripts/container_fetch_thingino_toolchain_downloads.sh": {
@@ -1658,11 +1662,11 @@
       "source": "tests/test_sd_package.py"
     },
     "tests/test_source_checkout.py": {
-      "sha256": "cb6ce83333168567b825bb065487b2ec002808754e265ee392717bcf425191e9",
+      "sha256": "f2fba3506f015a9cf4bbd7dc73318c2131c357ab7dd1c3f163179359aa0ea255",
       "source": "tests/test_source_checkout.py"
     },
     "tests/test_source_prepare.py": {
-      "sha256": "a90498b740f04c31d3b43bfe254949e15110809d4e57f15147b4d8268fa26be6",
+      "sha256": "9418719bd6f3d7fe4efdfe3fe3a16130cba15acaaf2d95e6636aa87ff3d684cc",
       "source": "tests/test_source_prepare.py"
     },
     "tests/test_stage1_build.py": {

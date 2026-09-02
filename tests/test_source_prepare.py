@@ -173,7 +173,7 @@ class SourceProfileTests(unittest.TestCase):
         profile = PREP.load_profile()
         self.assertEqual(profile["model"], "DCS-6100LHV2")
         self.assertEqual(profile["hardware_revision"], "A1")
-        self.assertEqual(len(profile["thingino_patches"]), 18)
+        self.assertEqual(len(profile["thingino_patches"]), 19)
         self.assertEqual(len(profile["installed_files"]), 149)
         self.assertEqual(
             profile["installed_files"][0]["destination"],
@@ -373,6 +373,20 @@ class SourceProfileTests(unittest.TestCase):
         self.assertEqual(kernel_release.count("--no-print-directory -s -C"), 2)
         self.assertIn("package/exfat-nofuse/exfat-nofuse.mk", kernel_release)
         self.assertIn("package/ingenic-sdk/ingenic-sdk.mk", kernel_release)
+
+        exfat_source = (
+            ROOT / "patches/thingino/0023-pin-exfat-nofuse-source-archive.patch"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "EXFAT_NOFUSE_SITE = $(call github,dorimanx,exfat-nofuse,",
+            exfat_source,
+        )
+        self.assertIn(
+            "b88a98f0a7e1b987465f5ccfcafb384b293506c7fec9d3b91b803e0fe5b16e0a",
+            exfat_source,
+        )
+        self.assertIn("EXFAT_NOFUSE_LICENSE_FILES = LICENSE", exfat_source)
+        self.assertNotIn("+EXFAT_NOFUSE_SITE_METHOD = git", exfat_source)
 
         uhttpd_stop = (
             ROOT / "patches/thingino/0014-stop-uhttpd-by-verified-pid.patch"
