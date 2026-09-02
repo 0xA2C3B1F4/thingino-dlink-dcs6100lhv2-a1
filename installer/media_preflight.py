@@ -19,6 +19,8 @@ class MediaPreflight:
     capacity_bytes: int
     filesystem: str
     mount_root: Path
+    mount_device_id: int = 0
+    mount_inode: int = 0
 
 
 DARWIN_DEVICE = re.compile(r"/dev/disk[1-9][0-9]*")
@@ -92,10 +94,13 @@ def validate_media_preflight_document(
         raise MediaError("media preflight mount root does not match the requested root")
     if expected_root.is_symlink() or not root.is_dir():
         raise MediaError("media root is not a real directory")
+    root_identity = root.stat(follow_symlinks=False)
     return MediaPreflight(
         physical_device=physical_device,
         model=model,
         capacity_bytes=capacity,
         filesystem=filesystem,
         mount_root=root,
+        mount_device_id=root_identity.st_dev,
+        mount_inode=root_identity.st_ino,
     )

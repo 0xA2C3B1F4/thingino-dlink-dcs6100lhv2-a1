@@ -140,6 +140,8 @@ def discover_public_files() -> list[str]:
             continue
         if "__pycache__" in relative.parts or path.name == ".DS_Store":
             continue
+        if relative.parts[0].endswith(".egg-info"):
+            continue
         if path.is_symlink():
             discovered.append(relative.as_posix())
         elif path.is_file() and path.suffix != ".pyc":

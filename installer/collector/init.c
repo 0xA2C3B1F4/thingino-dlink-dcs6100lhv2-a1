@@ -49,13 +49,18 @@ enum {
     MODEL_MARKER_OFFSET = 223235,
 };
 
+#if FUNCTIONAL_CAPTURE
+#define FULL_BACKUP_ROOT "/card/DCS6100F"
+#define OUTPUT_ROOT FULL_BACKUP_ROOT
+#else
+#define FULL_BACKUP_ROOT "/card/DCS6100B"
 #define OUTPUT_ROOT "/card/DCS6100A1"
+#endif
 #define VENDOR_ROOT OUTPUT_ROOT "/vendor"
 #define VENDOR_FILES VENDOR_ROOT "/files"
 #define PRESERVED_ROOT OUTPUT_ROOT "/preserved"
 #define PROTECTED_ROOT "/card/DCS6100P"
 #define PROTECTED_FILES PROTECTED_ROOT "/preserved"
-#define FULL_BACKUP_ROOT "/card/DCS6100B"
 #define FULL_COPY_A FULL_BACKUP_ROOT "/copy-a"
 #define FULL_COPY_B FULL_BACKUP_ROOT "/copy-b"
 
@@ -591,7 +596,7 @@ static void load_mmc_and_mount_card(void)
         "shortname=winnt");
 }
 
-#if !FULL_BACKUP_CAPTURE && !PROTECTED_CAPTURE
+#if !FULL_BACKUP_CAPTURE && !FUNCTIONAL_CAPTURE && !PROTECTED_CAPTURE
 static void collect_existing_recovery_preflight(void)
 {
     int audio_present;
@@ -682,13 +687,21 @@ static void capture_protected_readback(void)
 }
 #endif
 
-#if FULL_BACKUP_CAPTURE
+#if FULL_BACKUP_CAPTURE || FUNCTIONAL_CAPTURE
 static void capture_complete_backup(void)
 {
+#if FUNCTIONAL_CAPTURE
+    int audio_present;
+#endif
     load_mmc_and_mount_card();
     make_new_directory(FULL_BACKUP_ROOT, 0700);
     make_new_directory(FULL_COPY_A, 0700);
     make_new_directory(FULL_COPY_B, 0700);
+#if FUNCTIONAL_CAPTURE
+    make_new_directory(VENDOR_ROOT, 0700);
+    make_new_directory(VENDOR_FILES, 0700);
+    make_new_directory(PRESERVED_ROOT, 0700);
+#endif
 
     copy_mtd_with_sd_readback("/dev/mtd0", FULL_COPY_A "/mtd0.bin", 0x00040000);
     copy_mtd_with_sd_readback("/dev/mtd1", FULL_COPY_A "/mtd1.bin", 0x001c0000);
@@ -704,6 +717,53 @@ static void capture_complete_backup(void)
     copy_mtd_with_sd_readback("/dev/mtd4", FULL_COPY_B "/mtd4.bin", 0x00180000);
     copy_mtd_with_sd_readback("/dev/mtd5", FULL_COPY_B "/mtd5.bin", 0x00040000);
 
+#if FUNCTIONAL_CAPTURE
+    copy_mtd_with_sd_readback(
+        "/dev/mtd0", PRESERVED_ROOT "/mtd0.bin", 0x00040000);
+    copy_mtd_with_sd_readback(
+        "/dev/mtd4", PRESERVED_ROOT "/mtd4.bin", 0x00180000);
+    copy_mtd_with_sd_readback(
+        "/dev/mtd5", PRESERVED_ROOT "/mtd5.bin", 0x00040000);
+    write_new_file(
+        PRESERVED_ROOT "/device-layout.private.json",
+        DEVICE_LAYOUT_JSON,
+        sizeof(DEVICE_LAYOUT_JSON) - 1);
+
+    make_mount_directory("/stock", 0500);
+    mount_checked("/dev/mtdblock3", "/stock", "jffs2",
+        MS_RDONLY | MS_NOSUID | MS_NODEV | MS_NOEXEC, 0);
+    copy_vendor_file(
+        "/stock/lib/libimp.so", VENDOR_FILES "/libimp.so",
+        LIBIMP_SIZE, LIBIMP_SHA256, 1);
+    copy_vendor_file(
+        "/stock/lib/libalog.so", VENDOR_FILES "/libalog.so",
+        LIBALOG_SIZE, LIBALOG_SHA256, 1);
+    copy_vendor_file(
+        "/stock/lib/libsysutils.so", VENDOR_FILES "/libsysutils.so",
+        LIBSYSUTILS_SIZE, LIBSYSUTILS_SHA256, 1);
+    audio_present = copy_vendor_file(
+        "/stock/lib/libaudioProcess.so", VENDOR_FILES "/libaudioProcess.so",
+        LIBAUDIOPROCESS_SIZE, LIBAUDIOPROCESS_SHA256, 0);
+    if (audio_present)
+        write_new_file(
+            VENDOR_ROOT "/vendor-bundle.private.json",
+            VENDOR_MANIFEST_OPTIONAL_JSON,
+            sizeof(VENDOR_MANIFEST_OPTIONAL_JSON) - 1);
+    else
+        write_new_file(
+            VENDOR_ROOT "/vendor-bundle.private.json",
+            VENDOR_MANIFEST_REQUIRED_JSON,
+            sizeof(VENDOR_MANIFEST_REQUIRED_JSON) - 1);
+
+    write_new_file(
+        FULL_BACKUP_ROOT "/device-layout.private.json",
+        FUNCTIONAL_LAYOUT_JSON,
+        sizeof(FUNCTIONAL_LAYOUT_JSON) - 1);
+    write_new_file(
+        FULL_BACKUP_ROOT "/CAPTURE.OK",
+        "functional_duplicate_reads=complete;host_validation=required;pre_capture_writes=mtd1,mtd2\n",
+        sizeof("functional_duplicate_reads=complete;host_validation=required;pre_capture_writes=mtd1,mtd2\n") - 1);
+#else
     write_new_file(
         FULL_BACKUP_ROOT "/device-layout.private.json",
         FULL_BACKUP_LAYOUT_JSON,
@@ -712,6 +772,7 @@ static void capture_complete_backup(void)
         FULL_BACKUP_ROOT "/CAPTURE.OK",
         "duplicate_reads=complete;host_validation=required;nor_writes=false\n",
         sizeof("duplicate_reads=complete;host_validation=required;nor_writes=false\n") - 1);
+#endif
     if (call1(SYSCALL_SYNC, 0) != 0)
         FAIL("COLLECT FAIL final_sync\n");
     EMIT("COLLECT COMPLETE host_validation_required\n");
@@ -732,7 +793,7 @@ void _start(void)
     if (result != 0 && result != -EBUSY)
         FAIL("COLLECT FAIL devtmpfs\n");
     verify_exact_read_only_layout();
-#if FULL_BACKUP_CAPTURE
+#if FULL_BACKUP_CAPTURE || FUNCTIONAL_CAPTURE
     capture_complete_backup();
 #elif PROTECTED_CAPTURE
     capture_protected_readback();

@@ -16,6 +16,7 @@ from .artifacts import (
     validate_squashfs,
     validate_uimage_command_line,
 )
+from .install_policy import universal_physical_write_policy
 from .layout import ERASE_BLOCK_SIZE, TARGET
 from .fake_mtd import FinalBundleImages
 from .mtd3_split import (
@@ -55,6 +56,10 @@ class ValidatedFinalBundle:
     raw: bytes
     manifest: dict[str, object]
     members: dict[str, bytes]
+
+    @property
+    def sha256(self) -> str:
+        return hashlib.sha256(self.raw).hexdigest()
 
 
 def validate_final_kernel_config(raw: bytes, expected_command_line: str) -> None:
@@ -228,7 +233,12 @@ def build_final_bundle(
     data_jffs2: bytes,
     linux_config: bytes,
     signing_key: Path,
+    artifact_scope: str = "device-personalized",
 ) -> bytes:
+    if artifact_scope not in {"device-personalized", "model-universal"}:
+        raise BundleError("final bundle artifact scope is invalid")
+    if artifact_scope == "model-universal" and data_jffs2:
+        raise BundleError("model-universal bundle must leave data provisioning empty")
     try:
         layout = derive_final_layout(len(system_rootfs))
     except Mtd3SplitError as exc:
@@ -285,6 +295,7 @@ def build_final_bundle(
         ),
     ]
     manifest_document = {
+        "artifact_scope": artifact_scope,
         "activation": {
             "kind": "kernel-first-eraseblock",
             "offset": TARGET.partition(1).offset,
@@ -330,6 +341,11 @@ def build_final_bundle(
             "overlay_mount": "/overlay",
             "preserve_data_on_update": True,
         },
+        **(
+            {"physical_write_policy": universal_physical_write_policy()}
+            if artifact_scope == "model-universal"
+            else {}
+        ),
         "preserved_mtd": [0, 4, 5],
         "schema_version": 2,
         "signing_key_sha256": _public_key_id_from_private(signing_key),
@@ -420,6 +436,11 @@ def validate_final_bundle(raw: bytes, *, public_key: Path) -> ValidatedFinalBund
         raise BundleError("unsupported final-bundle schema")
     if manifest.get("image_kind") != "dcs6100-mtd3-split-v1":
         raise BundleError("final bundle image kind changed")
+    if manifest.get("artifact_scope") not in {
+        "device-personalized",
+        "model-universal",
+    }:
+        raise BundleError("final bundle artifact scope changed")
     if manifest.get("target") != {
         "hardware_revision": TARGET.hardware_revision,
         "model": TARGET.model,
@@ -428,6 +449,13 @@ def validate_final_bundle(raw: bytes, *, public_key: Path) -> ValidatedFinalBund
         raise BundleError("final bundle targets the wrong device")
     if manifest.get("preserved_mtd") != [0, 4, 5]:
         raise BundleError("final bundle does not preserve mtd0/mtd4/mtd5")
+    expected_physical_policy = (
+        universal_physical_write_policy()
+        if manifest.get("artifact_scope") == "model-universal"
+        else None
+    )
+    if manifest.get("physical_write_policy") != expected_physical_policy:
+        raise BundleError("final bundle physical write policy changed")
     if manifest.get("signing_key_sha256") != _public_key_id(public_key):
         raise BundleError("bundle signer identity does not match the trusted key")
 
@@ -553,6 +581,8 @@ def validate_final_bundle(raw: bytes, *, public_key: Path) -> ValidatedFinalBund
         or data_payload[:2] != b"\x85\x19"
     ):
         raise BundleError("bundle data image is not exact-span JFFS2")
+    if manifest["artifact_scope"] == "model-universal" and data_payload:
+        raise BundleError("model-universal bundle contains per-camera data")
     expected_ranges = {
         "images/kernel.uimage": (
             TARGET.partition(1).offset,
@@ -571,6 +601,38 @@ def validate_final_bundle(raw: bytes, *, public_key: Path) -> ValidatedFinalBund
         if len(members[path]) > span:
             raise BundleError("component exceeds its derived physical range")
     return ValidatedFinalBundle(raw=raw, manifest=manifest, members=members)
+
+
+def build_universal_final_bundle(
+    *,
+    kernel: bytes,
+    bootstrap_rootfs: bytes,
+    system_rootfs: bytes,
+    linux_config: bytes,
+    signing_key: Path,
+) -> bytes:
+    """Build one secret-free model artifact; provisioning is always separate."""
+
+    return build_final_bundle(
+        kernel=kernel,
+        bootstrap_rootfs=bootstrap_rootfs,
+        system_rootfs=system_rootfs,
+        data_jffs2=b"",
+        linux_config=linux_config,
+        signing_key=signing_key,
+        artifact_scope="model-universal",
+    )
+
+
+def validate_universal_final_bundle(
+    raw: bytes, *, public_key: Path
+) -> ValidatedFinalBundle:
+    bundle = validate_final_bundle(raw, public_key=public_key)
+    if bundle.manifest.get("artifact_scope") != "model-universal":
+        raise BundleError("final bundle is not model-universal")
+    if bundle.members["images/data.jffs2"]:
+        raise BundleError("model-universal bundle contains provisioning data")
+    return bundle
 
 
 def final_bundle_images(bundle: ValidatedFinalBundle) -> FinalBundleImages:

@@ -6,12 +6,13 @@ import hashlib
 import json
 import os
 import stat
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
 from .full_backup import (
     FullBackupError,
     validate_complete_backup_with_manifest,
+    validate_functional_backup_with_manifest,
 )
 from .layout import TARGET, Target
 
@@ -25,6 +26,13 @@ class RecoveryDecision:
     mode: str
     preserved_mtd: tuple[int, ...]
     recovery_images: int
+    camera_identity_sha256: str = ""
+    camera_authorization_key_sha256: str = field(
+        default="", repr=False, compare=False
+    )
+    functional_recovery_accepted: bool = False
+    original_complete_backup_accepted: bool = True
+    original_preserved_mtd: tuple[int, ...] = (0, 1, 2, 3, 4, 5)
 
 
 def _read_regular(path: Path, label: str, *, limit: int) -> bytes:
@@ -92,26 +100,23 @@ def _target_document(target: Target) -> dict[str, object]:
     }
 
 
-def validate_existing_recovery_boundary(
+def _validate_current_preserved_binding(
     *,
-    recovery_dir: Path,
+    manifest: dict[str, object],
     preserved_readback_dir: Path,
-    target: Target = TARGET,
-) -> RecoveryDecision:
-    """Accept an old recovery pair only when current preserved MTDs still match."""
-
-    try:
-        decision, manifest = validate_complete_backup_with_manifest(
-            recovery_dir, target=target
-        )
-    except FullBackupError as exc:
-        raise RecoveryGateError(str(exc)) from exc
+    target: Target,
+) -> tuple[str, str]:
     files = manifest.get("files")
-    assert isinstance(files, dict)
-
+    if not isinstance(files, dict):
+        raise RecoveryGateError("recovery manifest lacks file identities")
     if preserved_readback_dir.is_symlink() or not preserved_readback_dir.is_dir():
         raise RecoveryGateError("preserved readback is not a private directory")
-    expected_readback = {"device-layout.private.json", "mtd0.bin", "mtd4.bin", "mtd5.bin"}
+    expected_readback = {
+        "device-layout.private.json",
+        "mtd0.bin",
+        "mtd4.bin",
+        "mtd5.bin",
+    }
     if {entry.name for entry in preserved_readback_dir.iterdir()} != expected_readback:
         raise RecoveryGateError("preserved readback directory is not exact")
     layout_raw = _read_regular(
@@ -123,8 +128,23 @@ def validate_existing_recovery_boundary(
         layout = json.loads(layout_raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise RecoveryGateError("read-only device layout is invalid") from exc
-    if layout != {"read_only": True, "schema_version": 1, "target": _target_document(target)}:
+    expected_layout = {
+        "read_only": True,
+        "schema_version": 1,
+        "target": _target_document(target),
+    }
+    if layout != expected_layout:
         raise RecoveryGateError("read-only camera identity or partition layout differs")
+    camera_identity = hashlib.sha256()
+    camera_identity.update(b"thingino-dcs6100-camera-identity-v1\0")
+    authorization_key = hashlib.sha256()
+    authorization_key.update(
+        b"thingino-dcs6100-camera-authorization-key-v1\0"
+    )
+    for digest in (camera_identity, authorization_key):
+        digest.update(target.model.encode("ascii") + b"\0")
+        digest.update(target.hardware_revision.encode("ascii") + b"\0")
+        digest.update(target.nor_size.to_bytes(8, "big"))
     for mtd in (0, 4, 5):
         partition = target.partition(mtd)
         current = _read_regular(
@@ -135,11 +155,73 @@ def validate_existing_recovery_boundary(
         if len(current) != partition.size:
             raise RecoveryGateError(f"current preserved mtd{mtd} has the wrong size")
         reference = files[f"copy-a/mtd{mtd}.bin"]
-        assert isinstance(reference, dict)
-        if hashlib.sha256(current).hexdigest() != reference.get("sha256"):
-            raise RecoveryGateError(f"current preserved mtd{mtd} differs from same-device recovery")
+        if not isinstance(reference, dict) or (
+            hashlib.sha256(current).hexdigest() != reference.get("sha256")
+        ):
+            raise RecoveryGateError(
+                f"current preserved mtd{mtd} differs from same-device recovery"
+            )
+        for digest in (camera_identity, authorization_key):
+            digest.update(bytes((mtd,)))
+            digest.update(len(current).to_bytes(8, "big"))
+            digest.update(current)
+    return camera_identity.hexdigest(), authorization_key.hexdigest()
+
+
+def validate_existing_recovery_boundary(
+    *,
+    recovery_dir: Path,
+    preserved_readback_dir: Path,
+    target: Target = TARGET,
+) -> RecoveryDecision:
+    """Accept only an exact original complete backup at this legacy gate."""
+
+    try:
+        decision, manifest = validate_complete_backup_with_manifest(
+            recovery_dir, target=target
+        )
+    except FullBackupError as exc:
+        raise RecoveryGateError(str(exc)) from exc
+    camera_identity, authorization_key = _validate_current_preserved_binding(
+        manifest=manifest,
+        preserved_readback_dir=preserved_readback_dir,
+        target=target,
+    )
     return RecoveryDecision(
         mode="existing-verified-same-device-pair",
         preserved_mtd=(0, 4, 5),
         recovery_images=decision.recovery_images,
+        camera_identity_sha256=camera_identity,
+        camera_authorization_key_sha256=authorization_key,
+    )
+
+
+def validate_functional_recovery_boundary(
+    *,
+    recovery_dir: Path,
+    preserved_readback_dir: Path,
+    target: Target = TARGET,
+) -> RecoveryDecision:
+    """Accept schema 3 only at explicitly functional-aware call sites."""
+
+    try:
+        decision, manifest = validate_functional_backup_with_manifest(
+            recovery_dir, target=target
+        )
+    except FullBackupError as exc:
+        raise RecoveryGateError(str(exc)) from exc
+    camera_identity, authorization_key = _validate_current_preserved_binding(
+        manifest=manifest,
+        preserved_readback_dir=preserved_readback_dir,
+        target=target,
+    )
+    return RecoveryDecision(
+        mode="uartless-functional-same-device-pair",
+        preserved_mtd=(0, 4, 5),
+        recovery_images=decision.recovery_images,
+        camera_identity_sha256=camera_identity,
+        camera_authorization_key_sha256=authorization_key,
+        functional_recovery_accepted=True,
+        original_complete_backup_accepted=False,
+        original_preserved_mtd=(0, 3, 4, 5),
     )

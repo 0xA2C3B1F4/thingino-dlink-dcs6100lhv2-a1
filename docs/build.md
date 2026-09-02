@@ -7,9 +7,14 @@ them with owner-acquired camera files kept in a private workspace.
 ## Host gate
 
 Python 3.11 or newer and a running Docker-compatible container runtime are
-required. The guided builder currently requires Apple Silicon macOS. Install
-and start Docker Desktop first. The project installer then creates the build
-location and manages project images and containers.
+required. The editable package installs the pinned `pyserial` dependency used
+by the UART backup command. The guided builder currently requires Apple Silicon
+macOS. Install and start Docker Desktop first. The project installer creates
+the build location and manages project images and containers, but it does not
+install or start the host container runtime. The recovery root packager also
+requires LLVM `clang`/`ld.lld` and `mksquashfs`/`unsquashfs` on the host. On
+Apple Silicon, install Homebrew `llvm` and `lld`; the guided build selects the
+Homebrew compiler instead of the incompatible Apple Clang MIPS driver.
 
 ```bash
 make check
@@ -94,21 +99,41 @@ terms when cached locally.
 
 `local-build build` constructs the Thingino MIPS toolchain from pinned source.
 Upstream replaces its same-named release assets, so a release URL is not an
-immutable input even when an old checksum remains in this repository. The
-builder fetches the recursive source closure of the Buildroot `toolchain`
-target for the exact Thingino and Buildroot
-commits, validates its pinned inventory, and builds the ARM64-hosted MIPS SDK
-with networking disabled. The recipe makes the SDK relocatable without running
-the unrelated firmware package graph or camera-kernel target; the pinned Linux
-3.10.14 tarball remains the source of its matching userspace kernel headers.
-The generated SDK is packed with the locked deterministic tar and gzip recipe,
-then its archive must match the SHA-256 in `sources.lock.json` before it can
-enter the firmware download cache. A changed upstream release asset is never
-trusted or used as a fallback. The networked toolchain-source fetch mounts the
-verified public checkout and its public cache workspace.
+immutable input even when an old checksum remains in this repository. Build the
+public recovery inputs before asking the camera for any private input:
 
-Configure the private build inputs in a terminal, then build with the recorded
-plan:
+```bash
+thingino-dlink local-build recovery-assets
+```
+
+`recovery-assets` fetches the recursive source closure of the Buildroot
+`toolchain` target for the exact Thingino and Buildroot commits, validates its
+pinned inventory, and builds the ARM64-hosted MIPS SDK with networking disabled.
+The recipe makes the SDK relocatable without running the unrelated firmware
+package graph or camera-kernel target; the pinned Linux 3.10.14 tarball remains
+the source of its matching userspace kernel headers. The generated SDK is
+packed with the locked deterministic tar and gzip recipe, then its archive must
+match the SHA-256 in `sources.lock.json` before it can enter the firmware
+download cache. A changed upstream release asset is never trusted or used as a
+fallback. The one networked toolchain-source fetch mounts only the verified
+public checkout and its public cache workspace; no private configuration,
+camera file, or generated credential enters that container.
+
+The same command prepares the patched source, creates and validates the locked
+Buildroot download cache, and performs the bounded offline collector builds.
+Its result contains exact paths for `collector-kernel.uimage`,
+`collector-linux.config`, and `jzmmc_v12.ko` for the no-write UART transport.
+It additionally produces an all-MTD-read-only mtd2-boot kernel/config, minimal
+functional collector root, stock-U-Boot package, and package manifest for the
+explicit UARTless alternative. Both kernel sets are rebuilt in a second clean
+workspace and must be byte-identical before packaging. Building either set never contacts a camera or
+stages an SD card, so the command's immediate write set is empty. The UARTless
+manifest separately records that a future authorized physical boot writes
+mtd1/mtd2 and does not preserve an original complete six-partition backup.
+Follow the distinct command sequences in [installation](installation.md).
+
+After producing and validating the camera-specific inputs, configure them in a
+terminal and build with the recorded plan:
 
 ```bash
 thingino-dlink local-build configure
@@ -124,10 +149,11 @@ mode-0600 settings file. Wi-Fi details enter through the hidden prompts.
 `build` loads the recorded plan, so the normal command needs no private path
 arguments.
 
-`build` prepares the locked source, creates the source-built Thingino toolchain,
-then generates and validates the immutable Buildroot download cache. Toolchain
-compilation and both clean firmware builds run without networking in separate
-ext4 workspaces. The two firmware builds must export byte-identical base
+`build` revalidates and reuses the source-built Thingino toolchain and immutable
+Buildroot download cache produced by `recovery-assets`; advanced workflows that
+already possess accepted private inputs can let `build` create those caches on
+demand. Toolchain compilation and both clean firmware builds run without
+networking in separate ext4 workspaces. The two firmware builds must export byte-identical base
 artifacts. The command then creates the private final-root, applies the
 source-bound Raptor RWD overlay, builds both fixed-layout kernels, packages the
 schema-2 install set, and runs `inspect-install-set`. The output JSON names the
@@ -148,7 +174,84 @@ physical partitions read-only. The stock restorer uses
 and mtd3 writable. Their kernels, effective configs, and matching MMC modules
 are private recovery inputs, not public firmware artifacts.
 
-## What configure asks
+## Build one reusable A1 firmware
+
+The model-universal path is separate from the older personalized configure
+path. It accepts only model inputs and one stable model signing key:
+
+```bash
+thingino-dlink local-build build-universal \
+  --build-root /path/to/two-build-workspace \
+  --vendor-bundle-dir /private/model/vendor-bundle \
+  --media-closure-dir /private/model/media-closure \
+  --raptor-rwd-artifact /private/model/raptor-rwd.tar.gz \
+  --signing-key /private/model/release-ed25519.pem
+```
+
+The vendor and media directories are private because redistribution is not yet
+cleared, but their public catalogs fix the accepted runtime bytes. A second
+camera acquisition may be used as compatibility evidence only; it must
+normalize to the same catalog identities and must not select different model
+bytes. The signing key is also a model input: changing it intentionally changes
+the signed bundle.
+
+The command has no arguments for camera recovery, WPA, recovery session,
+management credential, API key, hostname, or SSH identity. It creates a
+`model-universal` install set and `thingino-universal.tgb` with an empty data
+member. The immutable system has a locked root account, no private Wi-Fi/API/
+SSH files, and non-executable network-facing startup scripts. Two clean builds
+must remain byte-identical.
+
+For each camera, create separate audit, data, and authorization artifacts after
+its own recovery boundary passes. On macOS the repository wrapper executes the
+locked builder image offline; Linux may instead supply its reviewed regular
+`mkfs.jffs2` binary directly:
+
+```bash
+export DCS6100_BUILDER_IMAGE=the-locked-image-id
+thingino-dlink universal provision \
+  --functional-recovery-dir /private/camera/functional-recovery \
+  --preserved-readback-dir /private/camera/functional-recovery/preserved \
+  --universal-bundle /model/thingino-universal.tgb \
+  --universal-public-key /model/release.pub \
+  --private-config-dir /private/camera/install-config \
+  --session-dir /private/camera/recovery-session \
+  --signing-key /private/camera/authorization.pem \
+  --unsquashfs /path/to/unsquashfs \
+  --mkfs-jffs2 ./scripts/run_container_mkfs_jffs2.sh \
+  --output /private/camera/provisioning.private.zip \
+  --data-output /private/camera/provisioning.data.jffs2
+
+thingino-dlink universal authorize \
+  --functional-recovery-dir /private/camera/functional-recovery \
+  --preserved-readback-dir /private/camera/functional-recovery/preserved \
+  --universal-bundle /model/thingino-universal.tgb \
+  --universal-public-key /model/release.pub \
+  --provisioning /private/camera/provisioning.private.zip \
+  --provisioning-data /private/camera/provisioning.data.jffs2 \
+  --provisioning-public-key /private/camera/authorization.pub \
+  --session-dir /private/camera/recovery-session \
+  --signing-key /private/camera/authorization.pem \
+  --output-dir /private/camera/authorization
+```
+
+Both provisioning files contain secrets and remain mode 0600. The data image
+is a complete deterministic OverlayFS upper JFFS2, not an immutable firmware
+member. It is built twice with fixed little-endian 32 KiB erase/256-byte page
+geometry, exact 1,507,328-byte padding, fake time, root ownership, and CRC scan.
+The signed authorization binds camera identity, universal bundle, exact stage
+2, data action, recovery session, audit sidecar, provisioning ID, and data-image
+digest. Its fixed binary form uses a camera-keyed HMAC derived from the already
+validated, never-written mtd0/mtd4/mtd5 contents. Neither per-camera artifact
+is a compiler input, so two cameras reference the same universal firmware
+SHA-256.
+
+Physical provisioning write/readback and interruption acceptance are still
+blocked release gates. Consequently no guided staging command exposes this new
+path yet. Host artifact success must not be interpreted as installation
+support.
+
+## Legacy personalized configure inputs
 
 Press Enter to accept a displayed default. A custom path may be absolute or
 relative to the directory where the command is run; it is resolved and saved
@@ -232,9 +335,9 @@ Verification checks the exact commits, trees, submodule identity, remotes, and
 clean state. Preparation exports the verified trees without Git metadata,
 checks every profile input hash, and applies the ordered patches offline.
 
-## Local device-specific inputs
+## Local private and model inputs
 
-The normal build also needs:
+The legacy personalized build also needs:
 
 - `/lib/libimp.so`, `/lib/libalog.so`, and `/lib/libsysutils.so` acquired from
   the owner's matching DCS-6100LHV2 A1 stock mtd3;

@@ -54,7 +54,9 @@ def images() -> FinalBundleImages:
     )
 
 
-def offline_images(data_mode: str = "initialize") -> OfflineStage2Images:
+def offline_images(
+    data_mode: str = "initialize", *, provisioning_data: bytes = b""
+) -> OfflineStage2Images:
     return OfflineStage2Images(
         system_offset=TARGET.partition(3).offset,
         system_erase_span=SYSTEM_FLASH_SPAN,
@@ -63,6 +65,7 @@ def offline_images(data_mode: str = "initialize") -> OfflineStage2Images:
         data_erase_span=DATA_FLASH_SPAN,
         kernel=b"activation".ljust(ERASE_BLOCK_SIZE, b"A") + b"kernel-tail",
         data_mode=data_mode,
+        provisioning_data=provisioning_data,
     )
 
 
@@ -242,6 +245,70 @@ class FakeMtdTests(unittest.TestCase):
                     retry.nor.snapshot()[data_start : data_start + len(data)],
                     data,
                 )
+
+    def test_universal_provisioning_is_complete_before_activation_and_retryable(self) -> None:
+        provisioning = b"\x85\x19" + bytes(
+            (index * 37) & 0xFF for index in range(DATA_FLASH_SPAN - 2)
+        )
+        candidate = offline_images("initialize", provisioning_data=provisioning)
+        data_pages = DATA_FLASH_SPAN // MTD_WRITE_SIZE
+        events = (
+            "during_erase_final_data_sector_0",
+            f"during_erase_final_data_sector_{DATA_FLASH_SPAN // MTD_PHYSICAL_ERASE_SIZE - 1}",
+            "during_write_final_data_page_0",
+            f"during_write_final_data_page_{data_pages // 2}",
+            f"during_write_final_data_page_{data_pages - 1}",
+            "after_readback_final_data",
+            "during_write_final_system_page_0",
+            "during_write_activation_page_0",
+        )
+        initial = INITIAL
+        for event in events:
+            with self.subTest(event=event):
+                fault = FaultInjector(fail_at=event, physical_steps=True)
+                interrupted_nor = FakeNor(initial, fault)
+                interrupted = OfflineStage2Installer(interrupted_nor)
+                with self.assertRaises(InjectedPowerLoss):
+                    interrupted.run(candidate)
+                if event != "during_write_activation_page_0":
+                    self.assertNotEqual(
+                        interrupted_nor.snapshot()[
+                            TARGET.partition(1).offset :
+                            TARGET.partition(1).offset + ERASE_BLOCK_SIZE
+                        ],
+                        candidate.kernel[:ERASE_BLOCK_SIZE],
+                    )
+                retry = OfflineStage2Installer(
+                    FakeNor(interrupted_nor.snapshot()),
+                    stock_userdata_backup=interrupted.stock_userdata_backup,
+                    stock_userdata_checkpoint=interrupted.stock_userdata_checkpoint,
+                )
+                retry.run(candidate)
+                self.assertEqual(
+                    retry.nor.snapshot()[
+                        candidate.data_offset :
+                        candidate.data_offset + DATA_FLASH_SPAN
+                    ],
+                    provisioning,
+                )
+
+    def test_interrupted_universal_retry_rejects_different_same_camera_provisioning(self) -> None:
+        first_data = b"\x85\x19" + b"a" * (DATA_FLASH_SPAN - 2)
+        second_data = b"\x85\x19" + b"b" * (DATA_FLASH_SPAN - 2)
+        first = offline_images("initialize", provisioning_data=first_data)
+        second = offline_images("initialize", provisioning_data=second_data)
+        fault = FaultInjector(fail_at="during_write_final_system_page_0", physical_steps=True)
+        interrupted_nor = FakeNor(INITIAL, fault)
+        interrupted = OfflineStage2Installer(interrupted_nor)
+        with self.assertRaises(InjectedPowerLoss):
+            interrupted.run(first)
+        retry = OfflineStage2Installer(
+            FakeNor(interrupted_nor.snapshot()),
+            stock_userdata_backup=interrupted.stock_userdata_backup,
+            stock_userdata_checkpoint=interrupted.stock_userdata_checkpoint,
+        )
+        with self.assertRaisesRegex(MtdError, "checkpoint mismatch"):
+            retry.run(second)
 
     def test_initialize_recovery_checkpoint_survives_torn_physical_writes(self) -> None:
         candidate = offline_images("initialize")

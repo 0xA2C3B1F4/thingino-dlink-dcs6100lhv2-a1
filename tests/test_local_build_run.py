@@ -11,6 +11,17 @@ from installer import local_build_run
 
 
 class LocalBuildRunTests(unittest.TestCase):
+    def test_stage1_uses_homebrew_llvm_instead_of_apple_clang(self) -> None:
+        clang = Path("/opt/homebrew/opt/llvm/bin/clang")
+        lld = Path("/opt/homebrew/bin/ld.lld")
+        with (
+            mock.patch.object(Path, "is_file", autospec=True, return_value=True),
+            mock.patch.object(local_build_run.os, "access", return_value=True),
+            mock.patch.object(local_build_run, "_tool", return_value=lld.resolve()),
+        ):
+            selected = local_build_run._llvm_tools()
+        self.assertEqual(selected, (clang.resolve(), lld.resolve()))
+
     def test_build_runs_two_clean_builds_overlay_split_and_inspection(self) -> None:
         with tempfile.TemporaryDirectory() as name:
             root = Path(name)
@@ -196,6 +207,133 @@ class LocalBuildRunTests(unittest.TestCase):
                 run_manifest["thingino_toolchain"]["archive_sha256"],
                 "d" * 64,
             )
+
+    def test_recovery_assets_build_before_private_configuration(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            project = root / "project"
+            project.mkdir()
+            build_root = root / "build-root"
+            (build_root / "runs").mkdir(parents=True)
+            source = root / "source"
+            source.mkdir()
+
+            def prepare_source(_checkout: Path, destination: Path, **_: object) -> None:
+                destination.mkdir()
+                (destination / "dcs6100-source-preparation.json").write_bytes(b"source")
+
+            def collector_run(arguments: list[str], *, label: str, **_: object) -> None:
+                self.assertIn(
+                    label,
+                    {
+                        "read-only collector kernel build",
+                        "read-only collector reproducibility build",
+                    },
+                )
+                result = Path(arguments[arguments.index("--result") + 1])
+                for filename in (
+                    "collector-kernel.uimage",
+                    "collector-linux.config",
+                    "jzmmc_v12.ko",
+                    "source-preparation.json",
+                    "uartless-collector-kernel.uimage",
+                    "uartless-collector-linux.config",
+                ):
+                    payload = b"source" if filename == "source-preparation.json" else filename.encode()
+                    (result / filename).write_bytes(payload)
+
+            acquired = {
+                "builder_image": {"id": "sha256:" + "a" * 64},
+                "source_checkout": {"path": str(source)},
+                "sources_lock_sha256": "b" * 64,
+                "thingino_toolchain": {"acquisition": "source-build"},
+            }
+            with (
+                mock.patch.object(
+                    local_build_run,
+                    "local_build_workspace_status",
+                    return_value={
+                        "build_count": 2,
+                        "build_root": str(build_root),
+                        "current_head": "c" * 40,
+                        "ready_to_build": True,
+                    },
+                ),
+                mock.patch.object(local_build_run, "_project_root", return_value=project),
+                mock.patch.object(
+                    local_build_run,
+                    "acquire_locked_public_inputs",
+                    return_value=acquired,
+                ),
+                mock.patch.object(
+                    local_build_run.source_prepare,
+                    "prepare_source",
+                    side_effect=prepare_source,
+                ),
+                mock.patch.object(
+                    local_build_run,
+                    "_prepare_thingino_toolchain",
+                    return_value=(root / "toolchain.tar.gz", {"archive_sha256": "d" * 64}),
+                ),
+                mock.patch.object(
+                    local_build_run,
+                    "_prepare_download_cache",
+                    return_value=(root / "downloads.tar", {"inventory_entries": 1}),
+                ),
+                mock.patch.object(local_build_run, "_run", side_effect=collector_run),
+                mock.patch.object(local_build_run, "validate_collector_kernel"),
+                mock.patch.object(local_build_run, "validate_uartless_collector_kernel"),
+                mock.patch.object(local_build_run, "validate_mmc_module"),
+                mock.patch.object(
+                    local_build_run,
+                    "build_collector_root",
+                    side_effect=lambda **values: values["output"].write_bytes(b"rootfs"),
+                ) as build_rootfs,
+            ):
+                result = local_build_run.build_local_recovery_assets(
+                    build_root=build_root
+                )
+
+            self.assertEqual(build_rootfs.call_count, 2)
+            self.assertEqual(result["write_set"], [])
+            self.assertEqual(
+                result["next_action"],
+                "choose-uart-read-only-or-uartless-functional-capture",
+            )
+            self.assertTrue(Path(result["files"]["kernel"]).is_file())
+            self.assertTrue(Path(result["files"]["uartless_package"]).is_file())
+            self.assertEqual(
+                result["transports"]["uartless"]["future_physical_boot_writes_mtd"],
+                [1, 2],
+            )
+            manifest = json.loads(Path(result["manifest"]).read_text())
+            self.assertEqual(manifest["project_head"], "c" * 40)
+            self.assertEqual(manifest["sources_lock_sha256"], "b" * 64)
+            self.assertEqual(
+                manifest["reproducibility"],
+                {"builds": 2, "byte_identical": True},
+            )
+
+    def test_universal_build_wrapper_cannot_receive_camera_private_inputs(self) -> None:
+        with mock.patch.object(
+            local_build_run,
+            "_build_local_install_set",
+            return_value={"artifact_scope": "model-universal"},
+        ) as build:
+            result = local_build_run.build_local_universal_install_set(
+                build_root=Path("/build"),
+                vendor_bundle_dir=Path("/model/vendor"),
+                media_closure_dir=Path("/model/media"),
+                raptor_rwd_artifact=Path("/model/raptor.tar"),
+                signing_key=Path("/model/release.pem"),
+            )
+        self.assertEqual(result["artifact_scope"], "model-universal")
+        values = build.call_args.kwargs
+        self.assertIsNone(values["private_config_dir"])
+        self.assertIsNone(values["expected_wpa_config_path"])
+        self.assertIsNone(values["session_dir"])
+        self.assertEqual(values["data_mode"], "initialize")
+        self.assertEqual(values["artifact_scope"], "model-universal")
 
     def test_build_rejects_a_single_build_workspace(self) -> None:
         with mock.patch.object(

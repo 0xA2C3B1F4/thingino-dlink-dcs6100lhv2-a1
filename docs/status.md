@@ -1,6 +1,6 @@
 # Release status
 
-Status date: 2026-09-01.
+Status date: 2026-09-02.
 
 This reviewed snapshot publishes the source and host tools. A supported public
 firmware release still has open gates. Device-specific build inputs stay with
@@ -35,15 +35,18 @@ still needs an upstream grant before firmware distribution.
 
 ## Source and host gates
 
-Before export, the current development source passed its 548-file fail-closed
-public-tree gate, 72 Markdown checks, and 531 Python tests. The refactored
-Control passed 186 library tests, eight binary and storage-worker tests, 16
-contract tests, a release build, and the 1,000-request soak. WebUI evidence for
-this checkpoint is 98 tests plus typecheck and bundle scan. The production
-export contains 479 allowlisted text files and 477
-`source-export.json` provenance entries. Its canonical `make check` passed 20
-Markdown checks and 523 Python tests. The browser evidence comes from the
-earlier 15-test Chromium fixture run.
+The current checkout passes its fail-closed public-tree gate with 488
+allowlisted text files, 20 Markdown checks, and 559 Python tests.
+The refactored Control previously passed 186 library tests, eight binary and
+storage-worker tests, 16 contract tests, a release build, and the 1,000-request
+soak. WebUI code did not change in this refactor; its latest retained gate is 98
+tests plus typecheck and bundle scan. The most recent 15-test Chromium fixture
+run is earlier browser evidence and was not repeated for this checkpoint.
+
+`source-export.json` has 477 provenance entries for the generated base export.
+Public-only commits layered on that base carry their own provenance in Git
+history; the manifest does not attribute those later files to the older
+development commit.
 
 The local install-set stager has native Linux and Windows CI contract coverage
 plus the macOS adapter, and it performs common file readback before activation.
@@ -63,11 +66,39 @@ The host and MIPS paths are implemented. One private camera completed the
 UART-assisted pre-write duplicate capture and the full UART-free same-device
 stock restore, including restorer physical readback, activation last, card
 passivation, and stable D-Link 1.02.02 setup-mode boot. A stock-U-Boot success
-indication alone was not treated as readback evidence. A supported unopened-
-camera capture path, physical fault/retry cases, and equivalent second-camera
-evidence remain release gates. Post-run atomic status-marker and transaction-
+indication alone was not treated as readback evidence. A development UARTless functional-capture source path now keeps the exact
+original-backup type separate while declaring a pre-capture mtd1/mtd2 write
+set, preserving original mtd0/mtd3/mtd4/mtd5, and requiring duplicate
+post-bootstrap reads. One camera completed its mtd1/mtd2 updater pass, inert
+handoff, read-only collector boot, duplicate schema-3 reconstruction, vendor
+capture, preserved readback, and same-device comparison with the earlier exact
+UART backup. It does not preserve original mtd1/mtd2, and its initial
+recovery-functional source is not a D-Link stock restoration source. Physical
+retry and restoration evidence, equivalent second-camera evidence, and an
+accepted stock-functional mtd1/mtd2 source remain release gates. Post-run atomic status-marker and transaction-
 rollback hardening has host and MIPS-build evidence but has not been repeated
 on physical hardware.
+
+The source also has an additive model-universal build path. Its API has no
+camera configuration or recovery arguments, emits an empty data member, locks
+the unprovisioned root, and disables network-facing startup. Separate signed
+audit sidecars, exact-span JFFS2 overlays, and authorizations bind one camera,
+session, provisioning payload, universal bundle, exact stage 2, and data
+action. The JFFS2 overlay is built twice with fixed geometry and checked with
+`jffs2dump -c`. Universal Stage 1 snapshots both write sources in RAM, verifies
+a camera-keyed HMAC before writes, commits backup/checkpoint temporary names by
+readback plus rename, writes and verifies provisioning before system/kernel,
+and passivates camera files after activation. The authorization key derived
+from preserved mtd0/mtd4/mtd5 is never emitted. Host tests prove that two camera
+fixtures use identical universal bytes and reject cross-camera swaps. The
+fake-NOR matrix injects torn erase/write/readback/activation failures and proves
+an exact provisioning retry.
+
+This is not yet physical provisioning acceptance. Slow-card timing, physical
+power interruption, one-use cleanup, and successful boot with camera-specific
+credentials remain blocked. The guided CLI can build the universal artifact and
+create provisioning/authorization artifacts, but does not expose universal SD
+staging while that gate is open.
 
 ## Open release gates
 
@@ -84,7 +115,11 @@ A public installer or firmware release remains blocked by:
 - a supported read-only pre-write RAM capture path for all six original
   partitions on an unopened camera;
 - the documented recovery flow on the final split layout;
-- equivalent proof on another DCS-6100LHV2 A1; and
+- physical JFFS2 provisioning write/readback, slow-card timing, provisioned
+  boot, and one-active-card cleanup without changing the universal firmware
+  digest;
+- equivalent proof on another DCS-6100LHV2 A1 using the identical universal
+  firmware SHA-256 and distinct camera artifacts; and
 - real removable-media acceptance for the installation workflow on each claimed
   macOS, Linux, and Windows host.
 

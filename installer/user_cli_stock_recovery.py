@@ -25,6 +25,41 @@ def _result(
     }
 
 
+def _load_uartless_package(
+    facade: object, arguments: argparse.Namespace
+) -> tuple[bytes, object]:
+    UserInstallerError = getattr(facade, "UserInstallerError")
+    hashlib = getattr(facade, "hashlib")
+    json = getattr(facade, "json")
+    package_manifest = getattr(facade, "package_manifest")
+    parse_package = getattr(facade, "parse_package")
+    read_snapshot = getattr(facade, "read_snapshot")
+    validate_bootstrap = getattr(facade, "validate_bootstrap")
+
+    package_raw = read_snapshot(arguments.package)
+    package = parse_package(package_raw, require_project_header=True)
+    validate_bootstrap(package)
+    manifest_raw = read_snapshot(arguments.package_manifest)
+    try:
+        document = json.loads(manifest_raw)
+        expected = json.loads(
+            package_manifest(package, purpose="uartless-functional-capture")
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+        raise UserInstallerError("UARTless capture manifest is invalid") from exc
+    expected.update(
+        {
+            "future_physical_boot_writes_mtd": [1, 2],
+            "original_complete_backup": False,
+            "original_preserved_mtd": [0, 3, 4, 5],
+            "restoration_class": "recovery-functional",
+        }
+    )
+    if document != expected or hashlib.sha256(package_raw).hexdigest() != package.sha256:
+        raise UserInstallerError("UARTless package manifest differs from the package")
+    return package_raw, package
+
+
 def _stock_backup_prepare(
     facade: object, arguments: argparse.Namespace
 ) -> dict[str, object]:
@@ -155,6 +190,172 @@ def _stock_backup_validate(
             restore_status="backup-only",
             safe_next_action="collect-current-read-only-mtd0-mtd4-mtd5",
         ),
+    )
+
+
+def _stock_uartless_prepare(
+    facade: object, arguments: argparse.Namespace
+) -> dict[str, object]:
+    _document = getattr(facade, "_document")
+    load_media_preflight = getattr(facade, "load_media_preflight")
+    stage_passive_verified_package = getattr(
+        facade, "stage_passive_verified_package"
+    )
+    package_raw, _package = _load_uartless_package(facade, arguments)
+    preflight = load_media_preflight(
+        arguments.media_preflight, expected_root=arguments.mount_root
+    )
+    stage_passive_verified_package(
+        package_raw,
+        root=arguments.mount_root,
+        preflight=preflight,
+        confirmed_physical_device=arguments.confirm_physical_device,
+    )
+    return _document(
+        "stock-recovery uartless-prepare",
+        ok=True,
+        phase="uartless-functional-capture-staged-inert",
+        next_command="thingino-dlink stock-recovery uartless-authorize",
+        preserved_mtd=[0, 3, 4, 5],
+        result={
+            "armed": False,
+            "functional_recovery_accepted": False,
+            "future_physical_boot_writes_mtd": [1, 2],
+            "original_complete_backup_accepted": False,
+            "original_preserved_mtd": [0, 3, 4, 5],
+            "replacement_mtd": [1, 2],
+            "restoration_class": "recovery-functional",
+            "safe_next_action": "review-write-set-then-run-uartless-authorize",
+            "write_set": [],
+        },
+    )
+
+
+def _stock_uartless_authorize(
+    facade: object, arguments: argparse.Namespace
+) -> dict[str, object]:
+    UserInstallerError = getattr(facade, "UserInstallerError")
+    _document = getattr(facade, "_document")
+    activate_passive_verified_package = getattr(
+        facade, "activate_passive_verified_package"
+    )
+    load_media_preflight = getattr(facade, "load_media_preflight")
+    if arguments.confirm_write_set != "WRITE-MTD1-MTD2":
+        raise UserInstallerError(
+            "UARTless capture requires exact WRITE-MTD1-MTD2 confirmation"
+        )
+    package_raw, _package = _load_uartless_package(facade, arguments)
+    preflight = load_media_preflight(
+        arguments.media_preflight, expected_root=arguments.mount_root
+    )
+    activate_passive_verified_package(
+        package_raw,
+        root=arguments.mount_root,
+        preflight=preflight,
+        confirmed_physical_device=arguments.confirm_physical_device,
+    )
+    return _document(
+        "stock-recovery uartless-authorize",
+        ok=True,
+        phase="uartless-functional-capture-armed",
+        next_command="thingino-dlink stock-recovery uartless-handoff",
+        preserved_mtd=[0, 3, 4, 5],
+        result={
+            "armed": True,
+            "functional_recovery_accepted": False,
+            "future_physical_boot_writes_mtd": [1, 2],
+            "original_complete_backup_accepted": False,
+            "original_preserved_mtd": [0, 3, 4, 5],
+            "replacement_mtd": [1, 2],
+            "restoration_class": "recovery-functional",
+            "safe_next_action": "boot-stock-uboot-once-then-return-sd-to-host",
+            "write_set": [],
+        },
+    )
+
+
+def _stock_uartless_handoff(
+    facade: object, arguments: argparse.Namespace
+) -> dict[str, object]:
+    UserInstallerError = getattr(facade, "UserInstallerError")
+    UARTLESS_CAPTURE_ACTIVE_FILENAME = getattr(
+        facade, "UARTLESS_CAPTURE_ACTIVE_FILENAME"
+    )
+    UARTLESS_CAPTURE_PASSIVE_FILENAME = getattr(
+        facade, "UARTLESS_CAPTURE_PASSIVE_FILENAME"
+    )
+    _document = getattr(facade, "_document")
+    deactivate_verified_package = getattr(facade, "deactivate_verified_package")
+    load_media_preflight = getattr(facade, "load_media_preflight")
+    if arguments.confirm_stock_uboot_result != "MTD1-MTD2-WRITTEN":
+        raise UserInstallerError(
+            "UARTless handoff requires exact MTD1-MTD2-WRITTEN confirmation"
+        )
+    package_raw, _package = _load_uartless_package(facade, arguments)
+    preflight = load_media_preflight(
+        arguments.media_preflight, expected_root=arguments.mount_root
+    )
+    deactivate_verified_package(
+        package_raw,
+        root=arguments.mount_root,
+        active_name=UARTLESS_CAPTURE_ACTIVE_FILENAME,
+        passive_name=UARTLESS_CAPTURE_PASSIVE_FILENAME,
+        preflight=preflight,
+        confirmed_physical_device=arguments.confirm_physical_device,
+    )
+    return _document(
+        "stock-recovery uartless-handoff",
+        ok=True,
+        phase="uartless-stock-selector-passive",
+        next_command="thingino-dlink stock-recovery uartless-validate",
+        preserved_mtd=[0, 3, 4, 5],
+        result={
+            "armed": False,
+            "functional_recovery_accepted": False,
+            "future_physical_boot_writes_mtd": [],
+            "original_complete_backup_accepted": False,
+            "original_preserved_mtd": [0, 3, 4, 5],
+            "replacement_mtd": [1, 2],
+            "restoration_class": "recovery-functional",
+            "safe_next_action": "boot-camera-with-passive-card-to-run-uartless-collector",
+            "write_set": [],
+        },
+    )
+
+
+def _stock_uartless_validate(
+    facade: object, arguments: argparse.Namespace
+) -> dict[str, object]:
+    _document = getattr(facade, "_document")
+    capture = getattr(
+        facade, "capture_functional_backup_from_uartless_collector"
+    )
+    read_snapshot = getattr(facade, "read_snapshot")
+    decision = capture(
+        collector_dir=arguments.collector_dir,
+        bootstrap_package=read_snapshot(arguments.package),
+        output_dir=arguments.output_dir,
+        confirmed_output_dir=arguments.confirm_output_dir,
+    )
+    return _document(
+        "stock-recovery uartless-validate",
+        ok=True,
+        phase="uartless-functional-recovery-validated",
+        next_command="thingino-dlink local-build configure",
+        preserved_mtd=[0, 3, 4, 5],
+        result={
+            "armed": False,
+            "duplicate_backup_accepted": decision.duplicate_partitions_accepted,
+            "functional_recovery_accepted": decision.functional_recovery_accepted,
+            "original_complete_backup_accepted": (
+                decision.original_complete_backup_accepted
+            ),
+            "original_preserved_mtd": list(decision.original_preserved_mtd),
+            "replacement_mtd": list(decision.replacement_mtd),
+            "restoration_class": "recovery-functional",
+            "safe_next_action": "build-or-stage-an-accepted-post-capture-installer",
+            "write_set": [],
+        },
     )
 
 

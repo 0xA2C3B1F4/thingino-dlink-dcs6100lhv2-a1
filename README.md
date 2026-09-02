@@ -3,8 +3,10 @@
 This is a local-first Thingino port for the D-Link DCS-6100LHV2 hardware
 revision A1. Firmware is built locally on your computer. After installation,
 the WebUI, RTSP, ONVIF, and Home Assistant integration run on your local network
-without a D-Link cloud account or cloud connection. This port is specific to
-the A1 model and revision. Do not use its installer or images on another camera.
+without a D-Link cloud account or cloud connection. An accepted model-universal
+firmware build may be reused only across DCS-6100LHV2 A1 cameras. Each physical
+camera still requires its own recovery evidence, authorization, and provisioning
+sidecar. Do not use this installer or its images on another model or revision.
 
 This is an independent project. It is not affiliated with, endorsed by, or
 maintained by D-Link or the Thingino project.
@@ -28,6 +30,31 @@ network details and the installer creates installation-specific management,
 API, and SSH material locally. Shared caches hold locked public inputs. Camera
 libraries, credentials, build runs, and install sets stay in your private
 workspace.
+
+## Reusable model build and per-camera authorization
+
+The preferred path builds the signed kernel, permanent bootstrap, and system
+SquashFS once with `artifact_scope: model-universal`. That build accepts no
+WPA configuration, recovery session, camera identifier, SSH key, API key, or
+management credential. Its data member is empty and its network-facing startup
+scripts remain non-executable until separate provisioning succeeds.
+
+`thingino-dlink local-build build-universal` creates those identical model
+bytes. `thingino-dlink universal provision` creates a private signed audit
+sidecar plus a deterministic, exact-span per-camera JFFS2 overlay image.
+`thingino-dlink universal authorize` binds both and the exact universal firmware
+digest to that camera's independently validated mtd0/mtd4/mtd5 identity. Stage
+1 snapshots and verifies a camera-keyed HMAC authorization, exact stage 2, data
+action, and JFFS2 image before removing the bootstrap or entering any final NOR
+write phase. It writes and reads back the complete private overlay before the
+final kernel activation eraseblock.
+
+Backups, protected readbacks, factory partitions, recovery sessions, and
+provisioning sidecars must never be copied between cameras. The older
+`local-build build` command remains explicitly `device-personalized`; its
+output embeds private values and must not be represented as reusable firmware.
+Physical provisioning write/readback and interruption acceptance remain release gates,
+so the universal host artifacts are not yet a supported firmware release.
 
 ## What this build changes
 
@@ -74,9 +101,11 @@ See [features.md](docs/features.md) for the validation level of each group.
 ## Installation quickstart
 
 There is no supported public firmware download yet. A source checkout alone
-cannot produce a safe image because each installation needs a reviewed
-camera-specific recovery set, an allowlisted vendor-library bundle collected
-from that camera, private credentials, and a validated install set.
+cannot produce a safe image because the reusable model build still needs the
+allowlisted model media closure and reviewed Raptor input. Each installation
+then needs that camera's own recovery set, authorization, and private
+provisioning sidecar; those camera inputs do not change the universal firmware
+bytes.
 
 The commands below show the current installation workflow for a reviewed private
 candidate. Stop if the [release status](docs/status.md) lists an open gate for
@@ -87,22 +116,26 @@ the operation you intend to perform.
 Use Python 3.11 or newer from a clean, reviewed checkout:
 
 ```bash
-python3 -m pip install -e .
 make check
+python3 -m pip install -e .
 thingino-dlink --help
 python3 -m installer --help
 ```
 
-Run these commands from the repository root. The default below creates the
-build workspace beside the checkout, on the same writable volume. Override
-this one non-secret path if that volume does not have enough free space:
+Run these commands from the repository root. Editable-install metadata is
+ignored by the public-tree checker, so `make check` remains repeatable after
+installation. The default below creates the build workspace beside the
+checkout. Set `DCS6100_DATA_VOLUME` to the exact mounted volume root that
+contains both paths; a containing directory is not a mount root. Override the
+build path if that volume does not have enough free space:
 
 ```bash
 export DCS6100_BUILD_ROOT="$(cd .. && pwd)/dcs6100-build"
+export DCS6100_DATA_VOLUME=/path/to/exact-mounted-volume
 
 thingino-dlink workflow-preflight --json \
   --mode production-build \
-  --data-volume "$(dirname "$DCS6100_BUILD_ROOT")"
+  --data-volume "$DCS6100_DATA_VOLUME"
 ```
 
 Install and start Docker Desktop, then let the installer create a two-run local
@@ -114,9 +147,29 @@ variable is unset:
 thingino-dlink local-build prepare
 thingino-dlink local-build bootstrap
 thingino-dlink local-build acquire
+thingino-dlink local-build recovery-assets
+# Complete stock-recovery backup-prepare, backup-capture, and backup-validate.
 thingino-dlink local-build configure
 thingino-dlink local-build build
 ```
+
+`recovery-assets` is the public bridge between `acquire` and the camera backup.
+It builds the source-locked MIPS toolchain, the locked Buildroot download
+cache, both collector kernels, effective Linux configurations, the matching
+MMC module, and the inert UARTless capture package. It does not contact a
+camera, stage removable media, or write NOR. Its JSON output exposes two
+separate transports:
+
+- `uart` preserves and duplicates all six original partitions with no NOR
+  write;
+- `uartless` uses stock U-Boot to write mtd1/mtd2, then duplicates the current
+  read-only layout while preserving original mtd0/mtd3/mtd4/mtd5.
+
+The UARTless package remains inert until the separate
+`stock-recovery uartless-authorize` command receives the exact
+`WRITE-MTD1-MTD2` confirmation. It never reports an original complete backup.
+Follow [installation](docs/installation.md) for the SD handoff and the exact
+transport-specific safety boundary.
 
 `configure` explains and asks for every private path and the intended data
 action. It validates all non-secret artifacts before asking for the station
@@ -291,8 +344,9 @@ Continue with [build.md](docs/build.md).
   state, and bounded media preparation.
 - [`tests/`](tests/) contains host, contract, negative-path, and fake-NOR tests.
 - [`docs/index.md`](docs/index.md) is the complete documentation index.
-- [`source-export.json`](source-export.json) binds this tree to its development
-  source commit and export policy.
+- [`source-export.json`](source-export.json) records the generated development
+  export base and its policy. Later public-only changes are recorded by the Git
+  commits layered on that base.
 
 ## Licensing
 

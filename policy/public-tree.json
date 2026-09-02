@@ -1,5 +1,4 @@
 {
-  "schema_version": 1,
   "files": [
     ".editorconfig",
     ".gitattributes",
@@ -136,6 +135,7 @@
     "installer/__init__.py",
     "installer/__main__.py",
     "installer/artifacts.py",
+    "installer/camera_authorization.py",
     "installer/candidate_log.py",
     "installer/cli.py",
     "installer/cli_commands_build.py",
@@ -158,6 +158,7 @@
     "installer/final_root_security.py",
     "installer/freestanding_sha256.h",
     "installer/full_backup.py",
+    "installer/install_policy.py",
     "installer/layout.py",
     "installer/live_ram.py",
     "installer/local_build.py",
@@ -176,6 +177,8 @@
     "installer/official_input.py",
     "installer/platform_wifi.py",
     "installer/private_config.py",
+    "installer/provisioning.py",
+    "installer/provisioning_data.py",
     "installer/ram_boot.py",
     "installer/recovery.py",
     "installer/recovery_ap/__init__.py",
@@ -225,6 +228,7 @@
     "installer/templates/runtime-candidate.sh",
     "installer/templates/thingino-health",
     "installer/uartless_gate.py",
+    "installer/universal_install.py",
     "installer/user_cli.py",
     "installer/user_cli_build.py",
     "installer/user_cli_diagnostics.py",
@@ -232,6 +236,7 @@
     "installer/user_cli_parser.py",
     "installer/user_cli_parser_stock_recovery.py",
     "installer/user_cli_stock_recovery.py",
+    "installer/user_cli_universal.py",
     "installer/vendor_bundle.py",
     "installer/workflow_preflight.py",
     "patches/README.md",
@@ -356,6 +361,7 @@
     "scripts/platform/media_preflight_common.py",
     "scripts/platform/windows_media_preflight.py",
     "scripts/raptor_rwd_runtime.py",
+    "scripts/run_container_mkfs_jffs2.sh",
     "scripts/run_macos_collector_kernel_build.sh",
     "scripts/run_macos_split_kernel_build.sh",
     "scripts/run_macos_stock_restore_kernel_build.sh",
@@ -399,6 +405,7 @@
     "tests/test_private_config.py",
     "tests/test_profile.py",
     "tests/test_project.py",
+    "tests/test_provisioning_data.py",
     "tests/test_prudynt_timezone.py",
     "tests/test_public_tree.py",
     "tests/test_ram_boot.py",
@@ -428,6 +435,7 @@
     "tests/test_thingino_control_device_script.py",
     "tests/test_thingino_control_init.py",
     "tests/test_uartless_gate.py",
+    "tests/test_universal_artifacts.py",
     "tests/test_user_cli.py",
     "tests/test_vendor_bundle.py",
     "tests/test_windows_media_preflight.py",
@@ -480,5 +488,6 @@
     "webui/tests/support/fixtures.ts",
     "webui/tests/tools.test.ts",
     "webui/tsconfig.json"
-  ]
+  ],
+  "schema_version": 1
 }

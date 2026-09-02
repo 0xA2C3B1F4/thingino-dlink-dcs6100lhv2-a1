@@ -5,11 +5,17 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 from installer import full_backup
 from installer.layout import Partition, Target
-from installer.recovery_gate import RecoveryGateError, validate_existing_recovery_boundary
+from installer import recovery_gate
+from installer.recovery_gate import (
+    RecoveryGateError,
+    validate_existing_recovery_boundary,
+    validate_functional_recovery_boundary,
+)
 
 
 TARGET = Target(
@@ -99,6 +105,44 @@ class RecoveryGateTests(unittest.TestCase):
             self.assertEqual(decision.mode, "existing-verified-same-device-pair")
             self.assertEqual(decision.preserved_mtd, (0, 4, 5))
             self.assertEqual(decision.recovery_images, 2)
+            self.assertRegex(decision.camera_identity_sha256, r"^[0-9a-f]{64}$")
+            expected_identity = hashlib.sha256()
+            expected_identity.update(b"thingino-dcs6100-camera-identity-v1\0")
+            expected_key = hashlib.sha256()
+            expected_key.update(
+                b"thingino-dcs6100-camera-authorization-key-v1\0"
+            )
+            for digest in (expected_identity, expected_key):
+                digest.update(TARGET.model.encode("ascii") + b"\0")
+                digest.update(TARGET.hardware_revision.encode("ascii") + b"\0")
+                digest.update(TARGET.nor_size.to_bytes(8, "big"))
+            for mtd in (0, 4, 5):
+                raw = (readback / f"mtd{mtd}.bin").read_bytes()
+                for digest in (expected_identity, expected_key):
+                    digest.update(bytes((mtd,)))
+                    digest.update(len(raw).to_bytes(8, "big"))
+                    digest.update(raw)
+            self.assertEqual(
+                decision.camera_identity_sha256,
+                expected_identity.hexdigest(),
+            )
+            self.assertEqual(
+                decision.camera_authorization_key_sha256,
+                expected_key.hexdigest(),
+            )
+            self.assertNotIn(
+                decision.camera_authorization_key_sha256,
+                repr(decision),
+            )
+            repeated = validate_existing_recovery_boundary(
+                recovery_dir=recovery,
+                preserved_readback_dir=readback,
+                target=TARGET,
+            )
+            self.assertEqual(
+                repeated.camera_identity_sha256,
+                decision.camera_identity_sha256,
+            )
 
     def test_gate_uses_the_same_manifest_snapshot_for_backup_and_device_binding(self) -> None:
         with tempfile.TemporaryDirectory() as directory_name:
@@ -114,6 +158,26 @@ class RecoveryGateTests(unittest.TestCase):
                     target=TARGET,
                 )
             load.assert_called_once_with(recovery)
+
+    def test_functional_recovery_uses_a_separate_honest_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            recovery, readback = fixture(Path(directory_name))
+            manifest = json.loads((recovery / "manifest.private.json").read_text())
+            with mock.patch.object(
+                recovery_gate,
+                "validate_functional_backup_with_manifest",
+                return_value=(SimpleNamespace(recovery_images=2), manifest),
+            ):
+                decision = validate_functional_recovery_boundary(
+                    recovery_dir=recovery,
+                    preserved_readback_dir=readback,
+                    target=TARGET,
+                )
+            self.assertTrue(decision.functional_recovery_accepted)
+            self.assertFalse(decision.original_complete_backup_accepted)
+            self.assertEqual(decision.preserved_mtd, (0, 4, 5))
+            self.assertEqual(decision.original_preserved_mtd, (0, 3, 4, 5))
+            self.assertRegex(decision.camera_identity_sha256, r"^[0-9a-f]{64}$")
 
     def test_other_device_or_changed_secret_partition_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory_name:

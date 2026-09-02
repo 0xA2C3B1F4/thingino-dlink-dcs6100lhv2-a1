@@ -449,6 +449,63 @@ def _audit_persistent_root(
             raise PersistentCandidateError(f"rwd configuration changed: {required}")
 
 
+def _validate_universal_provenance(rootfs: bytes, provenance_path: Path) -> str:
+    raw = _regular(provenance_path, "universal root provenance", 64 * 1024)
+    try:
+        document = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise PersistentCandidateError("universal root provenance is invalid") from exc
+    system = document.get("system") if isinstance(document, dict) else None
+    if (
+        not isinstance(system, dict)
+        or document.get("schema_version") != 1
+        or document.get("artifact_scope") != "model-universal"
+        or document.get("contains_device_secrets") is not False
+        or document.get("provisioning_required") is not True
+        or system.get("filename") != "system.universal.squashfs"
+        or system.get("sha256") != hashlib.sha256(rootfs).hexdigest()
+        or system.get("size") != len(rootfs)
+    ):
+        raise PersistentCandidateError("universal provenance does not bind rootfs")
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _validate_universal_tree(root: Path) -> None:
+    marker = root / "etc/dcs6100-universal-image.json"
+    try:
+        document = json.loads(marker.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise PersistentCandidateError("universal image marker is invalid") from exc
+    if document != {
+        "artifact_scope": "model-universal",
+        "contains_device_secrets": False,
+        "provisioning_required": True,
+        "schema_version": 1,
+        "target": "DCS-6100LHV2-A1",
+    }:
+        raise PersistentCandidateError("universal image marker changed")
+    for relative in (
+        "etc/wpa_supplicant.conf",
+        "etc/thingino-api.key",
+        "etc/dropbear/dropbear_ed25519_host_key",
+        "root/.ssh/authorized_keys",
+    ):
+        if (root / relative).exists() or (root / relative).is_symlink():
+            raise PersistentCandidateError(f"universal root contains secret path: {relative}")
+    for relative in (
+        "etc/init.d/S30dropbear",
+        "etc/init.d/S38wpa_supplicant",
+        "etc/init.d/S40network",
+        "etc/init.d/S60uhttpd",
+        "etc/init.d/S94onvif-httpd",
+        "etc/init.d/S95thingino-control",
+        "etc/init.d/S96rwd",
+    ):
+        path = root / relative
+        if path.is_symlink() or not path.is_file() or path.stat().st_mode & 0o111:
+            raise PersistentCandidateError(f"universal service is executable: {relative}")
+
+
 def build_persistent_root(
     *,
     base_rootfs_path: Path,
@@ -462,12 +519,20 @@ def build_persistent_root(
     unsquashfs: Path,
     static_rwd_tls: bool = False,
     split_mtd3: bool = False,
+    artifact_scope: str = "device-personalized",
 ) -> dict[str, object]:
     if output_dir.exists():
         raise PersistentCandidateError("refusing to reuse a private output directory")
+    if artifact_scope not in {"device-personalized", "model-universal"}:
+        raise PersistentCandidateError("persistent root artifact scope is invalid")
     base = _regular(base_rootfs_path, "base rootfs", MAX_BASE_BYTES)
     validate_squashfs(base)
-    base_provenance_sha256 = _validate_provenance(base, base_provenance_path)
+    if artifact_scope == "model-universal":
+        base_provenance_sha256 = _validate_universal_provenance(
+            base, base_provenance_path
+        )
+    else:
+        base_provenance_sha256 = _validate_provenance(base, base_provenance_path)
     normalized_tar, artifact_files = validate_artifact(
         artifact_path,
         expected_sha256=artifact_sha256,
@@ -491,11 +556,14 @@ def build_persistent_root(
         # invariant after releasing the reset GPIO, before applying the rwd delta.
         sanitized = temporary / "sanitized-base.squashfs"
         sanitized_raw = _pack(tool=mksquashfs, root=root, output=sanitized)
-        validate_final_root(
-            sanitized_raw,
-            unsquashfs=unsquashfs,
-            temporary_parent=temporary,
-        )
+        if artifact_scope == "model-universal":
+            _validate_universal_tree(root)
+        else:
+            validate_final_root(
+                sanitized_raw,
+                unsquashfs=unsquashfs,
+                temporary_parent=temporary,
+            )
 
         base_owned_runtime = _base_owned_runtime_identities(root)
         installed = _install_artifact(root, normalized_tar, static_rwd_tls=static_rwd_tls)
@@ -505,7 +573,7 @@ def build_persistent_root(
         init_path.chmod(0o755)
         service_target = root / "etc/init.d/S96rwd"
         service_target.write_bytes(service)
-        service_target.chmod(0o755)
+        service_target.chmod(0o644 if artifact_scope == "model-universal" else 0o755)
         _update_embedded_media_provenance(
             root,
             (root / "usr/bin/prudynt").read_bytes(),
@@ -521,7 +589,16 @@ def build_persistent_root(
             static_rwd_tls=static_rwd_tls,
         )
 
-        output = temporary / "system.private.squashfs"
+        if artifact_scope == "model-universal":
+            _validate_universal_tree(root)
+            if service_target.stat().st_mode & 0o111:
+                raise PersistentCandidateError("universal Raptor service is executable")
+        output_name = (
+            "system.universal.squashfs"
+            if artifact_scope == "model-universal"
+            else "system.private.squashfs"
+        )
+        output = temporary / output_name
         final_limit = SYSTEM_FLASH_SPAN if split_mtd3 else TARGET.partition(3).size - FOOTER_SIZE
         raw = _pack(
             tool=mksquashfs,
@@ -537,29 +614,53 @@ def build_persistent_root(
 
         try:
             base_document = json.loads(base_provenance_path.read_text(encoding="utf-8"))
-            policies = dict(base_document["policies"])
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as exc:
-            raise PersistentCandidateError("base provenance policies are invalid") from exc
-        policies.update(
-            {
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise PersistentCandidateError("base provenance is invalid") from exc
+        if artifact_scope == "model-universal":
+            policies = {
                 "media_runtime": "source-built-prudynt-with-rss-publisher",
-                "media_start": "automatic-S31prudynt-plus-S96rwd",
+                "media_start": "closed-until-separate-provisioning",
                 "overlay_base_runtime": "preserved-from-accepted-base",
                 "output_size": len(raw),
                 "reset_gpio_owner": "recovery-supervisor-only",
-                "webrtc": "raptor-rwd-video-only-loopback-signaling",
+                "webrtc": "disabled-until-provisioned",
                 "persistent_layout": "mtd3-split-v1" if split_mtd3 else "whole-mtd3",
                 "webrtc_tls_library_scope": "static-rwd" if static_rwd_tls else "/usr/lib/raptor",
                 "webrtc_max_clients": 1,
                 "webrtc_streams": [0, 1],
             }
-        )
+        else:
+            try:
+                policies = dict(base_document["policies"])
+            except (KeyError, TypeError) as exc:
+                raise PersistentCandidateError("base provenance policies are invalid") from exc
+            policies.update(
+                {
+                    "media_runtime": "source-built-prudynt-with-rss-publisher",
+                    "media_start": "automatic-S31prudynt-plus-S96rwd",
+                    "overlay_base_runtime": "preserved-from-accepted-base",
+                    "output_size": len(raw),
+                    "reset_gpio_owner": "recovery-supervisor-only",
+                    "webrtc": "raptor-rwd-video-only-loopback-signaling",
+                    "persistent_layout": "mtd3-split-v1" if split_mtd3 else "whole-mtd3",
+                    "webrtc_tls_library_scope": "static-rwd" if static_rwd_tls else "/usr/lib/raptor",
+                    "webrtc_max_clients": 1,
+                    "webrtc_streams": [0, 1],
+                }
+            )
         manifest = {
             "schema_version": 1,
-            "status": "private final-root input; not an install authorization",
+            "artifact_scope": artifact_scope,
+            "contains_device_secrets": artifact_scope != "model-universal",
+            "provisioning_required": artifact_scope == "model-universal",
+            "status": (
+                "model-universal final-root; separate provisioning required"
+                if artifact_scope == "model-universal"
+                else "private final-root input; not an install authorization"
+            ),
             "source_sha256": hashlib.sha256(base).hexdigest(),
             "system": {
-                "filename": "system.private.squashfs",
+                "filename": output_name,
                 "sha256": hashlib.sha256(raw).hexdigest(),
                 "size": len(raw),
             },
@@ -574,7 +675,11 @@ def build_persistent_root(
                 "source_provenance": source_provenance,
             },
         }
-        provenance = temporary / "final-root.private.json"
+        provenance = temporary / (
+            "final-root.universal.json"
+            if artifact_scope == "model-universal"
+            else "final-root.private.json"
+        )
         provenance.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
         shutil.rmtree(root)
         base_snapshot.unlink()

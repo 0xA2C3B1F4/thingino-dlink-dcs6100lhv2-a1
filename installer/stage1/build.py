@@ -8,6 +8,7 @@ import json
 import os
 import re
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
@@ -18,10 +19,12 @@ from installer.artifacts import (
     validate_uimage_command_line,
 )
 from installer.final_bundle import (
+    build_universal_final_bundle,
     derive_final_layout,
     final_kernel_command_line,
     validate_final_kernel_config,
 )
+from installer.install_policy import universal_physical_write_policy
 from installer.layout import TARGET
 from installer.media_closure import PROVEN_IDENTITIES
 from installer.runtime_policy import (
@@ -250,13 +253,23 @@ def render_contract(
     final_kernel: bytes,
     system: bytes,
     mmc_module: bytes,
+    require_camera_authorization: bool = False,
 ) -> bytes:
     parsed = validate_stage2(stage2)
+    if require_camera_authorization and parsed.data_mode != "initialize":
+        raise Stage1BuildError(
+            "camera-authorized universal stage 1 requires initialize data mode"
+        )
     lines = [
         "#ifndef DCS6100_STAGE1_GENERATED_CONTRACT_H",
         "#define DCS6100_STAGE1_GENERATED_CONTRACT_H",
         f'#define STAGE2_PATH "/card/{STAGE2_FILENAME}"',
         f'#define BOOTSTRAP_PATH "/card/{BOOTSTRAP_FILENAME}"',
+        '#define CAMERA_AUTHORIZATION_PATH "/card/INSTALL.AUTH.BIN"',
+        '#define CAMERA_AUTHORIZATION_MANIFEST_PATH "/card/INSTALL.AUTH"',
+        '#define CAMERA_AUTHORIZATION_SIGNATURE_PATH "/card/INSTALL.AUTH.SIG"',
+        '#define PROVISIONING_PATH "/card/THINGINO.PROVISION"',
+        f"#define REQUIRE_CAMERA_AUTHORIZATION {1 if require_camera_authorization else 0}",
         f"#define STAGE2_EXPECTED_SIZE {len(stage2)}U",
         f"#define STAGE2_KERNEL_OFFSET {parsed.kernel_offset}U",
         f"#define STAGE2_SYSTEM_OFFSET {parsed.system_offset}U",
@@ -348,6 +361,34 @@ def validate_final_root_contents(
     return _impl(sys.modules[__name__], paths=paths, shadow=shadow, authorized_keys=authorized_keys, dropbear_init=dropbear_init, network_init=network_init, interfaces_config=interfaces_config, loopback_config=loopback_config, wlan_config=wlan_config, dhcp_script=dhcp_script, resolver_policy=resolver_policy, wpa_config=wpa_config, prudynt_config=prudynt_config, thingino_config=thingino_config, onvif_config=onvif_config)
 
 
+STAGE1_MAX_LOAD_MEMORY = 16 * 1024 * 1024
+
+
+def _elf_load_memory_size(raw: bytes) -> int:
+    if len(raw) < 52 or raw[:6] != b"\x7fELF\x01\x01":
+        raise Stage1BuildError("stage-1 executable is not ELF32 little-endian")
+    program_offset = struct.unpack_from("<I", raw, 28)[0]
+    program_size = struct.unpack_from("<H", raw, 42)[0]
+    program_count = struct.unpack_from("<H", raw, 44)[0]
+    if program_size != 32 or not program_count:
+        raise Stage1BuildError("stage-1 ELF program-header table changed")
+    total = 0
+    for index in range(program_count):
+        offset = program_offset + index * program_size
+        if offset + program_size > len(raw):
+            raise Stage1BuildError("stage-1 ELF program-header table is truncated")
+        kind, _file_offset, _virtual, _physical, file_size, memory_size = (
+            struct.unpack_from("<IIIIII", raw, offset)
+        )
+        if kind == 1:
+            if memory_size < file_size:
+                raise Stage1BuildError("stage-1 ELF load segment shrank in memory")
+            total += memory_size
+    if not total:
+        raise Stage1BuildError("stage-1 ELF has no loadable memory")
+    return total
+
+
 def validate_final_root(
     raw: bytes, *, unsquashfs: Path, temporary_parent: Path
 ) -> None:
@@ -415,6 +456,8 @@ def build_stage1_root(
         init = executable.read_bytes()
         if init[:4] != b"\x7fELF" or STAGE2_FILENAME.encode() not in init:
             raise Stage1BuildError("compiled stage-1 PID 1 lost its fixed identity")
+        if _elf_load_memory_size(init) > STAGE1_MAX_LOAD_MEMORY:
+            raise Stage1BuildError("compiled stage-1 PID 1 exceeds its RAM snapshot budget")
         for token in (b"/bin/sh", b"telnet", b"dropbear", b"saveenv", b"fw_setenv"):
             if token in init:
                 raise Stage1BuildError("compiled stage-1 PID 1 gained a forbidden interface")
@@ -487,12 +530,39 @@ def _build_install_set(
     mksquashfs: Path,
     unsquashfs: Path,
     data_mode: str,
+    artifact_scope: str = "device-personalized",
+    universal_root_manifest: dict[str, object] | None = None,
+    universal_signing_key: Path | None = None,
 ) -> dict[str, object]:
     os.chmod(output_dir, 0o700)
     validate_squashfs(system)
-    validate_final_root(
-        system, unsquashfs=unsquashfs, temporary_parent=output_dir.parent
-    )
+    if artifact_scope == "device-personalized":
+        if universal_root_manifest is not None:
+            raise Stage1BuildError("personalized install set received universal metadata")
+        validate_final_root(
+            system, unsquashfs=unsquashfs, temporary_parent=output_dir.parent
+        )
+    elif artifact_scope == "model-universal":
+        if data_mode != "initialize":
+            raise Stage1BuildError(
+                "model-universal first-install set requires initialize data mode"
+            )
+        if not isinstance(universal_root_manifest, dict):
+            raise Stage1BuildError("model-universal root manifest is required")
+        if universal_signing_key is None:
+            raise Stage1BuildError("model-universal signing key is required")
+        system_identity = universal_root_manifest.get("system")
+        if (
+            universal_root_manifest.get("artifact_scope") != "model-universal"
+            or universal_root_manifest.get("contains_device_secrets") is not False
+            or universal_root_manifest.get("provisioning_required") is not True
+            or not isinstance(system_identity, dict)
+            or system_identity.get("sha256") != hashlib.sha256(system).hexdigest()
+            or system_identity.get("size") != len(system)
+        ):
+            raise Stage1BuildError("model-universal root identity differs")
+    else:
+        raise Stage1BuildError("install-set artifact scope is invalid")
     layout = derive_final_layout(len(system))
     validate_uimage_command_line(
         installer_kernel,
@@ -519,6 +589,7 @@ def _build_install_set(
         final_kernel=final_kernel,
         system=system,
         mmc_module=mmc_module,
+        require_camera_authorization=artifact_scope == "model-universal",
     )
     stage1_root_path = output_dir / "stage1-bootstrap.squashfs"
     stage1_root = build_stage1_root(
@@ -536,9 +607,35 @@ def _build_install_set(
     stage2_path = output_dir / STAGE2_FILENAME
     atomic_write(bootstrap_path, bootstrap)
     atomic_write(stage2_path, stage2)
+    universal_bundle_path: Path | None = None
+    universal_firmware_sha256: str | None = None
+    if artifact_scope == "model-universal":
+        assert universal_signing_key is not None
+        universal_bundle = build_universal_final_bundle(
+            kernel=final_kernel,
+            bootstrap_rootfs=stage1_root,
+            system_rootfs=system,
+            linux_config=final_linux_config,
+            signing_key=universal_signing_key,
+        )
+        universal_bundle_path = output_dir / "thingino-universal.tgb"
+        atomic_write(universal_bundle_path, universal_bundle)
+        universal_firmware_sha256 = hashlib.sha256(universal_bundle).hexdigest()
     manifest = {
         "schema_version": 2,
+        "artifact_scope": artifact_scope,
+        "provisioning": (
+            "separate-per-camera-audit-and-jffs2"
+            if artifact_scope == "model-universal"
+            else "embedded-device-personalization"
+        ),
+        "universal_firmware_sha256": universal_firmware_sha256,
         "status": "host-built install set; generation does not authorize live use",
+        **(
+            {"physical_write_policy": universal_physical_write_policy()}
+            if artifact_scope == "model-universal"
+            else {}
+        ),
         "target": {"model": TARGET.model, "hardware_revision": TARGET.hardware_revision},
         "layout": {
             "abi": "dcs6100lhv2-a1-mtd3-split-v1",
@@ -561,7 +658,11 @@ def _build_install_set(
             },
             "data": {
                 "filesystem": "jffs2",
-                "initialize": "explicit-erased-region",
+                "initialize": (
+                    "camera-authorized-jffs2-erase-write-readback"
+                    if artifact_scope == "model-universal"
+                    else "explicit-erased-region"
+                ),
                 "preserve": "before-and-after-complete-region-sha256",
                 "factory_reset": "explicit-data-only-erase",
                 "corrupt": "preserve-and-require-explicit-recovery",
@@ -581,11 +682,21 @@ def _build_install_set(
         },
         "interrupted_install_checkpoint": {
             "filename": "STOCKM3.OK",
-            "size": 80,
-            "magic": "DCS6RC01",
+            "size": 144 if artifact_scope == "model-universal" else 80,
+            "magic": (
+                "DCS6RC02" if artifact_scope == "model-universal" else "DCS6RC01"
+            ),
             "bindings": [
                 "stock backup size and SHA-256",
                 "exact stage-2 size and SHA-256",
+                *(
+                    [
+                        "exact camera authorization binary SHA-256",
+                        "exact provisioning JFFS2 SHA-256",
+                    ]
+                    if artifact_scope == "model-universal"
+                    else []
+                ),
             ],
             "policy": (
                 "permits only re-running the same bounded final install after "
@@ -619,8 +730,16 @@ def _build_install_set(
             )
         },
         "artifacts": {
-            path.name: {"size": path.stat().st_size, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
-            for path in (bootstrap_path, stage2_path, stage1_root_path)
+            path.name: {
+                "size": path.stat().st_size,
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            }
+            for path in (
+                bootstrap_path,
+                stage2_path,
+                stage1_root_path,
+                *((universal_bundle_path,) if universal_bundle_path is not None else ()),
+            )
         },
         "boot_sequence": [
             "stock U-Boot flashes only mtd1 and mtd2 from the matching file",
@@ -673,6 +792,53 @@ def build_install_set(
             mksquashfs=mksquashfs,
             unsquashfs=unsquashfs,
             data_mode=data_mode,
+        )
+        os.replace(working, output_dir)
+    except BaseException:
+        shutil.rmtree(working, ignore_errors=True)
+        raise
+    return manifest
+
+
+def build_universal_install_set(
+    *,
+    installer_kernel: bytes,
+    final_kernel: bytes,
+    final_linux_config: bytes,
+    system: bytes,
+    universal_root_manifest: dict[str, object],
+    signing_key: Path,
+    mmc_module: bytes,
+    output_dir: Path,
+    clang: Path,
+    lld: Path,
+    mksquashfs: Path,
+    unsquashfs: Path,
+) -> dict[str, object]:
+    """Build one identical model payload; camera authorization stays separate."""
+
+    if output_dir.exists() or output_dir.is_symlink():
+        raise Stage1BuildError("refusing to reuse a universal install-set directory")
+    output_dir.parent.mkdir(parents=True, exist_ok=True)
+    working = Path(
+        tempfile.mkdtemp(prefix=f".{output_dir.name}.", dir=output_dir.parent)
+    )
+    try:
+        manifest = _build_install_set(
+            installer_kernel=installer_kernel,
+            final_kernel=final_kernel,
+            final_linux_config=final_linux_config,
+            system=system,
+            mmc_module=mmc_module,
+            output_dir=working,
+            clang=clang,
+            lld=lld,
+            mksquashfs=mksquashfs,
+            unsquashfs=unsquashfs,
+            data_mode="initialize",
+            artifact_scope="model-universal",
+            universal_root_manifest=universal_root_manifest,
+            universal_signing_key=signing_key,
         )
         os.replace(working, output_dir)
     except BaseException:

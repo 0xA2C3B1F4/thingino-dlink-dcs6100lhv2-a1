@@ -194,6 +194,7 @@ class OfflineStage2Images:
     data_erase_span: int
     kernel: bytes
     data_mode: str = "initialize"
+    provisioning_data: bytes = b""
 
     def validate(self) -> None:
         if self.data_mode not in {"initialize", "preserve", "factory-reset"}:
@@ -206,6 +207,12 @@ class OfflineStage2Images:
             or self.data_erase_span != DATA_FLASH_SPAN
         ):
             raise MtdError("offline stage-2 layout does not match the fixed mtd3 ABI")
+        if self.provisioning_data and (
+            self.data_mode != "initialize"
+            or len(self.provisioning_data) != self.data_erase_span
+            or not self.provisioning_data.startswith(b"\x85\x19")
+        ):
+            raise MtdError("offline provisioning data violates its exact JFFS2 contract")
         FinalBundleImages(
             system_offset=self.system_offset,
             system_erase_span=self.system_erase_span,
@@ -262,14 +269,24 @@ def _offline_recovery_checkpoint(
 ) -> bytes:
     stage2_size = len(images.kernel) + len(images.system)
     stage2_digest = hashlib.sha256(images.kernel + images.system).digest()
-    return b"DCS6RC01" + b"".join(
-        (
-            len(backup).to_bytes(4, "big"),
-            stage2_size.to_bytes(4, "big"),
-            hashlib.sha256(backup).digest(),
-            stage2_digest,
+    version = b"DCS6RC02" if images.provisioning_data else b"DCS6RC01"
+    values = [
+        len(backup).to_bytes(4, "big"),
+        stage2_size.to_bytes(4, "big"),
+        hashlib.sha256(backup).digest(),
+        stage2_digest,
+    ]
+    if images.provisioning_data:
+        values.extend(
+            (
+                hashlib.sha256(
+                    b"modeled-camera-authorization\0"
+                    + hashlib.sha256(images.provisioning_data).digest()
+                ).digest(),
+                hashlib.sha256(images.provisioning_data).digest(),
+            )
         )
-    )
+    return version + b"".join(values)
 
 
 class FinalInstaller:
@@ -453,7 +470,11 @@ class OfflineStage2Installer(FinalInstaller):
                 self._write_and_verify(
                     offset=images.data_offset,
                     erase_span=images.data_erase_span,
-                    payload=b"",
+                    payload=(
+                        images.provisioning_data
+                        if images.data_mode == "initialize"
+                        else b""
+                    ),
                     label="final_data",
                 )
             elif self.nor.read(

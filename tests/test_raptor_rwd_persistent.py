@@ -177,6 +177,63 @@ class RaptorRwdPersistentTests(unittest.TestCase):
             self.assertTrue((root / "usr/bin/rwd").is_file())
             self.assertFalse(any(path.startswith("usr/lib/raptor/") for path in installed))
 
+    def test_universal_provenance_and_closed_services_are_separate(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            rootfs = b"universal-root"
+            provenance = root / "final-root.universal.json"
+            provenance.write_text(
+                json.dumps(
+                    {
+                        "artifact_scope": "model-universal",
+                        "contains_device_secrets": False,
+                        "provisioning_required": True,
+                        "schema_version": 1,
+                        "system": {
+                            "filename": "system.universal.squashfs",
+                            "sha256": __import__("hashlib").sha256(rootfs).hexdigest(),
+                            "size": len(rootfs),
+                        },
+                    }
+                )
+            )
+            self.assertRegex(
+                persistent._validate_universal_provenance(rootfs, provenance),
+                r"^[0-9a-f]{64}$",
+            )
+            marker = root / "etc/dcs6100-universal-image.json"
+            marker.parent.mkdir(parents=True)
+            marker.write_text(
+                json.dumps(
+                    {
+                        "artifact_scope": "model-universal",
+                        "contains_device_secrets": False,
+                        "provisioning_required": True,
+                        "schema_version": 1,
+                        "target": "DCS-6100LHV2-A1",
+                    }
+                )
+            )
+            for relative in (
+                "etc/init.d/S30dropbear",
+                "etc/init.d/S38wpa_supplicant",
+                "etc/init.d/S40network",
+                "etc/init.d/S60uhttpd",
+                "etc/init.d/S94onvif-httpd",
+                "etc/init.d/S95thingino-control",
+                "etc/init.d/S96rwd",
+            ):
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"#!/bin/sh\n")
+                path.chmod(0o644)
+            persistent._validate_universal_tree(root)
+            (root / "etc/init.d/S95thingino-control").chmod(0o755)
+            with self.assertRaisesRegex(
+                persistent.PersistentCandidateError, "executable"
+            ):
+                persistent._validate_universal_tree(root)
+
     def test_reset_conflicts_are_removed_without_following_directories(self) -> None:
         with tempfile.TemporaryDirectory() as name:
             root = Path(name)

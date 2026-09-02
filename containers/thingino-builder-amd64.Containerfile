@@ -11,7 +11,7 @@ RUN printf '%s\n' \
     && apt-get install -y --no-install-recommends \
       autoconf bc bison build-essential ca-certificates ccache cmake cpio curl \
       dialog file flex gawk git jq libcrypt-dev libncurses-dev \
-      libusb-1.0-0-dev m4 make mtools nodejs npm parted patch perl python3 \
+      libusb-1.0-0-dev m4 make mtd-utils mtools nodejs npm parted patch perl python3 \
       python3-jsonschema ripgrep rsync shfmt squashfs-tools swig \
       u-boot-tools unzip wget whiptail xz-utils zstd \
     && rm -rf /var/lib/apt/lists/*

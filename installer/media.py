@@ -5,11 +5,13 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
 from pathlib import Path
 
+from .install_policy import universal_physical_write_policy
 from .layout import TARGET
 from .media_preflight import (
     MediaError,
@@ -36,6 +38,8 @@ from .stage2 import (
 
 PASSIVE_BOOTSTRAP_FILENAME = "STAGE1.PKG"
 PASSIVE_RECOVERY_FILENAME = "RECOVERY.OFF"
+UARTLESS_CAPTURE_ACTIVE_FILENAME = "DCS6100LHV2Ax_FW000C00_UARTCAP_SD.bin"
+UARTLESS_CAPTURE_PASSIVE_FILENAME = "UARTCAP.PSV"
 STOCK_BACKUP_FILENAME = "STOCKM3.BIN"
 ARCHIVED_STOCK_BACKUP_FILENAME = "STOCKM3.OLD"
 STOCK_BACKUP_SIZE = 0x007C0000
@@ -296,6 +300,28 @@ def _validate_install_manifest(
         if artifacts.get(name) != expected:
             raise MediaError(f"install-set manifest does not bind {name}")
     if schema == 2:
+        artifact_scope = manifest.get("artifact_scope")
+        if artifact_scope is not None and artifact_scope not in {
+            "device-personalized",
+            "model-universal",
+        }:
+            raise MediaError("install-set artifact scope is invalid")
+        if artifact_scope == "model-universal":
+            firmware_identity = manifest.get("universal_firmware_sha256")
+            if (
+                manifest.get("provisioning") != "separate-per-camera-audit-and-jffs2"
+                or not isinstance(firmware_identity, str)
+                or re.fullmatch(r"[0-9a-f]{64}", firmware_identity) is None
+                or stage2_payload.data_mode != "initialize"
+                or manifest.get("physical_write_policy")
+                != universal_physical_write_policy()
+            ):
+                raise MediaError("model-universal install-set binding is invalid")
+        elif artifact_scope == "device-personalized" and (
+            manifest.get("provisioning") != "embedded-device-personalization"
+            or manifest.get("universal_firmware_sha256") is not None
+        ):
+            raise MediaError("personalized install-set binding is invalid")
         expected_layout = {
             "abi": "dcs6100lhv2-a1-mtd3-split-v1",
             "parent_physical_mtd": 3,
@@ -319,7 +345,11 @@ def _validate_install_manifest(
             },
             "data": {
                 "filesystem": "jffs2",
-                "initialize": "explicit-erased-region",
+                "initialize": (
+                    "camera-authorized-jffs2-erase-write-readback"
+                    if artifact_scope == "model-universal"
+                    else "explicit-erased-region"
+                ),
                 "preserve": "before-and-after-complete-region-sha256",
                 "factory_reset": "explicit-data-only-erase",
                 "corrupt": "preserve-and-require-explicit-recovery",
@@ -440,6 +470,8 @@ def validate_install_set(
             STAGE2_FILENAME,
             "stage1-bootstrap.squashfs",
         }
+        if manifest.get("artifact_scope") == "model-universal":
+            expected_names.add("thingino-universal.tgb")
         if not isinstance(artifacts, dict) or set(artifacts) != expected_names:
             raise MediaError("install-set manifest artifact allowlist changed")
         if artifacts.get("stage1-bootstrap.squashfs") != {
@@ -532,6 +564,33 @@ def replace_passive_bootstrap(
     from .media_transactions import replace_passive_bootstrap as implementation
 
     return implementation(sys.modules[__name__], old_bootstrap_bytes=old_bootstrap_bytes, old_stage2_bytes=old_stage2_bytes, legacy_migration_profile_bytes=legacy_migration_profile_bytes, new_bootstrap_bytes=new_bootstrap_bytes, stage2_bytes=stage2_bytes, manifest_bytes=manifest_bytes, root=root, bootstrap_name=bootstrap_name, preflight=preflight, confirmed_physical_device=confirmed_physical_device, passive_name=passive_name)
+
+
+def stage_passive_verified_package(
+    package_bytes: bytes,
+    *,
+    root: Path,
+    preflight: MediaPreflight,
+    confirmed_physical_device: str,
+    passive_name: str = UARTLESS_CAPTURE_PASSIVE_FILENAME,
+) -> str:
+    from .media_transactions import stage_passive_verified_package as implementation
+
+    return implementation(sys.modules[__name__], package_bytes, root=root, preflight=preflight, confirmed_physical_device=confirmed_physical_device, passive_name=passive_name)
+
+
+def activate_passive_verified_package(
+    package_bytes: bytes,
+    *,
+    root: Path,
+    preflight: MediaPreflight,
+    confirmed_physical_device: str,
+    active_name: str = UARTLESS_CAPTURE_ACTIVE_FILENAME,
+    passive_name: str = UARTLESS_CAPTURE_PASSIVE_FILENAME,
+) -> str:
+    from .media_transactions import activate_passive_verified_package as implementation
+
+    return implementation(sys.modules[__name__], package_bytes, root=root, preflight=preflight, confirmed_physical_device=confirmed_physical_device, active_name=active_name, passive_name=passive_name)
 
 
 def stage_verified_package(

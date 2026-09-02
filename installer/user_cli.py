@@ -36,7 +36,21 @@ from .collector.build import CollectorBuildError, build_collector_root
 from .full_backup import (
     FullBackupError,
     capture_complete_backup_from_ram_collector,
+    capture_functional_backup_from_uartless_collector,
     validate_complete_backup,
+)
+from .camera_authorization import (
+    CameraAuthorizationError,
+    create_camera_authorization,
+)
+from .final_bundle import BundleError, validate_universal_final_bundle
+from .provisioning import (
+    ProvisioningError,
+    create_provisioning_sidecar,
+    read_private_provisioning_data,
+    recovery_session_identity,
+    require_provisioning_signing_key,
+    validate_provisioning_sidecar,
 )
 from .layout import TARGET
 from .live_ram import (
@@ -65,10 +79,20 @@ from .local_build_acquire import (
     LocalBuildAcquireError,
     acquire_locked_public_inputs,
 )
-from .local_build_run import LocalBuildRunError, build_local_install_set
+from .local_build_run import (
+    LocalBuildRunError,
+    build_local_install_set,
+    build_local_recovery_assets,
+    build_local_universal_install_set,
+)
 from .media import (
     MediaError,
+    UARTLESS_CAPTURE_ACTIVE_FILENAME,
+    UARTLESS_CAPTURE_PASSIVE_FILENAME,
+    activate_passive_verified_package,
+    deactivate_verified_package,
     load_media_preflight,
+    stage_passive_verified_package,
     stage_verified_install_set,
     stage_verified_package,
     validate_install_set,
@@ -89,7 +113,11 @@ from .recovery import (
     inspect_same_device_stock_restore,
     prepare_same_device_stock_restore,
 )
-from .recovery_gate import RecoveryGateError, validate_existing_recovery_boundary
+from .recovery_gate import (
+    RecoveryGateError,
+    validate_existing_recovery_boundary,
+    validate_functional_recovery_boundary,
+)
 from .recovery_ap.host import (
     RecoveryApHostError,
     collect_runtime_snapshot,
@@ -117,10 +145,12 @@ from .runtime_candidate import (
     runtime_candidate_status,
     stage_runtime_candidate,
 )
+from .stage2 import build_stage2
 from .sd_package import (
     PackageError,
     atomic_write,
     matching_update_filenames,
+    package_manifest,
     parse_package,
     read_snapshot,
     validate_bootstrap,
@@ -184,11 +214,11 @@ def _now() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat()
 
 
-def _target() -> dict[str, object]:
+def _target(preserved_mtd: list[int] | None = None) -> dict[str, object]:
     return {
         "hardware_revision": TARGET.hardware_revision,
         "model": TARGET.model,
-        "preserved_mtd": [0, 4, 5],
+        "preserved_mtd": preserved_mtd or [0, 4, 5],
     }
 
 
@@ -203,14 +233,16 @@ def _document(
     next_command: str | None = None,
     result: dict[str, object] | None = None,
     error: str | None = None,
+    preserved_mtd: list[int] | None = None,
 ) -> dict[str, object]:
+    protected = preserved_mtd or [0, 4, 5]
     return {
         "command": command,
         "error": error,
         "next_command": next_command,
         "nor": {
             "full_physical_readback_verified": read_back_verified,
-            "preserved_mtd": [0, 4, 5],
+            "preserved_mtd": protected,
             "written_mtd": written_mtd or [],
             "writing_now": False,
         },
@@ -219,7 +251,7 @@ def _document(
         "physical_actions": physical_actions or [],
         "result": result or {},
         "schema_version": SCHEMA_VERSION,
-        "target": _target(),
+        "target": _target(protected),
     }
 
 
@@ -602,6 +634,12 @@ def _local_build_acquire(arguments: argparse.Namespace) -> dict[str, object]:
     return implementation(sys.modules[__name__], arguments)
 
 
+def _local_build_recovery_assets(arguments: argparse.Namespace) -> dict[str, object]:
+    from .user_cli_build import _local_build_recovery_assets as implementation
+
+    return implementation(sys.modules[__name__], arguments)
+
+
 def _local_build_configure(arguments: argparse.Namespace) -> dict[str, object]:
     from .user_cli_build import _local_build_configure as implementation
 
@@ -610,6 +648,26 @@ def _local_build_configure(arguments: argparse.Namespace) -> dict[str, object]:
 
 def _local_build_build(arguments: argparse.Namespace) -> dict[str, object]:
     from .user_cli_build import _local_build_build as implementation
+
+    return implementation(sys.modules[__name__], arguments)
+
+
+def _local_build_build_universal(
+    arguments: argparse.Namespace,
+) -> dict[str, object]:
+    from .user_cli_build import _local_build_build_universal as implementation
+
+    return implementation(sys.modules[__name__], arguments)
+
+
+def _universal_provision(arguments: argparse.Namespace) -> dict[str, object]:
+    from .user_cli_universal import _universal_provision as implementation
+
+    return implementation(sys.modules[__name__], arguments)
+
+
+def _universal_authorize(arguments: argparse.Namespace) -> dict[str, object]:
+    from .user_cli_universal import _universal_authorize as implementation
 
     return implementation(sys.modules[__name__], arguments)
 
@@ -706,6 +764,30 @@ def _stock_backup_capture(arguments: argparse.Namespace) -> dict[str, object]:
 
 def _stock_backup_validate(arguments: argparse.Namespace) -> dict[str, object]:
     from .user_cli_stock_recovery import _stock_backup_validate as implementation
+
+    return implementation(sys.modules[__name__], arguments)
+
+
+def _stock_uartless_prepare(arguments: argparse.Namespace) -> dict[str, object]:
+    from .user_cli_stock_recovery import _stock_uartless_prepare as implementation
+
+    return implementation(sys.modules[__name__], arguments)
+
+
+def _stock_uartless_authorize(arguments: argparse.Namespace) -> dict[str, object]:
+    from .user_cli_stock_recovery import _stock_uartless_authorize as implementation
+
+    return implementation(sys.modules[__name__], arguments)
+
+
+def _stock_uartless_handoff(arguments: argparse.Namespace) -> dict[str, object]:
+    from .user_cli_stock_recovery import _stock_uartless_handoff as implementation
+
+    return implementation(sys.modules[__name__], arguments)
+
+
+def _stock_uartless_validate(arguments: argparse.Namespace) -> dict[str, object]:
+    from .user_cli_stock_recovery import _stock_uartless_validate as implementation
 
     return implementation(sys.modules[__name__], arguments)
 
@@ -856,6 +938,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         document = arguments.handler(arguments)
     except (
+        BundleError,
+        CameraAuthorizationError,
         CandidateLogError,
         CollectorBuildError,
         DevelopmentInstallError,
@@ -871,6 +955,7 @@ def main(argv: list[str] | None = None) -> int:
         PackageError,
         PreflightError,
         PrivateConfigError,
+        ProvisioningError,
         RecoveryError,
         RecoveryGateError,
         RecoveryApHostError,
