@@ -36,6 +36,8 @@ from .stage2 import (
 
 PASSIVE_BOOTSTRAP_FILENAME = "STAGE1.PKG"
 PASSIVE_RECOVERY_FILENAME = "RECOVERY.OFF"
+UARTLESS_CAPTURE_ACTIVE_FILENAME = "DCS6100LHV2Ax_FW000C00_UARTCAP_SD.bin"
+UARTLESS_CAPTURE_PASSIVE_FILENAME = "UARTCAP.PSV"
 STOCK_BACKUP_FILENAME = "STOCKM3.BIN"
 ARCHIVED_STOCK_BACKUP_FILENAME = "STOCKM3.OLD"
 STOCK_BACKUP_SIZE = 0x007C0000
@@ -532,6 +534,33 @@ def replace_passive_bootstrap(
     from .media_transactions import replace_passive_bootstrap as implementation
 
     return implementation(sys.modules[__name__], old_bootstrap_bytes=old_bootstrap_bytes, old_stage2_bytes=old_stage2_bytes, legacy_migration_profile_bytes=legacy_migration_profile_bytes, new_bootstrap_bytes=new_bootstrap_bytes, stage2_bytes=stage2_bytes, manifest_bytes=manifest_bytes, root=root, bootstrap_name=bootstrap_name, preflight=preflight, confirmed_physical_device=confirmed_physical_device, passive_name=passive_name)
+
+
+def stage_passive_verified_package(
+    package_bytes: bytes,
+    *,
+    root: Path,
+    preflight: MediaPreflight,
+    confirmed_physical_device: str,
+    passive_name: str = UARTLESS_CAPTURE_PASSIVE_FILENAME,
+) -> str:
+    from .media_transactions import stage_passive_verified_package as implementation
+
+    return implementation(sys.modules[__name__], package_bytes, root=root, preflight=preflight, confirmed_physical_device=confirmed_physical_device, passive_name=passive_name)
+
+
+def activate_passive_verified_package(
+    package_bytes: bytes,
+    *,
+    root: Path,
+    preflight: MediaPreflight,
+    confirmed_physical_device: str,
+    active_name: str = UARTLESS_CAPTURE_ACTIVE_FILENAME,
+    passive_name: str = UARTLESS_CAPTURE_PASSIVE_FILENAME,
+) -> str:
+    from .media_transactions import activate_passive_verified_package as implementation
+
+    return implementation(sys.modules[__name__], package_bytes, root=root, preflight=preflight, confirmed_physical_device=confirmed_physical_device, active_name=active_name, passive_name=passive_name)
 
 
 def stage_verified_package(

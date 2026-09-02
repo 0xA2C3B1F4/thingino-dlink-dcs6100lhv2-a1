@@ -9,7 +9,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-from installer import user_cli, user_cli_parser
+from installer import user_cli, user_cli_parser, user_cli_stock_recovery
 
 
 class UserCliTests(unittest.TestCase):
@@ -107,6 +107,106 @@ class UserCliTests(unittest.TestCase):
         rendered = json.dumps(result, sort_keys=True)
         self.assertNotIn("private-token", rendered)
 
+    def test_uartless_functional_capture_parser_and_authorization_are_explicit(self) -> None:
+        parser = user_cli.build_parser()
+        common = [
+            "--package",
+            "capture.bin",
+            "--package-manifest",
+            "capture.json",
+            "--mount-root",
+            "card",
+            "--media-preflight",
+            "preflight.json",
+            "--confirm-physical-device",
+            "/dev/disk9",
+        ]
+        prepare = parser.parse_args(
+            ["stock-recovery", "uartless-prepare", *common]
+        )
+        authorize = parser.parse_args(
+            [
+                "stock-recovery",
+                "uartless-authorize",
+                *common,
+                "--confirm-write-set",
+                "WRITE-MTD1-MTD2",
+            ]
+        )
+        handoff = parser.parse_args(
+            [
+                "stock-recovery",
+                "uartless-handoff",
+                *common,
+                "--confirm-stock-uboot-result",
+                "MTD1-MTD2-WRITTEN",
+            ]
+        )
+        self.assertIs(prepare.handler, user_cli._stock_uartless_prepare)
+        self.assertIs(authorize.handler, user_cli._stock_uartless_authorize)
+        self.assertIs(handoff.handler, user_cli._stock_uartless_handoff)
+
+        arguments = SimpleNamespace(
+            package=Path("capture.bin"),
+            package_manifest=Path("capture.json"),
+            mount_root=Path("card"),
+            media_preflight=Path("preflight.json"),
+            confirm_physical_device="/dev/disk9",
+            confirm_write_set="WRITE-MTD1-MTD2",
+        )
+        preflight = SimpleNamespace(physical_device="/dev/disk9")
+        with (
+            mock.patch.object(
+                user_cli_stock_recovery,
+                "_load_uartless_package",
+                return_value=(b"package", object()),
+            ),
+            mock.patch.object(user_cli, "load_media_preflight", return_value=preflight),
+            mock.patch.object(user_cli, "activate_passive_verified_package") as run,
+        ):
+            result = user_cli._stock_uartless_authorize(arguments)
+        run.assert_called_once()
+        self.assertTrue(result["result"]["armed"])
+        self.assertEqual(
+            result["result"]["future_physical_boot_writes_mtd"], [1, 2]
+        )
+        self.assertFalse(result["result"]["original_complete_backup_accepted"])
+        self.assertEqual(result["result"]["write_set"], [])
+
+    def test_guided_install_accepts_only_one_explicit_recovery_class(self) -> None:
+        parser = user_cli.build_parser()
+        functional = parser.parse_args(
+            [
+                "prepare-card",
+                "--whole-device",
+                "/dev/disk9",
+                "--mount-root",
+                "card",
+                "--functional-recovery-dir",
+                "functional",
+                "--preserved-readback-dir",
+                "functional/preserved",
+            ]
+        )
+        self.assertEqual(functional.functional_recovery_dir, Path("functional"))
+        self.assertIsNone(functional.recovery_dir)
+        with self.assertRaises(user_cli.ArgumentParsingError):
+            parser.parse_args(
+                [
+                    "prepare-card",
+                    "--whole-device",
+                    "/dev/disk9",
+                    "--mount-root",
+                    "card",
+                    "--recovery-dir",
+                    "exact",
+                    "--functional-recovery-dir",
+                    "functional",
+                    "--preserved-readback-dir",
+                    "preserved",
+                ]
+            )
+
     def test_local_build_prepare_defaults_to_two_clean_builds(self) -> None:
         parser = user_cli.build_parser()
         arguments = parser.parse_args(
@@ -147,6 +247,36 @@ class UserCliTests(unittest.TestCase):
         )
         self.assertEqual(arguments.build_root, Path("/external/build"))
         self.assertIs(arguments.handler, user_cli._local_build_acquire)
+
+    def test_local_build_recovery_assets_parser_uses_generated_workspace(self) -> None:
+        parser = user_cli.build_parser()
+        arguments = parser.parse_args(
+            ["local-build", "recovery-assets", "--build-root", "/external/build"]
+        )
+        self.assertEqual(arguments.build_root, Path("/external/build"))
+        self.assertIs(arguments.handler, user_cli._local_build_recovery_assets)
+
+    def test_local_build_recovery_assets_dispatches_before_configure(self) -> None:
+        arguments = SimpleNamespace(
+            build_root=Path("/external/build"),
+            work_dir=Path("/state"),
+        )
+        with (
+            mock.patch.object(
+                user_cli,
+                "resolve_local_build_workspace",
+                return_value=Path("/external/build"),
+            ),
+            mock.patch.object(
+                user_cli,
+                "build_local_recovery_assets",
+                return_value={"write_set": [], "files": {"kernel": "/result/kernel"}},
+            ) as build,
+        ):
+            result = user_cli._local_build_recovery_assets(arguments)
+        build.assert_called_once_with(build_root=Path("/external/build"))
+        self.assertEqual(result["phase"], "local-build-recovery-assets-ready")
+        self.assertEqual(result["result"]["write_set"], [])
 
     def test_local_build_configure_parser_has_no_secret_arguments(self) -> None:
         parser = user_cli.build_parser()

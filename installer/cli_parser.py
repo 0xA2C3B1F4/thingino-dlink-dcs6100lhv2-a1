@@ -102,7 +102,12 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
     collector.add_argument("--unsquashfs", type=Path)
     collector.add_argument(
         "--capture-mode",
-        choices=("existing-recovery", "protected-readback", "complete-backup"),
+        choices=(
+            "existing-recovery",
+            "protected-readback",
+            "complete-backup",
+            "functional-uartless",
+        ),
         default="existing-recovery",
     )
     collector.set_defaults(handler=_build_read_only_collector)

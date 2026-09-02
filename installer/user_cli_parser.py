@@ -22,6 +22,7 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
     _local_build_build = getattr(facade, '_local_build_build')
     _local_build_configure = getattr(facade, '_local_build_configure')
     _local_build_prepare = getattr(facade, '_local_build_prepare')
+    _local_build_recovery_assets = getattr(facade, '_local_build_recovery_assets')
     _local_build_status = getattr(facade, '_local_build_status')
     _preflight = getattr(facade, '_preflight')
     _prepare_card = getattr(facade, '_prepare_card')
@@ -61,11 +62,16 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
     card.add_argument(
         "--mount-root", type=Path, required=True, help="mounted FAT32 card root"
     )
-    card.add_argument(
+    card_recovery = card.add_mutually_exclusive_group(required=True)
+    card_recovery.add_argument(
         "--recovery-dir",
         type=Path,
-        required=True,
-        help="validated complete same-camera mtd0-mtd5 backup",
+        help="validated exact complete same-camera mtd0-mtd5 backup",
+    )
+    card_recovery.add_argument(
+        "--functional-recovery-dir",
+        type=Path,
+        help="validated UARTless schema-3 functional same-camera recovery",
     )
     card.add_argument(
         "--preserved-readback-dir",
@@ -95,11 +101,16 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
     stage_install_set.add_argument(
         "--mount-root", type=Path, required=True, help="mounted FAT32 card root"
     )
-    stage_install_set.add_argument(
+    stage_recovery = stage_install_set.add_mutually_exclusive_group(required=True)
+    stage_recovery.add_argument(
         "--recovery-dir",
         type=Path,
-        required=True,
-        help="validated complete same-camera mtd0-mtd5 backup",
+        help="validated exact complete same-camera mtd0-mtd5 backup",
+    )
+    stage_recovery.add_argument(
+        "--functional-recovery-dir",
+        type=Path,
+        help="validated UARTless schema-3 functional same-camera recovery",
     )
     stage_install_set.add_argument(
         "--preserved-readback-dir",
@@ -124,11 +135,16 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
     install = commands.add_parser("install")
     _add_common(install, inherited=True)
     install.add_argument("--secrets-fd", type=int)
-    install.add_argument(
+    install_recovery = install.add_mutually_exclusive_group(required=True)
+    install_recovery.add_argument(
         "--recovery-dir",
         type=Path,
-        required=True,
-        help="validated complete same-camera mtd0-mtd5 backup",
+        help="validated exact complete same-camera mtd0-mtd5 backup",
+    )
+    install_recovery.add_argument(
+        "--functional-recovery-dir",
+        type=Path,
+        help="validated UARTless schema-3 functional same-camera recovery",
     )
     install.add_argument(
         "--preserved-readback-dir",
@@ -232,6 +248,10 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
     _add_common(local_build_acquire, inherited=True)
     local_build_acquire.add_argument("--build-root", type=Path)
     local_build_acquire.set_defaults(handler=_local_build_acquire)
+    local_build_recovery_assets = local_build_commands.add_parser("recovery-assets")
+    _add_common(local_build_recovery_assets, inherited=True)
+    local_build_recovery_assets.add_argument("--build-root", type=Path)
+    local_build_recovery_assets.set_defaults(handler=_local_build_recovery_assets)
     local_build_configure = local_build_commands.add_parser("configure")
     _add_common(local_build_configure, inherited=True)
     local_build_configure.add_argument("--build-root", type=Path)

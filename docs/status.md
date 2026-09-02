@@ -63,9 +63,14 @@ The host and MIPS paths are implemented. One private camera completed the
 UART-assisted pre-write duplicate capture and the full UART-free same-device
 stock restore, including restorer physical readback, activation last, card
 passivation, and stable D-Link 1.02.02 setup-mode boot. A stock-U-Boot success
-indication alone was not treated as readback evidence. A supported unopened-
-camera capture path, physical fault/retry cases, and equivalent second-camera
-evidence remain release gates. Post-run atomic status-marker and transaction-
+indication alone was not treated as readback evidence. A development UARTless functional-capture source path now keeps the exact
+original-backup type separate while declaring a pre-capture mtd1/mtd2 write
+set, preserving original mtd0/mtd3/mtd4/mtd5, and requiring duplicate
+post-bootstrap reads. It is not physical acceptance, does not preserve original
+mtd1/mtd2, and its initial recovery-functional source is not a D-Link stock
+restoration source. A supported unopened-camera capture path, UARTless physical
+write/handoff/retry/restore evidence, equivalent second-camera evidence, and an
+accepted stock-functional mtd1/mtd2 source remain release gates. Post-run atomic status-marker and transaction-
 rollback hardening has host and MIPS-build evidence but has not been repeated
 on physical hardware.
 

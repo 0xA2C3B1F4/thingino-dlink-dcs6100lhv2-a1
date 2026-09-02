@@ -80,6 +80,15 @@ class PublicTreeTests(unittest.TestCase):
             with mock.patch.object(POLICY, "ROOT", root):
                 self.assertEqual(POLICY.discover_public_files(), ["unexpected.txt"])
 
+    def test_ignores_editable_install_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            metadata = root / "thingino_dlink_dcs6100lhv2.egg-info"
+            metadata.mkdir()
+            (metadata / "PKG-INFO").write_text("generated", encoding="utf-8")
+            with mock.patch.object(POLICY, "ROOT", root):
+                self.assertEqual(POLICY.discover_public_files(), [])
+
     def test_ignores_nested_webui_build_and_dependency_data(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

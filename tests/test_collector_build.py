@@ -56,6 +56,18 @@ class CollectorBuildTests(unittest.TestCase):
         self.assertIn("duplicate_reads=complete", source)
         self.assertNotIn("MEMERASE", source)
 
+    def test_functional_uartless_mode_is_distinct_from_original_backup(self) -> None:
+        contract = build.render_contract(
+            mmc_module=b"reviewed-mmc-module",
+            capture_mode="functional-uartless",
+        ).decode("ascii")
+        source = build.SOURCE.read_text(encoding="utf-8")
+        self.assertIn("#define FUNCTIONAL_CAPTURE 1", contract)
+        self.assertIn("FUNCTIONAL_LAYOUT_JSON", contract)
+        self.assertIn('FULL_BACKUP_ROOT "/card/DCS6100F"', source)
+        self.assertIn("functional_duplicate_reads=complete", source)
+        self.assertIn("pre_capture_writes=mtd1,mtd2", source)
+
     def test_protected_readback_mode_does_not_depend_on_stock_vendor_mount(self) -> None:
         contract = build.render_contract(
             mmc_module=b"reviewed-mmc-module",

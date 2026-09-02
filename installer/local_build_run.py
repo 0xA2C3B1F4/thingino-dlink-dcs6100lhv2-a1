@@ -15,17 +15,31 @@ from pathlib import Path
 
 from scripts import source_prepare
 
+from .collector.build import CollectorBuildError, build_collector_root
+from .collector.kernel import (
+    CollectorKernelError,
+    validate_collector_kernel,
+    validate_uartless_collector_kernel,
+)
 from .download_cache import DownloadCacheError, validate_download_cache_archive
 from .final_bundle import render_final_kernel_fragment
 from .final_root import FinalRootError, prepare_from_private_directory
 from .local_build import LocalBuildError, local_build_workspace_status
 from .local_build_acquire import LocalBuildAcquireError, acquire_locked_public_inputs
 from .media_closure import MediaClosureError, load_media_closure
-from .sd_package import atomic_write, read_snapshot
+from .sd_package import (
+    atomic_write,
+    generate_bootstrap,
+    package_manifest,
+    parse_package,
+    read_snapshot,
+    validate_bootstrap,
+)
 from .stage1.build import (
     Stage1BuildError,
     build_install_set,
     render_installer_kernel_fragment,
+    validate_mmc_module,
 )
 from .vendor_bundle import (
     VendorBundleError,
@@ -62,6 +76,7 @@ def _project_root() -> Path:
         root / "scripts/run_macos_thingino_download_fetch.sh",
         root / "scripts/run_macos_thingino_build.sh",
         root / "scripts/run_macos_split_kernel_build.sh",
+        root / "scripts/run_macos_collector_kernel_build.sh",
         root / "components/raptor-rwd/build_persistent.py",
     )
     if not all(path.is_file() and not path.is_symlink() for path in required):
@@ -533,6 +548,284 @@ def _inspect_install_set(root: Path, install_set: Path, log_path: Path) -> dict[
     ):
         raise LocalBuildRunError("inspect-install-set did not accept schema 2")
     return document
+
+
+def build_local_recovery_assets(*, build_root: Path) -> dict[str, object]:
+    """Build the public read-only collector inputs before private configuration."""
+
+    try:
+        workspace = local_build_workspace_status(build_root=build_root)
+    except LocalBuildError as exc:
+        raise LocalBuildRunError(str(exc)) from exc
+    if workspace.get("ready_to_build") is not True:
+        raise LocalBuildRunError(
+            f"local build workspace is not ready: {workspace.get('safe_next_action')}"
+        )
+
+    root = _project_root().resolve(strict=True)
+    build_root = Path(str(workspace["build_root"]))
+    head = str(workspace["current_head"])
+    run_dir = build_root / "runs" / _run_id(head)
+    if run_dir.exists() or run_dir.is_symlink():
+        raise LocalBuildRunError("local recovery build directory already exists")
+    _write_owner(run_dir, head=head)
+    try:
+        acquired = acquire_locked_public_inputs(build_root=build_root)
+        builder = acquired.get("builder_image")
+        if not isinstance(builder, dict) or not isinstance(builder.get("id"), str):
+            raise LocalBuildRunError("locked public inputs lack a builder image")
+        builder_image = str(builder["id"])
+        lock_sha256 = str(acquired["sources_lock_sha256"])
+        prepared_source = run_dir / "prepared-source"
+        source_prepare.prepare_source(
+            Path(str(acquired["source_checkout"]["path"])),
+            prepared_source,
+            repository_root=root,
+        )
+        source_checkout = _directory(
+            Path(str(acquired["source_checkout"]["path"])),
+            "pinned Thingino source checkout",
+        )
+        toolchain_metadata = acquired.get("thingino_toolchain")
+        if not isinstance(toolchain_metadata, dict):
+            raise LocalBuildRunError("locked public inputs lack the Thingino toolchain")
+        thingino_toolchain, toolchain_identity = _prepare_thingino_toolchain(
+            root=root,
+            run_dir=run_dir,
+            build_root=build_root,
+            source_checkout=source_checkout,
+            builder_image=builder_image,
+            lock_sha256=lock_sha256,
+            metadata=toolchain_metadata,
+        )
+        download_cache, download_identity = _prepare_download_cache(
+            root=root,
+            run_dir=run_dir,
+            build_root=build_root,
+            prepared_source=prepared_source,
+            builder_image=builder_image,
+            lock_sha256=lock_sha256,
+            thingino_toolchain=thingino_toolchain,
+        )
+
+        result = run_dir / "collector-kernel"
+        result.mkdir(mode=0o700)
+        collector_workspace = run_dir / "collector-kernel.ext4"
+        _run(
+            [
+                str(root / "scripts/run_macos_collector_kernel_build.sh"),
+                "--task-scratch-root",
+                str(run_dir),
+                "--builder-lock",
+                str(run_dir),
+                "--builder-image",
+                builder_image,
+                "--container-name",
+                f"dcs6100-collector-{run_dir.name[-25:]}",
+                "--prepared-source",
+                str(prepared_source),
+                "--download-cache",
+                str(download_cache),
+                "--workspace-image",
+                str(collector_workspace),
+                "--result",
+                str(result),
+            ],
+            label="read-only collector kernel build",
+            log_path=run_dir / "logs/collector-kernel.log",
+        )
+        verification_result = run_dir / "collector-kernel-verification"
+        verification_result.mkdir(mode=0o700)
+        verification_workspace = run_dir / "collector-kernel-verification.ext4"
+        _run(
+            [
+                str(root / "scripts/run_macos_collector_kernel_build.sh"),
+                "--task-scratch-root",
+                str(run_dir),
+                "--builder-lock",
+                str(run_dir),
+                "--builder-image",
+                builder_image,
+                "--container-name",
+                f"dcs6100-collector-verify-{run_dir.name[-18:]}",
+                "--prepared-source",
+                str(prepared_source),
+                "--download-cache",
+                str(download_cache),
+                "--workspace-image",
+                str(verification_workspace),
+                "--result",
+                str(verification_result),
+            ],
+            label="read-only collector reproducibility build",
+            log_path=run_dir / "logs/collector-kernel-verification.log",
+        )
+        expected_files = {
+            "collector-kernel.uimage",
+            "collector-linux.config",
+            "jzmmc_v12.ko",
+            "source-preparation.json",
+            "uartless-collector-kernel.uimage",
+            "uartless-collector-linux.config",
+        }
+        if (
+            result.is_symlink()
+            or verification_result.is_symlink()
+            or {path.name for path in result.iterdir()} != expected_files
+            or {path.name for path in verification_result.iterdir()} != expected_files
+        ):
+            raise LocalBuildRunError("collector recovery asset allowlist changed")
+        for name in sorted(expected_files):
+            if (result / name).read_bytes() != (verification_result / name).read_bytes():
+                raise LocalBuildRunError(
+                    f"collector recovery reproducibility differs: {name}"
+                )
+        kernel = _regular(result / "collector-kernel.uimage", "collector kernel")
+        linux_config = _regular(
+            result / "collector-linux.config", "collector Linux configuration"
+        )
+        mmc_module = _regular(result / "jzmmc_v12.ko", "collector MMC module")
+        source_manifest = _regular(
+            result / "source-preparation.json", "collector source preparation"
+        )
+        uartless_kernel = _regular(
+            result / "uartless-collector-kernel.uimage",
+            "UARTless collector kernel",
+        )
+        uartless_linux_config = _regular(
+            result / "uartless-collector-linux.config",
+            "UARTless collector Linux configuration",
+        )
+        try:
+            validate_collector_kernel(
+                kernel=kernel.read_bytes(), linux_config=linux_config.read_bytes()
+            )
+            validate_uartless_collector_kernel(
+                kernel=uartless_kernel.read_bytes(),
+                linux_config=uartless_linux_config.read_bytes(),
+            )
+            validate_mmc_module(mmc_module.read_bytes())
+        except (CollectorKernelError, Stage1BuildError, ValueError) as exc:
+            raise LocalBuildRunError(str(exc)) from exc
+        if source_manifest.read_bytes() != (
+            prepared_source / "dcs6100-source-preparation.json"
+        ).read_bytes():
+            raise LocalBuildRunError("collector source preparation binding changed")
+
+        uartless = run_dir / "uartless-capture"
+        uartless.mkdir(mode=0o700)
+        uartless_rootfs = uartless / "uartless-collector.squashfs"
+        uartless_rootfs_verification = (
+            uartless / "uartless-collector-verification.squashfs"
+        )
+        try:
+            for output in (uartless_rootfs, uartless_rootfs_verification):
+                build_collector_root(
+                    mmc_module=mmc_module.read_bytes(),
+                    output=output,
+                    capture_mode="functional-uartless",
+                )
+            if uartless_rootfs.read_bytes() != uartless_rootfs_verification.read_bytes():
+                raise LocalBuildRunError(
+                    "UARTless collector root reproducibility differs"
+                )
+            package_raw = generate_bootstrap(
+                uartless_kernel.read_bytes(), uartless_rootfs.read_bytes()
+            )
+            verification_package_raw = generate_bootstrap(
+                (verification_result / "uartless-collector-kernel.uimage").read_bytes(),
+                uartless_rootfs_verification.read_bytes(),
+            )
+            if package_raw != verification_package_raw:
+                raise LocalBuildRunError(
+                    "UARTless capture package reproducibility differs"
+                )
+            package = parse_package(package_raw, require_project_header=True)
+            validate_bootstrap(package)
+        except (CollectorBuildError, ValueError) as exc:
+            raise LocalBuildRunError(str(exc)) from exc
+        uartless_rootfs_verification.unlink()
+        uartless_package = uartless / "uartless-capture-bootstrap.bin"
+        atomic_write(uartless_package, package_raw, mode=0o400)
+        package_document = json.loads(
+            package_manifest(package, purpose="uartless-functional-capture")
+        )
+        package_document.update(
+            {
+                "future_physical_boot_writes_mtd": [1, 2],
+                "original_complete_backup": False,
+                "original_preserved_mtd": [0, 3, 4, 5],
+                "restoration_class": "recovery-functional",
+            }
+        )
+        uartless_manifest = uartless / "uartless-capture-bootstrap.manifest.json"
+        atomic_write(
+            uartless_manifest,
+            (json.dumps(package_document, indent=2, sort_keys=True) + "\n").encode(),
+            mode=0o400,
+        )
+        files = {
+            "kernel": str(kernel),
+            "linux_config": str(linux_config),
+            "mmc_module": str(mmc_module),
+            "source_preparation": str(source_manifest),
+            "uartless_kernel": str(uartless_kernel),
+            "uartless_linux_config": str(uartless_linux_config),
+            "uartless_rootfs": str(uartless_rootfs),
+            "uartless_package": str(uartless_package),
+            "uartless_package_manifest": str(uartless_manifest),
+        }
+        identities = {
+            key: {"sha256": _sha256(Path(path)), "size": Path(path).stat().st_size}
+            for key, path in files.items()
+        }
+        manifest = {
+            "builder_image_id": builder_image,
+            "download_cache": download_identity,
+            "files": identities,
+            "project_head": head,
+            "reproducibility": {
+                "builds": 2,
+                "byte_identical": True,
+            },
+            "schema_version": 1,
+            "sources_lock_sha256": lock_sha256,
+            "thingino_toolchain": toolchain_identity,
+        }
+        manifest_path = run_dir / "local-recovery-assets.json"
+        atomic_write(
+            manifest_path,
+            (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode(),
+            mode=0o600,
+        )
+        return {
+            "collector_assets_dir": str(result),
+            "files": files,
+            "manifest": str(manifest_path),
+            "next_action": "choose-uart-read-only-or-uartless-functional-capture",
+            "run_dir": str(run_dir),
+            "schema_version": 1,
+            "transports": {
+                "uart": {
+                    "original_complete_backup": True,
+                    "write_set": [],
+                },
+                "uartless": {
+                    "future_physical_boot_writes_mtd": [1, 2],
+                    "original_complete_backup": False,
+                    "original_preserved_mtd": [0, 3, 4, 5],
+                    "restoration_class": "recovery-functional",
+                },
+            },
+            "write_set": [],
+        }
+    except Exception:
+        atomic_write(
+            run_dir / "FAILED",
+            b"local recovery asset build failed; inspect mode-restricted logs\n",
+            mode=0o600,
+        )
+        raise
 
 
 def build_local_install_set(

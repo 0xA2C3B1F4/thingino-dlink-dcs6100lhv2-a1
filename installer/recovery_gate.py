@@ -12,6 +12,7 @@ from pathlib import Path, PurePosixPath
 from .full_backup import (
     FullBackupError,
     validate_complete_backup_with_manifest,
+    validate_functional_backup_with_manifest,
 )
 from .layout import TARGET, Target
 
@@ -25,6 +26,9 @@ class RecoveryDecision:
     mode: str
     preserved_mtd: tuple[int, ...]
     recovery_images: int
+    functional_recovery_accepted: bool = False
+    original_complete_backup_accepted: bool = True
+    original_preserved_mtd: tuple[int, ...] = (0, 1, 2, 3, 4, 5)
 
 
 def _read_regular(path: Path, label: str, *, limit: int) -> bytes:
@@ -92,26 +96,23 @@ def _target_document(target: Target) -> dict[str, object]:
     }
 
 
-def validate_existing_recovery_boundary(
+def _validate_current_preserved_binding(
     *,
-    recovery_dir: Path,
+    manifest: dict[str, object],
     preserved_readback_dir: Path,
-    target: Target = TARGET,
-) -> RecoveryDecision:
-    """Accept an old recovery pair only when current preserved MTDs still match."""
-
-    try:
-        decision, manifest = validate_complete_backup_with_manifest(
-            recovery_dir, target=target
-        )
-    except FullBackupError as exc:
-        raise RecoveryGateError(str(exc)) from exc
+    target: Target,
+) -> None:
     files = manifest.get("files")
-    assert isinstance(files, dict)
-
+    if not isinstance(files, dict):
+        raise RecoveryGateError("recovery manifest lacks file identities")
     if preserved_readback_dir.is_symlink() or not preserved_readback_dir.is_dir():
         raise RecoveryGateError("preserved readback is not a private directory")
-    expected_readback = {"device-layout.private.json", "mtd0.bin", "mtd4.bin", "mtd5.bin"}
+    expected_readback = {
+        "device-layout.private.json",
+        "mtd0.bin",
+        "mtd4.bin",
+        "mtd5.bin",
+    }
     if {entry.name for entry in preserved_readback_dir.iterdir()} != expected_readback:
         raise RecoveryGateError("preserved readback directory is not exact")
     layout_raw = _read_regular(
@@ -123,7 +124,12 @@ def validate_existing_recovery_boundary(
         layout = json.loads(layout_raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise RecoveryGateError("read-only device layout is invalid") from exc
-    if layout != {"read_only": True, "schema_version": 1, "target": _target_document(target)}:
+    expected_layout = {
+        "read_only": True,
+        "schema_version": 1,
+        "target": _target_document(target),
+    }
+    if layout != expected_layout:
         raise RecoveryGateError("read-only camera identity or partition layout differs")
     for mtd in (0, 4, 5):
         partition = target.partition(mtd)
@@ -135,11 +141,64 @@ def validate_existing_recovery_boundary(
         if len(current) != partition.size:
             raise RecoveryGateError(f"current preserved mtd{mtd} has the wrong size")
         reference = files[f"copy-a/mtd{mtd}.bin"]
-        assert isinstance(reference, dict)
-        if hashlib.sha256(current).hexdigest() != reference.get("sha256"):
-            raise RecoveryGateError(f"current preserved mtd{mtd} differs from same-device recovery")
+        if not isinstance(reference, dict) or (
+            hashlib.sha256(current).hexdigest() != reference.get("sha256")
+        ):
+            raise RecoveryGateError(
+                f"current preserved mtd{mtd} differs from same-device recovery"
+            )
+
+
+def validate_existing_recovery_boundary(
+    *,
+    recovery_dir: Path,
+    preserved_readback_dir: Path,
+    target: Target = TARGET,
+) -> RecoveryDecision:
+    """Accept only an exact original complete backup at this legacy gate."""
+
+    try:
+        decision, manifest = validate_complete_backup_with_manifest(
+            recovery_dir, target=target
+        )
+    except FullBackupError as exc:
+        raise RecoveryGateError(str(exc)) from exc
+    _validate_current_preserved_binding(
+        manifest=manifest,
+        preserved_readback_dir=preserved_readback_dir,
+        target=target,
+    )
     return RecoveryDecision(
         mode="existing-verified-same-device-pair",
         preserved_mtd=(0, 4, 5),
         recovery_images=decision.recovery_images,
+    )
+
+
+def validate_functional_recovery_boundary(
+    *,
+    recovery_dir: Path,
+    preserved_readback_dir: Path,
+    target: Target = TARGET,
+) -> RecoveryDecision:
+    """Accept schema 3 only at explicitly functional-aware call sites."""
+
+    try:
+        decision, manifest = validate_functional_backup_with_manifest(
+            recovery_dir, target=target
+        )
+    except FullBackupError as exc:
+        raise RecoveryGateError(str(exc)) from exc
+    _validate_current_preserved_binding(
+        manifest=manifest,
+        preserved_readback_dir=preserved_readback_dir,
+        target=target,
+    )
+    return RecoveryDecision(
+        mode="uartless-functional-same-device-pair",
+        preserved_mtd=(0, 4, 5),
+        recovery_images=decision.recovery_images,
+        functional_recovery_accepted=True,
+        original_complete_backup_accepted=False,
+        original_preserved_mtd=(0, 3, 4, 5),
     )

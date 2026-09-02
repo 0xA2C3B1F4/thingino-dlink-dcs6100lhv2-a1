@@ -92,22 +92,26 @@ the operation you intend to perform.
 Use Python 3.11 or newer from a clean, reviewed checkout:
 
 ```bash
-python3 -m pip install -e .
 make check
+python3 -m pip install -e .
 thingino-dlink --help
 python3 -m installer --help
 ```
 
-Run these commands from the repository root. The default below creates the
-build workspace beside the checkout, on the same writable volume. Override
-this one non-secret path if that volume does not have enough free space:
+Run these commands from the repository root. Editable-install metadata is
+ignored by the public-tree checker, so `make check` remains repeatable after
+installation. The default below creates the build workspace beside the
+checkout. Set `DCS6100_DATA_VOLUME` to the exact mounted volume root that
+contains both paths; a containing directory is not a mount root. Override the
+build path if that volume does not have enough free space:
 
 ```bash
 export DCS6100_BUILD_ROOT="$(cd .. && pwd)/dcs6100-build"
+export DCS6100_DATA_VOLUME=/path/to/exact-mounted-volume
 
 thingino-dlink workflow-preflight --json \
   --mode production-build \
-  --data-volume "$(dirname "$DCS6100_BUILD_ROOT")"
+  --data-volume "$DCS6100_DATA_VOLUME"
 ```
 
 Install and start Docker Desktop, then let the installer create a two-run local
@@ -119,9 +123,29 @@ variable is unset:
 thingino-dlink local-build prepare
 thingino-dlink local-build bootstrap
 thingino-dlink local-build acquire
+thingino-dlink local-build recovery-assets
+# Complete stock-recovery backup-prepare, backup-capture, and backup-validate.
 thingino-dlink local-build configure
 thingino-dlink local-build build
 ```
+
+`recovery-assets` is the public bridge between `acquire` and the camera backup.
+It builds the source-locked MIPS toolchain, the locked Buildroot download
+cache, both collector kernels, effective Linux configurations, the matching
+MMC module, and the inert UARTless capture package. It does not contact a
+camera, stage removable media, or write NOR. Its JSON output exposes two
+separate transports:
+
+- `uart` preserves and duplicates all six original partitions with no NOR
+  write;
+- `uartless` uses stock U-Boot to write mtd1/mtd2, then duplicates the current
+  read-only layout while preserving original mtd0/mtd3/mtd4/mtd5.
+
+The UARTless package remains inert until the separate
+`stock-recovery uartless-authorize` command receives the exact
+`WRITE-MTD1-MTD2` confirmation. It never reports an original complete backup.
+Follow [installation](docs/installation.md) for the SD handoff and the exact
+transport-specific safety boundary.
 
 `configure` explains and asks for every private path and the intended data
 action. It validates all non-secret artifacts before asking for the station

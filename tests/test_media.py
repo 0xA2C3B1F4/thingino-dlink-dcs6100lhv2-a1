@@ -12,6 +12,7 @@ from installer import media
 from installer.media import (
     LEGACY_MIGRATION_PROFILE_KIND,
     MediaError,
+    activate_passive_verified_package,
     activate_staged_install_set,
     archive_existing_stock_backup,
     build_legacy_migration_profile,
@@ -20,6 +21,7 @@ from installer.media import (
     evacuate_existing_stock_backups,
     load_media_preflight,
     replace_passive_bootstrap,
+    stage_passive_verified_package,
     stage_verified_install_set,
     stage_verified_package,
 )
@@ -158,6 +160,67 @@ class MediaTests(unittest.TestCase):
             self.assertEqual(
                 matching_update_filenames(entry.name for entry in root.iterdir()),
                 [output_name],
+            )
+
+    def test_uartless_capture_stages_inert_then_activates_last(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            root = Path(directory_name)
+            preflight = load_media_preflight(
+                self._preflight(root), expected_root=root
+            )
+            package = generate_bootstrap(b"kernel", b"rootfs")
+            stage_passive_verified_package(
+                package,
+                root=root,
+                preflight=preflight,
+                confirmed_physical_device="/dev/test-external-media",
+            )
+            self.assertTrue((root / media.UARTLESS_CAPTURE_PASSIVE_FILENAME).is_file())
+            self.assertEqual(
+                matching_update_filenames(entry.name for entry in root.iterdir()), []
+            )
+            activate_passive_verified_package(
+                package,
+                root=root,
+                preflight=preflight,
+                confirmed_physical_device="/dev/test-external-media",
+            )
+            self.assertFalse((root / media.UARTLESS_CAPTURE_PASSIVE_FILENAME).exists())
+            self.assertEqual(
+                matching_update_filenames(entry.name for entry in root.iterdir()),
+                [media.UARTLESS_CAPTURE_ACTIVE_FILENAME],
+            )
+
+    def test_uartless_handoff_failure_after_rename_stays_inert(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            root = Path(directory_name)
+            preflight = load_media_preflight(
+                self._preflight(root), expected_root=root
+            )
+            package = generate_bootstrap(b"kernel", b"rootfs")
+            active = root / media.UARTLESS_CAPTURE_ACTIVE_FILENAME
+            active.write_bytes(package)
+            with (
+                mock.patch.object(
+                    media, "_sync_directory", side_effect=OSError("injected sync failure")
+                ),
+                self.assertRaises(OSError),
+            ):
+                deactivate_verified_package(
+                    package,
+                    root=root,
+                    active_name=media.UARTLESS_CAPTURE_ACTIVE_FILENAME,
+                    passive_name=media.UARTLESS_CAPTURE_PASSIVE_FILENAME,
+                    preflight=preflight,
+                    confirmed_physical_device="/dev/test-external-media",
+                )
+            self.assertFalse(active.exists())
+            self.assertEqual(
+                (root / media.UARTLESS_CAPTURE_PASSIVE_FILENAME).read_bytes(),
+                package,
+            )
+            self.assertEqual(
+                matching_update_filenames(entry.name for entry in root.iterdir()), []
             )
 
     def test_verified_package_deactivation_reuses_identical_passive_copy(self) -> None:

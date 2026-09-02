@@ -9,7 +9,7 @@ description = "Host tools for the D-Link DCS-6100LHV2 A1 Thingino port"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = ["pyserial==3.5"]
 
 [project.scripts]
 dcs6100-thingino = "installer.cli:main"

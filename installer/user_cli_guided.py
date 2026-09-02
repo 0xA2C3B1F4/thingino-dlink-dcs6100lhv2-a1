@@ -2,6 +2,27 @@
 
 from __future__ import annotations
 
+
+def _validate_selected_recovery(facade: object, arguments: argparse.Namespace) -> object:
+    exact = getattr(arguments, "recovery_dir", None)
+    functional = getattr(arguments, "functional_recovery_dir", None)
+    if (exact is None) == (functional is None):
+        raise getattr(facade, "UserInstallerError")(
+            "select exactly one exact or functional recovery directory"
+        )
+    if functional is not None:
+        validate = getattr(facade, "validate_functional_recovery_boundary")
+        return validate(
+            recovery_dir=functional,
+            preserved_readback_dir=arguments.preserved_readback_dir,
+        )
+    validate = getattr(facade, "validate_existing_recovery_boundary")
+    return validate(
+        recovery_dir=exact,
+        preserved_readback_dir=arguments.preserved_readback_dir,
+    )
+
+
 def _preflight(facade: object, arguments: argparse.Namespace) -> dict[str, object]:
     BOOTSTRAP_NAME = getattr(facade, 'BOOTSTRAP_NAME')
     Path = getattr(facade, 'Path')
@@ -192,15 +213,9 @@ def _prepare_card(facade: object, arguments: argparse.Namespace) -> dict[str, ob
     read_snapshot = getattr(facade, 'read_snapshot')
     stage_verified_package = getattr(facade, 'stage_verified_package')
     validate_bootstrap = getattr(facade, 'validate_bootstrap')
-    validate_existing_recovery_boundary = getattr(
-        facade, 'validate_existing_recovery_boundary'
-    )
     work_dir = arguments.work_dir.expanduser().resolve(strict=True)
     validated = _validate_config(_load_config(work_dir))
-    recovery_decision = validate_existing_recovery_boundary(
-        recovery_dir=arguments.recovery_dir,
-        preserved_readback_dir=arguments.preserved_readback_dir,
-    )
+    recovery_decision = _validate_selected_recovery(facade, arguments)
     recovery_package = validated["recovery_package"]
     if not isinstance(recovery_package, Path):
         raise UserInstallerError("preflight did not bind a recovery mtd1/mtd2 package")
@@ -275,7 +290,22 @@ def _prepare_card(facade: object, arguments: argparse.Namespace) -> dict[str, ob
         result={
             "already_prepared": already_prepared,
             "duplicate_backup_accepted": recovery_decision.recovery_images == 2,
-            "full_flash_reconstruction_accepted": True,
+            "full_flash_reconstruction_accepted": getattr(
+                recovery_decision, "original_complete_backup_accepted", True
+            ),
+            "functional_recovery_accepted": getattr(
+                recovery_decision, "functional_recovery_accepted", False
+            ),
+            "original_preserved_mtd": list(
+                getattr(
+                    recovery_decision,
+                    "original_preserved_mtd",
+                    (0, 1, 2, 3, 4, 5),
+                )
+            ),
+            "recovery_mode": getattr(
+                recovery_decision, "mode", "existing-verified-same-device-pair"
+            ),
             "same_device_binding_accepted": True,
             "files": files,
             "future_physical_boot_writes_mtd": [1, 2],
@@ -299,13 +329,7 @@ def _stage_install_set(facade: object, arguments: argparse.Namespace) -> dict[st
     read_snapshot = getattr(facade, 'read_snapshot')
     stage_verified_install_set = getattr(facade, 'stage_verified_install_set')
     validate_install_set = getattr(facade, 'validate_install_set')
-    validate_existing_recovery_boundary = getattr(
-        facade, 'validate_existing_recovery_boundary'
-    )
-    recovery_decision = validate_existing_recovery_boundary(
-        recovery_dir=arguments.recovery_dir,
-        preserved_readback_dir=arguments.preserved_readback_dir,
-    )
+    recovery_decision = _validate_selected_recovery(facade, arguments)
     install_set = _directory(arguments.install_set_dir, "install-set directory")
     bootstrap = read_snapshot(_regular(install_set / BOOTSTRAP_NAME, "bootstrap"))
     stage2 = read_snapshot(_regular(install_set / "THINGINO2.BIN", "stage 2"))
@@ -373,7 +397,22 @@ def _stage_install_set(facade: object, arguments: argparse.Namespace) -> dict[st
         result={
             "data_mode": payload.data_mode,
             "duplicate_backup_accepted": recovery_decision.recovery_images == 2,
-            "full_flash_reconstruction_accepted": True,
+            "full_flash_reconstruction_accepted": getattr(
+                recovery_decision, "original_complete_backup_accepted", True
+            ),
+            "functional_recovery_accepted": getattr(
+                recovery_decision, "functional_recovery_accepted", False
+            ),
+            "original_preserved_mtd": list(
+                getattr(
+                    recovery_decision,
+                    "original_preserved_mtd",
+                    (0, 1, 2, 3, 4, 5),
+                )
+            ),
+            "recovery_mode": getattr(
+                recovery_decision, "mode", "existing-verified-same-device-pair"
+            ),
             "same_device_binding_accepted": True,
             "files": files,
             "operator_confirmed_target": "DCS-6100LHV2-A1",
@@ -389,13 +428,7 @@ def _install(facade: object, arguments: argparse.Namespace) -> dict[str, object]
     complete_personal_install = getattr(facade, 'complete_personal_install')
     read_private_input = getattr(facade, 'read_private_input')
     read_snapshot = getattr(facade, 'read_snapshot')
-    validate_existing_recovery_boundary = getattr(
-        facade, 'validate_existing_recovery_boundary'
-    )
-    validate_existing_recovery_boundary(
-        recovery_dir=arguments.recovery_dir,
-        preserved_readback_dir=arguments.preserved_readback_dir,
-    )
+    _validate_selected_recovery(facade, arguments)
     work_dir = arguments.work_dir.expanduser().resolve(strict=True)
     validated = _validate_config(_load_config(work_dir))
     install_work = work_dir / "install"

@@ -7,10 +7,12 @@ firmware binaries or proprietary camera files.
 ## Host gate
 
 Python 3.11 or newer and a running Docker-compatible container runtime are
-required. The guided builder currently requires Apple Silicon macOS. Install
-and start Docker Desktop once; the project installer creates the build
-location and later manages project images and containers. It does not install
-or start the host container runtime itself.
+required. The editable package installs the pinned `pyserial` dependency used
+by the UART backup command. The guided builder currently requires Apple Silicon
+macOS. Install and start Docker Desktop once; the project installer creates the
+build location and later manages project images and containers. It does not
+install or start the host container runtime itself. The recovery root packager
+also requires LLVM `clang`/`ld.lld` and `mksquashfs`/`unsquashfs` on the host.
 
 ```bash
 make check
@@ -92,22 +94,41 @@ files nor makes the locally cached Ingenic toolchain redistributable.
 
 The Thingino MIPS build toolchain is deliberately absent from `acquire`.
 Upstream replaces its same-named release assets, so a release URL is not an
-immutable input even when an old checksum remains in this repository. During
-`local-build build`, the builder instead fetches the recursive source closure
-of the Buildroot `toolchain` target for the exact Thingino and Buildroot
-commits, validates its pinned inventory, and builds the ARM64-hosted MIPS SDK
-with networking disabled. The recipe makes the SDK relocatable without running
-the unrelated firmware package graph or camera-kernel target; the pinned Linux
-3.10.14 tarball remains the source of its matching userspace kernel headers.
-The generated SDK is packed with the locked deterministic tar and gzip recipe,
-then its archive must match the SHA-256 in `sources.lock.json` before it can
-enter the firmware download cache. A changed upstream release asset is never
-trusted or used as a fallback. The one networked toolchain-source fetch mounts
-only the verified public checkout and its public cache workspace; no private
-configuration, camera file, or generated credential enters that container.
+immutable input even when an old checksum remains in this repository. Build the
+public recovery inputs before asking the camera for any private input:
 
-Configure the private build inputs in a terminal, then build with the recorded
-plan:
+```bash
+thingino-dlink local-build recovery-assets
+```
+
+`recovery-assets` fetches the recursive source closure of the Buildroot
+`toolchain` target for the exact Thingino and Buildroot commits, validates its
+pinned inventory, and builds the ARM64-hosted MIPS SDK with networking disabled.
+The recipe makes the SDK relocatable without running the unrelated firmware
+package graph or camera-kernel target; the pinned Linux 3.10.14 tarball remains
+the source of its matching userspace kernel headers. The generated SDK is
+packed with the locked deterministic tar and gzip recipe, then its archive must
+match the SHA-256 in `sources.lock.json` before it can enter the firmware
+download cache. A changed upstream release asset is never trusted or used as a
+fallback. The one networked toolchain-source fetch mounts only the verified
+public checkout and its public cache workspace; no private configuration,
+camera file, or generated credential enters that container.
+
+The same command prepares the patched source, creates and validates the locked
+Buildroot download cache, and performs the bounded offline collector builds.
+Its result contains exact paths for `collector-kernel.uimage`,
+`collector-linux.config`, and `jzmmc_v12.ko` for the no-write UART transport.
+It additionally produces an all-MTD-read-only mtd2-boot kernel/config, minimal
+functional collector root, stock-U-Boot package, and package manifest for the
+explicit UARTless alternative. Both kernel sets are rebuilt in a second clean
+workspace and must be byte-identical before packaging. Building either set never contacts a camera or
+stages an SD card, so the command's immediate write set is empty. The UARTless
+manifest separately records that a future authorized physical boot writes
+mtd1/mtd2 and does not preserve an original complete six-partition backup.
+Follow the distinct command sequences in [installation](installation.md).
+
+After producing and validating the camera-specific inputs, configure them in a
+terminal and build with the recorded plan:
 
 ```bash
 thingino-dlink local-build configure
@@ -123,10 +144,11 @@ mode-0600 settings file. It never accepts an SSID, passphrase, credential, or
 API key in argv or the environment. `build` loads the recorded plan, so the
 normal command needs no private path arguments.
 
-`build` prepares the locked source, creates the source-built Thingino toolchain,
-then generates and validates the immutable Buildroot download cache. Toolchain
-compilation and both clean firmware builds run without networking in separate
-ext4 workspaces. The two firmware builds must export byte-identical base
+`build` revalidates and reuses the source-built Thingino toolchain and immutable
+Buildroot download cache produced by `recovery-assets`; advanced workflows that
+already possess accepted private inputs can let `build` create those caches on
+demand. Toolchain compilation and both clean firmware builds run without
+networking in separate ext4 workspaces. The two firmware builds must export byte-identical base
 artifacts. The command then creates the private final-root, applies the
 source-bound Raptor RWD overlay, builds both fixed-layout kernels, packages the
 schema-2 install set, and runs `inspect-install-set`. The output JSON names the

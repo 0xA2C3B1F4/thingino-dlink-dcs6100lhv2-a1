@@ -9,8 +9,11 @@ from pathlib import Path
 from installer.collector.kernel import (
     CollectorKernelError,
     render_collector_kernel_fragment,
+    render_uartless_collector_kernel_fragment,
+    uartless_collector_kernel_command_line,
     validate_collector_kernel,
     validate_collector_kernel_config,
+    validate_uartless_collector_kernel_config,
 )
 from tests.test_artifacts import test_uimage
 
@@ -43,6 +46,8 @@ class CollectorKernelTests(unittest.TestCase):
                 "collector-linux.config",
                 "jzmmc_v12.ko",
                 "source-preparation.json",
+                "uartless-collector-kernel.uimage",
+                "uartless-collector-linux.config",
             },
         )
 
@@ -61,6 +66,15 @@ class CollectorKernelTests(unittest.TestCase):
         self.assertIn(b"# CONFIG_WIRELESS is not set", fragment)
         self.assertIn(b"CONFIG_JZMMC_V12=m", fragment)
         self.assertIn(b"CONFIG_JFFS2_FS=y", fragment)
+
+    def test_uartless_fragment_boots_mtd2_with_every_partition_read_only(self) -> None:
+        fragment = render_uartless_collector_kernel_fragment()
+        validate_uartless_collector_kernel_config(fragment)
+        command_line = uartless_collector_kernel_command_line()
+        self.assertIn(b"CONFIG_CMDLINE_OVERRIDE=y", fragment)
+        self.assertIn(f'CONFIG_CMDLINE="{command_line}"'.encode(), fragment)
+        for partition in ("boot", "kernel", "rootfs", "userdata", "userdata2", "userdata3"):
+            self.assertIn(f"({partition})ro".encode(), fragment)
 
     def test_effective_config_rejects_ip_or_embedded_command_line_drift(self) -> None:
         fragment = render_collector_kernel_fragment()

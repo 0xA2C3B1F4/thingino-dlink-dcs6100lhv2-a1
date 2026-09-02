@@ -67,6 +67,26 @@ def _local_build_acquire(facade: object, arguments: argparse.Namespace) -> dict[
     )
 
 
+def _local_build_recovery_assets(
+    facade: object, arguments: argparse.Namespace
+) -> dict[str, object]:
+    _document = getattr(facade, '_document')
+    build_local_recovery_assets = getattr(facade, 'build_local_recovery_assets')
+    resolve_local_build_workspace = getattr(facade, 'resolve_local_build_workspace')
+    build_root = resolve_local_build_workspace(
+        build_root=arguments.build_root,
+        work_dir=arguments.work_dir,
+    )
+    result = build_local_recovery_assets(build_root=build_root)
+    return _document(
+        "local-build recovery-assets",
+        ok=True,
+        phase="local-build-recovery-assets-ready",
+        next_command="thingino-dlink stock-recovery backup-prepare",
+        result=result,
+    )
+
+
 def _prompt_local_build_value(
     facade: object,
     *,

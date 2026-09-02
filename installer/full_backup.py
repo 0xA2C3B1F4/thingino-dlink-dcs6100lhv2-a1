@@ -16,6 +16,12 @@ from pathlib import Path
 from typing import Callable
 
 from .layout import MTD_PHYSICAL_ERASE_SIZE, MTD_WRITE_SIZE, TARGET, Target
+from .vendor_bundle import (
+    FILES_DIRECTORY as VENDOR_FILES_DIRECTORY,
+    MANIFEST_NAME as VENDOR_MANIFEST_NAME,
+    VendorBundleError,
+    load_vendor_bundle,
+)
 
 
 MANIFEST_NAME = "manifest.private.json"
@@ -32,6 +38,16 @@ class CompleteBackupDecision:
     duplicate_partitions_accepted: bool
     full_flash_reconstruction_accepted: bool
     partition_count: int
+    recovery_images: int
+
+
+@dataclass(frozen=True, slots=True)
+class FunctionalBackupDecision:
+    duplicate_partitions_accepted: bool
+    functional_recovery_accepted: bool
+    original_complete_backup_accepted: bool
+    original_preserved_mtd: tuple[int, ...]
+    replacement_mtd: tuple[int, ...]
     recovery_images: int
 
 
@@ -58,6 +74,44 @@ def target_layout_document(target: Target = TARGET) -> dict[str, object]:
             for partition in target.partitions
         ],
         "write_size": MTD_WRITE_SIZE,
+    }
+
+
+def functional_target_layout_document(target: Target = TARGET) -> dict[str, object]:
+    document = target_layout_document(target)
+    document.update(
+        {
+            "capture_kind": "uartless-functional",
+            "original_complete_backup": False,
+            "original_preserved_mtd": [0, 3, 4, 5],
+            "pre_capture_write_set": [1, 2],
+            "replacement_mtd": [1, 2],
+        }
+    )
+    return document
+
+
+def _collector_preserved_layout_document(
+    target: Target = TARGET,
+) -> dict[str, object]:
+    return {
+        "read_only": True,
+        "schema_version": 1,
+        "target": {
+            "erase_block_size": target.erase_block_size,
+            "flash_size": target.nor_size,
+            "hardware_revision": target.hardware_revision,
+            "model": target.model,
+            "partitions": [
+                {
+                    "mtd": partition.mtd,
+                    "name": partition.name,
+                    "offset": partition.offset,
+                    "size": partition.size,
+                }
+                for partition in target.partitions
+            ],
+        },
     }
 
 
@@ -322,6 +376,417 @@ def capture_complete_backup_from_ram_collector(
         layout=layout,
         partition_reader=partition_reader,
         target=target,
+    )
+
+
+def _functional_device_binding(parts: dict[int, bytes]) -> str:
+    digest = hashlib.sha256()
+    for mtd in (0, 3, 4, 5):
+        raw = parts[mtd]
+        digest.update(f"mtd{mtd}".encode("ascii") + b"\0")
+        digest.update(len(raw).to_bytes(8, "big"))
+        digest.update(raw)
+    return digest.hexdigest()
+
+
+def _bootstrap_partition_images(package_raw: bytes) -> dict[int, bytes]:
+    from .sd_package import parse_package, validate_bootstrap
+
+    package = parse_package(package_raw, require_project_header=True)
+    validate_bootstrap(package)
+    images: dict[int, bytes] = {}
+    for record, mtd in zip(package.records, (1, 2), strict=True):
+        partition = TARGET.partition(mtd)
+        image = record.payload + b"\xff" * (partition.size - len(record.payload))
+        if len(image) != partition.size:
+            raise FullBackupError("UARTless replacement partition size differs")
+        images[mtd] = image
+    return images
+
+
+def capture_functional_backup_from_uartless_collector(
+    *,
+    collector_dir: Path,
+    bootstrap_package: bytes,
+    output_dir: Path,
+    confirmed_output_dir: Path,
+    target: Target = TARGET,
+) -> FunctionalBackupDecision:
+    """Accept post-bootstrap duplicate reads without calling them original backup."""
+
+    if collector_dir.is_symlink() or not collector_dir.is_dir():
+        raise FullBackupError("UARTless collector output is not a real directory")
+    expected_root = {
+        "CAPTURE.OK",
+        "copy-a",
+        "copy-b",
+        "device-layout.private.json",
+        "preserved",
+        "vendor",
+    }
+    if {entry.name for entry in collector_dir.iterdir()} != expected_root:
+        raise FullBackupError("UARTless collector output closure is not exact")
+    layout_path = collector_dir / "device-layout.private.json"
+    if layout_path.is_symlink() or not layout_path.is_file():
+        raise FullBackupError("UARTless collector layout is missing")
+    try:
+        layout = json.loads(layout_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise FullBackupError("UARTless collector layout is invalid") from exc
+    if layout != functional_target_layout_document(target):
+        raise FullBackupError("UARTless collector target or write boundary differs")
+    completion_raw = b"functional_duplicate_reads=complete;host_validation=required;pre_capture_writes=mtd1,mtd2\n"
+    if _read_regular(
+        collector_dir / "CAPTURE.OK",
+        "UARTless collector completion",
+        expected_size=len(completion_raw),
+    ) != completion_raw:
+        raise FullBackupError("UARTless collector completion contract differs")
+
+    expected_partition_files = {
+        f"mtd{partition.mtd}.bin" for partition in target.partitions
+    }
+    copies: dict[str, dict[int, bytes]] = {}
+    source_inodes: set[tuple[int, int]] = set()
+    for copy in COPY_NAMES:
+        directory = collector_dir / f"copy-{copy}"
+        if directory.is_symlink() or not directory.is_dir():
+            raise FullBackupError("UARTless collector copy is not a real directory")
+        if {entry.name for entry in directory.iterdir()} != expected_partition_files:
+            raise FullBackupError("UARTless collector partition closure differs")
+        parts: dict[int, bytes] = {}
+        for partition in target.partitions:
+            path = directory / f"mtd{partition.mtd}.bin"
+            metadata = path.stat(follow_symlinks=False)
+            identity = (metadata.st_dev, metadata.st_ino)
+            if identity in source_inodes:
+                raise FullBackupError("UARTless collector output contains a hardlink")
+            source_inodes.add(identity)
+            parts[partition.mtd] = _read_regular(
+                path,
+                f"UARTless collector copy-{copy} mtd{partition.mtd}",
+                expected_size=partition.size,
+            )
+        copies[copy] = parts
+    for partition in target.partitions:
+        if copies["a"][partition.mtd] != copies["b"][partition.mtd]:
+            raise FullBackupError(
+                f"UARTless duplicate reads differ for mtd{partition.mtd}"
+            )
+    expected_replacements = _bootstrap_partition_images(bootstrap_package)
+    for mtd in (1, 2):
+        if copies["a"][mtd] != expected_replacements[mtd]:
+            raise FullBackupError(
+                f"captured mtd{mtd} differs from the authorized replacement"
+            )
+
+    preserved_source = collector_dir / "preserved"
+    expected_preserved = {
+        "device-layout.private.json",
+        "mtd0.bin",
+        "mtd4.bin",
+        "mtd5.bin",
+    }
+    if (
+        preserved_source.is_symlink()
+        or not preserved_source.is_dir()
+        or {entry.name for entry in preserved_source.iterdir()} != expected_preserved
+    ):
+        raise FullBackupError("UARTless preserved-readback closure differs")
+    preserved_snapshots: dict[str, bytes] = {}
+    for name in sorted(expected_preserved):
+        path = preserved_source / name
+        limit = 128 * 1024 if name.endswith(".json") else target.nor_size
+        if path.is_symlink() or not path.is_file() or path.stat().st_size > limit:
+            raise FullBackupError("UARTless preserved readback is not exact")
+        preserved_snapshots[name] = path.read_bytes()
+    try:
+        preserved_layout = json.loads(
+            preserved_snapshots["device-layout.private.json"].decode("utf-8")
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise FullBackupError("UARTless preserved layout is invalid") from exc
+    if preserved_layout != _collector_preserved_layout_document(target):
+        raise FullBackupError("UARTless preserved layout contract differs")
+    for mtd in (0, 4, 5):
+        if preserved_snapshots[f"mtd{mtd}.bin"] != copies["a"][mtd]:
+            raise FullBackupError(
+                f"UARTless current preserved mtd{mtd} differs from duplicate capture"
+            )
+
+    vendor_source = collector_dir / "vendor"
+    try:
+        vendor_bundle = load_vendor_bundle(vendor_source)
+    except VendorBundleError as exc:
+        raise FullBackupError("UARTless vendor bundle validation failed") from exc
+    vendor_manifest_raw = (vendor_source / VENDOR_MANIFEST_NAME).read_bytes()
+
+    if (
+        not output_dir.is_absolute()
+        or confirmed_output_dir != output_dir
+        or output_dir.parent.resolve(strict=True) != output_dir.parent
+    ):
+        raise FullBackupError("functional backup destination confirmation does not match")
+    if output_dir.exists() or output_dir.is_symlink():
+        raise FullBackupError("refusing to overwrite functional recovery destination")
+    output_dir.mkdir(mode=0o700, parents=False)
+    incomplete = output_dir / "capture.incomplete"
+    _write_exclusive(incomplete, b"incomplete\n")
+    files: dict[str, object] = {}
+    fulls: dict[str, bytes] = {}
+    try:
+        preserved_output = output_dir / "preserved"
+        preserved_output.mkdir(mode=0o700)
+        for name, raw in preserved_snapshots.items():
+            _write_and_readback(
+                preserved_output / name, raw, storage_reader=None
+            )
+        vendor_output = output_dir / "vendor"
+        vendor_files_output = vendor_output / VENDOR_FILES_DIRECTORY
+        vendor_files_output.mkdir(mode=0o700, parents=True)
+        _write_and_readback(
+            vendor_output / VENDOR_MANIFEST_NAME,
+            vendor_manifest_raw,
+            storage_reader=None,
+        )
+        for artifact in vendor_bundle.artifacts:
+            _write_and_readback(
+                vendor_files_output / artifact.name,
+                artifact.raw,
+                storage_reader=None,
+            )
+        try:
+            load_vendor_bundle(vendor_output)
+        except VendorBundleError as exc:
+            raise FullBackupError("copied UARTless vendor bundle differs") from exc
+
+        for copy in COPY_NAMES:
+            copy_dir = output_dir / f"copy-{copy}"
+            copy_dir.mkdir(mode=0o700)
+            for partition in target.partitions:
+                relative = f"copy-{copy}/mtd{partition.mtd}.bin"
+                raw = copies[copy][partition.mtd]
+                _write_and_readback(output_dir / relative, raw, storage_reader=None)
+                files[relative] = _identity(raw)
+            full = b"".join(
+                copies[copy][partition.mtd] for partition in target.partitions
+            )
+            if len(full) != target.nor_size:
+                raise FullBackupError("functional reconstruction is not exactly 16 MiB")
+            full_name = f"functional-flash-{copy}.bin"
+            _write_and_readback(output_dir / full_name, full, storage_reader=None)
+            files[full_name] = _identity(full)
+            fulls[copy] = full
+        if fulls["a"] != fulls["b"]:
+            raise FullBackupError("functional flash reconstructions differ")
+        manifest = {
+            "schema": 3,
+            "recovery_kind": "uartless-functional",
+            "checks": {
+                "copy_a_matches_copy_b": True,
+                "functional_flash_a_matches_functional_flash_b": True,
+                "replacement_mtd_matches_bootstrap": True,
+                "storage_destination_confirmed": True,
+                "storage_readback_verified": True,
+            },
+            "device_binding_sha256": _functional_device_binding(copies["a"]),
+            "files": files,
+            "firmware_runtime": FIRMWARE_RUNTIME,
+            "functional_recovery_accepted": True,
+            "original_complete_backup_accepted": False,
+            "original_mtd1_mtd2_available": False,
+            "original_preserved_mtd": [0, 3, 4, 5],
+            "partition_order": [
+                f"mtd{partition.mtd}" for partition in target.partitions
+            ],
+            "replacement_mtd": [1, 2],
+            "replacement_source": {
+                "class": "recovery-functional",
+                "package_sha256": hashlib.sha256(bootstrap_package).hexdigest(),
+                "write_set": [1, 2],
+            },
+            "target": functional_target_layout_document(target),
+            "total_flash_size": target.nor_size,
+        }
+        manifest_raw = (
+            json.dumps(manifest, indent=2, sort_keys=True) + "\n"
+        ).encode("utf-8")
+        _write_and_readback(
+            output_dir / MANIFEST_NAME,
+            manifest_raw,
+            storage_reader=None,
+        )
+        incomplete.unlink()
+        descriptor = os.open(output_dir, os.O_RDONLY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+    except BaseException:
+        raise
+    return validate_functional_backup(output_dir, target=target)
+
+
+def validate_functional_backup(
+    recovery_dir: Path, *, target: Target = TARGET
+) -> FunctionalBackupDecision:
+    return validate_functional_backup_with_manifest(
+        recovery_dir, target=target
+    )[0]
+
+
+def validate_functional_backup_with_manifest(
+    recovery_dir: Path, *, target: Target = TARGET
+) -> tuple[FunctionalBackupDecision, dict[str, object]]:
+    if recovery_dir.is_symlink() or not recovery_dir.is_dir():
+        raise FullBackupError("functional recovery evidence is not a private directory")
+    manifest = load_private_manifest(recovery_dir)
+    expected_root = {
+        MANIFEST_NAME,
+        "copy-a",
+        "copy-b",
+        "functional-flash-a.bin",
+        "functional-flash-b.bin",
+        "preserved",
+        "vendor",
+    }
+    if {entry.name for entry in recovery_dir.iterdir()} != expected_root:
+        raise FullBackupError("functional recovery directory closure is not exact")
+    checks = manifest.get("checks")
+    required_checks = (
+        "copy_a_matches_copy_b",
+        "functional_flash_a_matches_functional_flash_b",
+        "replacement_mtd_matches_bootstrap",
+        "storage_destination_confirmed",
+        "storage_readback_verified",
+    )
+    partition_names = [f"mtd{partition.mtd}" for partition in target.partitions]
+    if (
+        manifest.get("schema") != 3
+        or manifest.get("recovery_kind") != "uartless-functional"
+        or not isinstance(checks, dict)
+        or not all(checks.get(name) is True for name in required_checks)
+        or manifest.get("functional_recovery_accepted") is not True
+        or manifest.get("original_complete_backup_accepted") is not False
+        or manifest.get("original_mtd1_mtd2_available") is not False
+        or manifest.get("original_preserved_mtd") != [0, 3, 4, 5]
+        or manifest.get("replacement_mtd") != [1, 2]
+        or manifest.get("target") != functional_target_layout_document(target)
+        or manifest.get("partition_order") != partition_names
+        or manifest.get("total_flash_size") != target.nor_size
+        or manifest.get("firmware_runtime") != FIRMWARE_RUNTIME
+    ):
+        raise FullBackupError("functional recovery manifest contract differs")
+    source = manifest.get("replacement_source")
+    if (
+        not isinstance(source, dict)
+        or source.get("class") != "recovery-functional"
+        or source.get("write_set") != [1, 2]
+        or not isinstance(source.get("package_sha256"), str)
+        or len(str(source["package_sha256"])) != 64
+    ):
+        raise FullBackupError("functional replacement source is invalid")
+    files = manifest.get("files")
+    expected_files = {
+        *(f"copy-{copy}/mtd{partition.mtd}.bin" for copy in COPY_NAMES for partition in target.partitions),
+        "functional-flash-a.bin",
+        "functional-flash-b.bin",
+    }
+    if not isinstance(files, dict) or set(files) != expected_files:
+        raise FullBackupError("functional recovery file closure differs")
+
+    copies: dict[str, dict[int, bytes]] = {}
+    fulls: dict[str, bytes] = {}
+    inodes: set[tuple[int, int]] = set()
+    for copy in COPY_NAMES:
+        copy_dir = recovery_dir / f"copy-{copy}"
+        if copy_dir.is_symlink() or not copy_dir.is_dir():
+            raise FullBackupError("functional recovery copy is not a real directory")
+        if {entry.name for entry in copy_dir.iterdir()} != {
+            f"mtd{partition.mtd}.bin" for partition in target.partitions
+        }:
+            raise FullBackupError("functional partition closure differs")
+        parts: dict[int, bytes] = {}
+        for partition in target.partitions:
+            relative = f"copy-{copy}/mtd{partition.mtd}.bin"
+            record = files.get(relative)
+            if not isinstance(record, dict) or record.get("size") != partition.size:
+                raise FullBackupError("functional partition record size differs")
+            path = recovery_dir / relative
+            metadata = path.stat(follow_symlinks=False)
+            inode = (metadata.st_dev, metadata.st_ino)
+            if inode in inodes:
+                raise FullBackupError("functional recovery contains a hardlink")
+            inodes.add(inode)
+            raw = _read_regular(path, relative, expected_size=partition.size)
+            if hashlib.sha256(raw).hexdigest() != record.get("sha256"):
+                raise FullBackupError("functional partition identity differs")
+            parts[partition.mtd] = raw
+        copies[copy] = parts
+        full_name = f"functional-flash-{copy}.bin"
+        full_record = files.get(full_name)
+        if not isinstance(full_record, dict) or full_record.get("size") != target.nor_size:
+            raise FullBackupError("functional flash record size differs")
+        full_path = recovery_dir / full_name
+        metadata = full_path.stat(follow_symlinks=False)
+        inode = (metadata.st_dev, metadata.st_ino)
+        if inode in inodes:
+            raise FullBackupError("functional recovery contains a hardlink")
+        inodes.add(inode)
+        full = _read_regular(full_path, full_name, expected_size=target.nor_size)
+        if hashlib.sha256(full).hexdigest() != full_record.get("sha256"):
+            raise FullBackupError("functional flash identity differs")
+        if full != b"".join(parts[p.mtd] for p in target.partitions):
+            raise FullBackupError("functional flash reconstruction differs")
+        fulls[copy] = full
+    if any(
+        copies["a"][partition.mtd] != copies["b"][partition.mtd]
+        for partition in target.partitions
+    ) or fulls["a"] != fulls["b"]:
+        raise FullBackupError("functional duplicate evidence differs")
+    if manifest.get("device_binding_sha256") != _functional_device_binding(copies["a"]):
+        raise FullBackupError("functional same-device binding differs")
+    try:
+        load_vendor_bundle(recovery_dir / "vendor")
+    except VendorBundleError as exc:
+        raise FullBackupError("functional vendor bundle differs") from exc
+    preserved = recovery_dir / "preserved"
+    if preserved.is_symlink() or not preserved.is_dir() or {
+        entry.name for entry in preserved.iterdir()
+    } != {"device-layout.private.json", "mtd0.bin", "mtd4.bin", "mtd5.bin"}:
+        raise FullBackupError("functional preserved-readback closure differs")
+    expected_preserved_layout = _collector_preserved_layout_document(target)
+    expected_preserved_layout_raw = (
+        json.dumps(expected_preserved_layout, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+    preserved_layout_raw = _read_regular(
+        preserved / "device-layout.private.json",
+        "functional preserved layout",
+        expected_size=len(expected_preserved_layout_raw),
+    )
+    try:
+        preserved_layout = json.loads(preserved_layout_raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise FullBackupError("functional preserved layout is invalid") from exc
+    if preserved_layout != _collector_preserved_layout_document(target):
+        raise FullBackupError("functional preserved layout contract differs")
+    for mtd in (0, 4, 5):
+        if _read_regular(
+            preserved / f"mtd{mtd}.bin",
+            f"functional preserved mtd{mtd}",
+            expected_size=target.partition(mtd).size,
+        ) != copies["a"][mtd]:
+            raise FullBackupError("functional preserved readback differs")
+    return (
+        FunctionalBackupDecision(
+            duplicate_partitions_accepted=True,
+            functional_recovery_accepted=True,
+            original_complete_backup_accepted=False,
+            original_preserved_mtd=(0, 3, 4, 5),
+            replacement_mtd=(1, 2),
+            recovery_images=2,
+        ),
+        manifest,
     )
 
 

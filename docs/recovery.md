@@ -16,6 +16,16 @@ Keep stock physical mtd5 and every per-device hash private. Do not commit
 backups, partition files, manifests, MAC addresses, serial numbers,
 credentials, or UART logs.
 
+The optional UARTless functional-capture path is a different recovery class.
+It deliberately lets stock U-Boot replace mtd1/mtd2 before capture, preserves
+original mtd0/mtd3/mtd4/mtd5, and validates the captured mtd1/mtd2 against the
+exact replacement package. Its schema-3 manifest must state
+`original_complete_backup_accepted: false`. The initial
+`recovery-functional` source can restore the reviewed collector/recovery state;
+it is not a D-Link stock restoration source. Never pass this schema to the
+exact same-device stock-restorer. A D-Link-functional restore requires a
+separately cataloged kernel/rootfs pair and physical acceptance.
+
 ## Current split-layout behavior
 
 The permanent mtd2 is a verifier and direct Thingino handoff. It does not run

@@ -14,9 +14,12 @@ not device proof and the unopened-camera transport remains a release gate.
 There is still no proven automatic stock-U-Boot SD-to-RAM collector boot that
 leaves all six original partitions unchanged. The complete-backup source is
 implemented, but a new unopened camera needs the separately authorized UART
-RAM transport until a non-writing bootstrap is found and physically accepted.
-The stock SD updater cannot close this gap because selecting its package erases
-and writes mtd1/mtd2 before the collector could run.
+RAM transport for a byte-exact original six-partition backup. An explicit
+UARTless functional-capture alternative uses the stock SD updater and therefore
+erases and writes mtd1/mtd2 before the collector runs. It preserves original
+mtd0, mtd3, mtd4, and mtd5 and must never report an original complete backup.
+This alternative remains a development candidate until its physical write,
+handoff, duplicate capture, retry, and functional restore have been accepted.
 
 ## Intended flow
 
@@ -41,6 +44,171 @@ The finished installation workflow is:
     media acceptance separately.
 
 The SD card is not required after a successful persistent installation.
+
+## Public-checkout complete-backup path
+
+After `local-build prepare`, `bootstrap`, and `acquire`, build the public
+read-only recovery inputs before `local-build configure`:
+
+```bash
+thingino-dlink local-build recovery-assets --json
+```
+
+The result names `kernel`, `linux_config`, and `mmc_module` files beneath one
+mode-restricted build run. It also reports an empty `write_set`. This command
+builds and validates the source-locked MIPS toolchain, download cache, collector
+kernel, effective configuration, and matching MMC module. It does not contact a
+camera or stage removable media.
+
+With the camera powered off, insert one FAT32 SD card into the host and create
+the native removable-media preflight. On macOS:
+
+```bash
+python3 scripts/platform/macos_media_preflight.py \
+  --whole-device /dev/diskN \
+  --mount-root /path/to/mounted-card \
+  --output /path/to/private/media-preflight.json
+```
+
+Use only the three paths printed by `recovery-assets`, repeat the exact physical
+device, and choose new private output directories:
+
+```bash
+thingino-dlink stock-recovery backup-prepare \
+  --kernel /path/from/result/collector-kernel.uimage \
+  --linux-config /path/from/result/collector-linux.config \
+  --mmc-module /path/from/result/jzmmc_v12.ko \
+  --output-dir /path/to/private/live-set \
+  --mount-root /path/to/mounted-card \
+  --media-preflight /path/to/private/media-preflight.json \
+  --confirm-physical-device /dev/diskN
+```
+
+Require the JSON result to report `write_set: []` and
+`read-only-collector-staged-unarmed`. Power the camera off before moving the SD
+card. Insert it into the matching A1 camera, connect its confirmed UART, start
+the capture command while the camera is still off, and only then power it on:
+
+```bash
+thingino-dlink stock-recovery backup-capture \
+  --input-dir /path/to/private/live-set \
+  --linux-config /path/from/result/collector-linux.config \
+  --serial-device /dev/cu.usbserial-N \
+  --confirm-serial-device /dev/cu.usbserial-N
+```
+
+The editable package installs the pinned `pyserial` dependency required by this
+command. The RAM collector marks all six physical partitions read-only, reads
+each partition twice, performs SD storage readback, retains the allowlisted
+stock-mtd3 vendor libraries, and halts. It never authorizes a NOR write. After a
+reported completion, power the camera off, return the card to the host, and
+finalize into a new private recovery directory:
+
+```bash
+thingino-dlink stock-recovery backup-validate \
+  --collector-dir /path/to/mounted-card/DCS6100B \
+  --output-dir /path/to/private/complete-backup \
+  --confirm-output-dir /path/to/private/complete-backup
+```
+
+Stop unless duplicate partition sets, both reconstructed 16 MiB images, and all
+storage readbacks pass. Keep the output private and never substitute another
+camera's backup. The remaining vendor-bundle, protected-readback, media-closure,
+and Raptor inputs must still pass their own documented producers and validators
+before `local-build configure`.
+
+## UARTless functional-capture alternative
+
+`local-build recovery-assets` also produces an all-MTD-read-only mtd2-boot
+kernel, a minimal collector root, and an exact stock-U-Boot package. This path
+is UARTless after SD staging, but it is not write-free: the first camera boot
+erases and writes physical mtd1 and mtd2. The accepted originals are therefore
+mtd0, mtd3, mtd4, and mtd5. The captured mtd1/mtd2 must instead equal the exact
+replacement images reconstructed from the authorized package.
+
+Stage the package under a non-matching inert name:
+
+```bash
+thingino-dlink stock-recovery uartless-prepare \
+  --package /path/from/result/uartless-capture-bootstrap.bin \
+  --package-manifest /path/from/result/uartless-capture-bootstrap.manifest.json \
+  --mount-root /path/to/mounted-card \
+  --media-preflight /path/to/private/media-preflight.json \
+  --confirm-physical-device /dev/diskN
+```
+
+The result must report `armed: false`, `original_complete_backup_accepted:
+false`, `original_preserved_mtd: [0,3,4,5]`, and the future write set `[1,2]`.
+Activation is a separate exact confirmation:
+
+```bash
+thingino-dlink stock-recovery uartless-authorize \
+  --package /path/from/result/uartless-capture-bootstrap.bin \
+  --package-manifest /path/from/result/uartless-capture-bootstrap.manifest.json \
+  --mount-root /path/to/mounted-card \
+  --media-preflight /path/to/private/media-preflight.json \
+  --confirm-physical-device /dev/diskN \
+  --confirm-write-set WRITE-MTD1-MTD2
+```
+
+Only `uartless-authorize` renames the reviewed package to the single filename
+matched by stock U-Boot. With the camera off, move the card to the camera and
+power it on once. This updater pass writes mtd1/mtd2 and enters its completion
+state; it does not yet run the collector. Power off, return the card to the
+host, regenerate the removable-media preflight, and make the selector inert:
+
+```bash
+thingino-dlink stock-recovery uartless-handoff \
+  --package /path/from/result/uartless-capture-bootstrap.bin \
+  --package-manifest /path/from/result/uartless-capture-bootstrap.manifest.json \
+  --mount-root /path/to/mounted-card \
+  --media-preflight /path/to/private/new-media-preflight.json \
+  --confirm-physical-device /dev/diskN \
+  --confirm-stock-uboot-result MTD1-MTD2-WRITTEN
+```
+
+Move the passive card back to the powered-off camera and boot normally. The new
+mtd1 kernel boots the minimal mtd2 collector without UART, enforces every mtd0
+through mtd5 partition read-only, captures each current partition twice to
+`DCS6100F`, performs SD readback, and halts. Return the card to the host and
+validate into a new private schema-3 functional recovery directory:
+
+```bash
+thingino-dlink stock-recovery uartless-validate \
+  --collector-dir /path/to/mounted-card/DCS6100F \
+  --package /path/from/result/uartless-capture-bootstrap.bin \
+  --output-dir /path/to/private/functional-recovery \
+  --confirm-output-dir /path/to/private/functional-recovery
+```
+
+This result may report `functional_recovery_accepted: true` only after duplicate
+reads, both 16 MiB functional reconstructions, mtd1/mtd2 replacement identity,
+the read-only preserved-partition readback, the camera vendor bundle, and all
+storage readbacks pass. The private result contains `vendor/` for
+`local-build configure` and `preserved/` for the later same-device gate.
+It always reports `original_complete_backup_accepted: false`.
+
+Functional recovery is accepted only through explicitly functional-aware CLI
+arguments. For example, later media staging uses:
+
+```bash
+thingino-dlink prepare-card \
+  --whole-device /dev/diskN \
+  --mount-root /path/to/mounted-card \
+  --functional-recovery-dir /path/to/private/functional-recovery \
+  --preserved-readback-dir /path/to/private/functional-recovery/preserved \
+  --confirm-physical-device /dev/diskN \
+  --confirm-target DCS-6100LHV2-A1
+```
+
+The exact `--recovery-dir` and functional `--functional-recovery-dir` arguments
+are mutually exclusive. Functional-aware results keep
+`full_flash_reconstruction_accepted: false` while reporting their separate
+functional acceptance; schema 3 never enters the exact same-device stock
+restore port. The initial restoration class is `recovery-functional`; it
+restores the reviewed recovery state, not D-Link stock behavior. A future
+`stock-functional` claim requires a separately cataloged and physically
+accepted D-Link kernel/rootfs restoration pair.
 
 ## Files acquired from the camera
 

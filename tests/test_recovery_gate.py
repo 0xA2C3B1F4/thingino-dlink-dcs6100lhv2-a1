@@ -5,11 +5,17 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 from installer import full_backup
 from installer.layout import Partition, Target
-from installer.recovery_gate import RecoveryGateError, validate_existing_recovery_boundary
+from installer import recovery_gate
+from installer.recovery_gate import (
+    RecoveryGateError,
+    validate_existing_recovery_boundary,
+    validate_functional_recovery_boundary,
+)
 
 
 TARGET = Target(
@@ -114,6 +120,25 @@ class RecoveryGateTests(unittest.TestCase):
                     target=TARGET,
                 )
             load.assert_called_once_with(recovery)
+
+    def test_functional_recovery_uses_a_separate_honest_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            recovery, readback = fixture(Path(directory_name))
+            manifest = json.loads((recovery / "manifest.private.json").read_text())
+            with mock.patch.object(
+                recovery_gate,
+                "validate_functional_backup_with_manifest",
+                return_value=(SimpleNamespace(recovery_images=2), manifest),
+            ):
+                decision = validate_functional_recovery_boundary(
+                    recovery_dir=recovery,
+                    preserved_readback_dir=readback,
+                    target=TARGET,
+                )
+            self.assertTrue(decision.functional_recovery_accepted)
+            self.assertFalse(decision.original_complete_backup_accepted)
+            self.assertEqual(decision.preserved_mtd, (0, 4, 5))
+            self.assertEqual(decision.original_preserved_mtd, (0, 3, 4, 5))
 
     def test_other_device_or_changed_secret_partition_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory_name:

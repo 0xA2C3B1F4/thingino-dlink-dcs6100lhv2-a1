@@ -11,7 +11,10 @@ import tempfile
 from pathlib import Path
 
 from installer.artifacts import validate_squashfs
-from installer.full_backup import target_layout_document
+from installer.full_backup import (
+    functional_target_layout_document,
+    target_layout_document,
+)
 from installer.layout import TARGET
 from installer.stage1.build import LINKER, validate_mmc_module
 from installer.vendor_bundle import CATALOG_PATH
@@ -147,14 +150,17 @@ def render_contract(
         "existing-recovery",
         "protected-readback",
         "complete-backup",
+        "functional-uartless",
     }:
         raise CollectorBuildError("collector capture mode is unsupported")
     lines.extend(
         (
             f"#define FULL_BACKUP_CAPTURE {int(capture_mode == 'complete-backup')}",
+            f"#define FUNCTIONAL_CAPTURE {int(capture_mode == 'functional-uartless')}",
             f"#define PROTECTED_CAPTURE {int(capture_mode == 'protected-readback')}",
             f"#define DEVICE_LAYOUT_JSON {_c_string(json.dumps(layout, indent=2, sort_keys=True) + chr(10))}",
             f"#define FULL_BACKUP_LAYOUT_JSON {_c_string(json.dumps(target_layout_document(), indent=2, sort_keys=True) + chr(10))}",
+            f"#define FUNCTIONAL_LAYOUT_JSON {_c_string(json.dumps(functional_target_layout_document(), indent=2, sort_keys=True) + chr(10))}",
             f"#define VENDOR_MANIFEST_REQUIRED_JSON {_c_string(_manifest(catalog, include_optional=False))}",
             f"#define VENDOR_MANIFEST_OPTIONAL_JSON {_c_string(_manifest(catalog, include_optional=True))}",
             "#endif",
@@ -317,6 +323,7 @@ def build_collector_root(
             "existing-recovery": b"/dev/mtdblock3",
             "protected-readback": b"/card/DCS6100P",
             "complete-backup": b"/card/DCS6100B",
+            "functional-uartless": b"/card/DCS6100F",
         }[capture_mode]
         if init[:4] != b"\x7fELF" or identity not in init:
             raise CollectorBuildError("compiled collector lost its fixed identity")
@@ -385,13 +392,19 @@ def build_collector_root(
         "nor_writes": False,
         "output_sha256": hashlib.sha256(raw).hexdigest(),
         "output_size": len(raw),
-        "preserved_mtd": [0, 4, 5],
+        "preserved_mtd": (
+            [0, 3, 4, 5]
+            if capture_mode == "functional-uartless"
+            else [0, 4, 5]
+        ),
         "vendor_files": (
             ["libimp.so", "libalog.so", "libsysutils.so"]
-            if capture_mode == "existing-recovery"
+            if capture_mode in {"existing-recovery", "functional-uartless"}
             else []
         ),
         "optional_archive": (
-            "libaudioProcess.so" if capture_mode == "existing-recovery" else None
+            "libaudioProcess.so"
+            if capture_mode in {"existing-recovery", "functional-uartless"}
+            else None
         ),
     }

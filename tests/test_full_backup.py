@@ -5,15 +5,21 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest import mock
 
 from installer.full_backup import (
     FullBackupError,
+    _collector_preserved_layout_document,
     capture_complete_backup,
     capture_complete_backup_from_ram_collector,
+    capture_functional_backup_from_uartless_collector,
+    functional_target_layout_document,
     target_layout_document,
     validate_complete_backup,
 )
 from installer.layout import TARGET
+from installer.sd_package import generate_bootstrap, parse_package
 
 
 def partition_images() -> dict[int, bytes]:
@@ -64,6 +70,67 @@ class FullBackupTests(unittest.TestCase):
             validated = validate_complete_backup(output)
         self.assertTrue(decision.duplicate_partitions_accepted)
         self.assertTrue(validated.full_flash_reconstruction_accepted)
+
+    def test_uartless_functional_capture_accepts_only_authorized_replacements(self) -> None:
+        package_raw = generate_bootstrap(b"replacement-kernel", b"replacement-rootfs")
+        package = parse_package(package_raw, require_project_header=True)
+        images = partition_images()
+        for record, mtd in zip(package.records, (1, 2), strict=True):
+            images[mtd] = record.payload + b"\xff" * (
+                TARGET.partition(mtd).size - len(record.payload)
+            )
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name).resolve()
+            collector = root / "DCS6100F"
+            collector.mkdir()
+            for copy in ("a", "b"):
+                directory = collector / f"copy-{copy}"
+                directory.mkdir()
+                for mtd, raw in images.items():
+                    (directory / f"mtd{mtd}.bin").write_bytes(raw)
+            (collector / "device-layout.private.json").write_text(
+                json.dumps(functional_target_layout_document()),
+                encoding="utf-8",
+            )
+            (collector / "CAPTURE.OK").write_bytes(
+                b"functional_duplicate_reads=complete;host_validation=required;"
+                b"pre_capture_writes=mtd1,mtd2\n"
+            )
+            preserved = collector / "preserved"
+            preserved.mkdir()
+            (preserved / "device-layout.private.json").write_text(
+                json.dumps(
+                    _collector_preserved_layout_document(),
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n"
+            )
+            for mtd in (0, 4, 5):
+                (preserved / f"mtd{mtd}.bin").write_bytes(images[mtd])
+            vendor = collector / "vendor"
+            (vendor / "files").mkdir(parents=True)
+            (vendor / "vendor-bundle.private.json").write_text("{}")
+            (vendor / "files/libimp.so").write_bytes(b"vendor")
+            output = root / "functional-recovery"
+            bundle = SimpleNamespace(
+                artifacts=(SimpleNamespace(name="libimp.so", raw=b"vendor"),)
+            )
+            with mock.patch(
+                "installer.full_backup.load_vendor_bundle", return_value=bundle
+            ):
+                decision = capture_functional_backup_from_uartless_collector(
+                    collector_dir=collector,
+                    bootstrap_package=package_raw,
+                    output_dir=output,
+                    confirmed_output_dir=output,
+                )
+            manifest = json.loads((output / "manifest.private.json").read_text())
+        self.assertTrue(decision.functional_recovery_accepted)
+        self.assertFalse(decision.original_complete_backup_accepted)
+        self.assertEqual(decision.original_preserved_mtd, (0, 3, 4, 5))
+        self.assertEqual(manifest["schema"], 3)
+        self.assertEqual(manifest["replacement_mtd"], [1, 2])
 
     def test_two_independent_mtd0_to_mtd5_reads_and_full_images_are_accepted(self) -> None:
         calls: list[tuple[str, int]] = []
