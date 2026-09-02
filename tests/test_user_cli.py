@@ -18,6 +18,38 @@ from installer import (
 
 
 class UserCliTests(unittest.TestCase):
+    def test_guided_cli_inspects_vendor_bundle_with_shared_loader(self) -> None:
+        parser = user_cli.build_parser()
+        arguments = parser.parse_args(
+            [
+                "inspect-vendor-bundle",
+                "--vendor-bundle-dir",
+                "/private/vendor",
+            ]
+        )
+        artifact = SimpleNamespace(
+            destination="lib/libimp.so",
+            name="libimp.so",
+            raw=b"vendor",
+            sha256="a" * 64,
+        )
+        bundle = SimpleNamespace(
+            artifacts=(artifact,),
+            bundle_sha256="b" * 64,
+            firmware_version="1.02.02",
+            manifest_sha256="c" * 64,
+        )
+        with mock.patch.object(
+            user_cli, "load_vendor_bundle", return_value=bundle
+        ) as load:
+            result = arguments.handler(arguments)
+
+        load.assert_called_once_with(Path("/private/vendor"))
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["phase"], "vendor-bundle-inspected")
+        self.assertEqual(result["result"]["file_count"], 1)
+        self.assertEqual(result["result"]["files"][0]["name"], "libimp.so")
+
     def test_workflow_preflight_parser_accepts_collector_build(self) -> None:
         parser = user_cli.build_parser()
         arguments = parser.parse_args(

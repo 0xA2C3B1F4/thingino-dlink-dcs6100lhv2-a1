@@ -498,7 +498,7 @@
       "source": "production/docs/architecture.md"
     },
     "docs/build.md": {
-      "sha256": "fe3a3bed97b2a39f7c81f6b82b55179f01259ec84564b20a1c4398f76936a158",
+      "sha256": "3988949528a0b1cbe74add7a98d988906f2ab4bf4d650f0354c24b2eeefc6ace",
       "source": "production/docs/build.md"
     },
     "docs/features.md": {
@@ -522,7 +522,7 @@
       "source": "production/docs/recovery.md"
     },
     "docs/status.md": {
-      "sha256": "e8b8146c00263e1e7ba2b7a4c7d5f11ecb2ad15e0f5272438be527eb1f80928b",
+      "sha256": "deb620e3fea6ca1a369c313938062f65e836cf9c8a006032769eca753576b398",
       "source": "production/docs/status.md"
     },
     "docs/testing.md": {
@@ -898,11 +898,11 @@
       "source": "installer/uartless_gate.py"
     },
     "installer/user_cli.py": {
-      "sha256": "1b27f5248933f33b07cce8752005408832e8f900e9f9a57d6c6b2593914c01d5",
+      "sha256": "e5cf61b6dd6e9338f268f3071efe0e308856e866763641ea063ee77e61f83b76",
       "source": "installer/user_cli.py"
     },
     "installer/user_cli_build.py": {
-      "sha256": "510741206f9070adf3707418081ba30b325e5d05cd20eafce5d9a023087da233",
+      "sha256": "cc6187db06b20a3807f06ce79cf8ab1946ff6416b31de59f91c1d8332f814a3c",
       "source": "installer/user_cli_build.py"
     },
     "installer/user_cli_diagnostics.py": {
@@ -914,7 +914,7 @@
       "source": "installer/user_cli_guided.py"
     },
     "installer/user_cli_parser.py": {
-      "sha256": "989ed78ca75e9a84ba3e0645116183666b2c1d5eccbd9a47371bfd54c18a32b6",
+      "sha256": "3141247e3d3981a9f3e637cf458ef57209bc5ce78d12fef8cde20aec699adc91",
       "source": "installer/user_cli_parser.py"
     },
     "installer/user_cli_parser_stock_recovery.py": {
@@ -1702,7 +1702,7 @@
       "source": "tests/test_uartless_gate.py"
     },
     "tests/test_user_cli.py": {
-      "sha256": "1a70b844e1bbbe56fb7e1eab7028463f9ca765b688375f44f5996e2eec900126",
+      "sha256": "07c77ca1e1569f2dfdff78a3e2e3a78a865c1421467590ac8708ecc4bb5b82e0",
       "source": "tests/test_user_cli.py"
     },
     "tests/test_vendor_bundle.py": {

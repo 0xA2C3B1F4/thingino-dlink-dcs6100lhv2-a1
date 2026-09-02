@@ -425,9 +425,12 @@ the environment, a public manifest, or a build log.
 The vendor bundle validator is available without building:
 
 ```bash
-python3 -m installer inspect-vendor-bundle \
+python3 -m installer.user_cli inspect-vendor-bundle \
   --vendor-bundle-dir /path/to/private/vendor-bundle
 ```
+
+The low-level `python3 -m installer inspect-vendor-bundle` form remains
+available for scripts that consume its compact JSON output.
 
 The acquisition step mounts physical mtd3 read-only, copies the four named
 library paths, and validates them against the profile catalog.

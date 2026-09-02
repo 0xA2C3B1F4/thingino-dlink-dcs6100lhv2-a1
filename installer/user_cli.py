@@ -195,6 +195,7 @@ from .universal_install import (
     stage_camera_bound_universal_install,
     validate_camera_bound_universal_install,
 )
+from .vendor_bundle import VendorBundleError, load_vendor_bundle
 
 
 SCHEMA_VERSION = 1
@@ -315,6 +316,10 @@ def _render(document: dict[str, object], *, json_mode: bool) -> None:
             "restore_status",
             "write_set",
             "physical_restore_proven",
+            "bundle_sha256",
+            "manifest_sha256",
+            "firmware_version",
+            "file_count",
         ):
             if result.get(key) is not None:
                 print(f"{key}: {result[key]}")
@@ -630,6 +635,12 @@ def _local_build_prepare(arguments: argparse.Namespace) -> dict[str, object]:
     return implementation(sys.modules[__name__], arguments)
 
 
+def _inspect_vendor_bundle(arguments: argparse.Namespace) -> dict[str, object]:
+    from .user_cli_build import _inspect_vendor_bundle as implementation
+
+    return implementation(sys.modules[__name__], arguments)
+
+
 def _local_build_status(arguments: argparse.Namespace) -> dict[str, object]:
     from .user_cli_build import _local_build_status as implementation
 
@@ -934,6 +945,7 @@ def main(argv: list[str] | None = None) -> int:
                 "verify-media",
                 "build-personal-mtd3",
                 "workflow-preflight",
+                "inspect-vendor-bundle",
                 "local-build",
                 "universal",
                 "runtime-candidate",
@@ -1000,6 +1012,7 @@ def main(argv: list[str] | None = None) -> int:
         StockRestoreSetError,
         UserInstallerError,
         UniversalInstallError,
+        VendorBundleError,
         WorkflowPreflightError,
         OSError,
     ) as exc:

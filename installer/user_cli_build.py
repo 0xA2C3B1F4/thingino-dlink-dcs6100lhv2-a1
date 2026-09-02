@@ -2,6 +2,35 @@
 
 from __future__ import annotations
 
+def _inspect_vendor_bundle(
+    facade: object, arguments: argparse.Namespace
+) -> dict[str, object]:
+    _document = getattr(facade, "_document")
+    load_vendor_bundle = getattr(facade, "load_vendor_bundle")
+    bundle = load_vendor_bundle(arguments.vendor_bundle_dir)
+    files = [
+        {
+            "destination": artifact.destination,
+            "name": artifact.name,
+            "sha256": artifact.sha256,
+            "size": len(artifact.raw),
+        }
+        for artifact in bundle.artifacts
+    ]
+    return _document(
+        "inspect-vendor-bundle",
+        ok=True,
+        phase="vendor-bundle-inspected",
+        result={
+            "bundle_sha256": bundle.bundle_sha256,
+            "file_count": len(files),
+            "files": files,
+            "firmware_version": bundle.firmware_version,
+            "manifest_sha256": bundle.manifest_sha256,
+        },
+    )
+
+
 def _local_build_prepare(facade: object, arguments: argparse.Namespace) -> dict[str, object]:
     _local_build_document = getattr(facade, '_local_build_document')
     prepare_local_build_workspace = getattr(facade, 'prepare_local_build_workspace')

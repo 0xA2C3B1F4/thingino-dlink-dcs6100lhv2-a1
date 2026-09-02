@@ -17,6 +17,7 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
     _diagnose_runtime = getattr(facade, '_diagnose_runtime')
     _hypothesis_record = getattr(facade, '_hypothesis_record')
     _install = getattr(facade, '_install')
+    _inspect_vendor_bundle = getattr(facade, '_inspect_vendor_bundle')
     _local_build_acquire = getattr(facade, '_local_build_acquire')
     _local_build_bootstrap = getattr(facade, '_local_build_bootstrap')
     _local_build_build = getattr(facade, '_local_build_build')
@@ -45,6 +46,11 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
     parser = _ArgumentParser(prog="thingino-dlink")
     _add_common(parser)
     commands = parser.add_subparsers(dest="command", required=True)
+
+    inspect_vendor = commands.add_parser("inspect-vendor-bundle")
+    _add_common(inspect_vendor, inherited=True)
+    inspect_vendor.add_argument("--vendor-bundle-dir", type=Path, required=True)
+    inspect_vendor.set_defaults(handler=_inspect_vendor_bundle)
 
     preflight = commands.add_parser("preflight")
     _add_common(preflight, inherited=True)
