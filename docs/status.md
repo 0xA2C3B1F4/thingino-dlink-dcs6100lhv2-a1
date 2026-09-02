@@ -35,8 +35,8 @@ still needs an upstream grant before firmware distribution.
 
 ## Source and host gates
 
-The current checkout passes its fail-closed public-tree gate with 488
-allowlisted text files, 20 Markdown checks, and 559 Python tests.
+The current checkout passes its fail-closed public-tree gate with 493
+allowlisted text files, 24 Markdown checks, and 559 Python tests.
 The refactored Control previously passed 186 library tests, eight binary and
 storage-worker tests, 16 contract tests, a release build, and the 1,000-request
 soak. WebUI code did not change in this refactor; its latest retained gate is 98

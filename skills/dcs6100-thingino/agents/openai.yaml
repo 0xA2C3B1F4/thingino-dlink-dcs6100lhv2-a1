@@ -1,0 +1,4 @@
+interface:
+  display_name: "DCS-6100 Thingino"
+  short_description: "Operate the DCS-6100LHV2 A1 workflow safely"
+  default_prompt: "Use $dcs6100-thingino to inspect the current release gates and choose the safe next step for this DCS-6100LHV2 A1 task."

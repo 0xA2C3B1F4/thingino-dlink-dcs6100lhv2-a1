@@ -16,6 +16,22 @@ maintained by D-Link or the Thingino project.
 > [release status](docs/status.md), [installation](docs/installation.md), and
 > [recovery](docs/recovery.md) before building or using removable media.
 
+## Use with a coding agent
+
+This repository includes the installable
+[`dcs6100-thingino` skill](skills/dcs6100-thingino/SKILL.md). It directs an
+agent to the current CLI, release gates, authorization boundaries, and evidence
+levels for this exact camera revision.
+
+Ask an agent with GitHub skill installation support:
+
+> Install and use the `dcs6100-thingino` skill from
+> `https://github.com/0xA2C3B1F4/thingino-dlink-dcs6100lhv2-a1/tree/main/skills/dcs6100-thingino`.
+
+The skill installs agent instructions only. It does not install this Python
+package, Docker, toolchains, private model inputs, or firmware, and it does not
+authorize removable-media or camera actions.
+
 ## Local device-specific build
 
 Firmware is built on your computer from pinned public sources and the matching
