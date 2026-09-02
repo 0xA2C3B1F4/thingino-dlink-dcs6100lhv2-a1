@@ -1,0 +1,155 @@
+#!/bin/sh
+set -u
+
+DAEMON=/usr/sbin/thingino-controld
+PIDFILE=/run/thingino-controld.pid
+WORKER_PIDFILE=/run/thingino-storage-worker.pid
+WORKER_SOCKET=/run/thingino-control/storage-v1.sock
+CONFIG=/etc/thingino.json
+port=1998
+
+owned_pid() {
+	pid=$1
+	case "$pid" in ''|*[!0-9]*) return 1 ;; esac
+	[ -r "/proc/$pid/exe" ] || return 1
+	[ "$(readlink "/proc/$pid/exe" 2>/dev/null)" = "$DAEMON" ] || return 1
+	! tr '\000' '\n' <"/proc/$pid/cmdline" 2>/dev/null | grep -Fqx -- '--storage-worker'
+}
+
+worker_owned_pid() {
+	pid=$1
+	case "$pid" in ''|*[!0-9]*) return 1 ;; esac
+	[ -r "/proc/$pid/exe" ] || return 1
+	[ "$(readlink "/proc/$pid/exe" 2>/dev/null)" = "$DAEMON" ] || return 1
+	tr '\000' '\n' <"/proc/$pid/cmdline" 2>/dev/null | grep -Fqx -- '--storage-worker'
+}
+
+running_pid() {
+	[ -s "$PIDFILE" ] || return 1
+	IFS= read -r pid <"$PIDFILE" || return 1
+	owned_pid "$pid"
+}
+
+worker_running_pid() {
+	[ -s "$WORKER_PIDFILE" ] || return 1
+	IFS= read -r pid <"$WORKER_PIDFILE" || return 1
+	worker_owned_pid "$pid"
+}
+
+start_worker() {
+	if worker_running_pid; then
+		[ -S "$WORKER_SOCKET" ] && return 0
+		echo "Storage worker socket is missing" >&2
+		return 1
+	fi
+	if [ -e "$WORKER_PIDFILE" ]; then
+		if IFS= read -r stale_pid <"$WORKER_PIDFILE" && [ -d "/proc/$stale_pid" ]; then
+			echo "Refusing an unowned storage worker PID file" >&2
+			return 1
+		fi
+		rm -f "$WORKER_PIDFILE"
+	fi
+	[ ! -e "$WORKER_SOCKET" ] || [ -S "$WORKER_SOCKET" ] || {
+		echo "Refusing a non-socket storage worker path" >&2
+		return 1
+	}
+	start-stop-daemon -S -b -m -p "$WORKER_PIDFILE" -x "$DAEMON" -- --storage-worker || return 1
+	i=0
+	while [ "$i" -lt 50 ]; do
+		worker_running_pid && [ -S "$WORKER_SOCKET" ] && return 0
+		usleep 100000
+		i=$((i + 1))
+	done
+	echo "Storage worker did not remain running" >&2
+	return 1
+}
+
+port_listening() {
+	hex_port=$(printf '%04X' "$port") || return 1
+	awk -v endpoint="0100007F:$hex_port" \
+		'$2 == endpoint && $4 == "0A" { found = 1 } END { exit !found }' \
+		/proc/net/tcp
+}
+
+start() {
+	[ -x "$DAEMON" ] || { echo "Thingino Control binary is missing" >&2; return 1; }
+	[ -f "$CONFIG" ] || { echo "Thingino configuration is missing" >&2; return 1; }
+	if running_pid; then
+		echo "Thingino Control is already running"
+		return 0
+	fi
+	if port_listening; then
+		echo "Thingino Control port is already in use" >&2
+		return 1
+	fi
+	start_worker || return 1
+	if [ -e "$PIDFILE" ]; then
+		if IFS= read -r stale_pid <"$PIDFILE" && [ -d "/proc/$stale_pid" ]; then
+			echo "Refusing an unowned Control PID file" >&2
+			return 1
+		fi
+		rm -f "$PIDFILE"
+	fi
+	start-stop-daemon -S -b -m -p "$PIDFILE" -x "$DAEMON" -- \
+		--camera --listen "127.0.0.1:$port" --token-file "$CONFIG" \
+		--whip-backend 127.0.0.1:8554 || return 1
+	i=0
+	while [ "$i" -lt 50 ]; do
+		running_pid && port_listening && return 0
+		usleep 100000
+		i=$((i + 1))
+	done
+	echo "Thingino Control did not remain running" >&2
+	return 1
+}
+
+stop_worker() {
+	[ -e "$WORKER_PIDFILE" ] || { [ ! -S "$WORKER_SOCKET" ] || rm -f "$WORKER_SOCKET"; return 0; }
+	[ -s "$WORKER_PIDFILE" ] || { echo "Refusing an empty storage worker PID file" >&2; return 1; }
+	IFS= read -r pid <"$WORKER_PIDFILE" || return 1
+	if [ ! -d "/proc/$pid" ]; then
+		rm -f "$WORKER_PIDFILE"
+		[ ! -S "$WORKER_SOCKET" ] || rm -f "$WORKER_SOCKET"
+		return 0
+	fi
+	worker_owned_pid "$pid" || { echo "Refusing an unowned storage worker PID" >&2; return 1; }
+	kill "$pid" 2>/dev/null || true
+	i=0
+	while worker_owned_pid "$pid" && [ "$i" -lt 50 ]; do
+		usleep 100000
+		i=$((i + 1))
+	done
+	worker_owned_pid "$pid" && { echo "Storage worker did not stop" >&2; return 1; }
+	rm -f "$WORKER_PIDFILE"
+	[ ! -S "$WORKER_SOCKET" ] || rm -f "$WORKER_SOCKET"
+}
+
+stop() {
+	[ -e "$PIDFILE" ] || return 0
+	[ -s "$PIDFILE" ] || { echo "Refusing an empty Control PID file" >&2; return 1; }
+	IFS= read -r pid <"$PIDFILE" || return 1
+	if [ ! -d "/proc/$pid" ]; then
+		rm -f "$PIDFILE"
+		return 0
+	fi
+	owned_pid "$pid" || { echo "Refusing an unowned Control PID" >&2; return 1; }
+	kill "$pid" 2>/dev/null || true
+	i=0
+	while owned_pid "$pid" && [ "$i" -lt 50 ]; do
+		usleep 100000
+		i=$((i + 1))
+	done
+	if owned_pid "$pid"; then
+		kill -9 "$pid" 2>/dev/null || true
+		usleep 100000
+	fi
+	owned_pid "$pid" && { echo "Thingino Control did not stop" >&2; return 1; }
+	rm -f "$PIDFILE"
+}
+
+case "${1:-}" in
+	start) start ;;
+	stop) stop && stop_worker ;;
+	restart) stop && stop_worker && start ;;
+	*) echo "Usage: $0 {start|stop|restart}" >&2; exit 1 ;;
+esac

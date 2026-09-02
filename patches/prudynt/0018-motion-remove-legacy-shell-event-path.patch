@@ -1,0 +1,156 @@
+diff --git a/src/Motion.cpp b/src/Motion.cpp
+index 297c444..9ad4e77 100644
+--- a/src/Motion.cpp
++++ b/src/Motion.cpp
+@@ -12,8 +12,6 @@ bool ignoreInitialPeriod = true;
+ namespace {
+ constexpr const char *kPrudyntRunDir = "/run/prudynt";
+ constexpr const char *kMotionStatePath = "/run/prudynt/motion.active";
+-constexpr const char *kMotionDetectedPath =
+-    "/run/prudynt/motion_detected.active";
+ constexpr const char *kMotorsActivePath = "/run/motors-active";
+ 
+ void write_motion_detection_state_file() {
+@@ -32,22 +30,6 @@ void remove_motion_detection_state_file() {
+   ::unlink(kMotionStatePath);
+ }
+ 
+-void write_motion_detected_state_file() {
+-  int fd = ::open(kMotionDetectedPath, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+-  if (fd < 0) {
+-    LOG_WARN("Motion: failed to create detected state file "
+-             << kMotionDetectedPath);
+-    return;
+-  }
+-  const char *payload = "motion=true\n";
+-  ssize_t ignored = ::write(fd, payload, strlen(payload));
+-  (void)ignored;
+-  ::close(fd);
+-}
+-
+-void remove_motion_detected_state_file() {
+-  ::unlink(kMotionDetectedPath);
+-}
+ } // namespace
+ 
+ std::string Motion::getConfigPath(const char *itemName) {
+@@ -58,11 +40,7 @@ void Motion::detect() {
+   LOG_INFO("Start motion detection thread.");
+ 
+   int ret;
+-  int debounce = 0;
+   IMP_IVS_MoveOutput *result;
+-  bool isInCooldown = false;
+-  auto cooldownEndTime = steady_clock::now();
+-  auto motionEndTime = steady_clock::now();
+   auto startTime = steady_clock::now();
+ 
+   if (init() != 0)
+@@ -138,8 +116,6 @@ void Motion::detect() {
+                << ", settle_ms=" << motorSettleWindow.count()
+                << ", since_last_ms=" << sinceLastMotor.count()
+                << ", cooldown_s=" << cfg->motion.cooldown_time_s << ")");
+-      isInCooldown = true;
+-      cooldownEndTime = steady_clock::now();
+     }
+     motorMovementActive = motorActiveOrSettling;
+ 
+@@ -157,74 +133,10 @@ void Motion::detect() {
+                                          : MotionObservationState::Clear,
+                       cfg->motion.monitor_stream, roiMask);
+ 
+-    if (ignoreInitialPeriod && elapsedTime.count() < cfg->motion.init_time_s) {
+-      releaseResult();
+-      continue;
+-    } else {
++    if (ignoreInitialPeriod && elapsedTime.count() >= cfg->motion.init_time_s) {
+       ignoreInitialPeriod = false;
+     }
+ 
+-    if (isInCooldown &&
+-        duration_cast<seconds>(currentTime - cooldownEndTime).count() <
+-            cfg->motion.cooldown_time_s) {
+-      releaseResult();
+-      continue;
+-    } else {
+-      isInCooldown = false;
+-    }
+-
+-    bool motionDetected = false;
+-    if (!motorMovementActive) {
+-      for (int i = 0; i < IMP_IVS_MOVE_MAX_ROI_CNT; i++) {
+-        if (result->retRoi[i]) {
+-          motionDetected = true;
+-          LOG_INFO("Active motion detected in region " << i);
+-          debounce++;
+-          if (debounce >= cfg->motion.debounce_time_s) {
+-            if (!moving.load()) {
+-              moving = true;
+-              LOG_INFO("Motion Start");
+-              write_motion_detected_state_file();
+-
+-              char cmd[128];
+-              memset(cmd, 0, sizeof(cmd));
+-              snprintf(cmd, sizeof(cmd), "%s start", cfg->motion.script_path);
+-              ret = system(cmd);
+-              if (ret != 0) {
+-                LOG_ERROR("Motion script failed:" << cmd);
+-              }
+-            }
+-            indicator = true;
+-            motionEndTime = steady_clock::now(); // Update last motion time
+-          }
+-        }
+-      }
+-    } else {
+-      debounce = 0;
+-    }
+-
+-    if (!motionDetected) {
+-      debounce = 0;
+-      auto duration =
+-          duration_cast<seconds>(currentTime - motionEndTime).count();
+-      if (moving && duration >= cfg->motion.min_time_s &&
+-          duration >= cfg->motion.post_time_s) {
+-        LOG_INFO("End of Motion");
+-        remove_motion_detected_state_file();
+-        char cmd[128];
+-        memset(cmd, 0, sizeof(cmd));
+-        snprintf(cmd, sizeof(cmd), "%s stop", cfg->motion.script_path);
+-        ret = system(cmd);
+-        if (ret != 0) {
+-          LOG_ERROR("Motion script failed:" << cmd);
+-        }
+-        moving = false;
+-        indicator = false;
+-        cooldownEndTime = steady_clock::now(); // Start cooldown
+-        isInCooldown = true;
+-      }
+-    }
+-
+     if (releaseResult() < 0) {
+       continue;
+     }
+diff --git a/src/Motion.hpp b/src/Motion.hpp
+index eb42fbf..564b1ab 100644
+--- a/src/Motion.hpp
++++ b/src/Motion.hpp
+@@ -9,7 +9,6 @@
+ #include "imp/imp_ivs_move.h"
+ #include "imp/imp_system.h"
+ #include "imp_hal.hpp"
+-#include <atomic>
+ #include <memory>
+ #include <thread>
+ 
+@@ -26,8 +25,6 @@ private:
+ 
+   std::string getConfigPath(const char *itemName);
+ 
+-  std::atomic<bool> moving;
+-  std::atomic<bool> indicator;
+   IMP_IVS_MoveParam move_param;
+   IMPIVSInterface *move_intf;
+   std::thread detect_thread;
+-- 
+2.54.0

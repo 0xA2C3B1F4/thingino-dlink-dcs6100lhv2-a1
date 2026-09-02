@@ -1,0 +1,1093 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 87443a6..5f3433a 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -25,7 +25,7 @@ ENDIF()
+ FIND_PATH(ubox_include_dir libubox/usock.h)
+ INCLUDE_DIRECTORIES(${ubox_include_dir})
+ 
+-SET(SOURCES main.c listen.c client.c utils.c file.c auth.c cgi.c relay.c proc.c plugin.c handler.c)
++SET(SOURCES main.c listen.c client.c utils.c file.c auth.c cgi.c relay.c proc.c plugin.c handler.c control_proxy.c)
+ IF(TLS_SUPPORT)
+ 	SET(SOURCES ${SOURCES} tls.c)
+ 	ADD_DEFINITIONS(-DHAVE_TLS)
+diff --git a/control_proxy.c b/control_proxy.c
+new file mode 100644
+index 0000000..914f709
+--- /dev/null
++++ b/control_proxy.c
+@@ -0,0 +1,827 @@
++/*
++ * D-Link Thingino Thingino Control reverse proxy.
++ *
++ * This file is limited to the DCS-6100LHV2 source profile. It keeps browser
++ * requests on uhttpd's same-origin TLS listener. /api/v1 is relayed to Rust;
++ * authenticated snapshots, /media/v1 MJPEG, and metadata are relayed directly
++ * to Prudynt so media never occupies a Rust worker or spawns a request process.
++ */
++
++#include <arpa/inet.h>
++#include <ctype.h>
++#include <errno.h>
++#include <fcntl.h>
++#include <libubox/blobmsg.h>
++#include <netinet/in.h>
++#include <sys/socket.h>
++
++#include "uhttpd.h"
++
++#define CONTROL_PROXY_HOST "127.0.0.1"
++#define CONTROL_PROXY_PORT 1998
++#define CONTROL_MEDIA_PORT 8080
++#define CONTROL_PROXY_TIMEOUT_MS 4000
++#define CONTROL_PROXY_MAX_BODY 4096
++#define CONTROL_PROXY_MAX_RESPONSE (2 * 1024 * 1024)
++#define CONTROL_PROXY_WRITE_BUFFER 8192
++#define CONTROL_LOCAL_FILE_PATH_MAX 512
++
++static bool control_proxy_start_media(struct client *cl);
++static bool control_proxy_start_local_file(struct client *cl);
++
++static bool control_proxy_session_cookie(const char *value)
++{
++	static const char prefix[] = "thingino_session=";
++	static const char login_suffix[] =
++		"; Path=/; Max-Age=86400; HttpOnly; SameSite=Strict";
++	static const char logout[] =
++		"thingino_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict";
++	const char *session;
++	unsigned int i;
++
++	if (!strcmp(value, logout))
++		return true;
++	if (strncmp(value, prefix, sizeof(prefix) - 1))
++		return false;
++	session = value + sizeof(prefix) - 1;
++	for (i = 0; i < 32; i++) {
++		if (!isxdigit((unsigned char) session[i]))
++			return false;
++	}
++	return !strcmp(session + 32, login_suffix);
++}
++
++static bool control_proxy_whip_location(const char *value)
++{
++	static const char prefix[] = "/api/v1/media/webrtc/whip/";
++	const char *session;
++	unsigned int i;
++
++	if (strncmp(value, prefix, sizeof(prefix) - 1))
++		return false;
++	session = value + sizeof(prefix) - 1;
++	for (i = 0; i < 32; i++) {
++		if (!isxdigit((unsigned char) session[i]))
++			return false;
++	}
++	return session[32] == 0;
++}
++
++static void control_proxy_finish(struct uloop_timeout *timeout)
++{
++	struct dispatch_control_proxy *proxy =
++		container_of(timeout, struct dispatch_control_proxy, finish);
++	struct client *cl = container_of(proxy, struct client,
++					 dispatch.control_proxy);
++
++	uh_request_done(cl);
++}
++
++static void control_proxy_complete(struct client *cl)
++{
++	struct dispatch_control_proxy *proxy = &cl->dispatch.control_proxy;
++
++	if (proxy->finishing)
++		return;
++	proxy->finishing = true;
++	uloop_timeout_cancel(&proxy->timeout);
++	if (proxy->initialized)
++		ustream_set_read_blocked(&proxy->backend.stream, true);
++	uloop_timeout_set(&proxy->finish, 0);
++}
++
++static void control_proxy_fail(struct client *cl, int code, const char *summary,
++			     const char *error)
++{
++	char body[192];
++	int len;
++
++	if (cl->dispatch.control_proxy.headers_done) {
++		cl->request.connection_close = true;
++		control_proxy_complete(cl);
++		return;
++	}
++	if (cl->request.transfer_chunked || cl->request.content_length > 0)
++		cl->request.connection_close = true;
++
++	len = snprintf(body, sizeof(body),
++		"{\"status\":\"error\",\"error\":{\"code\":\"%s\","
++		"\"message\":\"%s\"}}\n", error, summary);
++	if (len < 0 || len >= (int) sizeof(body)) {
++		uh_client_error(cl, 500, "Internal Server Error", NULL);
++		return;
++	}
++
++	cl->request.disable_chunked = true;
++	blobmsg_add_string(&cl->hdr_response, "Content-Type", "application/json");
++	blobmsg_add_string(&cl->hdr_response, "Cache-Control", "no-store");
++	snprintf(uh_buf, sizeof(uh_buf), "%d", len);
++	blobmsg_add_string(&cl->hdr_response, "Content-Length", uh_buf);
++	uh_http_header(cl, code, summary);
++	ustream_printf(cl->us, "\r\n");
++	ustream_write(cl->us, body, len, false);
++	control_proxy_complete(cl);
++}
++
++static void control_proxy_timeout(struct uloop_timeout *timeout)
++{
++	struct dispatch_control_proxy *proxy =
++		container_of(timeout, struct dispatch_control_proxy, timeout);
++	struct client *cl = container_of(proxy, struct client,
++					 dispatch.control_proxy);
++
++	control_proxy_fail(cl, 504, "Gateway Timeout", "backend_timeout");
++}
++
++static void control_proxy_free(struct client *cl)
++{
++	struct dispatch_control_proxy *proxy = &cl->dispatch.control_proxy;
++
++	uloop_timeout_cancel(&proxy->timeout);
++	uloop_timeout_cancel(&proxy->finish);
++	blob_buf_free(&proxy->hdr);
++	if (!proxy->initialized)
++		return;
++	ustream_free(&proxy->backend.stream);
++	close(proxy->backend.fd.fd);
++	proxy->initialized = false;
++}
++
++static const char *control_proxy_header(struct client *cl, const char *name)
++{
++	struct blob_attr *cur;
++	unsigned int rem;
++
++	blob_for_each_attr(cur, cl->hdr.head, rem) {
++		if (!strcasecmp(blobmsg_name(cur), name))
++			return blobmsg_get_string(cur);
++	}
++	return NULL;
++}
++
++static bool control_proxy_status(struct dispatch_control_proxy *proxy, char *line)
++{
++	char *code, *message, *end;
++	long status;
++
++	if (strncmp(line, "HTTP/1.1 ", 9) && strncmp(line, "HTTP/1.0 ", 9))
++		return false;
++	code = line + 9;
++	message = strchr(code, ' ');
++	if (!message || message != code + 3)
++		return false;
++	*message++ = 0;
++	errno = 0;
++	status = strtol(code, &end, 10);
++	if (errno || *end || status < 100 || status > 599 || !*message)
++		return false;
++	if (strpbrk(message, "\r\n"))
++		return false;
++	proxy->status_code = status;
++	snprintf(proxy->status_msg, sizeof(proxy->status_msg), "%s", message);
++	return true;
++}
++
++static bool control_proxy_response_header(struct client *cl, char *line)
++{
++	struct dispatch_control_proxy *proxy = &cl->dispatch.control_proxy;
++	char *value, *end;
++	unsigned long length;
++
++	value = uh_split_header(line);
++	if (!value)
++		return false;
++
++	if (!strcasecmp(line, "Content-Length")) {
++		if (proxy->content_length_seen || !*value)
++			return false;
++		errno = 0;
++		length = strtoul(value, &end, 10);
++		if (errno || *end || length > CONTROL_PROXY_MAX_RESPONSE)
++			return false;
++		proxy->content_length_seen = true;
++		proxy->response_remaining = length;
++		blobmsg_add_string(&proxy->hdr, "Content-Length", value);
++		return true;
++	}
++
++	if (!strcasecmp(line, "Content-Type")) {
++		if (proxy->content_type_seen ||
++		    ((strncasecmp(value, "application/json", 16) ||
++		      (value[16] && value[16] != ';')) &&
++		     strcasecmp(value, "image/jpeg") &&
++		     (!proxy->media || strncasecmp(value,
++		       "multipart/x-mixed-replace", 25))))
++			return false;
++		proxy->content_type_seen = true;
++		blobmsg_add_string(&proxy->hdr, "Content-Type", value);
++		return true;
++	}
++
++	if (!strcasecmp(line, "Content-Disposition")) {
++		if (proxy->content_disposition_seen ||
++		    (strcmp(value, "attachment; filename=\"snapshot-ch0.jpg\"") &&
++		     strcmp(value, "attachment; filename=\"snapshot-ch1.jpg\"")))
++			return false;
++		proxy->content_disposition_seen = true;
++		blobmsg_add_string(&proxy->hdr, "Content-Disposition", value);
++		return true;
++	}
++
++	if (!strcasecmp(line, "Location")) {
++		if (proxy->location_seen ||
++		    (strcmp(value, "/login.html") &&
++		     !control_proxy_whip_location(value)))
++			return false;
++		proxy->location_seen = true;
++		blobmsg_add_string(&proxy->hdr, "Location", value);
++		return true;
++	}
++
++	if (!strcasecmp(line, "Set-Cookie")) {
++		if (proxy->set_cookie_seen ||
++		    !control_proxy_session_cookie(value))
++			return false;
++		proxy->set_cookie_seen = true;
++		blobmsg_add_string(&proxy->hdr, "Set-Cookie", value);
++		return true;
++	}
++
++	if (!strcasecmp(line, "Transfer-Encoding"))
++		return false;
++
++	return true;
++}
++
++static bool control_proxy_finish_headers(struct client *cl)
++{
++	struct dispatch_control_proxy *proxy = &cl->dispatch.control_proxy;
++	struct blob_attr *cur;
++	unsigned int rem;
++
++	if (!proxy->status_seen ||
++	    (!proxy->content_length_seen && !proxy->media) ||
++	    (proxy->response_remaining && !proxy->content_type_seen) ||
++	    ((proxy->status_code == 302 || proxy->status_code == 201) &&
++	     !proxy->location_seen) ||
++	    (proxy->status_code != 302 && proxy->status_code != 201 &&
++	     proxy->location_seen))
++		return false;
++
++	proxy->headers_done = true;
++	proxy->stream_until_eof = proxy->media && !proxy->content_length_seen;
++	if (proxy->media)
++		uloop_timeout_cancel(&proxy->timeout);
++	cl->request.disable_chunked = true;
++	if (proxy->stream_until_eof)
++		cl->request.connection_close = true;
++	blobmsg_add_string(&proxy->hdr, "Cache-Control", "no-store");
++	uh_http_header(cl, proxy->status_code, proxy->status_msg);
++	blob_for_each_attr(cur, proxy->hdr.head, rem)
++		ustream_printf(cl->us, "%s: %s\r\n", blobmsg_name(cur),
++			       blobmsg_get_string(cur));
++	ustream_printf(cl->us, "\r\n");
++	return true;
++}
++
++static void control_proxy_read(struct ustream *stream, int bytes)
++{
++	struct dispatch_control_proxy *proxy =
++		container_of(stream, struct dispatch_control_proxy, backend.stream);
++	struct client *cl = container_of(proxy, struct client,
++					 dispatch.control_proxy);
++	char *buf, *newline;
++	int len;
++	(void) bytes;
++
++	while (!proxy->headers_done) {
++		int line_len;
++
++		buf = ustream_get_read_buf(stream, &len);
++		if (!buf || !len)
++			return;
++		newline = memchr(buf, '\n', len);
++		if (!newline) {
++			if (proxy->header_bytes + len >= 4096)
++				control_proxy_fail(cl, 502, "Bad Gateway", "bad_gateway");
++			return;
++		}
++		line_len = newline + 1 - buf;
++		proxy->header_bytes += line_len;
++		if (proxy->header_bytes > 4096) {
++			control_proxy_fail(cl, 502, "Bad Gateway", "bad_gateway");
++			return;
++		}
++		if (newline > buf && newline[-1] == '\r')
++			newline--;
++		*newline = 0;
++
++		if (!proxy->status_seen) {
++			if (!control_proxy_status(proxy, buf)) {
++				control_proxy_fail(cl, 502, "Bad Gateway", "bad_gateway");
++				return;
++			}
++			proxy->status_seen = true;
++		} else if (newline == buf) {
++			ustream_consume(stream, line_len);
++			if (proxy->authorizing) {
++				if (proxy->status_code != 204 ||
++				    !proxy->content_length_seen || proxy->response_remaining) {
++					control_proxy_fail(cl, 401, "Unauthorized", "unauthorized");
++					return;
++				}
++				if (proxy->local_file ?
++				    !control_proxy_start_local_file(cl) :
++				    !control_proxy_start_media(cl))
++					control_proxy_fail(cl, 502, "Bad Gateway", "bad_gateway");
++				return;
++			}
++			if (!control_proxy_finish_headers(cl)) {
++				control_proxy_fail(cl, 502, "Bad Gateway", "bad_gateway");
++				return;
++			}
++			if (!proxy->stream_until_eof && !proxy->response_remaining) {
++				if (ustream_pending_data(stream, false)) {
++					control_proxy_fail(cl, 502, "Bad Gateway", "bad_gateway");
++					return;
++				}
++				control_proxy_complete(cl);
++				return;
++			}
++			break;
++		} else if (!control_proxy_response_header(cl, buf)) {
++			control_proxy_fail(cl, 502, "Bad Gateway", "bad_gateway");
++			return;
++		}
++		ustream_consume(stream, line_len);
++	}
++
++	while (proxy->headers_done) {
++		size_t count;
++
++		if (ustream_pending_data(cl->us, true) >= 4096) {
++			ustream_set_read_blocked(stream, true);
++			return;
++		}
++		buf = ustream_get_read_buf(stream, &len);
++		if (!buf || !len)
++			break;
++		if (!proxy->stream_until_eof && !proxy->response_remaining) {
++			control_proxy_fail(cl, 502, "Bad Gateway", "bad_gateway");
++			return;
++		}
++		count = len;
++		if (!proxy->stream_until_eof && count > proxy->response_remaining)
++			count = proxy->response_remaining;
++		ustream_write(cl->us, buf, count, true);
++		ustream_consume(stream, count);
++		if (!proxy->stream_until_eof)
++			proxy->response_remaining -= count;
++		if (!proxy->stream_until_eof && !proxy->response_remaining) {
++			if (ustream_pending_data(stream, false)) {
++				control_proxy_fail(cl, 502, "Bad Gateway", "bad_gateway");
++				return;
++			}
++			control_proxy_complete(cl);
++			return;
++		}
++	}
++}
++
++static void control_proxy_state(struct ustream *stream)
++{
++	struct dispatch_control_proxy *proxy =
++		container_of(stream, struct dispatch_control_proxy, backend.stream);
++	struct client *cl = container_of(proxy, struct client,
++					 dispatch.control_proxy);
++
++	if (stream->eof && proxy->headers_done && proxy->stream_until_eof) {
++		control_proxy_complete(cl);
++		return;
++	}
++	if (stream->write_error || (stream->eof &&
++	    (!proxy->headers_done || proxy->response_remaining)))
++		control_proxy_fail(cl, 502, "Bad Gateway", "bad_gateway");
++}
++
++static void control_proxy_backend_write(struct ustream *stream, int bytes)
++{
++	struct dispatch_control_proxy *proxy =
++		container_of(stream, struct dispatch_control_proxy, backend.stream);
++	struct client *cl = container_of(proxy, struct client,
++					 dispatch.control_proxy);
++	(void) bytes;
++
++	if (ustream_pending_data(stream, true) >= CONTROL_PROXY_WRITE_BUFFER)
++		return;
++	cl->dispatch.data_blocked = false;
++	client_poll_post_data(cl);
++	ustream_poll(cl->us);
++}
++
++static void control_proxy_client_write(struct client *cl)
++{
++	struct ustream *backend = &cl->dispatch.control_proxy.backend.stream;
++
++	if (ustream_pending_data(cl->us, true) >= 4096)
++		return;
++	ustream_set_read_blocked(backend, false);
++	backend->notify_read(backend, 0);
++}
++
++static int control_proxy_data_send(struct client *cl, const char *data, int len)
++{
++	struct dispatch_control_proxy *proxy = &cl->dispatch.control_proxy;
++	int accepted;
++
++	if (len < 0 || (size_t) len > proxy->request_remaining)
++		return 0;
++	if (ustream_pending_data(&proxy->backend.stream, true) >=
++	    CONTROL_PROXY_WRITE_BUFFER) {
++		cl->dispatch.data_blocked = true;
++		return 0;
++	}
++	accepted = ustream_write(&proxy->backend.stream, data, len, true);
++	if (accepted < 0)
++		return 0;
++	proxy->request_remaining -= accepted;
++	return accepted;
++}
++
++static int control_proxy_connect(int port)
++{
++	struct sockaddr_in address = {
++		.sin_family = AF_INET,
++		.sin_port = htons(port),
++	};
++	int fd, flags;
++
++	if (inet_pton(AF_INET, CONTROL_PROXY_HOST, &address.sin_addr) != 1)
++		return -1;
++	fd = socket(AF_INET, SOCK_STREAM, 0);
++	if (fd < 0)
++		return -1;
++	flags = fcntl(fd, F_GETFL, 0);
++	if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0)
++		goto error;
++	if (connect(fd, (struct sockaddr *) &address, sizeof(address)) < 0 &&
++	    errno != EINPROGRESS)
++		goto error;
++	return fd;
++
++error:
++	close(fd);
++	return -1;
++}
++
++static int control_proxy_uint(const char *value, int minimum, int maximum,
++			     int *output)
++{
++	char *end;
++	long parsed;
++
++	if (!value || !*value)
++		return -1;
++	errno = 0;
++	parsed = strtol(value, &end, 10);
++	if (errno || *end || parsed < minimum || parsed > maximum)
++		return -1;
++	*output = parsed;
++	return 0;
++}
++
++static bool control_proxy_media_url(struct dispatch_control_proxy *proxy,
++				    const char *url, char *output, size_t len)
++{
++	char query[PATH_MAX + 64], *token, *save, *separator;
++	int stream = -1, fps = -1, quality = -1, width = -1, height = -1;
++	int written;
++
++	if (!strcmp(url, "/api/v1/actions/snapshot?stream_id=0")) {
++		snprintf(output, len, "/snapshot?ch=0");
++		return true;
++	}
++	if (!strcmp(url, "/api/v1/actions/snapshot?stream_id=1")) {
++		snprintf(output, len, "/snapshot?ch=1");
++		return true;
++	}
++	if (!strcmp(url, "/onvif/image.cgi")) {
++		snprintf(output, len, "/snapshot?ch=0");
++		return true;
++	}
++	if (!strcmp(url, "/onvif/image1.cgi")) {
++		snprintf(output, len, "/snapshot?ch=1");
++		return true;
++	}
++	if (!strcmp(url, "/media/v1/osd-sei")) {
++		snprintf(output, len, "/api/v1/osd-sei");
++		return true;
++	}
++	if (!strncmp(url, "/media/v1/file?", 15)) {
++		bool path_seen = false, download_seen = false;
++
++		if (strlen(url + 15) >= sizeof(query))
++			return false;
++		snprintf(query, sizeof(query), "%s", url + 15);
++		for (token = strtok_r(query, "&", &save); token;
++		     token = strtok_r(NULL, "&", &save)) {
++			separator = strchr(token, '=');
++			if (!separator)
++				return false;
++			*separator++ = 0;
++			if (!strcmp(token, "path")) {
++				if (path_seen || uh_urldecode(proxy->local_file_path,
++				    sizeof(proxy->local_file_path), separator,
++				    strlen(separator)) < 0)
++					return false;
++				path_seen = true;
++			} else if (!strcmp(token, "download")) {
++				if (download_seen || strcmp(separator, "1"))
++					return false;
++				download_seen = true;
++				proxy->local_file_download = true;
++			} else if (!strcmp(token, "play")) {
++				if (download_seen || strcmp(separator, "1"))
++					return false;
++				download_seen = true;
++			} else {
++				return false;
++			}
++		}
++		if (!path_seen ||
++		    strlen(proxy->local_file_path) > CONTROL_LOCAL_FILE_PATH_MAX ||
++		    (strncmp(proxy->local_file_path, "/mnt/", 5) &&
++		     strncmp(proxy->local_file_path, "/media/", 7)))
++			return false;
++		proxy->local_file = true;
++		return true;
++	}
++	if (strncmp(url, "/media/v1/mjpeg?", 16) || strlen(url + 16) >= sizeof(query))
++		return false;
++	snprintf(query, sizeof(query), "%s", url + 16);
++	for (token = strtok_r(query, "&", &save); token;
++	     token = strtok_r(NULL, "&", &save)) {
++		separator = strchr(token, '=');
++		if (!separator)
++			return false;
++		*separator++ = 0;
++		if (!strcmp(token, "stream")) {
++			if (stream >= 0 || control_proxy_uint(separator, 0, 1, &stream))
++				return false;
++		} else if (!strcmp(token, "f")) {
++			if (fps >= 0 || control_proxy_uint(separator, 1, 30, &fps))
++				return false;
++		} else if (!strcmp(token, "q")) {
++			if (quality >= 0 || control_proxy_uint(separator, 1, 100, &quality))
++				return false;
++		} else if (!strcmp(token, "w")) {
++			if (width >= 0 || control_proxy_uint(separator, 16, 4096, &width))
++				return false;
++		} else if (!strcmp(token, "h")) {
++			if (height >= 0 || control_proxy_uint(separator, 16, 4096, &height))
++				return false;
++		} else {
++			return false;
++		}
++	}
++	if (stream < 0 || ((width < 0) != (height < 0)))
++		return false;
++	written = snprintf(output, len, "/mjpg?ch=%d", stream);
++	if (written < 0 || (size_t) written >= len)
++		return false;
++#define MEDIA_PARAM(name, value) do { \
++	if ((value) >= 0) { \
++		int count = snprintf(output + written, len - written, "&" name "=%d", value); \
++		if (count < 0 || (size_t) count >= len - written) return false; \
++		written += count; \
++	} \
++} while (0)
++	MEDIA_PARAM("f", fps);
++	MEDIA_PARAM("q", quality);
++	MEDIA_PARAM("w", width);
++	MEDIA_PARAM("h", height);
++#undef MEDIA_PARAM
++	return true;
++}
++
++static bool control_proxy_is_media_url(const char *url)
++{
++	return !strncmp(url, "/media/v1/", 10) ||
++	       !strcmp(url, "/api/v1/actions/snapshot?stream_id=0") ||
++	       !strcmp(url, "/api/v1/actions/snapshot?stream_id=1") ||
++	       !strcmp(url, "/onvif/image.cgi") ||
++	       !strcmp(url, "/onvif/image1.cgi");
++}
++
++static void control_proxy_reset_response(struct dispatch_control_proxy *proxy)
++{
++	proxy->response_remaining = 0;
++	proxy->header_bytes = 0;
++	proxy->status_code = 0;
++	proxy->status_seen = false;
++	proxy->content_length_seen = false;
++	proxy->content_type_seen = false;
++	proxy->content_disposition_seen = false;
++	proxy->location_seen = false;
++	proxy->set_cookie_seen = false;
++	proxy->headers_done = false;
++	proxy->stream_until_eof = false;
++	blob_buf_free(&proxy->hdr);
++	blob_buf_init(&proxy->hdr, 0);
++}
++
++static int control_proxy_start_backend(struct client *cl, int port)
++{
++	struct dispatch_control_proxy *proxy = &cl->dispatch.control_proxy;
++	int fd = control_proxy_connect(port);
++
++	if (fd < 0)
++		return -1;
++	proxy->backend.stream.w.max_buffers = 48;
++	proxy->backend.stream.w.buffer_len = 256;
++	ustream_fd_init(&proxy->backend, fd);
++	proxy->initialized = true;
++	proxy->backend.stream.string_data = true;
++	proxy->backend.stream.notify_read = control_proxy_read;
++	proxy->backend.stream.notify_write = control_proxy_backend_write;
++	proxy->backend.stream.notify_state = control_proxy_state;
++	return 0;
++}
++
++static bool control_proxy_start_media(struct client *cl)
++{
++	struct dispatch_control_proxy *proxy = &cl->dispatch.control_proxy;
++
++	ustream_free(&proxy->backend.stream);
++	close(proxy->backend.fd.fd);
++	proxy->initialized = false;
++	control_proxy_reset_response(proxy);
++	proxy->authorizing = false;
++	if (control_proxy_start_backend(cl, CONTROL_MEDIA_PORT))
++		return false;
++	uloop_timeout_set(&proxy->timeout, CONTROL_PROXY_TIMEOUT_MS);
++	ustream_printf(&proxy->backend.stream,
++		"GET %s HTTP/1.0\r\nHost: %s:%d\r\nConnection: close\r\n\r\n",
++		proxy->backend_url, CONTROL_PROXY_HOST, CONTROL_MEDIA_PORT);
++	return true;
++}
++
++static bool control_proxy_start_local_file(struct client *cl)
++{
++	struct dispatch_control_proxy *proxy = &cl->dispatch.control_proxy;
++	char path[PATH_MAX];
++	char range[128];
++	const char *requested_range = control_proxy_header(cl, "range");
++	bool download = proxy->local_file_download;
++
++	snprintf(path, sizeof(path), "%s", proxy->local_file_path);
++	if (requested_range) {
++		if (strlen(requested_range) >= sizeof(range))
++			return false;
++		snprintf(range, sizeof(range), "%s", requested_range);
++	} else {
++		range[0] = 0;
++	}
++	control_proxy_free(cl);
++	memset(&cl->dispatch, 0, sizeof(cl->dispatch));
++	uh_file_serve_absolute(cl, path, download, range[0] ? range : NULL);
++	return true;
++}
++
++static bool control_proxy_encode_target(const char *input, char *output,
++					size_t len)
++{
++	static const char hex[] = "0123456789ABCDEF";
++	size_t used = 0;
++
++	for (; *input; input++) {
++		unsigned char value = *input;
++		bool safe = (value >= 'a' && value <= 'z') ||
++			(value >= 'A' && value <= 'Z') ||
++			(value >= '0' && value <= '9') ||
++			value == '-' || value == '_' || value == '.' || value == '~';
++		if (safe) {
++			if (used + 1 >= len)
++				return false;
++			output[used++] = value;
++		} else {
++			if (used + 3 >= len)
++				return false;
++			output[used++] = '%';
++			output[used++] = hex[value >> 4];
++			output[used++] = hex[value & 15];
++		}
++	}
++	output[used] = 0;
++	return true;
++}
++
++static bool control_proxy_url(const char *url)
++{
++	return !strncmp(url, "/api/v1/", 8) || !strcmp(url, "/api/v1") ||
++	       !strncmp(url, "/media/v1/", 10);
++}
++
++static void control_proxy_request(struct client *cl, char *url,
++				struct path_info *pi)
++{
++	struct dispatch_control_proxy *proxy = &cl->dispatch.control_proxy;
++	const char *authorization, *cookie, *api_key, *accept, *content_type;
++	const char *requested_with;
++	char remote[INET6_ADDRSTRLEN];
++	const void *remote_address;
++	bool media;
++	char encoded_target[PATH_MAX * 3];
++	(void) pi;
++
++	memset(proxy, 0, sizeof(*proxy));
++	blob_buf_init(&proxy->hdr, 0);
++	cl->dispatch.free = control_proxy_free;
++	proxy->finish.cb = control_proxy_finish;
++	media = control_proxy_is_media_url(url);
++	proxy->media = media;
++
++	if (cl->request.transfer_chunked) {
++		control_proxy_fail(cl, 400, "Bad Request", "bad_request");
++		return;
++	}
++	if (cl->request.content_length > CONTROL_PROXY_MAX_BODY) {
++		control_proxy_fail(cl, 413, "Payload Too Large", "payload_too_large");
++		return;
++	}
++	if (media && (cl->request.method != UH_HTTP_MSG_GET ||
++	    cl->request.content_length != 0 ||
++	    !control_proxy_media_url(proxy, url, proxy->backend_url,
++	      sizeof(proxy->backend_url)))) {
++		control_proxy_fail(cl, 400, "Bad Request", "bad_media_request");
++		return;
++	}
++	if (cl->request.method != UH_HTTP_MSG_GET &&
++	    cl->request.method != UH_HTTP_MSG_POST &&
++	    cl->request.method != UH_HTTP_MSG_PUT &&
++	    cl->request.method != UH_HTTP_MSG_DELETE) {
++		control_proxy_fail(cl, 405, "Method Not Allowed", "method_not_allowed");
++		return;
++	}
++
++	if (control_proxy_start_backend(cl, CONTROL_PROXY_PORT)) {
++		control_proxy_fail(cl, 502, "Bad Gateway", "bad_gateway");
++		return;
++	}
++
++	proxy->request_remaining = cl->request.content_length;
++	cl->dispatch.data_send = control_proxy_data_send;
++	cl->dispatch.write_cb = control_proxy_client_write;
++	proxy->timeout.cb = control_proxy_timeout;
++	uloop_timeout_set(&proxy->timeout, CONTROL_PROXY_TIMEOUT_MS);
++
++	proxy->authorizing = media;
++	if (media && !control_proxy_encode_target(url, encoded_target,
++	    sizeof(encoded_target))) {
++		control_proxy_fail(cl, 400, "Bad Request", "bad_media_request");
++		return;
++	}
++	if (media) {
++		ustream_printf(&proxy->backend.stream,
++			"GET /api/v1/internal/media-authorize?target=%s HTTP/1.1\r\n"
++			"Host: %s:%d\r\nConnection: close\r\nContent-Length: 0\r\n",
++			encoded_target, CONTROL_PROXY_HOST, CONTROL_PROXY_PORT);
++	} else {
++		ustream_printf(&proxy->backend.stream,
++			"%s %s HTTP/1.1\r\nHost: %s:%d\r\nConnection: close\r\n"
++			"Content-Length: %d\r\n",
++			http_methods[cl->request.method], url,
++			CONTROL_PROXY_HOST, CONTROL_PROXY_PORT,
++			cl->request.content_length);
++	}
++
++	authorization = control_proxy_header(cl, "authorization");
++	cookie = control_proxy_header(cl, "cookie");
++	api_key = control_proxy_header(cl, "x-api-key");
++	accept = control_proxy_header(cl, "accept");
++	content_type = control_proxy_header(cl, "content-type");
++	requested_with = control_proxy_header(cl, "x-requested-with");
++	if (authorization)
++		ustream_printf(&proxy->backend.stream, "Authorization: %s\r\n",
++			authorization);
++	if (cookie)
++		ustream_printf(&proxy->backend.stream, "Cookie: %s\r\n", cookie);
++	if (api_key)
++		ustream_printf(&proxy->backend.stream, "X-API-Key: %s\r\n", api_key);
++	if (!media && accept)
++		ustream_printf(&proxy->backend.stream, "Accept: %s\r\n", accept);
++	if (!media && content_type)
++		ustream_printf(&proxy->backend.stream, "Content-Type: %s\r\n",
++			content_type);
++	if (!media && requested_with && !strcmp(requested_with, "Thingino-WebUI"))
++		ustream_printf(&proxy->backend.stream,
++			"X-Requested-With: Thingino-WebUI\r\n");
++
++	remote_address = cl->peer_addr.family == AF_INET6 ?
++		(const void *) &cl->peer_addr.in6 : (const void *) &cl->peer_addr.in;
++	if (inet_ntop(cl->peer_addr.family, remote_address, remote, sizeof(remote)))
++		ustream_printf(&proxy->backend.stream,
++			"X-Thingino-Proxy: 1\r\nX-Thingino-Remote-Addr: %s\r\n",
++			remote);
++	ustream_printf(&proxy->backend.stream, "\r\n");
++}
++
++struct dispatch_handler control_proxy_dispatch = {
++	.check_url = control_proxy_url,
++	.handle_request = control_proxy_request,
++};
+diff --git a/file.c b/file.c
+index 81de399..39602a5 100644
+--- a/file.c
++++ b/file.c
+@@ -598,7 +598,17 @@ static void file_write_cb(struct client *cl)
+ 	int r;
+ 
+ 	while (cl->us->w.data_bytes < 256) {
+-		r = read(fd, uh_buf, sizeof(uh_buf));
++		size_t count = sizeof(uh_buf);
++
++		if (cl->dispatch.file.ranged) {
++			if (!cl->dispatch.file.remaining) {
++				uh_request_done(cl);
++				return;
++			}
++			if (count > cl->dispatch.file.remaining)
++				count = cl->dispatch.file.remaining;
++		}
++		r = read(fd, uh_buf, count);
+ 		if (r < 0) {
+ 			if (errno == EINTR)
+ 				continue;
+@@ -613,6 +623,8 @@ static void file_write_cb(struct client *cl)
+ 		}
+ 
+ 		uh_chunk_write(cl, uh_buf, r);
++		if (cl->dispatch.file.ranged)
++			cl->dispatch.file.remaining -= r;
+ 	}
+ }
+ 
+@@ -660,6 +672,129 @@ static void uh_file_data(struct client *cl, struct path_info *pi, int fd)
+ 	file_write_cb(cl);
+ }
+ 
++static bool uh_file_parse_range(const char *range, uint64_t size,
++				uint64_t *start, uint64_t *end)
++{
++	char *dash, *tail;
++	unsigned long long first, last;
++	char value[128];
++
++	if (!range || strncmp(range, "bytes=", 6) ||
++	    strlen(range + 6) >= sizeof(value) || strchr(range + 6, ','))
++		return false;
++	snprintf(value, sizeof(value), "%s", range + 6);
++	dash = strchr(value, '-');
++	if (!dash)
++		return false;
++	*dash++ = 0;
++	errno = 0;
++	if (!value[0]) {
++		last = strtoull(dash, &tail, 10);
++		if (errno || *tail || !last || !size)
++			return false;
++		if (last > size)
++			last = size;
++		*start = size - last;
++		*end = size - 1;
++		return true;
++	}
++	first = strtoull(value, &tail, 10);
++	if (errno || *tail || first >= size)
++		return false;
++	if (!dash[0]) {
++		last = size - 1;
++	} else {
++		errno = 0;
++		last = strtoull(dash, &tail, 10);
++		if (errno || *tail || last < first)
++			return false;
++		if (last >= size)
++			last = size - 1;
++	}
++	*start = first;
++	*end = last;
++	return true;
++}
++
++void uh_file_serve_absolute(struct client *cl, const char *path, bool download,
++			    const char *range)
++{
++	struct path_info pi = { 0 };
++	char resolved[PATH_MAX];
++	const char *name;
++	uint64_t range_start = 0, range_end = 0, content_length;
++	int fd;
++
++	if (!path || path[0] != '/' || !realpath(path, resolved) ||
++	    (strncmp(resolved, "/mnt/", 5) &&
++	     strncmp(resolved, "/media/", 7)) ||
++	    lstat(path, &pi.stat) || !S_ISREG(pi.stat.st_mode) ||
++	    S_ISLNK(pi.stat.st_mode)) {
++		uh_client_error(cl, 403, "Forbidden", NULL);
++		return;
++	}
++	fd = open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
++	if (fd < 0 || fstat(fd, &pi.stat) || !S_ISREG(pi.stat.st_mode)) {
++		if (fd >= 0)
++			close(fd);
++		uh_client_error(cl, 404, "Not Found", NULL);
++		return;
++	}
++	pi.phys = resolved;
++	pi.name = resolved;
++	cl->request.disable_chunked = true;
++	cl->dispatch.no_cache = true;
++	if (download) {
++		name = strrchr(resolved, '/');
++		name = name && name[1] ? name + 1 : "download";
++		if (strpbrk(name, "\"\\\r\n")) {
++			close(fd);
++			uh_client_error(cl, 400, "Bad Request", NULL);
++			return;
++		}
++		blobmsg_add_string(&cl->hdr_response, "Content-Disposition",
++			snprintf(uh_buf, sizeof(uh_buf),
++				 "attachment; filename=\"%s\"", name) > 0 ?
++			uh_buf : "attachment");
++	}
++	if (!range) {
++		uh_file_data(cl, &pi, fd);
++		return;
++	}
++	if (!uh_file_parse_range(range, pi.stat.st_size, &range_start, &range_end) ||
++	    lseek(fd, range_start, SEEK_SET) < 0) {
++		close(fd);
++		uh_http_header(cl, 416, "Range Not Satisfiable");
++		ustream_printf(cl->us, "Content-Range: bytes */%" PRIu64 "\r\n"
++				       "Content-Length: 0\r\n\r\n",
++			       (uint64_t) pi.stat.st_size);
++		uh_request_done(cl);
++		return;
++	}
++	content_length = range_end - range_start + 1;
++	uh_http_header(cl, 206, "Partial Content");
++	uh_file_response_ok_hdrs(cl, &pi.stat);
++	ustream_printf(cl->us, "Accept-Ranges: bytes\r\n"
++			       "Content-Range: bytes %" PRIu64 "-%" PRIu64
++			       "/%" PRIu64 "\r\n"
++			       "Content-Type: %s\r\n"
++			       "Content-Length: %" PRIu64 "\r\n\r\n",
++		       range_start, range_end, (uint64_t) pi.stat.st_size,
++		       uh_file_mime_lookup(pi.name), content_length);
++	if (cl->request.method == UH_HTTP_MSG_HEAD) {
++		uh_request_done(cl);
++		close(fd);
++		return;
++	}
++	cl->dispatch.file.fd = fd;
++	cl->dispatch.file.remaining = content_length;
++	cl->dispatch.file.ranged = true;
++	cl->dispatch.write_cb = file_write_cb;
++	cl->dispatch.free = uh_file_free;
++	cl->dispatch.close_fds = uh_file_free;
++	file_write_cb(cl);
++}
++
+ static bool __handle_file_request(struct client *cl, char *url, bool is_error_handler);
+ 
+ static void uh_file_request(struct client *cl, const char *url,
+diff --git a/main.c b/main.c
+index 24619fb..542e890 100644
+--- a/main.c
++++ b/main.c
+@@ -316,6 +316,7 @@ int main(int argc, char **argv)
+ 
+ 	BUILD_BUG_ON(sizeof(uh_buf) < PATH_MAX);
+ 
++	uh_dispatch_add(&control_proxy_dispatch);
+ 	uh_dispatch_add(&cgi_dispatch);
+ 	init_defaults_pre();
+ 	signal(SIGPIPE, SIG_IGN);
+diff --git a/uhttpd.h b/uhttpd.h
+index 47fb766..116213f 100644
+--- a/uhttpd.h
++++ b/uhttpd.h
+@@ -217,6 +217,34 @@ struct dispatch_proc {
+ 	char status_msg[64];
+ };
+ 
++struct dispatch_control_proxy {
++	struct ustream_fd backend;
++	struct uloop_timeout timeout;
++	struct uloop_timeout finish;
++	struct blob_buf hdr;
++	size_t request_remaining;
++	size_t response_remaining;
++	size_t header_bytes;
++	int status_code;
++	char status_msg[64];
++	bool initialized;
++	bool status_seen;
++	bool content_length_seen;
++	bool content_type_seen;
++	bool content_disposition_seen;
++	bool location_seen;
++	bool set_cookie_seen;
++	bool headers_done;
++	bool finishing;
++	bool media;
++	bool authorizing;
++	bool local_file;
++	bool local_file_download;
++	bool stream_until_eof;
++	char backend_url[256];
++	char local_file_path[PATH_MAX];
++};
++
+ struct dispatch_handler {
+ 	struct list_head list;
+ 	bool script;
+@@ -267,8 +295,11 @@ struct dispatch {
+ 		struct {
+ 			struct blob_attr **hdr;
+ 			int fd;
++			uint64_t remaining;
++			bool ranged;
+ 		} file;
+ 		struct dispatch_proc proc;
++		struct dispatch_control_proxy control_proxy;
+ #ifdef HAVE_UBUS
+ 		struct dispatch_ubus ubus;
+ #endif
+@@ -306,6 +337,7 @@ extern struct config conf;
+ extern const char * const http_versions[];
+ extern const char * const http_methods[];
+ extern struct dispatch_handler cgi_dispatch;
++extern struct dispatch_handler control_proxy_dispatch;
+ 
+ void uh_index_add(const char *filename);
+ 
+@@ -362,6 +394,8 @@ int uh_handler_add(const char *file);
+ int uh_handler_run(struct client *cl, char **url, bool fallback);
+ 
+ struct path_info *uh_path_lookup(struct client *cl, const char *url);
++void uh_file_serve_absolute(struct client *cl, const char *path, bool download,
++			    const char *range);
+ 
+ static inline void uh_client_ref(struct client *cl)
+ {

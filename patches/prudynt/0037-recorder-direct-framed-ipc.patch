@@ -1,0 +1,311 @@
+diff --git a/src/JsonAPI.cpp b/src/JsonAPI.cpp
+index efe2f8b..ff25e25 100644
+--- a/src/JsonAPI.cpp
++++ b/src/JsonAPI.cpp
+@@ -1358,157 +1358,51 @@ void handle_general(JsonValue *obj, std::string &out, bool &sep) {
+   }
+ }
+ 
+-void handle_mp4(JsonValue *obj, std::string &out, bool &sep) {
++bool handle_mp4(JsonValue *obj, std::string &out, bool &sep) {
+   add_key(out, sep, "mp4", "{");
+   bool s2 = false;
+   bool wrote = false;
++  bool request_ok = true;
+ 
+-  // Handle start command
+   if (JsonValue *start = obj_get(obj, "start")) {
+     if (start->type == JSON_OBJECT) {
+-      int channel = 0;
++      int channel = -1;
+       JsonValue *ch = obj_get(start, "channel");
+       if (ch && ch->type == JSON_NUMBER) {
+         channel = (int)ch->value.number.integer;
+       }
+-
+-      if (channel >= 0 && channel < NUM_VIDEO_CHANNELS) {
+-        // Build the FIFO command to start recording
+-        std::string fifo_cmd = "START ch=" + std::to_string(channel);
+-
+-        // Send mount and directory with hostname expansion
+-        if (cfg && cfg->recorder.mount && cfg->recorder.mount[0]) {
+-          fifo_cmd += " mount=" + std::string(cfg->recorder.mount);
+-        }
+-
+-        if (cfg && cfg->recorder.device_path && cfg->recorder.device_path[0]) {
+-          std::string device_path = cfg->recorder.device_path;
+-          // Expand %hostname variable
+-          size_t pos = device_path.find("%hostname");
+-          if (pos != std::string::npos) {
+-            char hostname[256] = {0};
+-            gethostname(hostname, sizeof(hostname) - 1);
+-            device_path.replace(pos, 9, hostname);
+-          }
+-          fifo_cmd += " dir=" + device_path;
+-        }
+-
+-        if (cfg && cfg->recorder.filename && cfg->recorder.filename[0]) {
+-          fifo_cmd += " template=" + std::string(cfg->recorder.filename);
+-        }
+-
+-        // Enable loop mode for continuous recording until manual stop
+-        fifo_cmd += " loop=1";
+-
+-        // Use duration from config or JSON for segment length
+-        JsonValue *dur = obj_get(start, "duration");
+-        if (dur && dur->type == JSON_NUMBER) {
+-          fifo_cmd += " dur=" + std::to_string((int)dur->value.number.integer);
+-        } else if (cfg && cfg->recorder.duration_s > 0) {
+-          fifo_cmd += " dur=" + std::to_string(cfg->recorder.duration_s);
+-        }
+-
+-        // Write to mp4ctl FIFO
+-        int fd = open("/run/prudynt/mp4ctl", O_WRONLY | O_NONBLOCK);
+-        if (fd >= 0) {
+-          fifo_cmd += "\n";
+-          ssize_t written = write(fd, fifo_cmd.c_str(), fifo_cmd.length());
+-          close(fd);
+-
+-          add_key(out, s2, "start");
+-          if (written > 0) {
+-            add_str(out, "ok");
+-          } else {
+-            add_str(out, "error");
+-          }
+-        } else {
+-          add_key(out, s2, "start");
+-          add_str(out, "fifo_unavailable");
+-        }
+-        wrote = true;
+-      } else {
+-        add_key(out, s2, "start");
+-        add_str(out, "invalid_channel");
+-        wrote = true;
++      int duration_seconds = 0;
++      JsonValue *duration = obj_get(start, "duration");
++      if (duration && duration->type == JSON_NUMBER) {
++        duration_seconds = (int)duration->value.number.integer;
+       }
++      const bool ok = MP4ControlSocket::startLoop(channel, duration_seconds);
++      add_key(out, s2, "start");
++      add_str(out, ok ? "ok" : "error");
++      wrote = true;
++      request_ok = ok && request_ok;
++    } else {
++      request_ok = false;
+     }
+   }
+ 
+-  // Handle stop command
+   if (JsonValue *stop = obj_get(obj, "stop")) {
++    int channel = -2;
+     if (stop->type == JSON_OBJECT) {
+-      int channel = -1;
+       JsonValue *ch = obj_get(stop, "channel");
+       if (ch && ch->type == JSON_NUMBER) {
+         channel = (int)ch->value.number.integer;
+       }
+-
+-      if (channel >= 0 && channel < NUM_VIDEO_CHANNELS) {
+-        // Stop loop recording for specific channel
+-        std::string fifo_cmd = "STOP LOOP ch=" + std::to_string(channel) + "\n";
+-        int fd = open("/run/prudynt/mp4ctl", O_WRONLY | O_NONBLOCK);
+-        if (fd >= 0) {
+-          ssize_t written = write(fd, fifo_cmd.c_str(), fifo_cmd.length());
+-          close(fd);
+-
+-          add_key(out, s2, "stop");
+-          if (written > 0) {
+-            add_str(out, "ok");
+-          } else {
+-            add_str(out, "error");
+-          }
+-        } else {
+-          add_key(out, s2, "stop");
+-          add_str(out, "fifo_unavailable");
+-        }
+-        wrote = true;
+-      } else if (channel == -1) {
+-        // Stop all channels
+-        std::string fifo_cmd = "STOP\n";
+-        int fd = open("/run/prudynt/mp4ctl", O_WRONLY | O_NONBLOCK);
+-        if (fd >= 0) {
+-          ssize_t written = write(fd, fifo_cmd.c_str(), fifo_cmd.length());
+-          close(fd);
+-
+-          add_key(out, s2, "stop");
+-          if (written > 0) {
+-            add_str(out, "ok");
+-          } else {
+-            add_str(out, "error");
+-          }
+-        } else {
+-          add_key(out, s2, "stop");
+-          add_str(out, "fifo_unavailable");
+-        }
+-        wrote = true;
+-      } else {
+-        add_key(out, s2, "stop");
+-        add_str(out, "invalid_channel");
+-        wrote = true;
+-      }
+     } else if (stop->type == JSON_NULL) {
+-      // Stop all channels
+-      std::string fifo_cmd = "STOP\n";
+-      int fd = open("/run/prudynt/mp4ctl", O_WRONLY | O_NONBLOCK);
+-      if (fd >= 0) {
+-        ssize_t written = write(fd, fifo_cmd.c_str(), fifo_cmd.length());
+-        close(fd);
+-
+-        add_key(out, s2, "stop");
+-        if (written > 0) {
+-          add_str(out, "ok");
+-        } else {
+-          add_str(out, "error");
+-        }
+-      } else {
+-        add_key(out, s2, "stop");
+-        add_str(out, "fifo_unavailable");
+-      }
+-      wrote = true;
++      channel = -1;
+     }
++    const bool ok = MP4ControlSocket::stop(channel);
++    add_key(out, s2, "stop");
++    add_str(out, ok ? "ok" : "error");
++    wrote = true;
++    request_ok = ok && request_ok;
+   }
+ 
+-  // Handle status query
+   if (JsonValue *status = obj_get(obj, "status")) {
+     if (status->type == JSON_NULL || status->type == JSON_OBJECT) {
+       add_key(out, s2, "status", "{");
+@@ -1516,7 +1410,7 @@ void handle_mp4(JsonValue *obj, std::string &out, bool &sep) {
+ 
+       for (int ch = 0; ch < NUM_VIDEO_CHANNELS; ch++) {
+         add_key(out, s3, ("ch" + std::to_string(ch)).c_str());
+-        add_bool(out, global_mp4_recorders[ch].isActive());
++        add_bool(out, MP4ControlSocket::active(ch));
+       }
+ 
+       out += "}";
+@@ -1526,9 +1420,10 @@ void handle_mp4(JsonValue *obj, std::string &out, bool &sep) {
+ 
+   if (!wrote) {
+     out.erase(out.size() - 1);
+-    return;
++    return false;
+   }
+   out += "}";
++  return request_ok;
+ }
+ } // namespace
+ 
+@@ -1604,7 +1499,7 @@ bool process_json(const std::string &in, std::string &out) {
+     } else if (!strcmp(k, "action") && v && v->type == JSON_OBJECT) {
+       handle_action(v, out, sep);
+     } else if (!strcmp(k, "mp4") && v && v->type == JSON_OBJECT) {
+-      handle_mp4(v, out, sep);
++      request_ok = handle_mp4(v, out, sep) && request_ok;
+     }
+   }
+ 
+diff --git a/src/MP4ControlSocket.cpp b/src/MP4ControlSocket.cpp
+index 74379b1..742271f 100644
+--- a/src/MP4ControlSocket.cpp
++++ b/src/MP4ControlSocket.cpp
+@@ -1243,6 +1243,10 @@ void start_loop_for_channel(const RecordingLoopParams &params) {
+ }
+ 
+ bool handle_loop_start(const StartCommandOptions &options) {
++  if (recorder_shutdown_requested.load(std::memory_order_acquire)) {
++    LOG_WARN("MP4ControlSocket: refusing loop start during shutdown");
++    return false;
++  }
+   bool ok = false;
+   auto params = build_loop_params(options, &ok);
+   if (!ok) {
+@@ -1274,6 +1278,43 @@ void MP4ControlSocket::retireFailedRecording(int channel,
+   stop_recording_locked(channel);
+ }
+ 
++bool MP4ControlSocket::startLoop(int channel, int duration_seconds) {
++  if (channel < 0 || channel >= NUM_VIDEO_CHANNELS || duration_seconds < 0 ||
++      duration_seconds > 86400) {
++    return false;
++  }
++  StartCommandOptions options;
++  options.channel = channel;
++  options.channelProvided = true;
++  options.loop = true;
++  if (duration_seconds > 0) {
++    options.duration_s = duration_seconds;
++    options.durationProvided = true;
++  }
++  return handle_loop_start(options);
++}
++
++bool MP4ControlSocket::stop(int channel) {
++  if (channel == -1) {
++    stop_all_loops();
++    cancel_all_stop_timers();
++    stop_all_recordings();
++    return true;
++  }
++  if (channel < 0 || channel >= NUM_VIDEO_CHANNELS) {
++    return false;
++  }
++  stop_loop_for_channel(channel);
++  cancel_stop_timer(channel);
++  stop_recording(channel);
++  return true;
++}
++
++bool MP4ControlSocket::active(int channel) {
++  return channel >= 0 && channel < NUM_VIDEO_CHANNELS &&
++         global_mp4_recorders[channel].isActive();
++}
++
+ void MP4ControlSocket::stopAll() {
+   recorder_shutdown_requested.store(true, std::memory_order_release);
+   stop_all_loops();
+diff --git a/src/MP4ControlSocket.hpp b/src/MP4ControlSocket.hpp
+index 76fbcad..6db2775 100644
+--- a/src/MP4ControlSocket.hpp
++++ b/src/MP4ControlSocket.hpp
+@@ -4,8 +4,8 @@
+ #include <string>
+ #include <thread>
+ 
+-// Simple FIFO-based control helper for MP4 recording.
+-// Uses a named pipe and accepts text commands (one per line):
++// In-process MP4 recorder control with a legacy FIFO adapter.
++// The named pipe accepts text commands (one per line):
+ //   START <path>  - begin recording to given file
+ //   STOP          - stop current recording
+ // Runs in its own thread and uses global_mp4_recorders defined in globals.
+@@ -13,6 +13,9 @@
+ class MP4ControlSocket {
+ public:
+   static void retireFailedRecording(int channel, uint64_t generation);
++  static bool startLoop(int channel, int duration_seconds = 0);
++  static bool stop(int channel);
++  static bool active(int channel);
+   static void stopAll();
+   static void run();
+ };
+diff --git a/tests/run_host_tests.sh b/tests/run_host_tests.sh
+index 0553cd4..173ae7c 100755
+--- a/tests/run_host_tests.sh
++++ b/tests/run_host_tests.sh
+@@ -30,6 +30,9 @@ grep -q '::rename(temporary_path.c_str(), state_path.c_str())' \
+   "$repo_dir/src/MP4ControlSocket.cpp"
+ grep -q 'IMP system initialization failed; refusing to start media workers' \
+   "$repo_dir/src/main.cpp"
++grep -q 'MP4ControlSocket::startLoop(channel, duration_seconds)' \
++  "$repo_dir/src/JsonAPI.cpp"
++! grep -q 'open("/run/prudynt/mp4ctl"' "$repo_dir/src/JsonAPI.cpp"
+ 
+ ${CXX:-c++} -std=c++20 -Wall -Wextra -Werror -pthread \
+   -I"$repo_dir/src" "$repo_dir/tests/test_media_queue.cpp" -o "$test_bin"

@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "status_date": "2026-08-31",
+  "scopes": [
+    {
+      "id": "source-publication",
+      "ready": true,
+      "gates": [
+        {
+          "id": "public-tree-policy",
+          "status": "closed",
+          "requirement": "The exported tree is allowlisted, text-only, and scanned for high-confidence private material.",
+          "evidence": ["policy/public-tree.json", "scripts/check_public_tree.py"]
+        },
+        {
+          "id": "security-contact",
+          "status": "closed",
+          "requirement": "A private vulnerability-reporting route is documented.",
+          "evidence": ["SECURITY.md"]
+        },
+        {
+          "id": "webui-ci",
+          "status": "closed",
+          "requirement": "CI runs WebUI typecheck, unit tests, production build, bundle scan, and Chromium fixtures.",
+          "evidence": [".github/workflows/check.yml", "webui/playwright.config.ts"]
+        },
+        {
+          "id": "prudynt-patch-disclosure",
+          "status": "closed",
+          "requirement": "The complete required Prudynt patch series is published with the unresolved upstream license status disclosed and without claiming MIT or open-source terms for Prudynt-derived context.",
+          "evidence": ["profiles/dlink-dcs6100lhv2-a1/source-profile.json", "third_party/LICENSE_REVIEW.md", "third_party/NOTICE.md"]
+        }
+      ]
+    },
+    {
+      "id": "firmware-release",
+      "ready": false,
+      "gates": [
+        {
+          "id": "prudynt-license-grant",
+          "status": "blocked",
+          "requirement": "The final Prudynt source and binary distribution terms are established.",
+          "evidence": ["third_party/LICENSE_REVIEW.md"]
+        },
+        {
+          "id": "rtl8188fu-license-closure",
+          "status": "blocked",
+          "requirement": "The exact GPL-2.0 and BSD-licensed RTL8188FU source closure, notices, and corresponding source are recorded.",
+          "evidence": [
+            "third_party/LICENSE_REVIEW.md",
+            "third_party/licenses/RTL8188FU-GPL-2.0-only.txt",
+            "third_party/licenses/RTL8188FU-hostap-BSD-3-Clause.txt"
+          ]
+        },
+        {
+          "id": "raptor-corresponding-source",
+          "status": "blocked",
+          "requirement": "The exact Raptor rwd link closure, notices, local patches, and corresponding-source delivery are reviewed together.",
+          "evidence": ["components/raptor-rwd/raptor-lock.json", "third_party/NOTICE.md"]
+        },
+        {
+          "id": "reproducible-firmware",
+          "status": "blocked",
+          "requirement": "Two clean builds from documented public and owner-acquired inputs are byte-identical.",
+          "evidence": ["docs/build.md", "docs/testing.md"]
+        },
+        {
+          "id": "content-addressed-candidate",
+          "status": "blocked",
+          "requirement": "The exact firmware candidate passes management, media, browser, and resource acceptance.",
+          "evidence": ["docs/testing.md"]
+        },
+        {
+          "id": "physical-failure-recovery",
+          "status": "blocked",
+          "requirement": "A supported pre-write RAM path captures two complete original partition sets, and interrupted write, corrupt data, reset, reinstall, final-layout recovery, and same-device stock restoration pass on physical hardware with complete readback.",
+          "evidence": ["docs/recovery.md", "profiles/dlink-dcs6100lhv2-a1/uartless-release-gate.json"]
+        },
+        {
+          "id": "second-camera",
+          "status": "blocked",
+          "requirement": "The published path passes on a second independently recovered DCS-6100LHV2 A1.",
+          "evidence": ["docs/status.md"]
+        },
+        {
+          "id": "host-platforms",
+          "status": "blocked",
+          "requirement": "The macOS, Linux, and Windows host contracts pass CI; each claimed physical-media path still needs recorded removable-media acceptance.",
+          "evidence": [".github/workflows/check.yml", "docs/installation.md", "docs/status.md"]
+        }
+      ]
+    }
+  ]
+}

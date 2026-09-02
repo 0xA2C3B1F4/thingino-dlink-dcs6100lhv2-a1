@@ -1,0 +1,22 @@
+diff --git a/src/JsonAPI.cpp b/src/JsonAPI.cpp
+index 4dbaefe..1e29ac7 100644
+--- a/src/JsonAPI.cpp
++++ b/src/JsonAPI.cpp
+@@ -340,6 +340,7 @@ void JsonAPI::addImage(JsonDoc &out, JsonValue &s2, JsonValue *obj,
+       cfg->set<int>("image.running_mode", mode);
+       hal::isp::set_running_mode(cfg->image.running_mode);
+ 
++#if !defined(DCS_DLINK_MEDIA_READY)
+       // Night mode runs streams at half the configured FPS to reduce
+       // sensor noise and bandwidth.  This is a runtime adjustment only
+       // — the config file is left alone so the user's value survives
+@@ -350,6 +351,7 @@ void JsonAPI::addImage(JsonDoc &out, JsonValue &s2, JsonValue *obj,
+         int effective_fps = std::max(1, cfg_fps / divisor);
+         hal::encoder::set_framerate(ch, effective_fps, 1);
+       }
++#endif
+     }
+     add_key(out, s2, "running_mode");
+     add_num(out, cfg->get<int>("image.running_mode"));
+-- 
+2.39.5

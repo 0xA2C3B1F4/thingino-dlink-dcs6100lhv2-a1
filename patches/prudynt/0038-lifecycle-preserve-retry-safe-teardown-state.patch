@@ -1,0 +1,439 @@
+diff --git a/src/IMPSystem.cpp b/src/IMPSystem.cpp
+index 2291a9b..e1f4016 100644
+--- a/src/IMPSystem.cpp
++++ b/src/IMPSystem.cpp
+@@ -617,34 +617,42 @@ int IMPSystem::init() {
+ 
+ int IMPSystem::destroy() {
+   LOG_INFO("IMPSystem::destroy() begin");
+-  const int ret = lifecycle_.teardown([&](IMPSystemStage stage) {
+-    int stage_ret = 0;
+-    switch (stage) {
+-    case IMPSystemStage::TuningEnabled:
+-      stage_ret = IMP_ISP_DisableTuning();
+-      LOG_DEBUG_OR_ERROR(stage_ret, "IMP_ISP_DisableTuning()");
+-      break;
+-    case IMPSystemStage::SystemInitialized:
+-      stage_ret = IMP_System_Exit();
+-      LOG_DEBUG_OR_ERROR(stage_ret, "IMP_System_Exit()");
+-      break;
+-    case IMPSystemStage::SensorEnabled:
+-      stage_ret = hal::isp::disable_sensor();
+-      LOG_DEBUG_OR_ERROR(stage_ret, "hal::isp::disable_sensor()");
+-      break;
+-    case IMPSystemStage::SensorAdded:
+-      stage_ret = hal::isp::del_sensor(&sinfo);
+-      LOG_DEBUG_OR_ERROR(stage_ret, "hal::isp::del_sensor(&sinfo)");
+-      break;
+-    case IMPSystemStage::IspOpen:
+-      stage_ret = IMP_ISP_Close();
+-      LOG_DEBUG_OR_ERROR(stage_ret, "IMP_ISP_Close()");
+-      break;
+-    case IMPSystemStage::Count:
+-      break;
+-    }
+-    return stage_ret;
+-  });
++  auto cleanup_once = [&]() {
++    return lifecycle_.teardown([&](IMPSystemStage stage) {
++      int stage_ret = 0;
++      switch (stage) {
++      case IMPSystemStage::TuningEnabled:
++        stage_ret = IMP_ISP_DisableTuning();
++        LOG_DEBUG_OR_ERROR(stage_ret, "IMP_ISP_DisableTuning()");
++        break;
++      case IMPSystemStage::SystemInitialized:
++        stage_ret = IMP_System_Exit();
++        LOG_DEBUG_OR_ERROR(stage_ret, "IMP_System_Exit()");
++        break;
++      case IMPSystemStage::SensorEnabled:
++        stage_ret = hal::isp::disable_sensor();
++        LOG_DEBUG_OR_ERROR(stage_ret, "hal::isp::disable_sensor()");
++        break;
++      case IMPSystemStage::SensorAdded:
++        stage_ret = hal::isp::del_sensor(&sinfo);
++        LOG_DEBUG_OR_ERROR(stage_ret, "hal::isp::del_sensor(&sinfo)");
++        break;
++      case IMPSystemStage::IspOpen:
++        stage_ret = IMP_ISP_Close();
++        LOG_DEBUG_OR_ERROR(stage_ret, "IMP_ISP_Close()");
++        break;
++      case IMPSystemStage::Count:
++        break;
++      }
++      return stage_ret;
++    });
++  };
++
++  int ret = cleanup_once();
++  if (ret != 0) {
++    LOG_WARN("IMPSystem cleanup failed; retrying while dependencies are intact");
++    ret = cleanup_once();
++  }
+ 
+   if (ret == 0) {
+     LOG_INFO("IMPSystem::destroy() complete");
+diff --git a/src/IMPSystemLifecycle.hpp b/src/IMPSystemLifecycle.hpp
+index f83e844..032a8b0 100644
+--- a/src/IMPSystemLifecycle.hpp
++++ b/src/IMPSystemLifecycle.hpp
+@@ -30,20 +30,20 @@ public:
+   }
+ 
+   template <typename StopStage> int teardown(StopStage &&stop_stage) {
+-    int first_failure = 0;
+     for (std::size_t index = active_.size(); index > 0; --index) {
+       const std::size_t stage_index = index - 1;
+       if (!active_[stage_index]) continue;
+ 
+       const int ret = stop_stage(static_cast<IMPSystemStage>(stage_index));
+-      if (ret != 0 && first_failure == 0) first_failure = ret;
+-
+-      // Teardown is best effort and single pass. Later vendor operations may
+-      // invalidate an earlier stage even if its explicit stop returned an
+-      // error, so never retry a stale state transition from a destructor.
++      if (ret != 0) {
++        // Preserve the failing stage and its prerequisites. Clearing them or
++        // continuing through their dependencies would make a retry unsafe and
++        // could make a partial teardown look complete.
++        return ret;
++      }
+       active_[stage_index] = false;
+     }
+-    return first_failure;
++    return 0;
+   }
+ 
+ private:
+diff --git a/src/Motion.cpp b/src/Motion.cpp
+index 23a2f3b..3d433fe 100644
+--- a/src/Motion.cpp
++++ b/src/Motion.cpp
+@@ -161,7 +161,9 @@ int Motion::init() {
+   int ret;
+ 
+   ret = IMP_IVS_CreateGroup(0);
+-  LOG_DEBUG_OR_ERROR_AND_EXIT(ret, "IMP_IVS_CreateGroup(0)");
++  LOG_DEBUG_OR_ERROR(ret, "IMP_IVS_CreateGroup(0)");
++  if (ret != 0) return ret;
++  lifecycle_.mark(MotionStage::GroupCreated);
+ 
+   // automatically set frame size / height
+   ret = IMP_Encoder_GetChnAttr(cfg->motion.monitor_stream, &channelAttributes);
+@@ -291,17 +293,38 @@ int Motion::init() {
+   }
+ 
+   move_intf = IMP_IVS_CreateMoveInterface(&move_param);
++  if (move_intf == nullptr) {
++    LOG_ERROR("IMP_IVS_CreateMoveInterface() returned null");
++    exit();
++    return -1;
++  }
++  lifecycle_.mark(MotionStage::InterfaceCreated);
+ 
+   ret = IMP_IVS_CreateChn(ivsChn, move_intf);
+-  LOG_DEBUG_OR_ERROR_AND_EXIT(ret,
+-                              "IMP_IVS_CreateChn(" << ivsChn << ", move_intf)");
++  LOG_DEBUG_OR_ERROR(ret,
++                     "IMP_IVS_CreateChn(" << ivsChn << ", move_intf)");
++  if (ret != 0) {
++    exit();
++    return ret;
++  }
++  lifecycle_.mark(MotionStage::ChannelCreated);
+ 
+   ret = IMP_IVS_RegisterChn(ivsGrp, ivsChn);
+-  LOG_DEBUG_OR_ERROR_AND_EXIT(ret, "IMP_IVS_RegisterChn(" << ivsGrp << ", "
+-                                                          << ivsChn << ")");
++  LOG_DEBUG_OR_ERROR(ret, "IMP_IVS_RegisterChn(" << ivsGrp << ", "
++                                                 << ivsChn << ")");
++  if (ret != 0) {
++    exit();
++    return ret;
++  }
++  lifecycle_.mark(MotionStage::ChannelRegistered);
+ 
+   ret = IMP_IVS_StartRecvPic(ivsChn);
+-  LOG_DEBUG_OR_ERROR_AND_EXIT(ret, "IMP_IVS_StartRecvPic(" << ivsChn << ")");
++  LOG_DEBUG_OR_ERROR(ret, "IMP_IVS_StartRecvPic(" << ivsChn << ")");
++  if (ret != 0) {
++    exit();
++    return ret;
++  }
++  lifecycle_.mark(MotionStage::Receiving);
+ 
+   fs = {/**< Device ID */ DEV_ID_FS,
+         /**< Group ID */ cfg->motion.monitor_stream,
+@@ -312,33 +335,61 @@ int Motion::init() {
+               /**< output ID */ 0};
+ 
+   ret = IMP_System_Bind(&fs, &ivs_cell);
+-  LOG_DEBUG_OR_ERROR_AND_EXIT(ret, "IMP_System_Bind(&fs, &ivs_cell)");
++  LOG_DEBUG_OR_ERROR(ret, "IMP_System_Bind(&fs, &ivs_cell)");
++  if (ret != 0) {
++    exit();
++    return ret;
++  }
++  lifecycle_.mark(MotionStage::Bound);
+ 
+-  return ret;
++  return 0;
+ }
+ 
+ int Motion::exit() {
+-  int ret;
+-
+   LOG_DEBUG("Exit motion detection.");
+-
+-  ret = IMP_IVS_StopRecvPic(ivsChn);
+-  LOG_DEBUG_OR_ERROR(ret, "IMP_IVS_StopRecvPic(0)");
+-
+-  ret = IMP_System_UnBind(&fs, &ivs_cell);
+-  LOG_DEBUG_OR_ERROR_AND_EXIT(ret, "IMP_System_UnBind(&fs, &ivs_cell)");
+-
+-  ret = IMP_IVS_UnRegisterChn(ivsChn);
+-  LOG_DEBUG_OR_ERROR(ret, "IMP_IVS_UnRegisterChn(0)");
+-
+-  ret = IMP_IVS_DestroyChn(ivsChn);
+-  LOG_DEBUG_OR_ERROR(ret, "IMP_IVS_DestroyChn(0)");
+-
+-  ret = IMP_IVS_DestroyGroup(ivsGrp);
+-  LOG_DEBUG_OR_ERROR(ret, "IMP_IVS_DestroyGroup(0)");
+-
+-  IMP_IVS_DestroyMoveInterface(move_intf);
+-
++  auto cleanup_once = [&]() {
++    return lifecycle_.teardown([&](MotionStage stage) {
++      int ret = 0;
++      switch (stage) {
++      case MotionStage::Receiving:
++        ret = IMP_IVS_StopRecvPic(ivsChn);
++        LOG_DEBUG_OR_ERROR(ret, "IMP_IVS_StopRecvPic(0)");
++        break;
++      case MotionStage::Bound:
++        ret = IMP_System_UnBind(&fs, &ivs_cell);
++        LOG_DEBUG_OR_ERROR(ret, "IMP_System_UnBind(&fs, &ivs_cell)");
++        break;
++      case MotionStage::ChannelRegistered:
++        ret = IMP_IVS_UnRegisterChn(ivsChn);
++        LOG_DEBUG_OR_ERROR(ret, "IMP_IVS_UnRegisterChn(0)");
++        break;
++      case MotionStage::ChannelCreated:
++        ret = IMP_IVS_DestroyChn(ivsChn);
++        LOG_DEBUG_OR_ERROR(ret, "IMP_IVS_DestroyChn(0)");
++        break;
++      case MotionStage::InterfaceCreated:
++        IMP_IVS_DestroyMoveInterface(move_intf);
++        move_intf = nullptr;
++        break;
++      case MotionStage::GroupCreated:
++        ret = IMP_IVS_DestroyGroup(ivsGrp);
++        LOG_DEBUG_OR_ERROR(ret, "IMP_IVS_DestroyGroup(0)");
++        break;
++      case MotionStage::Count:
++        break;
++      }
++      return ret;
++    });
++  };
++
++  int ret = cleanup_once();
++  if (ret != 0) {
++    LOG_WARN("Motion cleanup failed; retrying while dependencies are intact");
++    ret = cleanup_once();
++  }
++  if (ret != 0) {
++    LOG_ERROR("Motion cleanup remains incomplete = " << ret);
++  }
+   return ret;
+ }
+ 
+diff --git a/src/Motion.hpp b/src/Motion.hpp
+index e8ec046..4f5fcd5 100644
+--- a/src/Motion.hpp
++++ b/src/Motion.hpp
+@@ -4,6 +4,7 @@
+ #include "Config.hpp"
+ #include "Logger.hpp"
+ #include "MotionEventOutput.hpp"
++#include "MotionLifecycle.hpp"
+ #include "globals.hpp"
+ #include "imp/imp_ivs.h"
+ #include "imp/imp_ivs_move.h"
+@@ -26,13 +27,14 @@ private:
+   std::string getConfigPath(const char *itemName);
+ 
+   IMP_IVS_MoveParam move_param;
+-  IMPIVSInterface *move_intf;
++  IMPIVSInterface *move_intf = nullptr;
+   std::thread detect_thread;
+ 
+   IMPCell fs = {};
+   IMPCell ivs_cell = {};
+ 
+   IMPEncoderCHNAttr channelAttributes;
++  MotionLifecycle lifecycle_{};
+ };
+ 
+ #endif /* Motion_hpp */
+diff --git a/src/MotionLifecycle.hpp b/src/MotionLifecycle.hpp
+new file mode 100644
+index 0000000..2149139
+--- /dev/null
++++ b/src/MotionLifecycle.hpp
+@@ -0,0 +1,51 @@
++#pragma once
++
++#include <array>
++#include <cstddef>
++
++enum class MotionStage : std::size_t {
++  GroupCreated = 0,
++  InterfaceCreated,
++  ChannelCreated,
++  ChannelRegistered,
++  Bound,
++  Receiving,
++  Count,
++};
++
++class MotionLifecycle {
++public:
++  void mark(MotionStage stage) noexcept {
++    active_[static_cast<std::size_t>(stage)] = true;
++  }
++
++  bool active(MotionStage stage) const noexcept {
++    return active_[static_cast<std::size_t>(stage)];
++  }
++
++  bool empty() const noexcept {
++    for (bool stage_active : active_) {
++      if (stage_active) return false;
++    }
++    return true;
++  }
++
++  template <typename StopStage> int teardown(StopStage &&stop_stage) {
++    for (std::size_t index = active_.size(); index > 0; --index) {
++      const std::size_t stage_index = index - 1;
++      if (!active_[stage_index]) continue;
++
++      const int ret = stop_stage(static_cast<MotionStage>(stage_index));
++      if (ret != 0) {
++        // Keep this stage and all of its prerequisites active. A later retry
++        // can then resume without operating on already-destroyed dependencies.
++        return ret;
++      }
++      active_[stage_index] = false;
++    }
++    return 0;
++  }
++
++private:
++  std::array<bool, static_cast<std::size_t>(MotionStage::Count)> active_{};
++};
+diff --git a/tests/test_release_error_handling.cpp b/tests/test_release_error_handling.cpp
+index 5334185..b052a45 100644
+--- a/tests/test_release_error_handling.cpp
++++ b/tests/test_release_error_handling.cpp
+@@ -1,5 +1,6 @@
+ #include "IMPSystemLifecycle.hpp"
+ #include "Logger.hpp"
++#include "MotionLifecycle.hpp"
+ 
+ #include <cassert>
+ #include <string>
+@@ -18,6 +19,20 @@ int fatal_operation(int value) {
+   LOG_DEBUG_OR_ERROR_AND_EXIT(evaluated(value), "fatal operation");
+   return 0;
+ }
++
++void logging_void(int value) {
++  LOG_DEBUG_OR_ERROR(evaluated(value), "void operation");
++}
++
++bool logging_bool(int value) {
++  LOG_DEBUG_OR_ERROR(evaluated(value), "bool operation");
++  return true;
++}
++
++void *logging_pointer(int value) {
++  LOG_DEBUG_OR_ERROR(evaluated(value), "pointer operation");
++  return nullptr;
++}
+ } // namespace
+ 
+ Logger::Level Logger::level = Logger::INFO;
+@@ -60,6 +75,13 @@ int main() {
+ #endif
+   assert(logged_levels.back() == Logger::ERROR);
+ 
++  // The logging-only macro must remain usable in every return context used by
++  // Prudynt. It must never inject an implicit return.
++  logging_void(0);
++  assert(logging_bool(0));
++  assert(logging_pointer(0) == nullptr);
++  assert(condition_evaluations == 7);
++
+   IMPSystemLifecycle lifecycle;
+   lifecycle.mark(IMPSystemStage::IspOpen);
+   lifecycle.mark(IMPSystemStage::SensorAdded);
+@@ -73,14 +95,57 @@ int main() {
+     return stage == IMPSystemStage::SystemInitialized ? -11 : 0;
+   });
+   assert(cleanup_ret == -11);
++  assert(!lifecycle.empty());
++  assert(lifecycle.active(IMPSystemStage::SystemInitialized));
++  assert(lifecycle.active(IMPSystemStage::SensorEnabled));
+   assert((order == std::vector<IMPSystemStage>{
+                        IMPSystemStage::TuningEnabled,
++                       IMPSystemStage::SystemInitialized}));
++
++  order.clear();
++  assert(lifecycle.teardown([&](IMPSystemStage stage) {
++           order.push_back(stage);
++           return 0;
++         }) == 0);
++  assert((order == std::vector<IMPSystemStage>{
+                        IMPSystemStage::SystemInitialized,
+                        IMPSystemStage::SensorEnabled,
+                        IMPSystemStage::SensorAdded,
+                        IMPSystemStage::IspOpen}));
+   assert(lifecycle.empty());
+ 
++  MotionLifecycle motion;
++  motion.mark(MotionStage::GroupCreated);
++  motion.mark(MotionStage::InterfaceCreated);
++  motion.mark(MotionStage::ChannelCreated);
++  motion.mark(MotionStage::ChannelRegistered);
++  motion.mark(MotionStage::Receiving);
++  motion.mark(MotionStage::Bound);
++
++  std::vector<MotionStage> motion_order;
++  assert(motion.teardown([&](MotionStage stage) {
++           motion_order.push_back(stage);
++           return stage == MotionStage::Bound ? -17 : 0;
++         }) == -17);
++  assert((motion_order ==
++          std::vector<MotionStage>{MotionStage::Receiving,
++                                   MotionStage::Bound}));
++  assert(motion.active(MotionStage::Bound));
++  assert(motion.active(MotionStage::ChannelRegistered));
++
++  motion_order.clear();
++  assert(motion.teardown([&](MotionStage stage) {
++           motion_order.push_back(stage);
++           return 0;
++         }) == 0);
++  assert((motion_order ==
++          std::vector<MotionStage>{MotionStage::Bound,
++                                   MotionStage::ChannelRegistered,
++                                   MotionStage::ChannelCreated,
++                                   MotionStage::InterfaceCreated,
++                                   MotionStage::GroupCreated}));
++  assert(motion.empty());
++
+   // Every partial initialization prefix tears down only completed stages and
+   // always in reverse order.
+   constexpr std::size_t stage_count =

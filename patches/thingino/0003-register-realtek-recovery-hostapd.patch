@@ -1,0 +1,29 @@
+diff --git a/Config.in b/Config.in
+--- a/Config.in
++++ b/Config.in
+@@ -4,6 +4,7 @@ source "$BR2_EXTERNAL_THINGINO_PATH/Config.soc.in"
+ source "$BR2_EXTERNAL_THINGINO_PATH/package/thingino-kopt/Config.in"
+ source "$BR2_EXTERNAL_THINGINO_PATH/package/usbnet/Config.in"
+ source "$BR2_EXTERNAL_THINGINO_PATH/package/wifi/Config.in"
++source "$BR2_EXTERNAL_THINGINO_PATH/package/wifi-rtw-hostapd/Config.in"
+ 
+ config BR2_THINGINO_TOOLCHAIN
+ 	bool
+diff --git a/package/wifi-rtw-hostapd/wifi-rtw-hostapd.mk b/package/wifi-rtw-hostapd/wifi-rtw-hostapd.mk
+--- a/package/wifi-rtw-hostapd/wifi-rtw-hostapd.mk
++++ b/package/wifi-rtw-hostapd/wifi-rtw-hostapd.mk
+@@ -1,5 +1,6 @@
+ WIFI_RTW_HOSTAPD_VERSION = a69d6361ef0185aa7d2e4c774bc2de36fe83d81e
+-WIFI_RTW_HOSTAPD_SITE = $(call github,lwfinger,rtl8188eu,$(WIFI_RTW_HOSTAPD_VERSION))
++WIFI_RTW_HOSTAPD_SITE_METHOD = git
++WIFI_RTW_HOSTAPD_SITE = https://github.com/lwfinger/rtl8188eu
+ WIFI_RTW_HOSTAPD_SUBDIR = hostapd-2.9/hostapd
+ WIFI_RTW_HOSTAPD_CONFIG = $(WIFI_RTW_HOSTAPD_DIR)/$(WIFI_RTW_HOSTAPD_SUBDIR)/.config
+ #WIFI_RTW_HOSTAPD_PATCH = \
+@@ -21,5 +22,6 @@ WIFI_RTW_HOSTAPD_CONFIG_SET =
+ 
+ WIFI_RTW_HOSTAPD_CONFIG_ENABLE = \
++	CONFIG_IPV6 \
+ 	CONFIG_INTERNAL_LIBTOMMATH \
+ 	CONFIG_DEBUG_FILE \
+ 	CONFIG_DEBUG_SYSLOG

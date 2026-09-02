@@ -1,0 +1,15 @@
+{
+  "_template_notice": "Schema placeholder only; not consumed by a builder yet.",
+  "model": "DCS-6100LHV2",
+  "hardware_revision": "A1",
+  "hostname": "dlink-dcs6100lhv2",
+  "network": {
+    "automatic_default_route": false,
+    "ssid": "__SET_LOCALLY__",
+    "passphrase": "__GENERATE_LOCALLY__"
+  },
+  "ssh": {
+    "password_authentication": false,
+    "authorized_key": "__SET_LOCALLY__"
+  }
+}

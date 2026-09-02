@@ -1,0 +1,28 @@
+diff --git a/src/ConfigWatcher.cpp b/src/ConfigWatcher.cpp
+index 1111111..2222222 100644
+--- a/src/ConfigWatcher.cpp
++++ b/src/ConfigWatcher.cpp
+@@ -46,8 +46,10 @@ void ConfigWatcher::watch_using_notify() {
+     return;
+   }
+ 
+-  int watchDescriptor = inotify_add_watch(inotifyFd, cfg->filePath.c_str(),
+-                                          IN_MODIFY | IN_ALL_EVENTS);
++  // Control writes this file in place. Reload only after the writer closes it
++  // so cfg->load() can never observe the truncate/write intermediate state.
++  int watchDescriptor =
++      inotify_add_watch(inotifyFd, cfg->filePath.c_str(), IN_CLOSE_WRITE);
+   if (watchDescriptor == -1) {
+     LOG_ERROR("inotify_add_watch() failed");
+     close(inotifyFd);
+@@ -88,7 +89,7 @@ void ConfigWatcher::watch_using_notify() {
+     while (i < length) {
+       struct inotify_event *event = (struct inotify_event *)&buffer[i];
+ 
+-      if (event->mask & IN_MODIFY) {
++      if (event->mask & IN_CLOSE_WRITE) {
+         cfg->load();
+         LOG_INFO("Config file changed, the config is reloaded from: "
+                  << cfg->filePath);
+-- 
+2.51.0

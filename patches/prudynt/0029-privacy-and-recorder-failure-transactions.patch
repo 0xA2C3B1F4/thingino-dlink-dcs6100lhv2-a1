@@ -1,0 +1,914 @@
+--- a/src/AudioWorker.cpp
++++ b/src/AudioWorker.cpp
+@@ -2,6 +2,7 @@
+ 
+ #include "Config.hpp"
+ #include "Logger.hpp"
++#include "MP4ControlSocket.hpp"
+ #include "WorkerUtils.hpp"
+ #include "globals.hpp"
+ 
+@@ -309,6 +310,10 @@ void AudioWorker::process_audio_frame(IMPAudioFrame &frame) {
+     if (frame_len > 0) {
+       if (recorder.writeAudio(recorder_generation, start, frame_len, pts_ms)) {
+         mp4_audio_samples[ch] += frame_samples;
++      } else {
++        MP4ControlSocket::retireFailedRecording(ch, recorder_generation);
++        mp4_audio_samples[ch] = 0;
++        mp4_audio_generations[ch] = 0;
+       }
+     }
+   }
+--- a/src/ConfigWatcher.cpp
++++ b/src/ConfigWatcher.cpp
+@@ -46,10 +46,17 @@ void ConfigWatcher::watch_using_notify() {
+     return;
+   }
+ 
+-  // Control writes this file in place. Reload only after the writer closes it
+-  // so cfg->load() can never observe the truncate/write intermediate state.
+-  int watchDescriptor =
+-      inotify_add_watch(inotifyFd, cfg->filePath.c_str(), IN_CLOSE_WRITE);
++  std::string directory = ".";
++  std::string filename = cfg->filePath;
++  std::size_t separator = cfg->filePath.find_last_of('/');
++  if (separator != std::string::npos) {
++    directory = separator == 0 ? "/" : cfg->filePath.substr(0, separator);
++    filename = cfg->filePath.substr(separator + 1);
++  }
++  // Watch the directory so both a completed in-place write and Control's
++  // fsync+rename transaction reload the canonical file.
++  int watchDescriptor = inotify_add_watch(
++      inotifyFd, directory.c_str(), IN_CLOSE_WRITE | IN_MOVED_TO);
+   if (watchDescriptor == -1) {
+     LOG_ERROR("inotify_add_watch() failed");
+     close(inotifyFd);
+@@ -90,7 +97,8 @@ void ConfigWatcher::watch_using_notify() {
+     while (i < length) {
+       struct inotify_event *event = (struct inotify_event *)&buffer[i];
+ 
+-      if (event->mask & IN_CLOSE_WRITE) {
++      if ((event->mask & (IN_CLOSE_WRITE | IN_MOVED_TO)) && event->len > 0 &&
++          filename == event->name) {
+         cfg->load();
+         LOG_INFO("Config file changed, the config is reloaded from: "
+                  << cfg->filePath);
+--- a/src/IMPEncoder.cpp
++++ b/src/IMPEncoder.cpp
+@@ -1,5 +1,7 @@
+ #include "IMPEncoder.hpp"
+ #include "Config.hpp"
++#include "VideoPrivacyControl.hpp"
++#include "globals.hpp"
+ #include "imp_hal.hpp"
+ #include <cstdint>
+ #include <mutex>
+@@ -487,21 +489,36 @@ int IMPEncoder::init() {
+       osd = OSD::createNew(cfg->osd, encGrp, encChn, name);
+     }
+ 
+-    // Insert OSD group into pipeline so privacy covers can be applied
+-    IMPCell osd_cell = {DEV_ID_OSD, encGrp, 0};
+-    IMP_OSD_CreateGroup(encGrp);
+-    ret = IMP_System_Bind(&fs, &osd_cell);
+-    if (ret != 0) {
+-      LOG_ERROR("IMP_System_Bind(&fs, &osd) failed ret=" << ret);
+-      return ret;
++    {
++      std::lock_guard<std::mutex> hardware_lock(global_osd_hardware_mutex);
++      // Insert OSD group into pipeline so privacy covers can be applied.
++      // The complete group lifecycle shares the privacy/timestamp hardware
++      // mutex, preventing a live request from racing bind or teardown.
++      IMPCell osd_cell = {DEV_ID_OSD, encGrp, 0};
++      ret = IMP_OSD_CreateGroup(encGrp);
++      if (ret != 0) {
++        LOG_ERROR("IMP_OSD_CreateGroup(" << encGrp << ") failed ret=" << ret);
++        return ret;
++      }
++      ret = IMP_System_Bind(&fs, &osd_cell);
++      if (ret != 0) {
++        LOG_ERROR("IMP_System_Bind(&fs, &osd) failed ret=" << ret);
++        IMP_OSD_DestroyGroup(encGrp);
++        return ret;
++      }
++      ret = IMP_System_Bind(&osd_cell, &enc);
++      if (ret != 0) {
++        LOG_ERROR("IMP_System_Bind(&osd, &enc) failed ret=" << ret);
++        IMP_System_UnBind(&fs, &osd_cell);
++        IMP_OSD_DestroyGroup(encGrp);
++        return ret;
++      }
++      fs_to_enc_bound = true;
+     }
+-    ret = IMP_System_Bind(&osd_cell, &enc);
+-    if (ret != 0) {
+-      LOG_ERROR("IMP_System_Bind(&osd, &enc) failed ret=" << ret);
+-      IMP_System_UnBind(&fs, &osd_cell);
+-      return ret;
++    if (encChn >= 0 && encChn < NUM_VIDEO_CHANNELS && global_video[encChn]) {
++      global_video[encChn]->osd_ready.store(true, std::memory_order_release);
++      VideoPrivacyControl::reapplyIfRequested();
+     }
+-    fs_to_enc_bound = true;
+   } else {
+     hal::set_jpeg_quality_qtable(encChn, stream->jpeg_quality,
+                                  cfg->sysinfo.cpu);
+@@ -516,7 +533,18 @@ int IMPEncoder::deinit(bool stop_receive) {
+   int ret = 0;
+ 
+   if (!is_jpeg_stream && ownsGroupResources()) {
++    if (encChn >= 0 && encChn < NUM_VIDEO_CHANNELS && global_video[encChn]) {
++      global_video[encChn]->osd_ready.store(false, std::memory_order_release);
++      VideoPrivacyControl::prepareGroupTeardown(encChn);
++    }
++    if (osd) {
++      // Regions must be retired while their group still exists.
++      osd->exit();
++      delete osd;
++      osd = nullptr;
++    }
+     if (fs_to_enc_bound) {
++      std::lock_guard<std::mutex> hardware_lock(global_osd_hardware_mutex);
+       IMPCell osd_cell = {DEV_ID_OSD, encGrp, 0};
+       ret = IMP_System_UnBind(&osd_cell, &enc);
+       LOG_DEBUG_OR_ERROR(ret, "IMP_System_UnBind(&osd, &enc)");
+@@ -525,11 +553,6 @@ int IMPEncoder::deinit(bool stop_receive) {
+       IMP_OSD_DestroyGroup(encGrp);
+       fs_to_enc_bound = false;
+     }
+-    if (osd) {
+-      osd->exit();
+-      delete osd;
+-      osd = nullptr;
+-    }
+   }
+ 
+   if (chn_created && stop_receive) {
+--- a/src/MP4ControlSocket.cpp
++++ b/src/MP4ControlSocket.cpp
+@@ -15,6 +15,7 @@
+ #include <filesystem>
+ #include <fstream>
+ #include <memory>
++#include <mutex>
+ #include <sstream>
+ #include <string>
+ #include <sys/stat.h>
+@@ -256,7 +257,9 @@ bool validate_mount_point_path(fs::path mount_path, std::string &reason) {
+ 
+ bool start_recording(const std::string &path, int target_channel);
+ void stop_recording(int channel);
++void stop_recording_locked(int channel);
+ 
++std::array<std::mutex, NUM_VIDEO_CHANNELS> recorder_state_mutex;
+ std::mutex stop_timer_mutex;
+ std::array<std::thread, NUM_VIDEO_CHANNELS> stop_timer_threads;
+ std::array<std::atomic<bool>, NUM_VIDEO_CHANNELS> stop_timer_cancel;
+@@ -565,6 +568,8 @@ bool start_recording(const std::string &path, int target_channel) {
+     return false;
+   }
+ 
++  std::lock_guard<std::mutex> state_lock(recorder_state_mutex[target_channel]);
++
+   auto video =
+       wait_for_video_channel(target_channel, std::chrono::milliseconds(2000));
+   if (!video) {
+@@ -579,6 +584,11 @@ bool start_recording(const std::string &path, int target_channel) {
+              << target_channel);
+     return false;
+   }
++  if (video->mp4_accounted_active.load(std::memory_order_acquire)) {
++    // A previous segment may have stopped itself after an SD write error.
++    // Retire its counters and state before admitting a replacement segment.
++    stop_recording_locked(target_channel);
++  }
+ 
+   auto disable_force_if_idle = []() {
+     if (global_mp4_active_recorders.load(std::memory_order_relaxed) == 0) {
+@@ -732,6 +742,7 @@ bool start_recording(const std::string &path, int target_channel) {
+   bool ok = recorder.start(path.c_str(), init);
+   if (ok) {
+     const uint64_t recorder_generation = recorder.generation();
++    video->mp4_accounted_active.store(true, std::memory_order_release);
+     global_mp4_active_recorders.fetch_add(1, std::memory_order_relaxed);
+     LOG_INFO("MP4ControlSocket: recorder started with avcC payload size="
+              << init.avcC.size() << " on channel " << target_channel);
+@@ -756,15 +767,28 @@ bool start_recording(const std::string &path, int target_channel) {
+         int64_t pts_ms = relative_ts / 1000;
+ 
+         // Write prebuffer frame to MP4
+-        recorder.writeVideo(recorder_generation, frame.data.data(),
+-                            frame.data.size(), pts_ms, frame.is_keyframe);
++        if (!recorder.writeVideo(recorder_generation, frame.data.data(),
++                                 frame.data.size(), pts_ms,
++                                 frame.is_keyframe)) {
++          LOG_ERROR("MP4ControlSocket: failed to flush prebuffer frame");
++          ok = false;
++          break;
++        }
+       }
+ 
+       // Allow live frames to be written now
+       video->mp4_prebuffer_flushing.store(false, std::memory_order_release);
+     }
+ #endif
++    if (!ok) {
++      stop_recording_locked(target_channel);
++      return false;
++    }
+   } else {
++#ifdef PREBUFFER_ENABLED
++    video->mp4_prebuffer_flushing.store(false, std::memory_order_release);
++    video->mp4_prebuffer_offset_ms.store(0, std::memory_order_relaxed);
++#endif
+     reset_wait_state();
+     disable_force_if_idle();
+   }
+@@ -775,32 +799,41 @@ void stop_recording(int channel) {
+   if (channel < 0 || channel >= NUM_VIDEO_CHANNELS) {
+     return;
+   }
++  std::lock_guard<std::mutex> state_lock(recorder_state_mutex[channel]);
++  stop_recording_locked(channel);
++}
+ 
++void stop_recording_locked(int channel) {
+   auto &recorder = global_mp4_recorders[channel];
+-  if (!recorder.isActive()) {
++  auto video = global_video[channel];
++  bool accounted =
++      video && video->mp4_accounted_active.exchange(false,
++                                                    std::memory_order_acq_rel);
++  if (!recorder.isActive() && !accounted) {
+     return;
+   }
+ 
+-  recorder.stop();
+-  if (global_video[channel]) {
+-    global_video[channel]->mp4_waiting_for_idr.store(false);
++  if (recorder.isActive()) recorder.stop();
++  if (video) {
++    video->mp4_waiting_for_idr.store(false);
+ 
+ #ifdef PREBUFFER_ENABLED
+     // Clear prebuffer frames when recording stops (but keep buffer enabled)
+-    if (global_video[channel]->prebuffer) {
+-      global_video[channel]->prebuffer->clearFrames();
++    if (video->prebuffer) {
++      video->prebuffer->clearFrames();
+     }
+     // Reset prebuffer offset and flushing flag for next recording
+-    global_video[channel]->mp4_prebuffer_offset_ms.store(
+-        0, std::memory_order_relaxed);
+-    global_video[channel]->mp4_prebuffer_flushing.store(
+-        false, std::memory_order_relaxed);
++    video->mp4_prebuffer_offset_ms.store(0, std::memory_order_relaxed);
++    video->mp4_prebuffer_flushing.store(false, std::memory_order_relaxed);
+ #endif
+   }
+   remove_channel_state_file(channel);
+ 
+-  int remaining =
+-      global_mp4_active_recorders.fetch_sub(1, std::memory_order_relaxed) - 1;
++  int remaining = global_mp4_active_recorders.load(std::memory_order_relaxed);
++  if (accounted) {
++    remaining =
++        global_mp4_active_recorders.fetch_sub(1, std::memory_order_relaxed) - 1;
++  }
+   if (remaining <= 0) {
+     global_mp4_active_recorders.store(0, std::memory_order_relaxed);
+     global_force_video_active.store(false, std::memory_order_relaxed);
+@@ -1190,6 +1223,14 @@ bool handle_loop_start(const StartCommandOptions &options) {
+ }
+ } // namespace
+ 
++void MP4ControlSocket::retireFailedRecording(int channel,
++                                             uint64_t generation) {
++  if (channel < 0 || channel >= NUM_VIDEO_CHANNELS) return;
++  std::lock_guard<std::mutex> state_lock(recorder_state_mutex[channel]);
++  if (global_mp4_recorders[channel].generation() != generation) return;
++  stop_recording_locked(channel);
++}
++
+ void MP4ControlSocket::run() {
+   LOG_INFO("MP4ControlSocket: run() entered");
+ 
+--- a/src/MP4ControlSocket.hpp
++++ b/src/MP4ControlSocket.hpp
+@@ -1,5 +1,6 @@
+ #pragma once
+ 
++#include <cstdint>
+ #include <string>
+ #include <thread>
+ 
+@@ -11,5 +12,6 @@
+ 
+ class MP4ControlSocket {
+ public:
++  static void retireFailedRecording(int channel, uint64_t generation);
+   static void run();
+ };
+--- a/src/OSD.cpp
++++ b/src/OSD.cpp
+@@ -459,6 +459,7 @@ void OSD::renderTimestamp(const char *text) {
+ }
+ 
+ void OSD::updateTimestampOverlay() {
++  std::lock_guard<std::mutex> hardware_lock(global_osd_hardware_mutex);
+   char base[64];
+   const char *fmt = (cfg && cfg->osd.burnin.format && cfg->osd.burnin.format[0])
+                         ? cfg->osd.burnin.format : "%F %T";
+@@ -625,9 +626,9 @@ int OSD::start() {
+ 
+ int OSD::exit() {
+ #ifdef OSD_BURN_TIMESTAMP
+-  // Tear down the burned-in timestamp region. IMPEncoder destroys the OSD
+-  // group before calling us, so unregister best-effort and always free the
+-  // region handle to avoid leaking it.
++  std::lock_guard<std::mutex> hardware_lock(global_osd_hardware_mutex);
++  // Tear down the burned-in timestamp region while IMPEncoder still owns the
++  // live OSD group. The shared hardware mutex serializes this with privacy.
+   if (ts_region_created_) {
+     IMP_OSD_ShowRgn(ts_rgn_, osdGrp, 0);
+     IMP_OSD_UnRegisterRgn(ts_rgn_, osdGrp);
+@@ -673,6 +674,7 @@ void OSD::updateDisplayEverySecond() {
+   if (cfg && cfg->osd.burnin.enabled) {
+     updateTimestampOverlay();
+   } else if (ts_region_created_) {
++    std::lock_guard<std::mutex> hardware_lock(global_osd_hardware_mutex);
+     IMP_OSD_ShowRgn(ts_rgn_, osdGrp, 0);
+     ts_region_created_ = false;
+   }
+--- a/src/VideoPrivacyControl.cpp
++++ b/src/VideoPrivacyControl.cpp
+@@ -123,23 +123,40 @@ void ensureFifo() {
+ }
+ 
+ bool destroyPrivacyCover(int ch) {
++  std::lock_guard<std::mutex> hardware_lock(global_osd_hardware_mutex);
+   auto &vs = global_video[ch];
+   if (!vs || vs->privacy_osd_handle < 0) return true;
+   int encGrp = vs->encChn;
+   IMPRgnHandle handle =
+       (IMPRgnHandle)(intptr_t)vs->privacy_osd_handle;
+-  if (IMP_OSD_ShowRgn(handle, encGrp, 0) != 0) {
+-    LOG_WARN("VideoPrivacyControl: failed to hide OSD cover on ch" << ch);
+-  }
+   if (IMP_OSD_UnRegisterRgn(handle, encGrp) != 0) {
+-    LOG_WARN("VideoPrivacyControl: failed to unregister OSD cover on ch"
+-             << ch);
++    LOG_ERROR("VideoPrivacyControl: failed to unregister OSD cover on ch"
++              << ch);
++    return false;
+   }
+-  if (IMP_OSD_DestroyRgn(handle) != 0) return false;
++  IMP_OSD_DestroyRgn(handle);
+   vs->privacy_osd_handle = -1;
+   return true;
+ }
+ 
++bool privacyChannelRequired(int ch) {
++  if (ch < 0 || ch >= NUM_VIDEO_CHANNELS) return false;
++  auto &vs = global_video[ch];
++  return vs && vs->stream && vs->stream->enabled;
++}
++
++bool allRequiredOsdGroupsReady() {
++  bool any_required = false;
++  for (int ch = 0; ch < NUM_VIDEO_CHANNELS; ++ch) {
++    if (!privacyChannelRequired(ch)) continue;
++    any_required = true;
++    if (!global_video[ch]->osd_ready.load(std::memory_order_acquire)) {
++      return false;
++    }
++  }
++  return any_required;
++}
++
+ void flushVideoQueues(const std::shared_ptr<video_stream> &vs) {
+   H264NALUnit dummy;
+   if (vs->msgChannel) {
+@@ -153,44 +170,136 @@ void flushVideoQueues(const std::shared_ptr<video_stream> &vs) {
+   }
+ }
+ 
++bool createPrivacyCover(int ch) {
++  std::lock_guard<std::mutex> hardware_lock(global_osd_hardware_mutex);
++  auto &vs = global_video[ch];
++  if (!vs || !privacyChannelRequired(ch) ||
++      !vs->osd_ready.load(std::memory_order_acquire)) {
++    return false;
++  }
++  if (vs->privacy_osd_handle >= 0) return true;
++
++  int sw = vs->stream ? vs->stream->width : 1920;
++  int sh = vs->stream ? vs->stream->height : 1080;
++  if (sw <= 0) sw = 1920;
++  if (sh <= 0) sh = 1080;
++
++  int encGrp = vs->encChn;
++  IMPOSDRgnAttr rgnAttr{};
++  rgnAttr.type = OSD_REG_COVER;
++  rgnAttr.rect.p0.x = 0;
++  rgnAttr.rect.p0.y = 0;
++  rgnAttr.rect.p1.x = sw - 1;
++  rgnAttr.rect.p1.y = sh - 1;
++#if defined(PLATFORM_T31) || defined(PLATFORM_T40) || defined(PLATFORM_T41) || \
++    defined(PLATFORM_T23) || defined(PLATFORM_T32) || defined(PLATFORM_T33) || \
++    defined(PLATFORM_C100)
++  rgnAttr.fmt = PIX_FMT_BGRA;
++#else
++  rgnAttr.fmt = PIX_FMT_MONOWHITE;
++#endif
++  rgnAttr.data.coverData.color = hal::osd::black_cover_color();
++
++  IMPRgnHandle handle = IMP_OSD_CreateRgn(&rgnAttr);
++  if (handle == INVHANDLE) {
++    LOG_ERROR("VideoPrivacyControl: IMP_OSD_CreateRgn failed for ch" << ch);
++    return false;
++  }
++
++  IMPOSDGrpRgnAttr grpAttr{};
++  grpAttr.show = 1;
++  grpAttr.layer = 1;
++  int ret = IMP_OSD_RegisterRgn(handle, encGrp, &grpAttr);
++  if (ret != 0) {
++    LOG_ERROR("VideoPrivacyControl: IMP_OSD_RegisterRgn failed for ch"
++              << ch << " ret=" << ret);
++    IMP_OSD_DestroyRgn(handle);
++    return false;
++  }
++  ret = IMP_OSD_SetGrpRgnAttr(handle, encGrp, &grpAttr);
++  if (ret != 0) {
++    LOG_ERROR("VideoPrivacyControl: IMP_OSD_SetGrpRgnAttr failed for ch"
++              << ch << " ret=" << ret);
++    if (IMP_OSD_UnRegisterRgn(handle, encGrp) != 0) {
++      vs->privacy_osd_handle = static_cast<int>(handle);
++      vs->privacy_requested.store(true, std::memory_order_release);
++      (void)write_privacy_state_file();
++      return false;
++    }
++    IMP_OSD_DestroyRgn(handle);
++    return false;
++  }
++  ret = IMP_OSD_Start(encGrp);
++  if (ret != 0) {
++    LOG_ERROR("VideoPrivacyControl: IMP_OSD_Start(" << encGrp
++              << ") failed ret=" << ret);
++    if (IMP_OSD_UnRegisterRgn(handle, encGrp) != 0) {
++      vs->privacy_osd_handle = static_cast<int>(handle);
++      vs->privacy_requested.store(true, std::memory_order_release);
++      (void)write_privacy_state_file();
++      return false;
++    }
++    IMP_OSD_DestroyRgn(handle);
++    return false;
++  }
++
++  vs->privacy_osd_handle = static_cast<int>(handle);
++  LOG_INFO("VideoPrivacyControl: OSD cover enabled on ch" << ch << " ("
++           << sw << "x" << sh << ")");
++  return true;
++}
++
+ bool disablePrivacyLocked() {
+-  bool ok = true;
++  std::vector<int> removed_channels;
+   for (int ch = 0; ch < NUM_VIDEO_CHANNELS; ++ch) {
+     if (!global_video[ch]) continue;
+     auto &vs = global_video[ch];
+     if (!destroyPrivacyCover(ch)) {
+-      ok = false;
+-      vs->privacy_requested.store(true, std::memory_order_release);
+       LOG_ERROR("VideoPrivacyControl: failed to disable OSD cover on ch"
+                 << ch);
+-      continue;
++      bool restored = true;
++      for (int removed : removed_channels) {
++        restored = createPrivacyCover(removed) && restored;
++      }
++      for (int active = 0; active < NUM_VIDEO_CHANNELS; ++active) {
++        if (global_video[active]) {
++          global_video[active]->privacy_requested.store(
++              true, std::memory_order_release);
++        }
++      }
++      (void)write_privacy_state_file();
++      if (!restored) {
++        LOG_ERROR("VideoPrivacyControl: privacy disable rollback incomplete");
++      }
++      return false;
+     }
++    removed_channels.push_back(ch);
++  }
++  for (int ch : removed_channels) {
++    auto &vs = global_video[ch];
+     vs->privacy_requested.store(false, std::memory_order_release);
++    flushVideoQueues(vs);
+     if (vs->running) IMP_Encoder_RequestIDR(ch);
+-    LOG_INFO("VideoPrivacyControl: OSD cover disabled on ch" << ch);
+   }
+-  if (ok) {
+-    remove_privacy_state_file();
+-    LOG_INFO("VideoPrivacyControl: privacy disabled on all channels");
+-  } else {
+-    (void)write_privacy_state_file();
+-  }
+-  return ok;
++  remove_privacy_state_file();
++  LOG_INFO("VideoPrivacyControl: privacy disabled on all channels");
++  return true;
+ }
+ 
+ bool enablePrivacyLocked() {
+-  bool any_channel = false;
++  if (!allRequiredOsdGroupsReady()) {
++    LOG_ERROR("VideoPrivacyControl: required OSD groups are not ready");
++    return false;
++  }
+   bool already_enabled = true;
+   for (int ch = 0; ch < NUM_VIDEO_CHANNELS; ++ch) {
++    if (!privacyChannelRequired(ch)) continue;
+     auto &vs = global_video[ch];
+-    if (!vs) continue;
+-    any_channel = true;
+     if (!vs->privacy_requested.load(std::memory_order_acquire) ||
+         vs->privacy_osd_handle < 0) {
+       already_enabled = false;
+     }
+   }
+-  if (!any_channel) return false;
+   if (already_enabled) return write_privacy_state_file();
+ 
+   // Retire any partial previous application before preparing a new all-channel
+@@ -206,76 +315,9 @@ bool enablePrivacyLocked() {
+ 
+   std::vector<int> prepared_channels;
+   for (int ch = 0; ch < NUM_VIDEO_CHANNELS; ++ch) {
+-    if (!global_video[ch]) continue;
+-    auto &vs = global_video[ch];
+-      // Get stream dimensions
+-      int sw = vs->stream ? vs->stream->width : 1920;
+-      int sh = vs->stream ? vs->stream->height : 1080;
+-      if (sw <= 0) sw = 1920;
+-      if (sh <= 0) sh = 1080;
+-
+-      // Create full-frame black cover region
+-      int encGrp = vs->encChn;  // OSD group = encoder channel
+-      IMPOSDRgnAttr rgnAttr{};
+-      rgnAttr.type = OSD_REG_COVER;
+-      rgnAttr.rect.p0.x = 0;
+-      rgnAttr.rect.p0.y = 0;
+-      rgnAttr.rect.p1.x = sw - 1;
+-      rgnAttr.rect.p1.y = sh - 1;
+-      // Pick platform-appropriate pixel format for cover regions
+-#if defined(PLATFORM_T31) || defined(PLATFORM_T40) || defined(PLATFORM_T41) || \
+-    defined(PLATFORM_T23) || defined(PLATFORM_T32) || defined(PLATFORM_T33) || \
+-    defined(PLATFORM_C100)
+-      rgnAttr.fmt = PIX_FMT_BGRA;
+-#else
+-      rgnAttr.fmt = PIX_FMT_MONOWHITE;
+-#endif
+-      rgnAttr.data.coverData.color = hal::osd::black_cover_color();
+-
+-      IMPRgnHandle handle = IMP_OSD_CreateRgn(&rgnAttr);
+-      if (handle == INVHANDLE) {
+-        LOG_ERROR("VideoPrivacyControl: IMP_OSD_CreateRgn failed for ch"
+-                  << ch);
+-        goto rollback;
+-      }
+-
+-      IMPOSDGrpRgnAttr grpAttr{};
+-      grpAttr.show = 1;
+-      int ret = IMP_OSD_RegisterRgn(handle, encGrp, &grpAttr);
+-      if (ret != 0) {
+-        LOG_ERROR("VideoPrivacyControl: IMP_OSD_RegisterRgn failed for ch"
+-                  << ch << " ret=" << ret);
+-        IMP_OSD_DestroyRgn(handle);
+-        goto rollback;
+-      }
+-
+-      // Pin the cover's layer explicitly via SetGrpRgnAttr — RegisterRgn does
+-      // not reliably apply it. Higher layer = nearer the front, so keeping the
+-      // cover one below the burned-in OSD timestamp (layer 2) lets the
+-      // timestamp composite on top while the cover still fully obscures the
+-      // video (it is opaque and full-frame, so no scene leaks). Only the
+-      // relative order matters — these are the only two drawn regions.
+-      grpAttr.layer = 1;
+-      ret = IMP_OSD_SetGrpRgnAttr(handle, encGrp, &grpAttr);
+-      if (ret != 0) {
+-        LOG_ERROR("VideoPrivacyControl: IMP_OSD_SetGrpRgnAttr failed for ch"
+-                  << ch << " ret=" << ret);
+-        IMP_OSD_UnRegisterRgn(handle, encGrp);
+-        IMP_OSD_DestroyRgn(handle);
+-        goto rollback;
+-      }
+-
+-      ret = IMP_OSD_Start(encGrp);
+-      if (ret != 0) {
+-        LOG_WARN("VideoPrivacyControl: IMP_OSD_Start(" << encGrp
+-                << ") = " << ret);
+-      }
+-
+-      vs->privacy_osd_handle = static_cast<int>(handle);
+-      prepared_channels.push_back(ch);
+-
+-      LOG_INFO("VideoPrivacyControl: OSD cover enabled on ch" << ch
+-               << " (" << sw << "x" << sh << ")");
++    if (!privacyChannelRequired(ch)) continue;
++    if (!createPrivacyCover(ch)) goto rollback;
++    prepared_channels.push_back(ch);
+   }
+ 
+   for (int ch : prepared_channels) {
+@@ -289,19 +331,32 @@ bool enablePrivacyLocked() {
+   return true;
+ 
+ rollback:
++  bool rollback_ok = true;
+   for (auto it = prepared_channels.rbegin(); it != prepared_channels.rend();
+        ++it) {
+     auto &vs = global_video[*it];
+-    (void)destroyPrivacyCover(*it);
+-    vs->privacy_requested.store(false, std::memory_order_release);
++    if (destroyPrivacyCover(*it)) {
++      vs->privacy_requested.store(false, std::memory_order_release);
++    } else {
++      rollback_ok = false;
++      vs->privacy_requested.store(true, std::memory_order_release);
++    }
+   }
+   for (int ch = 0; ch < NUM_VIDEO_CHANNELS; ++ch) {
+-    if (global_video[ch]) {
++    if (global_video[ch] && global_video[ch]->privacy_osd_handle < 0) {
+       global_video[ch]->privacy_requested.store(false,
+                                                  std::memory_order_release);
++    } else if (global_video[ch]) {
++      rollback_ok = false;
++      global_video[ch]->privacy_requested.store(true,
++                                                 std::memory_order_release);
+     }
+   }
++  if (rollback_ok) {
+     remove_privacy_state_file();
++  } else {
++    (void)write_privacy_state_file();
++  }
+   LOG_ERROR("VideoPrivacyControl: privacy enable rolled back");
+   return false;
+ }
+@@ -400,7 +455,50 @@ void fifoLoop() {
+ 
+ bool VideoPrivacyControl::setPrivacy(bool enabled) {
+   std::lock_guard<std::mutex> lock(privacy_mutex);
+-  return enabled ? enablePrivacyLocked() : disablePrivacyLocked();
++  for (auto &video : global_video) {
++    if (video) {
++      video->privacy_transition.store(true, std::memory_order_release);
++      video->should_grab_frames.notify_one();
++    }
++  }
++  bool applied = enabled ? enablePrivacyLocked() : disablePrivacyLocked();
++  for (auto &video : global_video) {
++    if (video) {
++      video->privacy_epoch.fetch_add(1, std::memory_order_acq_rel);
++      video->privacy_transition.store(false, std::memory_order_release);
++    }
++  }
++  return applied;
++}
++
++void VideoPrivacyControl::prepareGroupTeardown(int channel) {
++  if (channel < 0 || channel >= NUM_VIDEO_CHANNELS) return;
++  std::lock_guard<std::mutex> lock(privacy_mutex);
++  auto &video = global_video[channel];
++  if (!video) return;
++  // Preserve privacy_requested as the desired state across encoder restart,
++  // but never retain an IMP region handle after its OSD group is removed.
++  if (!destroyPrivacyCover(channel) && video->privacy_osd_handle >= 0) {
++    LOG_ERROR("VideoPrivacyControl: failed to retire cover before group teardown");
++    // The group teardown below invalidates every registered region. Never let
++    // its numeric handle survive and masquerade as an applied cover after the
++    // encoder graph is recreated.
++    video->privacy_osd_handle = -1;
++  }
++}
++
++void VideoPrivacyControl::reapplyIfRequested() {
++  bool requested = false;
++  for (int ch = 0; ch < NUM_VIDEO_CHANNELS; ++ch) {
++    if (privacyChannelRequired(ch) && global_video[ch]->privacy_requested.load(
++                                          std::memory_order_acquire)) {
++      requested = true;
++      break;
++    }
++  }
++  if (requested && allRequiredOsdGroupsReady() && !setPrivacy(true)) {
++    LOG_ERROR("VideoPrivacyControl: failed to reapply privacy after OSD restart");
++  }
+ }
+ 
+ void VideoPrivacyControl::run() {
+--- a/src/VideoPrivacyControl.hpp
++++ b/src/VideoPrivacyControl.hpp
+@@ -3,6 +3,8 @@
+ namespace VideoPrivacyControl {
+ 
+ bool setPrivacy(bool enabled);
++void prepareGroupTeardown(int channel);
++void reapplyIfRequested();
+ void run();
+ 
+ }
+--- a/src/VideoWorker.cpp
++++ b/src/VideoWorker.cpp
+@@ -12,6 +12,7 @@
+ #include "IMPFramesource.hpp"
+ #include "Logger.hpp"
+ #include "MediaRuntimeMetrics.hpp"
++#include "MP4ControlSocket.hpp"
+ #include "PreTriggerBuffer.hpp"
+ #include "RecorderStartPolicy.hpp"
+ #include "RecorderTimelinePolicy.hpp"
+@@ -280,6 +281,9 @@ bool VideoWorker::run() {
+   bool mp4_waiting_frame_end = false;
+   bool mp4_inserted_codec_config = false;
+   RecorderGenerationTracker mp4_generation;
++  uint64_t observed_privacy_epoch =
++      video_state ? video_state->privacy_epoch.load(std::memory_order_acquire)
++                  : 0;
+ 
+ #ifdef PREBUFFER_ENABLED
+   // Prebuffer frame accumulation (similar to mp4_sample)
+@@ -410,9 +414,15 @@ bool VideoWorker::run() {
+           relative_ts_us = 0;
+         int64_t pts_ms = relative_ts_us / 1000 + prebuffer_offset;
+ 
+-        channel_recorder.writeVideo(mp4_generation.generation(),
+-                                    pf.data.data(), pf.data.size(), pts_ms,
+-                                    pf.is_keyframe);
++        if (!channel_recorder.writeVideo(mp4_generation.generation(),
++                                         pf.data.data(), pf.data.size(), pts_ms,
++                                         pf.is_keyframe)) {
++          pending_frames_during_flush.clear();
++          reset_mp4_state();
++          MP4ControlSocket::retireFailedRecording(
++              encChn, mp4_generation.generation());
++          return;
++        }
+       }
+ 
+       // Update timestamp base for subsequent live frames
+@@ -479,9 +489,14 @@ bool VideoWorker::run() {
+       video_state->mp4_required_idr_ts_us.store(mp4_sample_ts_us,
+                                                 std::memory_order_relaxed);
+     }
+-    channel_recorder.writeVideo(mp4_generation.generation(), mp4_sample.data(),
+-                                mp4_sample.size(), pts_ms,
+-                                mp4_sample_is_key);
++    if (!channel_recorder.writeVideo(mp4_generation.generation(),
++                                     mp4_sample.data(), mp4_sample.size(),
++                                     pts_ms, mp4_sample_is_key)) {
++      reset_mp4_state();
++      MP4ControlSocket::retireFailedRecording(encChn,
++                                               mp4_generation.generation());
++      return;
++    }
+     reset_mp4_sample();
+   };
+ 
+@@ -613,7 +628,22 @@ bool VideoWorker::run() {
+ #endif
+             reset_mp4_state();
+           }
+-          bool recorder_accepts_samples = recorder_active;
++          bool privacy_transition =
++              video_state && video_state->privacy_transition.load(
++                                 std::memory_order_acquire);
++          uint64_t privacy_epoch =
++              video_state
++                  ? video_state->privacy_epoch.load(std::memory_order_acquire)
++                  : observed_privacy_epoch;
++          if (privacy_transition || privacy_epoch != observed_privacy_epoch) {
++#ifdef PREBUFFER_ENABLED
++            pending_frames_during_flush.clear();
++            reset_prebuffer_sample();
++#endif
++            reset_mp4_state();
++            observed_privacy_epoch = privacy_epoch;
++          }
++          bool recorder_accepts_samples = recorder_active && !privacy_transition;
+           if ((!recorder_active || !recorder_accepts_samples) &&
+               mp4_sample_ts_us != -1) {
+             reset_mp4_state();
+@@ -1150,12 +1180,14 @@ bool VideoWorker::run() {
+           // without RTSP clients Accumulate all NAL units (except SPS/PPS) into
+           // prebuffer_sample, flush on frameEnd
+           if (global_video[encChn]->prebuffer &&
+-              global_video[encChn]->prebuffer->isEnabled()) {
++              global_video[encChn]->prebuffer->isEnabled() &&
++              !global_video[encChn]->privacy_transition.load(
++                  std::memory_order_acquire)) {
+             // Skip VPS/SPS/PPS for prebuffer (they're in the avcC/hvcC)
+             if (!(nal_is_vps || nal_is_sps || nal_is_pps) && payload_len > 0) {
+               // Set timestamp from first NAL unit of frame
+               if (prebuffer_sample_ts_us == -1) {
+-                prebuffer_sample_ts_us = stream.pack[i].timestamp;
++                prebuffer_sample_ts_us = pack_ts_us;
+               }
+ 
+               // SEI metadata for prebuffer: prepend SEI NAL before first
+--- a/src/globals.cpp
++++ b/src/globals.cpp
+@@ -2,6 +2,7 @@
+ 
+ bool global_osd_thread_signal = false;
+ bool global_reload_osd = false;
++std::mutex global_osd_hardware_mutex;
+ std::array<MP4Recorder, NUM_VIDEO_CHANNELS> global_mp4_recorders;
+ std::atomic<bool> global_force_video_active{false};
+ std::atomic<int> global_mp4_active_recorders{0};
+--- a/src/globals.hpp
++++ b/src/globals.hpp
+@@ -65,6 +65,7 @@ private:
+ 
+ extern std::mutex
+     mutex_main; // protects global_restart_rtsp and global_restart_video
++extern std::mutex global_osd_hardware_mutex;
+ 
+ struct AudioFrame {
+   std::vector<uint8_t> data;
+@@ -244,6 +245,7 @@ struct video_stream {
+       mp4_prebuffer_offset_ms; // Offset for live frames when prebuffer is used
+   std::atomic<bool>
+       mp4_prebuffer_flushing; // True while prebuffer frames are being written
++  std::atomic<bool> mp4_accounted_active{false};
+   std::mutex onDataCallbackLock; // protects onDataCallback from deallocation
+   std::condition_variable should_grab_frames;
+   binary_semaphore_compat is_activated{0};
+@@ -257,6 +259,9 @@ struct video_stream {
+   std::mutex tap_mutex;
+   std::vector<VideoTapEntry> video_taps;
+   std::atomic<bool> privacy_requested{false};
++  std::atomic<bool> osd_ready{false};
++  std::atomic<bool> privacy_transition{false};
++  std::atomic<uint64_t> privacy_epoch{0};
+   // Cached black IDR frame for privacy mode (Annex B: start_code + SPS + PPS + IDR)
+   int privacy_osd_handle{-1};  // OSD cover region handle for privacy
+ 
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -926,7 +926,6 @@ int main(int argc, const char *argv[]) {
+   // Start Unix domain socket control server for MP4 recording
+   std::thread(MP4ControlSocket::run).detach();
+   std::thread(AudioOutputControl::run).detach();
+-  std::thread(VideoPrivacyControl::run).detach();
+   ImagingControl::start();
+ 
+   global_video[0] = std::make_shared<video_stream>(0, &cfg->stream0, "stream0");
+@@ -955,6 +954,7 @@ int main(int argc, const char *argv[]) {
+   }
+ 
+   ipc_server.start();
++  bool privacy_control_started = false;
+ 
+   while (!global_shutdown_requested.load(std::memory_order_relaxed)) {
+     global_restart = true;
+@@ -1014,6 +1014,18 @@ int main(int argc, const char *argv[]) {
+         start_video(1);
+       }
+ 
++      // Privacy cannot touch an OSD group before the corresponding encoder
++      // has created and bound it. Apply persisted state and expose the legacy
++      // control FIFO only after the initial video graph is ready.
++      if (cfg->osd.privacy.enabled &&
++          !VideoPrivacyControl::setPrivacy(true)) {
++        LOG_ERROR("Failed to apply configured privacy state");
++      }
++      if (!privacy_control_started) {
++        std::thread(VideoPrivacyControl::run).detach();
++        privacy_control_started = true;
++      }
++
+       if (cfg->stream2.enabled &&
+           (cfg->stream2.jpeg_idle_fps > 0 || cfg->stream2.jpeg_refresh > 0)) {
+         StartHelper sh{2};
+--- a/tests/test_media_queue.cpp
++++ b/tests/test_media_queue.cpp
+@@ -161,6 +161,15 @@ static void test_recorder_timestamp_preserves_low_fps_and_rebases_jumps() {
+   int64_t rebased = normalizeRecorderFrameTimestamp(
+       timestamp_us + 84000000LL, timestamp_us, nominal_step_us);
+   assert(rebased == timestamp_us + nominal_step_us);
++
++  // The Ingenic encoder switches from a relative clock to uptime at the first
++  // GOP, about four seconds after startup. The transition moment is four
++  // seconds, but the raw timestamp jump can be tens of seconds.
++  int64_t startup_timestamp_us = 4000000LL;
++  int64_t uptime_timestamp_us = 84000000LL;
++  rebased = normalizeRecorderFrameTimestamp(
++      uptime_timestamp_us, startup_timestamp_us, nominal_step_us);
++  assert(rebased == startup_timestamp_us + nominal_step_us);
+ }
+ 
+ static void test_versioned_json_frame_is_exact_and_bounded() {

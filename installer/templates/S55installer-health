@@ -1,0 +1,62 @@
+#!/bin/sh
+
+READY=/run/thingino-health
+WAITER_PID=/run/thingino-health.wait.pid
+WAIT_SECONDS=300
+
+ready() {
+	ip -4 addr show dev wlan0 scope global | grep -q 'inet ' || return 1
+}
+
+mark_ready() {
+	: >"$READY"
+	printf '%s\n' 'D-Link installer health: local IPv4 network ready.'
+}
+
+wait_for_ready() {
+	waited=0
+	while [ "$waited" -lt "$WAIT_SECONDS" ]; do
+		if ready; then
+			mark_ready
+			return 0
+		fi
+		sleep 1
+		waited=$((waited + 1))
+	done
+	printf '%s\n' 'D-Link installer health: local station network timed out.' >&2
+	return 1
+}
+
+stop_waiter() {
+	pid=
+	[ ! -s "$WAITER_PID" ] || pid=$(cat "$WAITER_PID" 2>/dev/null || true)
+	case "$pid" in
+		''|*[!0-9]*) ;;
+		*)
+			if [ -r "/proc/$pid/cmdline" ] &&
+				tr '\000' ' ' <"/proc/$pid/cmdline" | grep -F -q "$0 wait"; then
+				kill "$pid" 2>/dev/null || true
+			fi
+			;;
+	esac
+	rm -f "$WAITER_PID"
+}
+
+start() {
+	stop_waiter
+	rm -f "$READY"
+	if ready; then
+		mark_ready
+		return 0
+	fi
+	"$0" wait &
+	printf '%s\n' "$!" >"$WAITER_PID"
+	printf '%s\n' 'D-Link installer health: waiting for local IPv4 in background.'
+}
+
+case "$1" in
+	start) start ;;
+	wait) wait_for_ready ;;
+	stop) stop_waiter; rm -f "$READY" ;;
+	*) exit 1 ;;
+esac

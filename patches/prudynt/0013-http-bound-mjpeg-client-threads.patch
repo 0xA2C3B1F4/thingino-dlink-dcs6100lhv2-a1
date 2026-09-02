@@ -1,0 +1,213 @@
+diff --git a/src/HTTPClientAdmission.hpp b/src/HTTPClientAdmission.hpp
+new file mode 100644
+index 0000000..6197df4
+--- /dev/null
++++ b/src/HTTPClientAdmission.hpp
+@@ -0,0 +1,30 @@
++#pragma once
++
++#include <atomic>
++
++class HTTPClientAdmission {
++public:
++  static constexpr unsigned limit = 8;
++  static constexpr unsigned stack_size = 256U * 1024U;
++
++  bool tryAcquire() {
++    unsigned active = active_.load(std::memory_order_relaxed);
++    while (active < limit) {
++      if (active_.compare_exchange_weak(active, active + 1,
++                                        std::memory_order_acquire,
++                                        std::memory_order_relaxed)) {
++        return true;
++      }
++    }
++    return false;
++  }
++
++  void release() { active_.fetch_sub(1, std::memory_order_release); }
++
++  unsigned active() const {
++    return active_.load(std::memory_order_acquire);
++  }
++
++private:
++  std::atomic<unsigned> active_{0};
++};
+diff --git a/src/HTTPMJPEG.cpp b/src/HTTPMJPEG.cpp
+index 523385c..7c0ec46 100644
+--- a/src/HTTPMJPEG.cpp
++++ b/src/HTTPMJPEG.cpp
+@@ -18,11 +18,15 @@
+ #include <cstdio>
+ #include <cstdlib>
+ #include <cstring>
++#include <exception>
+ #include <fcntl.h>
+ #include <fstream>
++#include <memory>
++#include <new>
+ #include <netinet/in.h>
+ #include <netinet/ip.h>
+ #include <netinet/tcp.h>
++#include <pthread.h>
+ 
+ #include <chrono>
+ #include <string>
+@@ -274,8 +278,75 @@ void HTTPMJPEG::server_loop(int port) {
+       // accept interrupted by shutdown or error; continue
+       continue;
+     }
+-    std::thread(&HTTPMJPEG::handle_client, this, cfd).detach();
++    if (!start_client_thread(cfd)) {
++      LOG_WARN("HTTPMJPEG: rejecting client because the bounded client "
++               "thread could not start");
++      ::shutdown(cfd, SHUT_RDWR);
++      ::close(cfd);
++    }
++  }
++}
++
++bool HTTPMJPEG::start_client_thread(int cfd) {
++  if (!client_threads_.tryAcquire())
++    return false;
++
++  std::unique_ptr<ClientThreadContext> context(
++      new (std::nothrow) ClientThreadContext{this, cfd});
++  if (!context) {
++    client_threads_.release();
++    return false;
++  }
++
++  pthread_attr_t attributes;
++  int error = pthread_attr_init(&attributes);
++  const bool attributes_initialized = error == 0;
++  if (error == 0)
++    error = pthread_attr_setdetachstate(&attributes, PTHREAD_CREATE_DETACHED);
++  if (error == 0)
++    error = pthread_attr_setstacksize(&attributes,
++                                     HTTPClientAdmission::stack_size);
++
++  pthread_t thread;
++  if (error == 0) {
++    error = pthread_create(&thread, &attributes,
++                           &HTTPMJPEG::client_thread_entry, context.get());
++  }
++  if (error == 0)
++    context.release();
++  if (attributes_initialized && pthread_attr_destroy(&attributes) != 0 &&
++      error == 0)
++    LOG_WARN("HTTPMJPEG: pthread attributes could not be destroyed");
++  if (error != 0) {
++    client_threads_.release();
++    LOG_WARN("HTTPMJPEG: pthread_create failed: " << strerror(error));
++    return false;
++  }
++  return true;
++}
++
++void *HTTPMJPEG::client_thread_entry(void *raw_context) {
++  std::unique_ptr<ClientThreadContext> context(
++      static_cast<ClientThreadContext *>(raw_context));
++  HTTPMJPEG *owner = context->owner;
++  const int fd = context->fd;
++  struct AdmissionRelease {
++    HTTPClientAdmission &admission;
++    ~AdmissionRelease() { admission.release(); }
++  } release{owner->client_threads_};
++
++  try {
++    owner->handle_client(fd);
++  } catch (const std::exception &error) {
++    LOG_ERROR("HTTPMJPEG: client handler failed: " << error.what());
++    ::shutdown(fd, SHUT_RDWR);
++    ::close(fd);
++  } catch (...) {
++    LOG_ERROR("HTTPMJPEG: client handler failed with an unknown exception");
++    ::shutdown(fd, SHUT_RDWR);
++    ::close(fd);
+   }
++  return nullptr;
+ }
+ 
+ void HTTPMJPEG::handle_client(int cfd) {
+diff --git a/src/HTTPMJPEG.hpp b/src/HTTPMJPEG.hpp
+index 1c220f6..6f0beb4 100644
+--- a/src/HTTPMJPEG.hpp
++++ b/src/HTTPMJPEG.hpp
+@@ -1,6 +1,8 @@
+ #ifndef HTTP_MJPEG_HPP
+ #define HTTP_MJPEG_HPP
+ 
++#include "HTTPClientAdmission.hpp"
++
+ #include <atomic>
+ #include <thread>
+ 
+@@ -16,11 +18,19 @@ public:
+   void stop();                                   // best-effort stop
+ 
+ private:
++  struct ClientThreadContext {
++    HTTPMJPEG *owner;
++    int fd;
++  };
++
+   void server_loop(int port);
+   void handle_client(int cfd);
++  bool start_client_thread(int cfd);
++  static void *client_thread_entry(void *raw_context);
+ 
+   std::thread th_;
+   std::atomic<bool> running_{false};
++  HTTPClientAdmission client_threads_;
+   int listen_fd_{-1};
+   bool mjpeg_enabled_{true};
+   bool api_enabled_{false};
+diff --git a/tests/test_media_queue.cpp b/tests/test_media_queue.cpp
+index 7bd6fa3..726c682 100644
+--- a/tests/test_media_queue.cpp
++++ b/tests/test_media_queue.cpp
+@@ -4,6 +4,7 @@
+ #include "EncoderReceivePolicy.hpp"
+ #include "DLinkMediaProcessPolicy.hpp"
+ #include "HTTPBindPolicy.hpp"
++#include "HTTPClientAdmission.hpp"
+ #include "JpegDemandPolicy.hpp"
+ #include "JpegIdlePolicy.hpp"
+ #include "StreamRuntimePolicy.hpp"
+@@ -82,6 +83,24 @@ static void test_http_bind_policy() {
+   assert(httpBindHostAddress(true) == 0x7f000001U);
+ }
+ 
++static void test_http_client_admission_is_bounded_and_reusable() {
++  HTTPClientAdmission admission;
++  for (unsigned index = 0; index < HTTPClientAdmission::limit; ++index)
++    assert(admission.tryAcquire());
++  assert(admission.active() == HTTPClientAdmission::limit);
++  assert(!admission.tryAcquire());
++
++  admission.release();
++  assert(admission.active() == HTTPClientAdmission::limit - 1);
++  assert(admission.tryAcquire());
++  assert(admission.active() == HTTPClientAdmission::limit);
++
++  for (unsigned index = 0; index < HTTPClientAdmission::limit; ++index)
++    admission.release();
++  assert(admission.active() == 0);
++  assert(HTTPClientAdmission::stack_size == 256U * 1024U);
++}
++
+ static void test_video_receive_demand_and_transition_policy() {
+   VideoReceiveDemand idle;
+   assert(!videoReceiveDemandActive(idle));
+@@ -361,6 +380,7 @@ int main() {
+   test_jpeg_demand_deadline_and_idle_policy();
+   test_mjpeg_request_policy();
+   test_http_bind_policy();
++  test_http_client_admission_is_bounded_and_reusable();
+   test_video_receive_demand_and_transition_policy();
+   test_stream_runtime_fps_policy();
+   test_dlink_media_process_policy();
+-- 
+2.54.0

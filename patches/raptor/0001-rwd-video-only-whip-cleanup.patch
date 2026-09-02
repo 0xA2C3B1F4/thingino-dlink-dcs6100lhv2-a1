@@ -1,0 +1,126 @@
+diff --git a/rwd/rwd.h b/rwd/rwd.h
+index e684cc8..5e09712 100644
+--- a/rwd/rwd.h
++++ b/rwd/rwd.h
+@@ -238,6 +238,8 @@ struct rwd_server {
+ 	rss_ring_t *audio_ring;
+ 	uint64_t audio_read_seq;
+ 	bool has_audio;
++	bool video_only;       /* skip audio ring/thread for video-only deployments */
++	bool signaling_loopback; /* expose HTTP signaling only through local proxy */
+ 	int audio_mode;	     /* RWD_AUDIO_MODE_OPUS or _AUTO */
+ 	int opus_complexity; /* 0-10 for transcode encoder */
+ 	int opus_bitrate;    /* bps for transcode encoder */
+diff --git a/rwd/rwd_main.c b/rwd/rwd_main.c
+index 47fa00a..333375d 100644
+--- a/rwd/rwd_main.c
++++ b/rwd/rwd_main.c
+@@ -187,6 +187,26 @@ static int create_udp_socket(int port)
+ 
+ /* ── Create listening TCP socket for HTTP ── */
+ 
+-static int create_http_socket(int port)
++static int create_http_socket(int port, bool loopback_only)
+ {
++	if (loopback_only) {
++		int loopback_fd = socket(AF_INET, SOCK_STREAM, 0);
++		if (loopback_fd < 0)
++			return -1;
++		int reuse = 1;
++		setsockopt(loopback_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
++		struct sockaddr_in loopback = {
++			.sin_family = AF_INET,
++			.sin_port = htons(port),
++			.sin_addr.s_addr = htonl(INADDR_LOOPBACK),
++		};
++		if (bind(loopback_fd, (struct sockaddr *)&loopback, sizeof(loopback)) < 0 ||
++		    listen(loopback_fd, 8) < 0) {
++			close(loopback_fd);
++			return -1;
++		}
++		fcntl(loopback_fd, F_SETFL, fcntl(loopback_fd, F_GETFL) | O_NONBLOCK);
++		return loopback_fd;
++	}
++
+ 	int fd = socket(AF_INET6, SOCK_STREAM, 0);
+@@ -563,8 +563,11 @@ static void rwd_run(rwd_server_t *srv)
+ 	pthread_attr_setstacksize(&tattr, 128 * 1024);
+ 
+ 	pthread_t video_tid, audio_tid;
++	bool audio_started = false;
+ 	pthread_create(&video_tid, &tattr, rwd_video_reader_thread, srv);
+-	pthread_create(&audio_tid, &tattr, rwd_audio_reader_thread, srv);
++	if (!srv->video_only &&
++	    pthread_create(&audio_tid, &tattr, rwd_audio_reader_thread, srv) == 0)
++		audio_started = true;
+ 	pthread_attr_destroy(&tattr);
+ 
+ 	uint8_t udp_buf[RWD_UDP_BUF_SIZE];
+@@ -637,7 +640,8 @@ static void rwd_run(rwd_server_t *srv)
+ 	/* Shutdown — wake reader threads so they see *running == false */
+ 	pthread_cond_broadcast(&srv->clients_cond);
+ 	pthread_join(video_tid, NULL);
+-	pthread_join(audio_tid, NULL);
++	if (audio_started)
++		pthread_join(audio_tid, NULL);
+ 
+ 	/* Cleanup all clients */
+ 	pthread_mutex_lock(&srv->clients_lock);
+@@ -693,6 +717,9 @@ int main(int argc, char **argv)
+ 		srv.max_clients = 1;
+ 	if (srv.max_clients > RWD_MAX_CLIENTS)
+ 		srv.max_clients = RWD_MAX_CLIENTS;
++	srv.video_only = rss_config_get_bool(dctx.cfg, "webrtc", "video_only", false);
++	srv.signaling_loopback =
++		rss_config_get_bool(dctx.cfg, "webrtc", "signaling_loopback", false);
+ 	const char *audio_mode_str = rss_config_get_str(dctx.cfg, "webrtc", "audio_mode", "opus");
+ 	if (strcmp(audio_mode_str, "auto") == 0)
+ 		srv.audio_mode = RWD_AUDIO_MODE_AUTO;
+@@ -795,11 +822,13 @@ int main(int argc, char **argv)
+-	srv.http_fd = create_http_socket(srv.http_port);
++	srv.http_fd = create_http_socket(srv.http_port, srv.signaling_loopback);
+ 	if (srv.http_fd < 0) {
+ 		RSS_FATAL("failed to bind HTTP port %d: %s", srv.http_port, strerror(errno));
+ 		goto cleanup;
+ 	}
+ 	RSS_INFO("HTTP listening on port %d (GET /webrtc, POST /whip)", srv.http_port);
+-	RSS_DEBUG("  max_clients=%d audio=%s opus_complexity=%d opus_bitrate=%d", srv.max_clients,
+-		  audio_mode_str, srv.opus_complexity, srv.opus_bitrate);
++	RSS_DEBUG("  max_clients=%d video_only=%s signaling_loopback=%s audio=%s opus_complexity=%d opus_bitrate=%d",
++		  srv.max_clients, srv.video_only ? "true" : "false",
++		  srv.signaling_loopback ? "true" : "false", audio_mode_str,
++		  srv.opus_complexity, srv.opus_bitrate);
+ 
+ 	/* WebTorrent external sharing (optional) */
+ #ifdef RAPTOR_WEBTORRENT
+diff --git a/rwd/rwd_media.c b/rwd/rwd_media.c
+index 9bfe4fa..79c1fca 100644
+--- a/rwd/rwd_media.c
++++ b/rwd/rwd_media.c
+@@ -889,6 +889,9 @@ void *rwd_audio_reader_thread(void *arg)
+ 	uint32_t audio_codec = 0;
+ 	int sample_rate = 0;
+ 	uint8_t audio_profile = 0;
++#ifndef RAPTOR_AAC
++	(void)audio_profile;
++#endif
+ 	int64_t audio_ts_epoch = 0;
+ 	uint8_t audio_buf[4096];
+ 	uint8_t transcode_out[1024]; /* max Opus or PCMU frame output */
+diff --git a/rwd/rwd_signaling.c b/rwd/rwd_signaling.c
+index ba0063a..5d67719 100644
+--- a/rwd/rwd_signaling.c
++++ b/rwd/rwd_signaling.c
+@@ -65,10 +65,4 @@ static void http_send(int fd, const char *status, const char *content_type, cons
+ 			       "Content-Length: %zu\r\n"
+-			       /* CORS: wildcard required -- WHIP clients (go2rtc, HA,
+-				  browsers) connect cross-origin by design. Auth
+-				  headers protect against unauthorized access. */
+-			       "Access-Control-Allow-Origin: *\r\n"
+-			       "Access-Control-Allow-Methods: POST, DELETE, OPTIONS\r\n"
+-			       "Access-Control-Allow-Headers: Content-Type\r\n"
+ 			       "%s"
+ 			       "Connection: close\r\n"
+ 			       "\r\n",
+-- 
+2.51.0

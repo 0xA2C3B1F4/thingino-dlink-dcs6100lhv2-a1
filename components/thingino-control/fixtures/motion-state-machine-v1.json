@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "source_semantics": {
+    "debounce_samples": "Prudynt increments once per active ROI in each IVS result, not once per wall-clock second.",
+    "event_end": "Inactive starts after both min_active_ms and post_ms have elapsed since the last qualifying detected sample.",
+    "cooldown": "Detected samples are ignored until cooldown_ms has elapsed after inactive.",
+    "initial_period": "Samples are ignored until init_ms has elapsed only for the first Prudynt process session; a same-process Motion thread re-enable does not re-arm the global grace flag.",
+    "motor_suppression": "Motor-active samples behave as clear for event end, and the cooldown restarts when motor movement and its settle window end.",
+    "video_length": "The legacy shell used this only as the requested event clip duration; it did not change Motion ON or OFF timing.",
+    "pre_time": "The pinned Prudynt source has recorder prebuffer settings but no motion.pre_time setting. Event timing does not consume a pre_time value."
+  },
+  "cases": [
+    {
+      "name": "initial-period-and-minimum-active-time",
+      "config": {"debounce_samples":0,"cooldown_ms":5000,"init_ms":5000,"min_active_ms":1000,"post_ms":0},
+      "observations": [
+        {"state":"monitoring","at_ms":0,"monitoring_since_ms":0,"sequence":1,"roi_mask":0},
+        {"state":"detected","at_ms":4999,"monitoring_since_ms":0,"sequence":2,"roi_mask":1},
+        {"state":"detected","at_ms":5000,"monitoring_since_ms":0,"sequence":3,"roi_mask":1},
+        {"state":"clear","at_ms":5999,"monitoring_since_ms":0,"sequence":4,"roi_mask":0},
+        {"state":"clear","at_ms":6000,"monitoring_since_ms":0,"sequence":5,"roi_mask":0}
+      ],
+      "expected_transitions": [
+        {"state":"active","at_ms":5000},
+        {"state":"inactive","at_ms":6000}
+      ]
+    },
+    {
+      "name": "debounce-counts-active-rois",
+      "config": {"debounce_samples":2,"cooldown_ms":5000,"init_ms":0,"min_active_ms":0,"post_ms":0},
+      "observations": [
+        {"state":"detected","at_ms":0,"monitoring_since_ms":0,"sequence":1,"roi_mask":3}
+      ],
+      "expected_transitions": [
+        {"state":"active","at_ms":0}
+      ]
+    },
+    {
+      "name": "same-process-motion-reenable-does-not-repeat-initial-grace",
+      "config": {"debounce_samples":0,"cooldown_ms":5000,"init_ms":5000,"min_active_ms":1000,"post_ms":0},
+      "observations": [
+        {"state":"monitoring","at_ms":0,"monitoring_since_ms":0,"sequence":1,"roi_mask":0,"initial_grace":false},
+        {"state":"detected","at_ms":100,"monitoring_since_ms":0,"sequence":2,"roi_mask":1,"initial_grace":false}
+      ],
+      "expected_transitions": [
+        {"state":"active","at_ms":100}
+      ]
+    },
+    {
+      "name": "cooldown-ignores-new-motion-until-expiry",
+      "config": {"debounce_samples":0,"cooldown_ms":5000,"init_ms":0,"min_active_ms":1000,"post_ms":0},
+      "observations": [
+        {"state":"detected","at_ms":0,"monitoring_since_ms":0,"sequence":1,"roi_mask":1},
+        {"state":"clear","at_ms":1000,"monitoring_since_ms":0,"sequence":2,"roi_mask":0},
+        {"state":"detected","at_ms":5999,"monitoring_since_ms":0,"sequence":3,"roi_mask":1},
+        {"state":"detected","at_ms":6000,"monitoring_since_ms":0,"sequence":4,"roi_mask":1}
+      ],
+      "expected_transitions": [
+        {"state":"active","at_ms":0},
+        {"state":"inactive","at_ms":1000},
+        {"state":"active","at_ms":6000}
+      ]
+    },
+    {
+      "name": "long-event-refreshes-post-window",
+      "config": {"debounce_samples":0,"cooldown_ms":5000,"init_ms":0,"min_active_ms":1000,"post_ms":3000},
+      "observations": [
+        {"state":"detected","at_ms":0,"monitoring_since_ms":0,"sequence":1,"roi_mask":1},
+        {"state":"detected","at_ms":5000,"monitoring_since_ms":0,"sequence":2,"roi_mask":1},
+        {"state":"clear","at_ms":7999,"monitoring_since_ms":0,"sequence":3,"roi_mask":0},
+        {"state":"clear","at_ms":8000,"monitoring_since_ms":0,"sequence":4,"roi_mask":0}
+      ],
+      "expected_transitions": [
+        {"state":"active","at_ms":0},
+        {"state":"inactive","at_ms":8000}
+      ]
+    },
+    {
+      "name": "prudynt-stop-clears-recovered-active-state",
+      "recovered_active": true,
+      "config": {"debounce_samples":0,"cooldown_ms":5000,"init_ms":0,"min_active_ms":1000,"post_ms":0},
+      "observations": [
+        {"state":"monitoring","at_ms":100,"monitoring_since_ms":100,"sequence":1,"roi_mask":0},
+        {"state":"stopped","at_ms":200,"monitoring_since_ms":100,"sequence":2,"roi_mask":0}
+      ],
+      "expected_transitions": [
+        {"state":"inactive","at_ms":200}
+      ]
+    },
+    {
+      "name": "control-restart-recovered-active-clears-after-fresh-hold",
+      "recovered_active": true,
+      "config": {"debounce_samples":0,"cooldown_ms":5000,"init_ms":0,"min_active_ms":1000,"post_ms":3000},
+      "observations": [
+        {"state":"clear","at_ms":10000,"monitoring_since_ms":100,"sequence":1,"roi_mask":0},
+        {"state":"clear","at_ms":12999,"monitoring_since_ms":100,"sequence":2,"roi_mask":0},
+        {"state":"clear","at_ms":13000,"monitoring_since_ms":100,"sequence":3,"roi_mask":0}
+      ],
+      "expected_transitions": [
+        {"state":"inactive","at_ms":13000}
+      ]
+    },
+    {
+      "name": "motor-suppression-restarts-cooldown-when-movement-ends",
+      "config": {"debounce_samples":0,"cooldown_ms":5000,"init_ms":0,"min_active_ms":1000,"post_ms":0},
+      "observations": [
+        {"state":"detected","at_ms":0,"monitoring_since_ms":0,"sequence":1,"roi_mask":1},
+        {"state":"suppressed","at_ms":1000,"monitoring_since_ms":0,"sequence":2,"roi_mask":0},
+        {"state":"suppressed","at_ms":8000,"monitoring_since_ms":0,"sequence":3,"roi_mask":0},
+        {"state":"clear","at_ms":8000,"monitoring_since_ms":0,"sequence":4,"roi_mask":0},
+        {"state":"detected","at_ms":12999,"monitoring_since_ms":0,"sequence":5,"roi_mask":1},
+        {"state":"detected","at_ms":13000,"monitoring_since_ms":0,"sequence":6,"roi_mask":1}
+      ],
+      "expected_transitions": [
+        {"state":"active","at_ms":0},
+        {"state":"inactive","at_ms":1000},
+        {"state":"active","at_ms":13000}
+      ]
+    }
+  ]
+}

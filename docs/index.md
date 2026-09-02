@@ -1,0 +1,18 @@
+# Documentation
+
+- [Status](status.md) lists what is proven and what blocks a public release.
+- [Features](features.md) separates implemented features from their validation
+  level.
+- [Hardware](hardware.md) defines the only supported board and flash layout.
+- [Architecture](architecture.md) explains Control, Prudynt, Raptor rwd, uhttpd,
+  and the WebUI.
+- [API](api.md) summarizes the stable Thingino Control v1 boundary.
+- [Build](build.md) covers source preparation, private inputs, and build gates.
+- [Installation](installation.md) defines the installation boundary and flow.
+- [Recovery](recovery.md) explains what can and cannot recover this layout.
+- [Testing](testing.md) lists host, build, browser, and device evidence levels.
+
+Third-party source and redistribution notes are in
+[`third_party/NOTICE.md`](../third_party/NOTICE.md). The exact unresolved
+license evidence and upstream request are in
+[`third_party/LICENSE_REVIEW.md`](../third_party/LICENSE_REVIEW.md).

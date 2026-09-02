@@ -1,0 +1,34 @@
+diff --git a/package/prudynt-t/files/S31prudynt b/package/prudynt-t/files/S31prudynt
+--- a/package/prudynt-t/files/S31prudynt
++++ b/package/prudynt-t/files/S31prudynt
+@@ -7,6 +7,22 @@
+ PIDFILE="/run/prudynt.pid"
+ HEARTBEAT_INIT="/etc/init.d/S99heartbeat"
+ 
++load_timezone() {
++	# Keep the camera's POSIX TZ value in the Prudynt environment.  `read` is
++	# an ash builtin, so startup does not create a helper process or temporary
++	# file.  Control writes this file in place and includes a trailing LF.
++	TZ_VALUE=
++	if [ -r /etc/TZ ]; then
++		IFS= read -r TZ_VALUE < /etc/TZ || true
++	fi
++	if [ -n "$TZ_VALUE" ]; then
++		TZ=$TZ_VALUE
++		export TZ
++	else
++		unset TZ
++	fi
++}
++
+ restart_heartbeat() {
+ 	if [ -x "$HEARTBEAT_INIT" ]; then
+ 		"$HEARTBEAT_INIT" restart >/dev/null 2>&1
+@@ -47,6 +63,7 @@ stop_daemon() {
+ 
+ start() {
+ 	echo -c 15 "Starting Prudynt"
++	load_timezone
+ 	start_daemon
+ 	status=$?
+ 	if [ "$status" -eq 0 ]; then

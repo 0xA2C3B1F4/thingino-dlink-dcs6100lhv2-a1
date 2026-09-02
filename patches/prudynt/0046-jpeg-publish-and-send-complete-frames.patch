@@ -1,0 +1,468 @@
+diff --git a/src/HTTPMJPEG.cpp b/src/HTTPMJPEG.cpp
+index 679a3fc..15f2e6c 100644
+--- a/src/HTTPMJPEG.cpp
++++ b/src/HTTPMJPEG.cpp
+@@ -128,40 +128,6 @@ bool write_full(int fd, const void *data, size_t len) {
+   return true;
+ }
+ 
+-// Write in small chunks, paced across the target duration to avoid bursts
+-bool write_chunked_paced(int fd, const unsigned char *data, size_t len,
+-                         size_t chunk_sz, milliseconds total) {
+-  auto start = steady_clock::now();
+-  size_t sent = 0;
+-  while (sent < len) {
+-    size_t to_send = std::min(chunk_sz, len - sent);
+-    ssize_t n = ::send(fd, data + sent, to_send, MSG_NOSIGNAL);
+-    if (n < 0) {
+-      if (errno == EINTR)
+-        continue;
+-      return false;
+-    }
+-    if (n == 0)
+-      return false;
+-    sent += static_cast<size_t>(n);
+-
+-    // Target schedule: proportion of total duration based on bytes sent
+-    auto elapsed = steady_clock::now() - start;
+-    auto target_us = static_cast<uint64_t>(sent) *
+-                     duration_cast<microseconds>(total).count() /
+-                     static_cast<uint64_t>(len);
+-    auto elapsed_us =
+-        static_cast<uint64_t>(duration_cast<microseconds>(elapsed).count());
+-    if (target_us > elapsed_us) {
+-      auto sleep_us = target_us - elapsed_us;
+-      if (sleep_us > 50) { // avoid oversleeping tiny fragments
+-        usleep(static_cast<useconds_t>(sleep_us));
+-      }
+-    }
+-  }
+-  return true;
+-}
+-
+ // Local snapshot helper: copy the latest JPEG frame (already clean)
+ bool get_snapshot_ch_local_http(int ch, std::vector<unsigned char> &image) {
+   std::unique_lock lck(mutex_main);
+@@ -380,7 +346,6 @@ void HTTPMJPEG::handle_client(int cfd) {
+   // Parse request line
+   std::string method;
+   int ch = 0, q = -1, fps = -1, w = -1, h = -1;
+-  int chunk_sz = 1024;      // default paced chunk size (bytes)
+   int sndbuf_override = -1; // bytes; <=0 means use default
+   int tos_override = -1;    // IP TOS override; <0 means default
+   std::string boundary = "prudyntmjpegboundary";
+@@ -762,12 +727,8 @@ void HTTPMJPEG::handle_client(int cfd) {
+   auto *stream_cfg = global_jpeg[ch]->stream;
+   int orig_fps = stream_cfg->fps;
+ 
+-  // Optional tuning: chunk size, sndbuf, tos
+-  p = get_param(qs, "cs");
+-  if (!p.empty()) {
+-    int cs = atoi(p.c_str());
+-    chunk_sz = std::max(256, std::min(4096, cs));
+-  }
++  // Optional socket tuning. Encoder dimensions, quality, and frame delivery
++  // are intentionally not mutable per request.
+   p = get_param(qs, "sndbuf");
+   if (!p.empty()) {
+     int sb = atoi(p.c_str());
+@@ -803,9 +764,6 @@ void HTTPMJPEG::handle_client(int cfd) {
+   hdr +=
+       "\r\nCache-Control: no-store, no-cache, must-revalidate, max-age=0\r\n";
+   hdr += "Pragma: no-cache\r\n";
+-  hdr += "X-Chunk-Size: ";
+-  hdr += std::to_string(chunk_sz);
+-  hdr += "\r\n";
+   hdr += "Connection: close\r\n\r\n";
+   if (!write_full(cfd, hdr.data(), hdr.size())) {
+     ::close(cfd);
+@@ -818,7 +776,7 @@ void HTTPMJPEG::handle_client(int cfd) {
+   // Determine pacing from requested/original fps (fallback to 10)
+   int target_fps = (fps > 0 ? fps : (orig_fps > 0 ? orig_fps : 10));
+   auto tick = milliseconds(std::max(10, 1000 / target_fps));
+-  auto t_next = steady_clock::now() + tick; // first send in ~1 tick
++  auto t_next = steady_clock::now();
+   // Set a conservative send timeout to avoid blocking indefinitely on a stalled
+   // link
+   {
+@@ -897,14 +855,20 @@ void HTTPMJPEG::handle_client(int cfd) {
+         !write_full(cfd, part_hdr, static_cast<size_t>(header_len))) {
+       break;
+     }
+-    if (!write_chunked_paced(cfd, img.data(), img.size(),
+-                             static_cast<size_t>(chunk_sz), tick))
++    // A multipart part is one presentation unit. Never deliberately spread a
++    // JPEG across the frame interval: browsers may decode the incomplete scan
++    // and paint the missing rows gray. Socket backpressure remains bounded by
++    // SO_SNDTIMEO; cadence is applied between complete parts below.
++    if (!write_full(cfd, img.data(), img.size()))
+       break;
+     if (!write_full(cfd, "\r\n", 2))
+       break;
+ 
+     // Inform producer we're still subscribed
+     global_jpeg[ch]->request();
++    const auto after_send = steady_clock::now();
++    if (after_send < t_next)
++      std::this_thread::sleep_until(t_next);
+   }
+ 
+   ::close(cfd);
+diff --git a/src/JPEGWorker.cpp b/src/JPEGWorker.cpp
+index beb2ac2..f425155 100644
+--- a/src/JPEGWorker.cpp
++++ b/src/JPEGWorker.cpp
+@@ -2,6 +2,7 @@
+ 
+ #include "Config.hpp"
+ #include "EncoderReceivePolicy.hpp"
++#include "JpegFramePolicy.hpp"
+ #include "Logger.hpp"
+ #include "MediaRuntimeMetrics.hpp"
+ #include "RepeatedFailureGate.hpp"
+@@ -127,6 +128,7 @@ bool JPEGWorker::run() {
+   // Local stats counters
+   uint32_t bps{0}; // Bytes per second
+   uint32_t fps{0}; // frames per second
++  std::vector<unsigned char> candidate_buf;
+ 
+   // timestamp for stream stats calculation
+   unsigned long long ms{0};
+@@ -134,6 +136,7 @@ bool JPEGWorker::run() {
+   auto &runtime_metrics = mediaRuntimeMetrics();
+   RepeatedFailureGate empty_stream_failure;
+   RepeatedFailureGate zero_length_failure;
++  RepeatedFailureGate invalid_frame_failure;
+   RepeatedFailureGate standby_stop_failure;
+   RepeatedFailureGate standby_start_failure;
+   RepeatedFailureGate source_timeout_failure;
+@@ -309,16 +312,28 @@ bool JPEGWorker::run() {
+                 });
+ 
+             size_t total_size = 0;
++            bool pack_layout_valid = true;
+             for (uint32_t i = 0; i < stream.packCount; i++) {
+               auto slices = hal::encoder::get_pack_slices(stream, i);
+-              total_size += slices.first_len + slices.second_len;
++              if ((slices.first_len > 0 && !slices.first_ptr) ||
++                  (slices.second_len > 0 && !slices.second_ptr) ||
++                  slices.first_len > kMaxJpegFrameBytes - total_size) {
++                pack_layout_valid = false;
++                break;
++              }
++              total_size += slices.first_len;
++              if (slices.second_len > kMaxJpegFrameBytes - total_size) {
++                pack_layout_valid = false;
++                break;
++              }
++              total_size += slices.second_len;
+             }
+-            if (total_size == 0) {
++            if (!pack_layout_valid || total_size == 0) {
+               observeRepeatedFailure(
+                   zero_length_failure, true,
+                   [&] {
+-                    LOG_WARN("JPEGWorker: encoder returned zero-length stream "
+-                             "on channel "
++                    LOG_WARN("JPEGWorker: encoder returned invalid pack layout "
++                             "or zero-length stream on channel "
+                              << global_jpeg[jpgChn]->encChn);
+                   },
+                   [&](uint16_t) {});
+@@ -332,27 +347,56 @@ bool JPEGWorker::run() {
+                            << count << " suppressed failures");
+                 });
+ 
++            candidate_buf.resize(total_size);
++            unsigned char *dst = candidate_buf.data();
++            for (uint32_t i = 0; i < stream.packCount; i++) {
++              auto slices = hal::encoder::get_pack_slices(stream, i);
++              if (slices.first_len) {
++                std::memcpy(dst, slices.first_ptr, slices.first_len);
++                dst += slices.first_len;
++              }
++              if (slices.second_len) {
++                std::memcpy(dst, slices.second_ptr, slices.second_len);
++                dst += slices.second_len;
++              }
++            }
++
++            auto *jpeg_stream_config = global_jpeg[jpgChn]->stream;
++            const bool valid_frame = jpegFrameMatches(
++                candidate_buf.data(), candidate_buf.size(),
++                static_cast<unsigned>(jpeg_stream_config->width),
++                static_cast<unsigned>(jpeg_stream_config->height));
++            if (!valid_frame) {
++              runtime_metrics.recordJpegInvalidFrame(jpgChn);
++              observeRepeatedFailure(
++                  invalid_frame_failure, true,
++                  [&] {
++                    LOG_WARN("JPEGWorker: dropped incomplete, malformed, or "
++                             "wrong-sized JPEG frame on channel "
++                             << global_jpeg[jpgChn]->encChn << " (bytes="
++                             << total_size << ", expected="
++                             << jpeg_stream_config->width << "x"
++                             << jpeg_stream_config->height << ")");
++                  },
++                  [&](uint16_t) {});
++              IMP_Encoder_ReleaseStream(global_jpeg[jpgChn]->encChn, &stream);
++              std::this_thread::sleep_for(std::chrono::milliseconds(10));
++              continue;
++            }
++            observeRepeatedFailure(
++                invalid_frame_failure, false, [] {}, [&](uint16_t count) {
++                  LOG_INFO("JPEGWorker: valid JPEG framing recovered after "
++                           << count << " suppressed invalid frames");
++                });
++
+             fps++;
+             bps += total_size;
+ 
+-            // Build in-memory JPEG snapshot buffer for HTTP/IPC consumers
+-            if (total_size) {
++            // Publish only a complete, dimension-matched frame. Build outside
++            // mutex_main so encoder copying never extends the consumer lock.
++            {
+               std::unique_lock buf_lock(mutex_main);
+-              auto &buf = global_jpeg[jpgChn]->snapshot_buf;
+-              buf.resize(total_size);
+-              unsigned char *dst = buf.data();
+-              // Second pass: copy data into buffer
+-              for (uint32_t i = 0; i < stream.packCount; i++) {
+-                auto slices = hal::encoder::get_pack_slices(stream, i);
+-                if (slices.first_len) {
+-                  std::memcpy(dst, slices.first_ptr, slices.first_len);
+-                  dst += slices.first_len;
+-                }
+-                if (slices.second_len) {
+-                  std::memcpy(dst, slices.second_ptr, slices.second_len);
+-                  dst += slices.second_len;
+-                }
+-              }
++              global_jpeg[jpgChn]->snapshot_buf.swap(candidate_buf);
+             }
+ 
+             uint32_t seq = ++global_jpeg[jpgChn]->frame_seq;
+diff --git a/src/IPCServer.cpp b/src/IPCServer.cpp
+index 4d51675..601e507 100644
+--- a/src/IPCServer.cpp
++++ b/src/IPCServer.cpp
+@@ -1079,6 +1079,12 @@ int IPCServer::handle_client(int fd) {
+                             runtime_metrics.jpeg_source_timeouts_total[channel]
+                                 .load()));
+       write(fd, line, strlen(line));
++      snprintf(line, sizeof(line),
++               "prudynt_jpeg_invalid_frames_total{channel=\"%zu\"} %llu\n",
++               channel, static_cast<unsigned long long>(
++                            runtime_metrics.jpeg_invalid_frames_total[channel]
++                                .load()));
++      write(fd, line, strlen(line));
+     }
+ 
+     // Build info as a const gauge with labels
+diff --git a/src/MediaRuntimeMetrics.hpp b/src/MediaRuntimeMetrics.hpp
+index adf96d8..34453ce 100644
+--- a/src/MediaRuntimeMetrics.hpp
++++ b/src/MediaRuntimeMetrics.hpp
+@@ -84,6 +84,12 @@ public:
+           1, std::memory_order_relaxed);
+   }
+ 
++  void recordJpegInvalidFrame(int channel) {
++    if (validJpegChannel(channel))
++      jpeg_invalid_frames_total[channel].fetch_add(
++          1, std::memory_order_relaxed);
++  }
++
+   void clearJpegRuntimeState(int channel) {
+     if (!validJpegChannel(channel))
+       return;
+@@ -114,6 +120,8 @@ public:
+       jpeg_receive_stop_failures_total{};
+   std::array<std::atomic<std::uint64_t>, jpeg_channel_count>
+       jpeg_source_timeouts_total{};
++  std::array<std::atomic<std::uint64_t>, jpeg_channel_count>
++      jpeg_invalid_frames_total{};
+ 
+ private:
+   static bool validJpegChannel(int channel) {
+diff --git a/tests/run_host_tests.sh b/tests/run_host_tests.sh
+index 3bd454b..8ffd8b5 100755
+--- a/tests/run_host_tests.sh
++++ b/tests/run_host_tests.sh
+@@ -18,6 +18,9 @@ test "$osd_start_owners" = "$repo_dir/src/IMPEncoder.cpp"
+ grep -q 'IMP_OSD_Stop(encGrp)' "$repo_dir/src/IMPEncoder.cpp"
+ ! grep -q 'IMP_OSD_Start(' "$repo_dir/src/OSD.cpp"
+ ! grep -q 'IMP_OSD_Start(' "$repo_dir/src/VideoPrivacyControl.cpp"
++! grep -q 'write_chunked_paced' "$repo_dir/src/HTTPMJPEG.cpp"
++grep -q 'write_full(cfd, img.data(), img.size())' "$repo_dir/src/HTTPMJPEG.cpp"
++grep -q 'jpegFrameMatches' "$repo_dir/src/JPEGWorker.cpp"
+ 
+ start_recv_line=$(grep -n 'ret = IMP_Encoder_StartRecvPic(encChn);' \
+   "$repo_dir/src/VideoWorker.cpp" | tail -1 | cut -d: -f1)
+diff --git a/tests/test_media_queue.cpp b/tests/test_media_queue.cpp
+index 236905d..0743cf0 100644
+--- a/tests/test_media_queue.cpp
++++ b/tests/test_media_queue.cpp
+@@ -10,6 +10,7 @@
+ #include "HTTPClientAdmission.hpp"
+ #include "JpegDemandPolicy.hpp"
+ #include "JpegIdlePolicy.hpp"
++#include "JpegFramePolicy.hpp"
+ #include "StreamRuntimePolicy.hpp"
+ #include "MJPEGRequestPolicy.hpp"
+ #include "MediaRuntimeMetrics.hpp"
+@@ -64,6 +65,42 @@ static void test_jpeg_idle_policy() {
+   assert(jpegIdleFpsPolicy(5, 0) == 5);
+ }
+ 
++static std::vector<unsigned char> minimal_jpeg(std::uint16_t width,
++                                               std::uint16_t height) {
++  return {
++      0xff, 0xd8,
++      0xff, 0xc0, 0x00, 0x0b, 0x08,
++      static_cast<unsigned char>(height >> 8),
++      static_cast<unsigned char>(height & 0xff),
++      static_cast<unsigned char>(width >> 8),
++      static_cast<unsigned char>(width & 0xff),
++      0x01, 0x01, 0x11, 0x00,
++      0xff, 0xda, 0x00, 0x08, 0x01, 0x01, 0x00, 0x00, 0x3f, 0x00,
++      0x00, 0xff, 0xd9,
++  };
++}
++
++static void test_jpeg_frame_policy_rejects_partial_and_wrong_frames() {
++  auto frame = minimal_jpeg(1920, 1080);
++  JpegFrameInfo info;
++  assert(inspectJpegFrame(frame.data(), frame.size(), info));
++  assert(info.width == 1920);
++  assert(info.height == 1080);
++  assert(jpegFrameMatches(frame.data(), frame.size(), 1920, 1080));
++  assert(!jpegFrameMatches(frame.data(), frame.size(), 640, 360));
++
++  auto missing_eoi = frame;
++  missing_eoi.resize(missing_eoi.size() - 2);
++  assert(!jpegFrameMatches(missing_eoi.data(), missing_eoi.size(), 1920,
++                           1080));
++
++  auto malformed_segment = frame;
++  malformed_segment[4] = 0x7f;
++  malformed_segment[5] = 0xff;
++  assert(!jpegFrameMatches(malformed_segment.data(), malformed_segment.size(),
++                           1920, 1080));
++}
++
+ static void test_client_counter_lease_releases_once() {
+   std::atomic<unsigned> clients{0};
+   {
+@@ -111,8 +148,10 @@ static void test_media_metrics_track_jpeg_lifecycle_per_channel() {
+ 
+   metrics.recordJpegReceiveStart(1, false);
+   metrics.recordJpegSourceTimeout(1);
++  metrics.recordJpegInvalidFrame(1);
+   assert(metrics.jpeg_receive_start_failures_total[1].load() == 1);
+   assert(metrics.jpeg_source_timeouts_total[1].load() == 1);
++  assert(metrics.jpeg_invalid_frames_total[1].load() == 1);
+ 
+   metrics.clearJpegRuntimeState(1);
+   assert(metrics.jpeg_worker_running[1].load() == 0);
+@@ -544,6 +583,7 @@ static void test_slow_client_does_not_block_fast_client() {
+ int main() {
+   test_shared_payload_fanout();
+   test_jpeg_idle_policy();
++  test_jpeg_frame_policy_rejects_partial_and_wrong_frames();
+   test_client_counter_lease_releases_once();
+   test_media_metrics_track_queue_high_water();
+   test_media_metrics_track_jpeg_lifecycle_per_channel();
+diff --git a/src/JpegFramePolicy.hpp b/src/JpegFramePolicy.hpp
+new file mode 100644
+index 0000000..ab3dd85
+--- /dev/null
++++ b/src/JpegFramePolicy.hpp
+@@ -0,0 +1,86 @@
++#pragma once
++
++#include <cstddef>
++#include <cstdint>
++
++struct JpegFrameInfo {
++  std::uint16_t width{0};
++  std::uint16_t height{0};
++};
++
++constexpr std::size_t kMaxJpegFrameBytes = 8U * 1024U * 1024U;
++
++inline bool isJpegStartOfFrameMarker(std::uint8_t marker) {
++  return (marker >= 0xc0U && marker <= 0xc3U) ||
++         (marker >= 0xc5U && marker <= 0xc7U) ||
++         (marker >= 0xc9U && marker <= 0xcbU) ||
++         (marker >= 0xcdU && marker <= 0xcfU);
++}
++
++// Validate the framing emitted by the JPEG encoder before publishing it to
++// HTTP/IPC consumers. Entropy-coded scan data is opaque here; the encoder owns
++// JPEG decoding correctness, while this policy rejects truncated buffers,
++// malformed marker lengths, missing dimensions, and cross-channel frames.
++inline bool inspectJpegFrame(const unsigned char *data, std::size_t size,
++                             JpegFrameInfo &info) {
++  info = {};
++  if (!data || size < 8U || size > kMaxJpegFrameBytes || data[0] != 0xffU ||
++      data[1] != 0xd8U || data[size - 2U] != 0xffU ||
++      data[size - 1U] != 0xd9U) {
++    return false;
++  }
++
++  bool have_dimensions = false;
++  std::size_t offset = 2U;
++  while (offset + 1U < size) {
++    if (data[offset] != 0xffU)
++      return false;
++    while (offset < size && data[offset] == 0xffU)
++      ++offset;
++    if (offset >= size)
++      return false;
++
++    const std::uint8_t marker = data[offset++];
++    if (marker == 0xd9U)
++      return have_dimensions && offset == size;
++    if (marker == 0xd8U || marker == 0x00U)
++      return false;
++    if (marker == 0x01U || (marker >= 0xd0U && marker <= 0xd7U))
++      continue;
++    if (offset + 2U > size)
++      return false;
++
++    const std::size_t segment_size =
++        (static_cast<std::size_t>(data[offset]) << 8U) |
++        static_cast<std::size_t>(data[offset + 1U]);
++    if (segment_size < 2U || segment_size > size - offset)
++      return false;
++
++    if (isJpegStartOfFrameMarker(marker)) {
++      if (segment_size < 8U || have_dimensions)
++        return false;
++      info.height = static_cast<std::uint16_t>(
++          (static_cast<std::uint16_t>(data[offset + 3U]) << 8U) |
++          static_cast<std::uint16_t>(data[offset + 4U]));
++      info.width = static_cast<std::uint16_t>(
++          (static_cast<std::uint16_t>(data[offset + 5U]) << 8U) |
++          static_cast<std::uint16_t>(data[offset + 6U]));
++      have_dimensions = info.width != 0U && info.height != 0U;
++      if (!have_dimensions)
++        return false;
++    }
++
++    offset += segment_size;
++    if (marker == 0xdaU)
++      return have_dimensions;
++  }
++  return false;
++}
++
++inline bool jpegFrameMatches(const unsigned char *data, std::size_t size,
++                             unsigned expected_width,
++                             unsigned expected_height) {
++  JpegFrameInfo info;
++  return inspectJpegFrame(data, size, info) && info.width == expected_width &&
++         info.height == expected_height;
++}

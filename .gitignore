@@ -1,0 +1,59 @@
+.DS_Store
+/AGENTS.md
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Local tools and scratch space
+.cache/
+.tmp/
+tmp/
+build/
+dist/
+out/
+/components/thingino-control/target/
+/webui/node_modules/
+/webui/dist/
+/webui/test-results/
+/webui/playwright-report/
+/components/thingino-control/fuzz/artifacts/
+/components/thingino-control/fuzz/target/
+
+# Locally acquired vendor inputs and generated private output
+downloads/
+firmware/
+private/
+output/private/
+vendor-src/
+
+# Device data, captures, and logs
+evidence/private/
+captures/
+*.log
+*.pcap
+*.pcapng
+*.dmp
+*.dump
+
+# Firmware and disk artifacts are never source files in this repository
+*.bin
+*.img
+*.uim
+*.ffu
+*.ubi
+*.ubifs
+*.jffs2
+*.squashfs
+
+# Credentials and local configuration
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+*.crt
+*.cer
+*.csr
+*_known_hosts

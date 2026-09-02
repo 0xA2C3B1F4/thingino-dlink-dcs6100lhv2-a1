@@ -1,0 +1,88 @@
+#!/bin/sh
+# Persistent, video-only rwd consumer for the Prudynt-owned main RSS ring.
+
+PATH=/bin:/sbin:/usr/bin:/usr/sbin${PATH:+:$PATH}
+export PATH
+
+DAEMON=/usr/bin/rwd
+PIDFILE=/run/rwd.pid
+BASE_CONFIG=/etc/raptor.conf
+RUNTIME_CONFIG=/run/raptor-runtime.conf
+READY=/run/prudynt-dlink-media.ready
+RING=/dev/shm/rss_ring_main
+
+alive() {
+	[ -r "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null
+}
+
+ready() {
+	alive &&
+		netstat -lnt 2>/dev/null |
+		awk '$4 ~ /:8554$/ { if ($4 == "127.0.0.1:8554") loopback = 1; else unsafe = 1 } END { exit !(loopback && !unsafe) }' &&
+		netstat -lnu 2>/dev/null |
+		awk '$4 ~ /:8443$/ { found = 1 } END { exit !found }'
+}
+
+stop() {
+	if alive; then
+		start-stop-daemon -K -p "$PIDFILE" -x "$DAEMON" 2>/dev/null || true
+	fi
+	i=0
+	while alive && [ "$i" -lt 30 ]; do
+		usleep 100000
+		i=$((i + 1))
+	done
+	if alive; then
+		start-stop-daemon -K -s KILL -p "$PIDFILE" -x "$DAEMON" 2>/dev/null || true
+		usleep 100000
+	fi
+	rm -f "$PIDFILE" "$RUNTIME_CONFIG"
+}
+
+start() {
+	[ -x "$DAEMON" ] && [ -r "$BASE_CONFIG" ] || return 1
+	if ready; then
+		return 0
+	fi
+	stop
+
+	# Prudynt remains the owner of IMP, ISP, the encoder, and this ring. Wait
+	# for its explicit stream0 readiness before starting the consumer.
+	i=0
+	while [ "$i" -lt 150 ]; do
+		grep -qx '1080p-started' "$READY" 2>/dev/null && [ -e "$RING" ] && break
+		pidof /usr/bin/prudynt >/dev/null 2>&1 || return 1
+		usleep 100000
+		i=$((i + 1))
+	done
+	grep -qx '1080p-started' "$READY" 2>/dev/null && [ -e "$RING" ] || return 1
+
+	local_ip=$(ip -4 -o addr show scope global 2>/dev/null |
+		awk '{ split($4, address, "/"); print address[1]; exit }')
+	[ -n "$local_ip" ] || return 1
+	umask 077
+	awk -v ip="$local_ip" '{ print; if ($0 == "[webrtc]") print "local_ip = " ip }' \
+		"$BASE_CONFIG" >"$RUNTIME_CONFIG.tmp"
+	mv "$RUNTIME_CONFIG.tmp" "$RUNTIME_CONFIG"
+
+	LD_LIBRARY_PATH=/usr/lib/raptor:/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} \
+		start-stop-daemon -S -b -m -p "$PIDFILE" -x "$DAEMON" -- \
+		-f -c "$RUNTIME_CONFIG"
+	i=0
+	while [ "$i" -lt 50 ]; do
+		ready && return 0
+		alive || break
+		usleep 100000
+		i=$((i + 1))
+	done
+	stop
+	echo "rwd failed; Prudynt RTSP, snapshot, and MJPEG remain available" >&2
+	return 1
+}
+
+case "${1:-}" in
+	start) start ;;
+	stop) stop ;;
+	restart) stop; start ;;
+	*) echo "Usage: $0 {start|stop|restart}" >&2; exit 2 ;;
+esac

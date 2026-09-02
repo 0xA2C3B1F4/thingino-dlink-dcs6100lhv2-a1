@@ -1,0 +1,132 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import tempfile
+import unittest
+from pathlib import Path
+from unittest import mock
+
+from installer import full_backup
+from installer.layout import Partition, Target
+from installer.recovery_gate import RecoveryGateError, validate_existing_recovery_boundary
+
+
+TARGET = Target(
+    model="DCS-6100LHV2",
+    hardware_revision="A1",
+    nor_size=42,
+    erase_block_size=1,
+    partitions=tuple(
+        Partition(f"part{mtd}", mtd, mtd * 7, 7, always_preserve=mtd in (0, 4, 5))
+        for mtd in range(6)
+    ),
+)
+
+
+def identity(raw: bytes) -> dict[str, object]:
+    return {
+        "md5": hashlib.md5(raw, usedforsecurity=False).hexdigest(),
+        "sha256": hashlib.sha256(raw).hexdigest(),
+        "size": len(raw),
+    }
+
+
+def fixture(root: Path) -> tuple[Path, Path]:
+    recovery = root / "recovery"
+    recovery.mkdir()
+    chunks = [bytes([mtd + 1]) * 7 for mtd in range(6)]
+    full = b"".join(chunks)
+    files: dict[str, object] = {}
+    for copy in ("a", "b"):
+        copy_dir = recovery / f"copy-{copy}"
+        copy_dir.mkdir()
+        for mtd, raw in enumerate(chunks):
+            relative = f"copy-{copy}/mtd{mtd}.bin"
+            (recovery / relative).write_bytes(raw)
+            files[relative] = identity(raw)
+        name = f"full-flash-{copy}.bin"
+        (recovery / name).write_bytes(full)
+        files[name] = identity(full)
+    manifest = {
+        "schema": 1,
+        "description": "private test fixture",
+        "checks": {
+            "copy_a_matches_copy_b": True,
+            "device_md5_matches_host": True,
+            "full_flash_a_matches_full_flash_b": True,
+        },
+        "files": files,
+        "firmware_runtime": "1.02.02",
+        "partition_order": [f"mtd{mtd}" for mtd in range(6)],
+        "total_flash_size": len(full),
+    }
+    (recovery / "manifest.private.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+    readback = root / "readback"
+    readback.mkdir()
+    layout = {
+        "read_only": True,
+        "schema_version": 1,
+        "target": {
+            "erase_block_size": 1,
+            "flash_size": 42,
+            "hardware_revision": "A1",
+            "model": "DCS-6100LHV2",
+            "partitions": [
+                {"mtd": p.mtd, "name": p.name, "offset": p.offset, "size": p.size}
+                for p in TARGET.partitions
+            ],
+        },
+    }
+    (readback / "device-layout.private.json").write_text(json.dumps(layout), encoding="utf-8")
+    for mtd in (0, 4, 5):
+        (readback / f"mtd{mtd}.bin").write_bytes(chunks[mtd])
+    return recovery, readback
+
+
+class RecoveryGateTests(unittest.TestCase):
+    def test_existing_verified_pair_replaces_redundant_new_backup(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            recovery, readback = fixture(Path(directory_name))
+
+            decision = validate_existing_recovery_boundary(
+                recovery_dir=recovery,
+                preserved_readback_dir=readback,
+                target=TARGET,
+            )
+
+            self.assertEqual(decision.mode, "existing-verified-same-device-pair")
+            self.assertEqual(decision.preserved_mtd, (0, 4, 5))
+            self.assertEqual(decision.recovery_images, 2)
+
+    def test_gate_uses_the_same_manifest_snapshot_for_backup_and_device_binding(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            recovery, readback = fixture(Path(directory_name))
+            with mock.patch.object(
+                full_backup,
+                "load_private_manifest",
+                wraps=full_backup.load_private_manifest,
+            ) as load:
+                validate_existing_recovery_boundary(
+                    recovery_dir=recovery,
+                    preserved_readback_dir=readback,
+                    target=TARGET,
+                )
+            load.assert_called_once_with(recovery)
+
+    def test_other_device_or_changed_secret_partition_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            recovery, readback = fixture(Path(directory_name))
+            (readback / "mtd5.bin").write_bytes(b"different")
+
+            with self.assertRaisesRegex(RecoveryGateError, "mtd5"):
+                validate_existing_recovery_boundary(
+                    recovery_dir=recovery,
+                    preserved_readback_dir=readback,
+                    target=TARGET,
+                )
+
+
+if __name__ == "__main__":
+    unittest.main()

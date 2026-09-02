@@ -1,0 +1,125 @@
+diff --git a/src/JpegDemandPolicy.hpp b/src/JpegDemandPolicy.hpp
+new file mode 100644
+index 0000000..21fe0c8
+--- /dev/null
++++ b/src/JpegDemandPolicy.hpp
+@@ -0,0 +1,11 @@
++#pragma once
++
++#include <cstdint>
++
++inline bool jpegRequestDeadlineActive(uint32_t now_ms, uint32_t deadline_ms) {
++  return static_cast<int32_t>(deadline_ms - now_ms) > 0;
++}
++
++inline bool jpegSourceDemandActive(bool request_active, int idle_fps) {
++  return request_active || idle_fps > 0;
++}
+diff --git a/src/VideoWorker.cpp b/src/VideoWorker.cpp
+index b4df109..95a3a76 100644
+--- a/src/VideoWorker.cpp
++++ b/src/VideoWorker.cpp
+@@ -444,8 +444,14 @@ void VideoWorker::run() {
+     for (int j = 0; j < NUM_JPEG_CHANNELS; ++j) {
+       auto jpeg_stream_state = global_jpeg[j];
+       if (jpeg_stream_state && encChn == jpeg_stream_state->streamChn) {
+-        jpeg_wants_frames = true;
+-        break;
++        int idle_fps = jpeg_stream_state->stream
++                           ? jpeg_stream_state->stream->jpeg_idle_fps
++                           : 0;
++        if (jpegSourceDemandActive(jpeg_stream_state->request_or_overrun(),
++                                   idle_fps)) {
++          jpeg_wants_frames = true;
++          break;
++        }
+       }
+     }
+     run_for_jpeg =
+diff --git a/src/globals.hpp b/src/globals.hpp
+index b7ebc0e..28544cb 100644
+--- a/src/globals.hpp
++++ b/src/globals.hpp
+@@ -6,6 +6,7 @@
+ #include "IMPBackchannel.hpp"
+ #include "IMPEncoder.hpp"
+ #include "IMPFramesource.hpp"
++#include "JpegDemandPolicy.hpp"
+ #include "MP4Recorder.hpp"
+ #include "MsgChannel.hpp"
+ #ifdef PREBUFFER_ENABLED
+@@ -157,21 +158,28 @@ struct jpeg_stream {
+   std::atomic<bool> reconfig{false};
+ 
+   steady_clock::time_point last_image;
+-  steady_clock::time_point last_subscriber;
++  std::atomic<uint32_t> subscriber_deadline_ms{0};
++
++  static uint32_t monotonic_ms() {
++    return static_cast<uint32_t>(
++        duration_cast<milliseconds>(steady_clock::now().time_since_epoch())
++            .count());
++  }
+ 
+   void request() {
+-    auto now = steady_clock::now();
+     {
+       std::unique_lock lck(mutex_main);
+-      last_subscriber = now;
++      subscriber_deadline_ms.store(monotonic_ms() + 1000,
++                                   std::memory_order_release);
+     }
+     // Wake JPEG worker if it's sleeping
+     should_grab_frames.notify_one();
+   }
+ 
+   bool request_or_overrun() {
+-    return duration_cast<milliseconds>(steady_clock::now() - last_subscriber)
+-               .count() < 1000;
++    uint32_t deadline =
++        subscriber_deadline_ms.load(std::memory_order_acquire);
++    return jpegRequestDeadlineActive(monotonic_ms(), deadline);
+   }
+ 
+   jpeg_stream(int encChn, _stream *stream)
+diff --git a/tests/test_media_queue.cpp b/tests/test_media_queue.cpp
+index 578b507..231d446 100644
+--- a/tests/test_media_queue.cpp
++++ b/tests/test_media_queue.cpp
+@@ -1,6 +1,7 @@
+ // Build and run with tests/run_host_tests.sh.
+ 
+ #include "FrameRecoveryGate.hpp"
++#include "JpegDemandPolicy.hpp"
+ #include "JpegIdlePolicy.hpp"
+ #include "MsgChannel.hpp"
+ #include "SharedPayload.hpp"
+@@ -46,6 +47,17 @@ static void test_jpeg_idle_policy() {
+   assert(jpegIdleFpsPolicy(5, 0) == 5);
+ }
+ 
++static void test_jpeg_demand_deadline_and_idle_policy() {
++  assert(!jpegRequestDeadlineActive(1000, 1000));
++  assert(jpegRequestDeadlineActive(1000, 1001));
++  assert(!jpegRequestDeadlineActive(1001, 1000));
++  assert(jpegRequestDeadlineActive(0xfffffff0U, 0x00000010U));
++  assert(!jpegRequestDeadlineActive(0x00000010U, 0xfffffff0U));
++  assert(!jpegSourceDemandActive(false, 0));
++  assert(jpegSourceDemandActive(true, 0));
++  assert(jpegSourceDemandActive(false, 1));
++}
++
+ static void test_exact_byte_boundary() {
+   MsgChannel<TestNal> queue(800, 128);
+   assert(queue.write(nal(1, 64, true, false)));
+@@ -242,6 +254,7 @@ static void test_slow_client_does_not_block_fast_client() {
+ int main() {
+   test_shared_payload_fanout();
+   test_jpeg_idle_policy();
++  test_jpeg_demand_deadline_and_idle_policy();
+   test_exact_byte_boundary();
+   test_exact_element_boundary();
+   test_whole_frame_eviction();
+-- 
+2.54.0
+

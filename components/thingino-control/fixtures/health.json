@@ -1,0 +1,1 @@
+{"status":"ok","healthy":true,"backend":{"name":"fixture","available":true},"checks":{"system":{"uptime_seconds":123,"streamer_running":true},"network":{"online":true},"streaming":{"running":true,"healthy":true}}}

@@ -1,0 +1,592 @@
+diff --git a/src/FrameRecoveryGate.hpp b/src/FrameRecoveryGate.hpp
+new file mode 100644
+index 0000000..b528fd9
+--- /dev/null
++++ b/src/FrameRecoveryGate.hpp
+@@ -0,0 +1,42 @@
++#pragma once
++
++#include <cstddef>
++#include <cstdint>
++
++// A per-client video tap may retain at most this many encoded payload bytes.
++// The element limit remains as a second guard against tiny-NAL metadata growth.
++inline constexpr size_t RTSP_VIDEO_TAP_MAX_BYTES = 512 * 1024;
++
++// Tracks queue evictions and blocks inter-frame recovery until a new random
++// access frame arrives. The RTSP layer prepends cached codec configuration when
++// the gate opens again.
++class FrameRecoveryGate {
++public:
++  void reset(uint64_t eviction_count = 0) {
++    observed_evictions_ = eviction_count;
++    waiting_for_random_access_ = false;
++  }
++
++  bool observe(uint64_t eviction_count) {
++    if (eviction_count == observed_evictions_)
++      return false;
++    observed_evictions_ = eviction_count;
++    waiting_for_random_access_ = true;
++    return true;
++  }
++
++  bool accept(bool is_random_access, bool is_frame_start = true) {
++    if (!waiting_for_random_access_)
++      return true;
++    if (!is_random_access || !is_frame_start)
++      return false;
++    waiting_for_random_access_ = false;
++    return true;
++  }
++
++  bool waiting() const { return waiting_for_random_access_; }
++
++private:
++  uint64_t observed_evictions_{0};
++  bool waiting_for_random_access_{false};
++};
+diff --git a/src/MsgChannel.hpp b/src/MsgChannel.hpp
+index 47744bf..50e1581 100644
+--- a/src/MsgChannel.hpp
++++ b/src/MsgChannel.hpp
+@@ -2,20 +2,30 @@
+ #define MsgChannel_hpp
+ 
+ #include <atomic>
++#include <algorithm>
+ #include <condition_variable>
+ #include <deque>
+ #include <iostream>
+ #include <mutex>
+ #include <thread>
+ #include <type_traits>
++#include <utility>
+ 
+ /* Implementation of the MsgChannel API, except that it keeps
+  * the most recent bsize elements in the queue.
+  */
+ template <class T> class MsgChannel {
+ public:
+-  MsgChannel(unsigned int bsize) : buffer_size{bsize} {
+-  }
++  struct Diagnostics {
++    size_t elements{0};
++    size_t bytes{0};
++    size_t high_water_elements{0};
++    size_t high_water_bytes{0};
++    uint64_t evictions{0};
++  };
++
++  MsgChannel(unsigned int bsize, size_t byte_limit = 0)
++      : buffer_size{bsize}, byte_limit{byte_limit} {}
+ 
+   // SFINAE helper: detect frame-boundary fields at compile time.
+   template <typename U, typename = void>
+@@ -25,6 +35,13 @@ public:
+                                           decltype(std::declval<U&>().is_frame_end)>>
+       : std::true_type {};
+ 
++  template <typename U, typename = void>
++  struct has_payload_size : std::false_type {};
++  template <typename U>
++  struct has_payload_size<U,
++                          std::void_t<decltype(std::declval<const U &>().data.size())>>
++      : std::true_type {};
++
+   // Write with frame-aware eviction (for types with is_frame_start/is_frame_end).
+   // When buffer_size is exceeded, drop whole frames instead of individual NAL
+   // units.  Dropping a mid-frame NAL corrupts the bitstream and causes decoder
+@@ -34,44 +51,95 @@ public:
+   // write succeeded without eviction.
+   bool write(T msg) {
+     std::unique_lock<std::mutex> lck(cv_mtx);
++
++    if constexpr (has_frame_markers<T>::value) {
++      if (dropping_incomplete_frame) {
++        if (msg.is_frame_end)
++          dropping_incomplete_frame = false;
++        return false;
++      }
++    }
++
++    const size_t msg_bytes = payload_size(msg);
+     msg_buffer.push_front(std::move(msg));
+-    if (msg_buffer.size() <= buffer_size) {
++    queued_bytes += msg_bytes;
++    high_water_elements = std::max(high_water_elements, msg_buffer.size());
++    high_water_bytes = std::max(high_water_bytes, queued_bytes);
++
++    if (!over_limit()) {
+       write_cv.notify_all();
+       return true;
+     }
+-    // Evict oldest complete frame if markers exist; otherwise drop oldest NAL.
++
++    bool evicted = false;
++    // Evict complete oldest frames until both limits are satisfied. If the only
++    // remaining frame is still being written, discard it and ignore its tail.
+     if constexpr (has_frame_markers<T>::value) {
+-      while (msg_buffer.size() > buffer_size && !msg_buffer.empty()) {
+-        auto &back = msg_buffer.back();
+-        bool end_marker = back.is_frame_end;
+-        msg_buffer.pop_back();
+-        if (end_marker) break; // evicted one complete frame
+-        // Continue popping until we reach frame_end that closes this frame.
++      while (over_limit() && !msg_buffer.empty()) {
++        bool found_frame_end = false;
++        while (!msg_buffer.empty()) {
++          bool end_marker = msg_buffer.back().is_frame_end;
++          queued_bytes -= payload_size(msg_buffer.back());
++          msg_buffer.pop_back();
++          if (end_marker) {
++            found_frame_end = true;
++            break;
++          }
++        }
++        evicted = true;
++        if (!found_frame_end) {
++          dropping_incomplete_frame = true;
++          break;
++        }
+       }
+     } else {
++      queued_bytes -= payload_size(msg_buffer.back());
+       msg_buffer.pop_back();
++      evicted = true;
+     }
++
++    if (evicted)
++      ++eviction_count;
+     write_cv.notify_all();
+     return false;
+   }
+ 
+   bool write_wait(T msg) {
+     std::unique_lock<std::mutex> lck(cv_mtx);
+-    if (buffer_size == 0) {
++    const size_t msg_bytes = payload_size(msg);
++    if (byte_limit > 0 && msg_bytes > byte_limit)
++      return false;
++
++    if (buffer_size == 0 && byte_limit == 0) {
++      queued_bytes += payload_size(msg);
+       msg_buffer.push_front(std::move(msg));
++      high_water_elements = std::max(high_water_elements, msg_buffer.size());
++      high_water_bytes = std::max(high_water_bytes, queued_bytes);
+       write_cv.notify_all();
+       return true;
+     }
+-    space_cv.wait(lck, [&] { return msg_buffer.size() < buffer_size; });
++    space_cv.wait(lck, [&] {
++      const bool have_element_space =
++          buffer_size == 0 || msg_buffer.size() < buffer_size;
++      const bool have_byte_space =
++          byte_limit == 0 || queued_bytes + msg_bytes <= byte_limit;
++      return have_element_space && have_byte_space;
++    });
++    queued_bytes += msg_bytes;
+     msg_buffer.push_front(std::move(msg));
++    high_water_elements = std::max(high_water_elements, msg_buffer.size());
++    high_water_bytes = std::max(high_water_bytes, queued_bytes);
+     write_cv.notify_all();
+     return true;
+   }
+ 
+-  bool read(T *out) {
++  bool read(T *out, uint64_t *observed_evictions = nullptr) {
+     std::unique_lock<std::mutex> lck(cv_mtx);
+     if (can_read()) {
+-      *out = msg_buffer.back();
++      if (observed_evictions)
++        *observed_evictions = eviction_count;
++      queued_bytes -= payload_size(msg_buffer.back());
++      *out = std::move(msg_buffer.back());
+       msg_buffer.pop_back();
+       space_cv.notify_one();
+       return true;
+@@ -84,7 +152,8 @@ public:
+     while (!can_read()) {
+       write_cv.wait(lck);
+     };
+-    T val = msg_buffer.back();
++    queued_bytes -= payload_size(msg_buffer.back());
++    T val = std::move(msg_buffer.back());
+     msg_buffer.pop_back();
+     space_cv.notify_one();
+     return val;
+@@ -93,6 +162,8 @@ public:
+   void clear() {
+     std::unique_lock<std::mutex> lck(cv_mtx);
+     msg_buffer.clear();
++    queued_bytes = 0;
++    dropping_incomplete_frame = false;
+     space_cv.notify_all();
+   }
+ 
+@@ -105,16 +176,51 @@ public:
+     return buffer_size;
+   }
+ 
++  size_t bytes() const {
++    std::unique_lock<std::mutex> lck(cv_mtx);
++    return queued_bytes;
++  }
++
++  size_t byteCapacity() const { return byte_limit; }
++
++  uint64_t evictionCount() const {
++    std::unique_lock<std::mutex> lck(cv_mtx);
++    return eviction_count;
++  }
++
++  Diagnostics diagnostics() const {
++    std::unique_lock<std::mutex> lck(cv_mtx);
++    return Diagnostics{msg_buffer.size(), queued_bytes, high_water_elements,
++                       high_water_bytes, eviction_count};
++  }
++
+ private:
+   bool can_read() {
+     return !msg_buffer.empty();
+   }
+ 
++  static size_t payload_size(const T &msg) {
++    if constexpr (has_payload_size<T>::value)
++      return msg.data.size();
++    return 0;
++  }
++
++  bool over_limit() const {
++    return (buffer_size > 0 && msg_buffer.size() > buffer_size) ||
++           (byte_limit > 0 && queued_bytes > byte_limit);
++  }
++
+   std::deque<T> msg_buffer;
+   mutable std::mutex cv_mtx;
+   std::condition_variable write_cv;
+   std::condition_variable space_cv;
+   unsigned int buffer_size;
++  size_t byte_limit{0};
++  size_t queued_bytes{0};
++  size_t high_water_elements{0};
++  size_t high_water_bytes{0};
++  uint64_t eviction_count{0};
++  bool dropping_incomplete_frame{false};
+ };
+ 
+ #endif
+diff --git a/src/simple-rtsp/RtspServer.cpp b/src/simple-rtsp/RtspServer.cpp
+index b52b568..18e53b1 100644
+--- a/src/simple-rtsp/RtspServer.cpp
++++ b/src/simple-rtsp/RtspServer.cpp
+@@ -7,6 +7,7 @@
+ #include "RtpPacketizer.hpp"
+ #include "SdpGenerator.hpp"
+ #include "Logger.hpp"
++#include "FrameRecoveryGate.hpp"
+ #include "globals.hpp"
+ #include "IMPBackchannel.hpp"
+ 
+@@ -106,6 +107,7 @@ struct Session {
+     // Video tap
+     std::shared_ptr<MsgChannel<H264NALUnit>> videoTap;
+     uint64_t videoTapId = 0;
++    FrameRecoveryGate videoRecovery;
+ 
+     // Audio tap
+     std::shared_ptr<MsgChannel<AudioFrame>> audioTap;
+@@ -192,8 +194,8 @@ struct Session {
+ 
+     bool hasValidSession() const { return sessionId[0] != '\0'; }
+ 
+-    // Multi-packet send queue.  Non-blocking sends — queued when EAGAIN.
+-    // Queue is never capped (memory is the only limit) so NALs are never dropped.
++    // Multi-packet send queue. Non-blocking sends are queued on EAGAIN. The
++    // event loop stops consuming taps as soon as this queue becomes non-empty.
+     std::deque<std::vector<uint8_t>> sendQueue;
+     size_t sendQueueBytes = 0;
+ 
+@@ -431,6 +433,7 @@ void RtspServer::eventLoop() {
+                     s->sendQueueBytes -= s->sendQueue.front().size();
+                     s->sendQueue.pop_front();
+                 } else if (n > 0) {
++                    s->sendQueueBytes -= static_cast<size_t>(n);
+                     s->sendQueue.front().erase(
+                         s->sendQueue.front().begin(),
+                         s->sendQueue.front().begin() + static_cast<ptrdiff_t>(n));
+@@ -443,17 +446,37 @@ void RtspServer::eventLoop() {
+                 }
+             }
+ 
+-            // Drain video tap — up to 30 NALs per cycle.  On backpressure
+-            // the NAL is dropped (destructive MsgChannel::read).
+-            if (s->videoTap) {
++            // Preserve packet ordering and keep socket pressure out of user
++            // memory. Finish the queued packet before consuming more media.
++            if (s->pendingRespLen > 0 || !s->sendQueue.empty()) {
++                backpressure = true;
++            }
++
++            // Drain video tap only while the client socket accepts data. Queue
++            // eviction drops complete frames and requires a fresh IDR.
++            if (!backpressure && s->videoTap) {
+                 H264NALUnit nal;
+                 int drained = 0;
+-                while (!backpressure && drained < 30 && s->videoTap->read(&nal)) {
++                uint64_t readEvictions = 0;
++                while (!backpressure && drained < 30 &&
++                       s->videoTap->read(&nal, &readEvictions)) {
++                    if (s->videoRecovery.observe(readEvictions)) {
++                        s->codecConfigSent = false;
++                        s->spsChanged = false;
++                        s->waitingForKeyframe = false;
++                    }
++                    if (!s->videoRecovery.accept(nal.is_random_access,
++                                                 nal.is_frame_start))
++                        continue;
+                     if (!this->sendVideoNal(*s, nal)) {
+                         backpressure = true;
+                         break;
+                     }
+                     drained++;
++                    if (!s->sendQueue.empty()) {
++                        backpressure = true;
++                        break;
++                    }
+                 }
+                 if (drained > 0) {
+                     LOG_DDEBUG("video drain " << drained << " NALs, ch="
+@@ -467,9 +490,14 @@ void RtspServer::eventLoop() {
+                 int drained = 0;
+                 while (drained < 200 && s->audioTap->read(&af)) {
+                     if (!this->sendAudioFrame(*s, af)) {
++                        backpressure = true;
+                         break;
+                     }
+                     drained++;
++                    if (!s->sendQueue.empty()) {
++                        backpressure = true;
++                        break;
++                    }
+                 }
+                 if (drained > 0)
+                     LOG_DDEBUG("audio drain " << drained << " frames");
+@@ -1580,7 +1608,8 @@ void RtspServer::handlePlay(int idx, int cseq, const char *uri,
+ 
+     // ── Set up video tap ────────────────────────────────────────────────
+     if (s->videoChn >= 0 && !s->videoTap) {
+-        s->videoTap = std::make_shared<MsgChannel<H264NALUnit>>(MSG_CHANNEL_SIZE * 2);
++        s->videoTap = std::make_shared<MsgChannel<H264NALUnit>>(
++            MSG_CHANNEL_SIZE * 2, RTSP_VIDEO_TAP_MAX_BYTES);
+         s->videoTapId = register_video_tap(
+             s->videoChn,
+             s->videoTap,
+@@ -1608,6 +1637,7 @@ void RtspServer::handlePlay(int idx, int cseq, const char *uri,
+         // stale frames arrive in a burst and ffplay's jitter
+         // buffer overflows on startup.
+         s->videoTap->clear();
++        s->videoRecovery.reset(s->videoTap->evictionCount());
+         s->hasAudioRtpTs = false;
+         if (s->videoChn < NUM_VIDEO_CHANNELS)
+             activePlayers_[s->videoChn]++;
+diff --git a/tests/run_host_tests.sh b/tests/run_host_tests.sh
+new file mode 100755
+index 0000000..b525e7c
+--- /dev/null
++++ b/tests/run_host_tests.sh
+@@ -0,0 +1,12 @@
++#!/bin/sh
++set -eu
++
++: "${TMPDIR:?TMPDIR must point to writable temporary storage}"
++
++repo_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
++test_bin=$(mktemp "${TMPDIR%/}/prudynt-media-queue.XXXXXX")
++trap 'rm -f "$test_bin"' EXIT HUP INT TERM
++
++${CXX:-c++} -std=c++20 -Wall -Wextra -Werror -pthread \
++  -I"$repo_dir/src" "$repo_dir/tests/test_media_queue.cpp" -o "$test_bin"
++"$test_bin"
+diff --git a/tests/test_media_queue.cpp b/tests/test_media_queue.cpp
+new file mode 100644
+index 0000000..fa0a9a1
+--- /dev/null
++++ b/tests/test_media_queue.cpp
+@@ -0,0 +1,176 @@
++// Build and run with tests/run_host_tests.sh.
++
++#include "FrameRecoveryGate.hpp"
++#include "MsgChannel.hpp"
++#include "SharedPayload.hpp"
++
++#include <cassert>
++#include <cstdint>
++#include <iostream>
++#include <memory>
++#include <set>
++#include <vector>
++
++struct TestNal {
++  SharedPayload data;
++  bool is_frame_start{false};
++  bool is_frame_end{false};
++  bool is_random_access{false};
++  uint32_t frame_id{0};
++};
++
++static TestNal nal(uint32_t frame_id, size_t bytes, bool start, bool end,
++                   bool random_access = false) {
++  std::vector<uint8_t> payload(bytes, static_cast<uint8_t>(frame_id));
++  return TestNal{SharedPayload(std::move(payload)), start, end, random_access,
++                 frame_id};
++}
++
++static void test_shared_payload_fanout() {
++  SharedPayload original(std::vector<uint8_t>(64 * 1024, 0x5a));
++  SharedPayload general = original;
++  SharedPayload tap_a = original;
++  SharedPayload tap_b = original;
++
++  assert(original.storageIdentity() == general.storageIdentity());
++  assert(original.storageIdentity() == tap_a.storageIdentity());
++  assert(original.storageIdentity() == tap_b.storageIdentity());
++  assert(original.useCount() == 4);
++  assert(tap_b[123] == 0x5a);
++}
++
++static void test_exact_byte_boundary() {
++  MsgChannel<TestNal> queue(800, 128);
++  assert(queue.write(nal(1, 64, true, false)));
++  assert(queue.write(nal(1, 64, false, true)));
++  assert(queue.bytes() == 128);
++  assert(queue.evictionCount() == 0);
++
++  assert(!queue.write(nal(2, 64, true, false)));
++  assert(queue.bytes() == 64);
++  assert(queue.evictionCount() == 1);
++  assert(queue.write(nal(2, 64, false, true)));
++  assert(queue.bytes() == 128);
++}
++
++static void test_whole_frame_eviction() {
++  MsgChannel<TestNal> queue(800, 180);
++  for (uint32_t frame = 1; frame <= 8; ++frame) {
++    queue.write(nal(frame, 40, true, false, frame == 1 || frame == 6));
++    queue.write(nal(frame, 40, false, false));
++    queue.write(nal(frame, 40, false, true));
++  }
++
++  assert(queue.bytes() <= 180);
++  assert(queue.evictionCount() > 0);
++
++  std::vector<TestNal> remaining;
++  TestNal item;
++  while (queue.read(&item))
++    remaining.push_back(std::move(item));
++  assert(!remaining.empty());
++
++  std::set<uint32_t> seen;
++  for (const auto &entry : remaining)
++    seen.insert(entry.frame_id);
++  for (uint32_t frame : seen) {
++    bool have_start = false;
++    bool have_end = false;
++    for (const auto &entry : remaining) {
++      if (entry.frame_id != frame)
++        continue;
++      have_start |= entry.is_frame_start;
++      have_end |= entry.is_frame_end;
++    }
++    assert(have_start && have_end);
++  }
++}
++
++static void test_oversized_incomplete_frame_is_discarded() {
++  MsgChannel<TestNal> queue(800, 100);
++  assert(queue.write(nal(1, 60, true, false)));
++  assert(!queue.write(nal(1, 60, false, false)));
++  assert(!queue.write(nal(1, 20, false, true)));
++  assert(queue.size() == 0);
++
++  assert(queue.write(nal(2, 40, true, false, true)));
++  assert(queue.write(nal(2, 40, false, true, true)));
++  assert(queue.size() == 2);
++}
++
++static void test_idr_recovery_after_eviction() {
++  MsgChannel<TestNal> queue(800, 180);
++  FrameRecoveryGate recovery;
++  recovery.reset(queue.evictionCount());
++
++  for (uint32_t frame = 1; frame <= 8; ++frame) {
++    bool idr = frame == 1 || frame == 6;
++    queue.write(nal(frame, 60, true, true, idr));
++  }
++
++  assert(recovery.observe(queue.evictionCount()));
++  std::vector<uint32_t> accepted;
++  TestNal item;
++  while (queue.read(&item)) {
++    if (recovery.accept(item.is_random_access))
++      accepted.push_back(item.frame_id);
++  }
++  assert(!accepted.empty());
++  assert(accepted.front() == 6);
++  assert(!recovery.waiting());
++}
++
++static void test_disconnect_releases_only_its_queue() {
++  SharedPayload payload(std::vector<uint8_t>(32 * 1024, 0x33));
++  auto client_a = std::make_unique<MsgChannel<TestNal>>(800, 64 * 1024);
++  auto client_b = std::make_unique<MsgChannel<TestNal>>(800, 64 * 1024);
++  TestNal frame{payload, true, true, true, 1};
++  assert(client_a->write(frame));
++  assert(client_b->write(frame));
++  assert(payload.useCount() == 4);
++
++  client_a->clear();
++  assert(payload.useCount() == 3);
++  assert(client_b->size() == 1);
++  client_a.reset();
++  assert(client_b->size() == 1);
++  client_b.reset();
++  assert(payload.useCount() == 2);
++}
++
++static void test_parallel_slow_clients_stay_bounded() {
++  MsgChannel<TestNal> client_a(800, RTSP_VIDEO_TAP_MAX_BYTES);
++  MsgChannel<TestNal> client_b(800, RTSP_VIDEO_TAP_MAX_BYTES);
++
++  for (uint32_t frame = 1; frame <= 40; ++frame) {
++    SharedPayload payload(std::vector<uint8_t>(32 * 1024,
++                                               static_cast<uint8_t>(frame)));
++    TestNal item{payload, true, true, frame % 10 == 0, frame};
++    client_a.write(item);
++    client_b.write(item);
++  }
++
++  assert(client_a.bytes() <= RTSP_VIDEO_TAP_MAX_BYTES);
++  assert(client_b.bytes() <= RTSP_VIDEO_TAP_MAX_BYTES);
++  assert(client_a.evictionCount() > 0);
++  assert(client_b.evictionCount() > 0);
++
++  TestNal a;
++  TestNal b;
++  while (client_a.read(&a) && client_b.read(&b)) {
++    assert(a.frame_id == b.frame_id);
++    assert(a.data.storageIdentity() == b.data.storageIdentity());
++  }
++}
++
++int main() {
++  test_shared_payload_fanout();
++  test_exact_byte_boundary();
++  test_whole_frame_eviction();
++  test_oversized_incomplete_frame_is_discarded();
++  test_idr_recovery_after_eviction();
++  test_disconnect_releases_only_its_queue();
++  test_parallel_slow_clients_stay_bounded();
++  std::cout << "media queue host tests passed\n";
++  return 0;
++}

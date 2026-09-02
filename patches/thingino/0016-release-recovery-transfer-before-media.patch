@@ -1,0 +1,16 @@
+diff --git a/package/thingino-daynightd/files/S06ircut b/package/thingino-daynightd/files/S06ircut
+--- a/package/thingino-daynightd/files/S06ircut
++++ b/package/thingino-daynightd/files/S06ircut
+@@ -3,6 +3,12 @@
+ start() {
+ 	echo -c 15 "Initializing IR-CUT"
+ 
++	# A recovery-to-Thingino transition keeps the recovery tmpfs mounted.
++	# Release its verified 8 MiB mtd3 transfer before TISP needs a contiguous
++	# Linux allocation. Current recovery images already do this before the
++	# transition; this remains as compatibility protection for older images.
++	rm -f /run/transfer.bin /run/transfer.footer
++	sync
+ 	# DCS-6100LHV2 A1 uses a two-wire latching IR-cut motor. Initialize
+ 	# both directions and leave the daylight filter engaged. Runtime
+ 	# transitions are performed by Thingino Control, not helper commands.

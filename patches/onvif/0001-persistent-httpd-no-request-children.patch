@@ -1,0 +1,642 @@
+diff --git a/Makefile b/Makefile
+index f1376b4..9ab627f 100644
+--- a/Makefile
++++ b/Makefile
+@@ -21,6 +21,9 @@ OBJECTS_O	 = $(SRC_DIR)/onvif_simple_server.o \
+ 		   $(SRC_DIR)/audio_output_enabled.o \
+ 		   $(SRC_DIR)/prudynt_bridge.o
+ 
++OBJECTS_H	 = $(filter-out $(SRC_DIR)/onvif_simple_server.o,$(OBJECTS_O)) \
++		   $(SRC_DIR)/onvif_httpd.o
++
+ OBJECTS_N	 = $(SRC_DIR)/onvif_notify_server.o \
+ 		   $(SRC_DIR)/conf.o \
+ 		   $(SRC_DIR)/utils.o \
+@@ -107,7 +110,7 @@ ifeq ($(STRIP), )
+     STRIP=echo
+ endif
+ 
+-all: onvif_simple_server onvif_notify_server wsd_simple_server
++all: onvif_simple_server onvif_httpd onvif_notify_server wsd_simple_server
+ 
+ # Debug build with AddressSanitizer and debugging symbols
+ debug: CFLAGS_DEBUG = -g -O0 -fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer -DDEBUG
+@@ -130,6 +133,11 @@ onvif_simple_server: $(OBJECTS_O)
+ 	$(CC) $(OBJECTS_O) $(LIBS_O) -fPIC -Os -o $@
+ 	$(STRIP) $@
+ 
++onvif_httpd: $(OBJECTS_H)
++	$(CC) $(OBJECTS_H) $(LIBS_O) -fPIC -Os \
++		-Wl,--wrap=system,--wrap=popen,--wrap=pclose -o $@
++	$(STRIP) $@
++
+ onvif_notify_server: $(OBJECTS_N)
+ 	$(CC) $(OBJECTS_N) $(LIBS_N) -fPIC -Os -o $@
+ 	$(STRIP) $@
+@@ -162,9 +170,11 @@ wsd_simple_server_debug: $(OBJECTS_W_DEBUG)
+ 
+ clean:
+ 	rm -f onvif_simple_server onvif_simple_server_debug
++	rm -f onvif_httpd
+ 	rm -f onvif_notify_server onvif_notify_server_debug
+ 	rm -f wsd_simple_server wsd_simple_server_debug
+ 	rm -f $(OBJECTS_O) $(OBJECTS_O_DEBUG)
++	rm -f $(SRC_DIR)/onvif_httpd.o
+ 	rm -f $(OBJECTS_N) $(OBJECTS_N_DEBUG)
+ 	rm -f $(OBJECTS_W) $(OBJECTS_W_DEBUG)
+ 	$(MAKE) -C libtomcrypt clean
+diff --git a/src/onvif_httpd.c b/src/onvif_httpd.c
+new file mode 100644
+index 0000000..6d964e7
+--- /dev/null
++++ b/src/onvif_httpd.c
+@@ -0,0 +1,589 @@
++#define _GNU_SOURCE
++
++#include <arpa/inet.h>
++#include <errno.h>
++#include <fcntl.h>
++#include <setjmp.h>
++#include <signal.h>
++#include <stdbool.h>
++#include <stdint.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <strings.h>
++#include <sys/socket.h>
++#include <sys/stat.h>
++#include <sys/time.h>
++#include <sys/types.h>
++#include <time.h>
++#include <unistd.h>
++
++#define ONVIF_LISTEN_PORT 1999
++#define CONTROL_PORT 1998
++#define HEADER_LIMIT 8192
++#define BODY_LIMIT (16 * 1024)
++#define RESPONSE_LIMIT (256 * 1024)
++#define CONFIG_LIMIT (64 * 1024)
++#define IO_TIMEOUT_SECONDS 4
++#define RESOURCE_DIRECTORY "/usr/share/onvif"
++
++static jmp_buf request_exit_point;
++static volatile sig_atomic_t request_active;
++
++static void onvif_request_exit(int status)
++{
++    if (request_active)
++        longjmp(request_exit_point, status + 1);
++    _exit(status);
++}
++
++/* Reuse the reviewed CGI request implementation in one persistent process.
++ * Its process exits are contained to the current request by longjmp. */
++#define main onvif_cgi_main
++#define exit onvif_request_exit
++#include "onvif_simple_server.c"
++#undef exit
++#undef main
++
++static int read_all(int fd, void *buffer, size_t length)
++{
++    unsigned char *output = buffer;
++    size_t used = 0;
++
++    while (used < length) {
++        ssize_t count = read(fd, output + used, length - used);
++        if (count > 0) {
++            used += (size_t) count;
++            continue;
++        }
++        if (count < 0 && errno == EINTR)
++            continue;
++        return -1;
++    }
++    return 0;
++}
++
++static int write_all(int fd, const void *buffer, size_t length)
++{
++    const unsigned char *input = buffer;
++    size_t used = 0;
++
++    while (used < length) {
++        ssize_t count = write(fd, input + used, length - used);
++        if (count > 0) {
++            used += (size_t) count;
++            continue;
++        }
++        if (count < 0 && errno == EINTR)
++            continue;
++        return -1;
++    }
++    return 0;
++}
++
++static ssize_t find_header_end(const unsigned char *buffer, size_t length)
++{
++    size_t index;
++
++    for (index = 0; index + 3 < length; index++) {
++        if (!memcmp(buffer + index, "\r\n\r\n", 4))
++            return (ssize_t) index;
++    }
++    return -1;
++}
++
++static bool safe_service(const char *path, char *service, size_t length)
++{
++    static const char *const names[] = {
++        "device_service", "deviceio_service", "events_service",
++        "imaging_service", "media_service", "media2_service", "ptz_service"
++    };
++    const char *name;
++    size_t index;
++
++    if (strncmp(path, "/onvif/", 7))
++        return false;
++    name = path + 7;
++    if (strchr(name, '?') || strchr(name, '/') || strlen(name) >= length)
++        return false;
++    for (index = 0; index < sizeof(names) / sizeof(names[0]); index++) {
++        if (!strcmp(name, names[index])) {
++            strcpy(service, name);
++            return true;
++        }
++    }
++    return false;
++}
++
++static int parse_content_length(char *headers, size_t *content_length,
++                                char *service, size_t service_length,
++                                char *remote, size_t remote_length)
++{
++    char *line;
++    char *save = NULL;
++    bool length_seen = false;
++
++    line = strtok_r(headers, "\r\n", &save);
++    if (!line)
++        return -1;
++    {
++        char method[8], path[128], version[16], extra;
++        if (sscanf(line, "%7s %127s %15s %c", method, path, version, &extra) != 3 ||
++            strcmp(method, "POST") ||
++            (strcmp(version, "HTTP/1.1") && strcmp(version, "HTTP/1.0")) ||
++            !safe_service(path, service, service_length))
++            return -1;
++    }
++
++    remote[0] = '\0';
++    while ((line = strtok_r(NULL, "\r\n", &save)) != NULL) {
++        char *value = strchr(line, ':');
++        if (!value)
++            return -1;
++        *value++ = '\0';
++        while (*value == ' ' || *value == '\t')
++            value++;
++        if (!strcasecmp(line, "Content-Length")) {
++            char *end;
++            unsigned long parsed;
++            if (length_seen || !*value)
++                return -1;
++            errno = 0;
++            parsed = strtoul(value, &end, 10);
++            if (errno || *end || parsed > BODY_LIMIT)
++                return -1;
++            *content_length = (size_t) parsed;
++            length_seen = true;
++        } else if (!strcasecmp(line, "Transfer-Encoding")) {
++            return -1;
++        } else if (!strcasecmp(line, "X-Thingino-Remote-Addr")) {
++            struct in_addr ipv4;
++            struct in6_addr ipv6;
++            if (strlen(value) >= remote_length ||
++                (inet_pton(AF_INET, value, &ipv4) != 1 &&
++                 inet_pton(AF_INET6, value, &ipv6) != 1))
++                return -1;
++            strcpy(remote, value);
++        }
++    }
++    return length_seen ? 0 : -1;
++}
++
++static int status_reason(int status, const char **reason)
++{
++    switch (status) {
++    case 200: *reason = "OK"; return 0;
++    case 400: *reason = "Bad Request"; return 0;
++    case 401: *reason = "Unauthorized"; return 0;
++    case 500: *reason = "Internal Server Error"; return 0;
++    default: return -1;
++    }
++}
++
++static int relay_cgi_response(int fd, char *response, size_t length)
++{
++    char *separator;
++    char *line;
++    char *save = NULL;
++    char content_type[128] = "application/soap+xml";
++    char authenticate[256] = "";
++    int status = 200;
++    const char *reason;
++    size_t body_length;
++    char headers[768];
++    int header_length;
++
++    if (length >= RESPONSE_LIMIT)
++        return -1;
++    response[length] = '\0';
++    separator = strstr(response, "\r\n\r\n");
++    if (!separator)
++        return -1;
++    *separator = '\0';
++    body_length = length - (size_t) (separator + 4 - response);
++
++    line = strtok_r(response, "\r\n", &save);
++    while (line) {
++        char *value = strchr(line, ':');
++        if (!value)
++            return -1;
++        *value++ = '\0';
++        while (*value == ' ' || *value == '\t')
++            value++;
++        if (!strcasecmp(line, "Status")) {
++            char *end;
++            long parsed = strtol(value, &end, 10);
++            if (end != value + 3 || (parsed != 200 && parsed != 400 &&
++                parsed != 401 && parsed != 500))
++                return -1;
++            status = (int) parsed;
++        } else if (!strcasecmp(line, "Content-Type")) {
++            if (strlen(value) >= sizeof(content_type) || strpbrk(value, "\r\n"))
++                return -1;
++            strcpy(content_type, value);
++        } else if (!strcasecmp(line, "WWW-Authenticate")) {
++            if (strlen(value) >= sizeof(authenticate) || strpbrk(value, "\r\n"))
++                return -1;
++            strcpy(authenticate, value);
++        } else if (strcasecmp(line, "Content-Length") &&
++                   strcasecmp(line, "Connection")) {
++            return -1;
++        }
++        line = strtok_r(NULL, "\r\n", &save);
++    }
++    if (status_reason(status, &reason))
++        return -1;
++    header_length = snprintf(headers, sizeof(headers),
++        "HTTP/1.1 %d %s\r\nContent-Type: %s\r\nContent-Length: %zu\r\n"
++        "Connection: close\r\n%s%s%s\r\n",
++        status, reason, content_type, body_length,
++        authenticate[0] ? "WWW-Authenticate: " : "",
++        authenticate[0] ? authenticate : "",
++        authenticate[0] ? "\r\n" : "");
++    if (header_length < 0 || (size_t) header_length >= sizeof(headers))
++        return -1;
++    if (write_all(fd, headers, (size_t) header_length))
++        return -1;
++    return write_all(fd, separator + 4, body_length);
++}
++
++static void send_simple_response(int fd, int status, const char *reason,
++                                 const char *body)
++{
++    char header[256];
++    size_t body_length = strlen(body);
++    int count = snprintf(header, sizeof(header),
++        "HTTP/1.1 %d %s\r\nContent-Type: text/plain\r\n"
++        "Content-Length: %zu\r\nConnection: close\r\n\r\n",
++        status, reason, body_length);
++    if (count > 0 && (size_t) count < sizeof(header)) {
++        (void) write_all(fd, header, (size_t) count);
++        (void) write_all(fd, body, body_length);
++    }
++}
++
++static int process_request(int fd)
++{
++    static unsigned char request[HEADER_LIMIT + 4 + BODY_LIMIT];
++    static char response[RESPONSE_LIMIT + 1];
++    size_t used = 0;
++    size_t content_length = 0;
++    ssize_t header_offset = -1;
++    char service[32];
++    char remote[INET6_ADDRSTRLEN];
++    FILE *input = NULL;
++    FILE *output = NULL;
++    FILE *saved_stdin = stdin;
++    FILE *saved_stdout = stdout;
++    size_t body_offset;
++    size_t response_length;
++    long response_position;
++    char length_text[24];
++    char uri[64];
++    char *arguments[3];
++    int jump_status;
++    int result = -1;
++    bool invoked = false;
++
++    while (header_offset < 0) {
++        ssize_t count;
++        if (used >= HEADER_LIMIT)
++            goto bad_request;
++        count = read(fd, request + used, HEADER_LIMIT - used);
++        if (count > 0) {
++            used += (size_t) count;
++            header_offset = find_header_end(request, used);
++            continue;
++        }
++        if (count < 0 && errno == EINTR)
++            continue;
++        goto bad_request;
++    }
++    body_offset = (size_t) header_offset + 4;
++    request[header_offset] = '\0';
++    if (parse_content_length((char *) request, &content_length, service,
++                             sizeof(service), remote, sizeof(remote)))
++        goto bad_request;
++    if (used - body_offset > content_length)
++        goto bad_request;
++    if (read_all(fd, request + used, content_length - (used - body_offset)))
++        goto bad_request;
++
++    input = fmemopen(request + body_offset, content_length ? content_length : 1,
++                     "r");
++    output = fmemopen(response, RESPONSE_LIMIT, "w");
++    if (!input || !output)
++        goto cleanup;
++    stdin = input;
++    stdout = output;
++    snprintf(length_text, sizeof(length_text), "%zu", content_length);
++    snprintf(uri, sizeof(uri), "/onvif/%s", service);
++    setenv("REQUEST_METHOD", "POST", 1);
++    setenv("CONTENT_LENGTH", length_text, 1);
++    setenv("CONTENT_TYPE", "application/soap+xml", 1);
++    setenv("REQUEST_URI", uri, 1);
++    setenv("SCRIPT_NAME", uri, 1);
++    setenv("REMOTE_ADDR", remote[0] ? remote : "127.0.0.1", 1);
++    arguments[0] = (char *) "onvif-httpd";
++    arguments[1] = service;
++    arguments[2] = NULL;
++    optind = 1;
++    opterr = 0;
++    request_active = 1;
++    invoked = true;
++    jump_status = setjmp(request_exit_point);
++    if (!jump_status)
++        (void) onvif_cgi_main(2, arguments);
++    request_active = 0;
++    fflush(output);
++    response_position = ftell(output);
++    if (response_position < 0 || (size_t) response_position >= RESPONSE_LIMIT)
++        goto cleanup;
++    response_length = (size_t) response_position;
++    stdin = saved_stdin;
++    stdout = saved_stdout;
++    fclose(input);
++    input = NULL;
++    fclose(output);
++    output = NULL;
++    result = relay_cgi_response(fd, response, response_length);
++    goto cleanup;
++
++bad_request:
++    send_simple_response(fd, 400, "Bad Request", "invalid ONVIF request\n");
++cleanup:
++    request_active = 0;
++    stdin = saved_stdin;
++    stdout = saved_stdout;
++    if (input)
++        fclose(input);
++    if (output)
++        fclose(output);
++    if (invoked) {
++        free_conf_file();
++        memset(&service_ctx, 0, sizeof(service_ctx));
++    }
++    return result;
++}
++
++static bool extract_control_token(char token[65])
++{
++    char config[CONFIG_LIMIT + 1];
++    int fd = open("/etc/thingino.json", O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
++    ssize_t length;
++    char *control;
++    char *key;
++    char *value;
++    size_t index;
++
++    if (fd < 0)
++        return false;
++    length = read(fd, config, CONFIG_LIMIT + 1);
++    close(fd);
++    if (length <= 0 || length > CONFIG_LIMIT)
++        return false;
++    config[length] = '\0';
++    control = strstr(config, "\"control\"");
++    if (!control || !(key = strstr(control, "\"token\"")))
++        return false;
++    value = strchr(key + 7, ':');
++    if (!value)
++        return false;
++    value++;
++    while (*value == ' ' || *value == '\t' || *value == '\r' || *value == '\n')
++        value++;
++    if (*value++ != '"')
++        return false;
++    if (strlen(value) < 65)
++        return false;
++    for (index = 0; index < 64; index++) {
++        unsigned char byte = (unsigned char) value[index];
++        if (!((byte >= '0' && byte <= '9') || (byte >= 'a' && byte <= 'f') ||
++              (byte >= 'A' && byte <= 'F')))
++            return false;
++        token[index] = (char) byte;
++    }
++    if (value[64] != '"')
++        return false;
++    token[64] = '\0';
++    return true;
++}
++
++static int control_daynight(const char *mode)
++{
++    struct sockaddr_in address = {
++        .sin_family = AF_INET,
++        .sin_port = htons(CONTROL_PORT),
++        .sin_addr.s_addr = htonl(INADDR_LOOPBACK),
++    };
++    struct timeval timeout = {.tv_sec = 2, .tv_usec = 0};
++    char token[65];
++    char body[32];
++    char request[512];
++    char response[64];
++    int fd;
++    int body_length;
++    int request_length;
++    ssize_t count;
++
++    if (!extract_control_token(token))
++        return -1;
++    body_length = snprintf(body, sizeof(body), "{\"mode\":\"%s\"}", mode);
++    if (body_length < 0 || (size_t) body_length >= sizeof(body))
++        return -1;
++    request_length = snprintf(request, sizeof(request),
++        "POST /api/v1/actions/daynight HTTP/1.1\r\nHost: 127.0.0.1:%d\r\n"
++        "Authorization: Bearer %s\r\nContent-Type: application/json\r\n"
++        "Content-Length: %d\r\nConnection: close\r\n\r\n%s",
++        CONTROL_PORT, token, body_length, body);
++    memset(token, 0, sizeof(token));
++    if (request_length < 0 || (size_t) request_length >= sizeof(request))
++        return -1;
++    fd = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
++    if (fd < 0)
++        return -1;
++    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
++    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
++    if (connect(fd, (struct sockaddr *) &address, sizeof(address)) ||
++        write_all(fd, request, (size_t) request_length)) {
++        close(fd);
++        return -1;
++    }
++    memset(request, 0, sizeof(request));
++    count = read(fd, response, sizeof(response) - 1);
++    close(fd);
++    if (count <= 0)
++        return -1;
++    response[count] = '\0';
++    return !strncmp(response, "HTTP/1.1 200 ", 13) ? 0 : -1;
++}
++
++static int set_utc_from_command(const char *command)
++{
++    int year, month, day, hour, minute, second, consumed = 0;
++    struct tm value;
++    time_t timestamp;
++    struct timespec target;
++
++    if (sscanf(command,
++        "date -s \"%4d-%2d-%2d %2d:%2d:%2d\" > /dev/null 2>&1%n",
++        &year, &month, &day, &hour, &minute, &second, &consumed) != 6 ||
++        command[consumed] != '\0')
++        return -1;
++    memset(&value, 0, sizeof(value));
++    value.tm_year = year - 1900;
++    value.tm_mon = month - 1;
++    value.tm_mday = day;
++    value.tm_hour = hour;
++    value.tm_min = minute;
++    value.tm_sec = second;
++    timestamp = timegm(&value);
++    if (timestamp == (time_t) -1)
++        return -1;
++    target.tv_sec = timestamp;
++    target.tv_nsec = 0;
++    return clock_settime(CLOCK_REALTIME, &target);
++}
++
++static int signal_prudynt(void)
++{
++    char buffer[32];
++    int fd = open("/run/prudynt.pid", O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
++    ssize_t count;
++    char *end;
++    long pid;
++
++    if (fd < 0)
++        return -1;
++    count = read(fd, buffer, sizeof(buffer) - 1);
++    close(fd);
++    if (count <= 0)
++        return -1;
++    buffer[count] = '\0';
++    errno = 0;
++    pid = strtol(buffer, &end, 10);
++    while (*end == '\r' || *end == '\n')
++        end++;
++    if (errno || *end || pid <= 1 || pid > INT32_MAX)
++        return -1;
++    return kill((pid_t) pid, SIGUSR2);
++}
++
++/* This daemon deliberately interposes the upstream command hooks. The D-Link
++ * profile routes supported IR-cut actions to Rust and performs the two other
++ * supported operations natively. Unknown command templates fail closed. */
++int __wrap_system(const char *command)
++{
++    if (!command) {
++        errno = ENOSYS;
++        return 0;
++    }
++    if (!strcmp(command, "/sbin/ircut auto"))
++        return control_daynight("auto");
++    if (!strcmp(command, "/sbin/ircut on") || !strcmp(command, "ircut on"))
++        return control_daynight("day");
++    if (!strcmp(command, "/sbin/ircut off") || !strcmp(command, "ircut off"))
++        return control_daynight("night");
++    if (!strcmp(command, "hwclock -w > /dev/null 2>&1"))
++        return 0;
++    if (!strcmp(command,
++        "kill -USR2 $(cat /var/run/streaming.pid 2>/dev/null) > /dev/null 2>&1"))
++        return signal_prudynt();
++    if (!strncmp(command, "date -s \"", 9))
++        return set_utc_from_command(command);
++    errno = ENOSYS;
++    return -1;
++}
++
++FILE *__wrap_popen(const char *command, const char *type)
++{
++    (void) command;
++    (void) type;
++    errno = ENOSYS;
++    return NULL;
++}
++
++int __wrap_pclose(FILE *stream)
++{
++    (void) stream;
++    errno = EINVAL;
++    return -1;
++}
++
++int main(void)
++{
++    struct sockaddr_in address = {
++        .sin_family = AF_INET,
++        .sin_port = htons(ONVIF_LISTEN_PORT),
++        .sin_addr.s_addr = htonl(INADDR_LOOPBACK),
++    };
++    int listener;
++    int option = 1;
++
++    signal(SIGPIPE, SIG_IGN);
++    if (chdir(RESOURCE_DIRECTORY))
++        return EXIT_FAILURE;
++    listener = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
++    if (listener < 0)
++        return EXIT_FAILURE;
++    setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
++    if (bind(listener, (struct sockaddr *) &address, sizeof(address)) ||
++        listen(listener, 8)) {
++        close(listener);
++        return EXIT_FAILURE;
++    }
++    for (;;) {
++        struct timeval timeout = {.tv_sec = IO_TIMEOUT_SECONDS, .tv_usec = 0};
++        int client = accept4(listener, NULL, NULL, SOCK_CLOEXEC);
++        if (client < 0) {
++            if (errno == EINTR)
++                continue;
++            close(listener);
++            return EXIT_FAILURE;
++        }
++        setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
++        setsockopt(client, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
++        (void) process_request(client);
++        close(client);
++    }
++}

@@ -1,0 +1,827 @@
+{
+  "schema_version": 1,
+  "hardware_revision": "A1",
+  "installed_files": [
+    {
+      "destination": "configs/cameras-exp/dlink_dcs6100lhv2_a1_t31n_os02g10_rtl8188fu/collector-kernel.fragment",
+      "sha256": "dcc1935efe641f193b0506164a84952facd591ca050430e6765dc3ecc92e507e",
+      "source": "profiles/dlink-dcs6100lhv2-a1/collector-kernel.fragment"
+    },
+    {
+      "destination": "configs/cameras-exp/dlink_dcs6100lhv2_a1_t31n_os02g10_rtl8188fu/dlink_dcs6100lhv2_a1_t31n_os02g10_rtl8188fu_defconfig",
+      "sha256": "c2b76246ca0f162c18e4e7fb30b40e14461adddbb960aa760f2987bb64a7bdb3",
+      "source": "profiles/dlink-dcs6100lhv2-a1/defconfig"
+    },
+    {
+      "destination": "configs/cameras-exp/dlink_dcs6100lhv2_a1_t31n_os02g10_rtl8188fu/kernel.fragment",
+      "sha256": "7b8923008d034f2f8e7c3d0e1bf61f4e6c70da3e789724baf678575f42b5dda3",
+      "source": "profiles/dlink-dcs6100lhv2-a1/kernel.fragment"
+    },
+    {
+      "destination": "configs/cameras-exp/dlink_dcs6100lhv2_a1_t31n_os02g10_rtl8188fu/recovery-ap-kernel.fragment",
+      "sha256": "3cb630216bd4c91ee9234225e20f8dda8510ec14b6c0e6154a0cf633f3d26660",
+      "source": "profiles/dlink-dcs6100lhv2-a1/recovery-ap-kernel.fragment"
+    },
+    {
+      "destination": "configs/cameras-exp/dlink_dcs6100lhv2_a1_t31n_os02g10_rtl8188fu/stock-restore-kernel.fragment",
+      "sha256": "eea2bb59fc2279ac46c802454d01a24086c0baed179d7156f299eba55d544691",
+      "source": "profiles/dlink-dcs6100lhv2-a1/stock-restore-kernel.fragment"
+    },
+    {
+      "destination": "configs/cameras-exp/dlink_dcs6100lhv2_a1_t31n_os02g10_rtl8188fu/thingino.json",
+      "sha256": "2d94c0cd190c532ea2474fdd44a3217b02c18a4f1830153ecc17f1b27c5f7933",
+      "source": "profiles/dlink-dcs6100lhv2-a1/thingino.json"
+    },
+    {
+      "destination": "dcs6100-webui/index.html",
+      "sha256": "136b88f7cf8ba949e64ae37c1f96cde1e2e53b37987a485bc89c3bc02311069e",
+      "source": "webui/index.html"
+    },
+    {
+      "destination": "dcs6100-webui/public/manifest.webmanifest",
+      "sha256": "38bda3647c9bb6976180108beedeceb0dfde4068a3f157a18ae8527e8d553ce5",
+      "source": "webui/public/manifest.webmanifest"
+    },
+    {
+      "destination": "dcs6100-webui/src/api/client.ts",
+      "sha256": "ee64c78a08714ad18ce4f6c0ee53e1a1d074da8c059d385cafec00d5d96a2249",
+      "source": "webui/src/api/client.ts"
+    },
+    {
+      "destination": "dcs6100-webui/src/api/contracts.ts",
+      "sha256": "195f8115841c78517be4b99ecf81fd542d0b0b1b85a5dae54ce846286f931d9e",
+      "source": "webui/src/api/contracts.ts"
+    },
+    {
+      "destination": "dcs6100-webui/src/api/control.ts",
+      "sha256": "f883b8559e5255e3ea2ccfe5a1fdddfc74b7cc8b251d9ea938ad6ddf8fec8419",
+      "source": "webui/src/api/control.ts"
+    },
+    {
+      "destination": "dcs6100-webui/src/api/decode.ts",
+      "sha256": "cdbb7cc85266313268efb71678cf07c94e42651cbdf2021053c2c027f0b05f7a",
+      "source": "webui/src/api/decode.ts"
+    },
+    {
+      "destination": "dcs6100-webui/src/api/media.ts",
+      "sha256": "6a965ec5da48b1f534abb44eb7b993f4ca95970c667d35d204d9fd38f86cebb0",
+      "source": "webui/src/api/media.ts"
+    },
+    {
+      "destination": "dcs6100-webui/src/api/routes.ts",
+      "sha256": "2b15f51ea0fad8057891e6beef9bbb8dcebcde8afac08db5f7bfbca95fb71a41",
+      "source": "webui/src/api/routes.ts"
+    },
+    {
+      "destination": "dcs6100-webui/src/app/dom.ts",
+      "sha256": "06f573d3a6b4d33f43a7ce1fa46b110bfa8842bc6e933cb7c2c31ebcabb1ca53",
+      "source": "webui/src/app/dom.ts"
+    },
+    {
+      "destination": "dcs6100-webui/src/app/forms.ts",
+      "sha256": "61c1fa7bdc4ffe4995138575b6126759bb4b1447b964ca50d1d712251079eb7f",
+      "source": "webui/src/app/forms.ts"
+    },
+    {
+      "destination": "dcs6100-webui/src/app/fullscreen-preview.ts",
+      "sha256": "1d1e8e105c2392a5ff9bd9363ed1f4f453574b5927db072537b69b93436b3970",
+      "source": "webui/src/app/fullscreen-preview.ts"
+    },
+    {
+      "destination": "dcs6100-webui/src/app/navigation.ts",
+      "sha256": "43001ab7fedacc49bfb59d830eb84a63cd402398e4cb7e18f2f987d377534382",
+      "source": "webui/src/app/navigation.ts"
+    },
+    {
+      "destination": "dcs6100-webui/src/app/shell.ts",
+      "sha256": "b68b15edad269a44f62823359209f8d23d669bdb611504853fc4b85f53b64f13",
+      "source": "webui/src/app/shell.ts"
+    },
+    {
+      "destination": "dcs6100-webui/src/app/streamer-preview.ts",
+      "sha256": "56b6017c0204703dc8796a543fa690da118b9db8ca81d255f471ae3a4250aaa3",
+      "source": "webui/src/app/streamer-preview.ts"
+    },
+    {
+      "destination": "dcs6100-webui/src/main.ts",
+      "sha256": "c17a9cc894ab30dc640c5d1bb7e04c2c4450e572f44e6f2cfc664164c5fca43c",
+      "source": "webui/src/main.ts"
+    },
+    {
+      "destination": "dcs6100-webui/src/pages/config.ts",
+      "sha256": "dd97b206bd7ecc9ef110056dc9164d6eed78cb52d528d48707e447c30c9ee5ce",
+      "source": "webui/src/pages/config.ts"
+    },
+    {
+      "destination": "dcs6100-webui/src/pages/login.ts",
+      "sha256": "9de06837c3d57e67df5a03a303262d31478899b480a71d9b6c035edf35390cec",
+      "source": "webui/src/pages/login.ts"
+    },
+    {
+      "destination": "dcs6100-webui/src/pages/preview.ts",
+      "sha256": "b4e323bf2aeab90e73c2fe7269fbf2db516af33c7074f98f7a4690c3dad1eb69",
+      "source": "webui/src/pages/preview.ts"
+    },
+    {
+      "destination": "dcs6100-webui/src/pages/tools.ts",
+      "sha256": "ac41308e6c77dd9792c2e4622a4b14f6a40bc6f8cc5989bd90337bfd40a96717",
+      "source": "webui/src/pages/tools.ts"
+    },
+    {
+      "destination": "dcs6100-webui/src/styles.css",
+      "sha256": "9a6221b35745f0bef95159b3b5c7002efe3481cbd4067875341631055ee22147",
+      "source": "webui/src/styles.css"
+    },
+    {
+      "destination": "dcs6100-webui/tsconfig.json",
+      "sha256": "d6a0a2065f76d64d605b76a3ce689c2ada4792b93fb6a8d86daa83b85d0f8fdb",
+      "source": "webui/tsconfig.json"
+    },
+    {
+      "destination": "package/prudynt-t/0001-enforce-rtsp-basic-auth.patch",
+      "sha256": "35a4b2e2341fa9ec5dcf52bfb985de6d356fbd0cbc3a5000f9db4475ae554aee",
+      "source": "patches/prudynt/0001-enforce-rtsp-basic-auth.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0002-dlink-media-baseline.patch",
+      "sha256": "12cdbec5c7c77a9d174c131ee7dce266a5813cb97cb34b31606149e5e2d1601a",
+      "source": "patches/prudynt/0002-dlink-media-baseline.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0003-rtsp-share-immutable-video-payloads.patch",
+      "sha256": "8f8072040aff1dc39f329bb1010ff761a861685f14c0af6f5d37ea935fbbac16",
+      "source": "patches/prudynt/0003-rtsp-share-immutable-video-payloads.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0004-rtsp-bound-slow-client-video-queues.patch",
+      "sha256": "3fd55a0bc90ec1b2afc6629990891ff668cfff7da46751b3431aeaa217d2b431",
+      "source": "patches/prudynt/0004-rtsp-bound-slow-client-video-queues.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0005-jpeg-preserve-zero-idle-frame-rate.patch",
+      "sha256": "e6723143c4bac9eb276f001cf7972f075b0ca681e24ffc7acda3e2de52b6b933",
+      "source": "patches/prudynt/0005-jpeg-preserve-zero-idle-frame-rate.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0006-test-cover-queue-element-and-client-isolation-limits.patch",
+      "sha256": "62fede6ee5c902a6009a86f047fdee82ea6e99097076fb71c0df59fd0cb54c87",
+      "source": "patches/prudynt/0006-test-cover-queue-element-and-client-isolation-limits.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0007-jpeg-synchronize-video-demand-lifecycle.patch",
+      "sha256": "f9d8f6618b0ab0f44049c68e7ecabd05dd1c898fdaf512413255855e3c879cad",
+      "source": "patches/prudynt/0007-jpeg-synchronize-video-demand-lifecycle.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0008-jpeg-expire-source-demand-after-disconnect.patch",
+      "sha256": "2fe80fb61ead7a71698c462444e49a50b1a87af9d40717040275ca120e86b06b",
+      "source": "patches/prudynt/0008-jpeg-expire-source-demand-after-disconnect.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0009-jpeg-apply-expiry-to-the-video-standby-gate.patch",
+      "sha256": "227300c711e3a6e97b24c9b12caf463642792aa927a346c770add90771c447e5",
+      "source": "patches/prudynt/0009-jpeg-apply-expiry-to-the-video-standby-gate.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0010-media-bound-JPEG-demand-and-receive-lifecycle.patch",
+      "sha256": "27926b3ea85496aa77a92a4f03fc5e81e79f71d7effd733079a16db8816d69a8",
+      "source": "patches/prudynt/0010-media-bound-JPEG-demand-and-receive-lifecycle.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0011-http-keep-shared-JPEG-static-and-loopback-only.patch",
+      "sha256": "a5194814d05b870be96c49da513d7c55e939157da9cc67ca92167fddaec9c177",
+      "source": "patches/prudynt/0011-http-keep-shared-JPEG-static-and-loopback-only.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0012-media-replace-unsafe-dlink-video-restarts.patch",
+      "sha256": "0720af7ed9717988dec09376f1d36fad30f1b17e6bd3a252820c3453093b0b8c",
+      "source": "patches/prudynt/0012-media-replace-unsafe-dlink-video-restarts.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0013-http-bound-mjpeg-client-threads.patch",
+      "sha256": "5fe70843096bb6a5ed68cc183dd514162121bf35f169cd04ee0d8c90c3aaec2e",
+      "source": "patches/prudynt/0013-http-bound-mjpeg-client-threads.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0014-media-keep-dlink-live-controls-in-process.patch",
+      "sha256": "a3668b647864cafc6d97205fc305670343b0329a4feecda5875fda77f1e1cd30",
+      "source": "patches/prudynt/0014-media-keep-dlink-live-controls-in-process.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0015-reload-camera-timezone.patch",
+      "sha256": "b6056eae82881d737dd6abaa7c71a7590852348f64160851bdd763287b74f603",
+      "source": "patches/prudynt/0015-reload-camera-timezone.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0016-scale-burnin-osd-per-stream.patch",
+      "sha256": "2e7bfa345f5a8f4b187181d57b45c84905548bb6f01463798aa91983ba1b2d7e",
+      "source": "patches/prudynt/0016-scale-burnin-osd-per-stream.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0017-motion-add-nonblocking-Control-observation-output.patch",
+      "sha256": "5e174ea3ee1e87768e1cadc7c4e300bd715ab1899fcc2185145f24eb16d61537",
+      "source": "patches/prudynt/0017-motion-add-nonblocking-Control-observation-output.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0018-motion-remove-legacy-shell-event-path.patch",
+      "sha256": "4a979a45a637200f14d4c5ca9739a4a7e2252feb3bb7a2df544c4ab3a8824213",
+      "source": "patches/prudynt/0018-motion-remove-legacy-shell-event-path.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0019-motion-clear-stale-state-on-process-start.patch",
+      "sha256": "814c7beeb6b76e69da2679d6ac71a5fafbba3ea1412fb1fe06573e83144c6000",
+      "source": "patches/prudynt/0019-motion-clear-stale-state-on-process-start.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0020-config-reload-after-complete-write.patch",
+      "sha256": "04a5cfdceeb16eadb1b4aefcf433e4c9b5b17be70019f3e140b48f701066f2f2",
+      "source": "patches/prudynt/0020-config-reload-after-complete-write.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0021-media-stabilize-IPC-clients-and-expose-queue-metrics.patch",
+      "sha256": "9f342cc6e52eb3c10a5f8ad5daef09b5681b836555f6f9da879b3c335535655d",
+      "source": "patches/prudynt/0021-media-stabilize-IPC-clients-and-expose-queue-metrics.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0022-recorder-require-keyframe-safe-durable-segments.patch",
+      "sha256": "70753b4c5fd4d36715eed8c87fa3e9d92114b87e9e7f397802baceb9c715b01a",
+      "source": "patches/prudynt/0022-recorder-require-keyframe-safe-durable-segments.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0023-ipc-add-bounded-versioned-JSON-framing.patch",
+      "sha256": "b667884c856ea9ce8fd47fc583e09bd7e37ddaf708f9bcf9ace3b526fb455b6f",
+      "source": "patches/prudynt/0023-ipc-add-bounded-versioned-JSON-framing.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0024-jpeg-recover-failed-starts-and-isolate-snapshot-files.patch",
+      "sha256": "0ccc2693872b3da27ecea0ad72e135de842842b679ea8eb38d79b9b2c5b095bc",
+      "source": "patches/prudynt/0024-jpeg-recover-failed-starts-and-isolate-snapshot-files.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0025-rtsp-bound-socket-and-audio-queues-by-bytes-and-elements.patch",
+      "sha256": "8de04548866681b9a030c96bb67b08b134c05c82d31e32da4d5c436da722401a",
+      "source": "patches/prudynt/0025-rtsp-bound-socket-and-audio-queues-by-bytes-and-elements.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0026-motion-clear-active-marker-before-thread-exit.patch",
+      "sha256": "d377cdda3d536582d2ea5294dd6559eae75276ecdbf5c8a32a2b3dae50bd0a56",
+      "source": "patches/prudynt/0026-motion-clear-active-marker-before-thread-exit.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0027-jpeg-expose-per-channel-lifecycle-metrics.patch",
+      "sha256": "c05b643b54580da89dc83bf6df927b8d659df6537f77410238d8650f1f819d3d",
+      "source": "patches/prudynt/0027-jpeg-expose-per-channel-lifecycle-metrics.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0028-privacy-ack-and-recorder-segment-timestamps.patch",
+      "sha256": "46937b1e990350008b987fb670fd118e3071d5ce491723e1223ecf81dcc57551",
+      "source": "patches/prudynt/0028-privacy-ack-and-recorder-segment-timestamps.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0029-privacy-and-recorder-failure-transactions.patch",
+      "sha256": "f233e02fd346b597d2254c7bf5cc5fa2ac6a6cad981734c3bc226b854252bf32",
+      "source": "patches/prudynt/0029-privacy-and-recorder-failure-transactions.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0030-osd-centralize-group-lifecycle.patch",
+      "sha256": "b61b1037d2c9fc7c762a9ebd2a7ee2d238f2ae01e26172420552f39a3e0f7216",
+      "source": "patches/prudynt/0030-osd-centralize-group-lifecycle.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0031-video-ready-startup-barrier.patch",
+      "sha256": "321e34af4c852159e27dfe6e61967d1fa2da27dabdbdede127924681e3893659",
+      "source": "patches/prudynt/0031-video-ready-startup-barrier.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0032-recorder-reject-volatile-and-root-mounts.patch",
+      "sha256": "4f954025af5e5bf11585bfc07b8c367990858d41e6cb77487dee5dcf163c663a",
+      "source": "patches/prudynt/0032-recorder-reject-volatile-and-root-mounts.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0033-recorder-close-segments-before-process-exit.patch",
+      "sha256": "f75f4866f22d5b3619d31aad4f79fd17eccb8f1a0325b80cc88980e52a2ecdae",
+      "source": "patches/prudynt/0033-recorder-close-segments-before-process-exit.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0034-dlink-disable-unsupported-defog.patch",
+      "sha256": "87e4383f700beb5757b19852e78d83393f6c4d52ef757c09af720cffeb9de144",
+      "source": "patches/prudynt/0034-dlink-disable-unsupported-defog.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0035-release-error-handling-and-imp-init-rollback.patch",
+      "sha256": "55e19c9e2c04259083d0ae980475547747f8f256aea38837bf87a808c1b8b799",
+      "source": "patches/prudynt/0035-release-error-handling-and-imp-init-rollback.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0036-explicit-release-debug-logging.patch",
+      "sha256": "94748b678bd0f6deb882124d05461822094a2b69cfc025d913ea8a375ec94240",
+      "source": "patches/prudynt/0036-explicit-release-debug-logging.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0037-recorder-direct-framed-ipc.patch",
+      "sha256": "42e50d7b34945acaa0aa038bca62d065dfaa8028e6f078a783b635e0a53c0cdc",
+      "source": "patches/prudynt/0037-recorder-direct-framed-ipc.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0038-lifecycle-preserve-retry-safe-teardown-state.patch",
+      "sha256": "b824e53e42280937c5cdba547f9a281c3e668222eaedae402af58e186c590ad5",
+      "source": "patches/prudynt/0038-lifecycle-preserve-retry-safe-teardown-state.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0039-recorder-include-framed-control-socket-declaration.patch",
+      "sha256": "aa2ff8eca4ee5e9b15174f4d785e602c59a506e4b22aa75bf4bf7a8230046e79",
+      "source": "patches/prudynt/0039-recorder-include-framed-control-socket-declaration.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0040-logging-use-the-declared-critical-level.patch",
+      "sha256": "3256b2a0367df31d113a0c66da5aae9d3e543eb9b7c4b93e2a7795221fa1649b",
+      "source": "patches/prudynt/0040-logging-use-the-declared-critical-level.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0041-media-retire-ready-marker-across-process-restart.patch",
+      "sha256": "82e43e7db3ba6cf60f85259577ef04dd134aa94c053e9b3d9fa02713926e4eaa",
+      "source": "patches/prudynt/0041-media-retire-ready-marker-across-process-restart.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0042-motion-snapshot-config-before-ivs-restart.patch",
+      "sha256": "12a5454b356cc21985e54b075fd7536173ba5fae350d1879c17168471399aba1",
+      "source": "patches/prudynt/0042-motion-snapshot-config-before-ivs-restart.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0043-worker-startup-and-join-ownership.patch",
+      "sha256": "6ead3d6a258af589e0617c952e748472255ee67cd03f369285777e8751ed0b42",
+      "source": "patches/prudynt/0043-worker-startup-and-join-ownership.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0044-bound-repeated-worker-error-logs.patch",
+      "sha256": "ad5b800120faf5b409cf38cae00245ae2e37e69583735502f1a5c3d85ba639a3",
+      "source": "patches/prudynt/0044-bound-repeated-worker-error-logs.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0045-refuse-motion-init-with-stale-ivs-state.patch",
+      "sha256": "68de772136e7b49124e0efaf5c120e95163f9ab03222144e0c5214bd7c6964bf",
+      "source": "patches/prudynt/0045-refuse-motion-init-with-stale-ivs-state.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0046-jpeg-publish-and-send-complete-frames.patch",
+      "sha256": "2321190c2b673189c452bdb5ab151b0ddcacbfd4d49d7297b6db2ac9270ca3c7",
+      "source": "patches/prudynt/0046-jpeg-publish-and-send-complete-frames.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0047-media-publish-stream0-to-raptor-ring.patch",
+      "sha256": "af6fa43a4c50787422d0be1a3eb0e56e2075703eadcf203ac0c6357fc80b58da",
+      "source": "patches/prudynt/0047-media-publish-stream0-to-raptor-ring.patch"
+    },
+    {
+      "destination": "package/prudynt-t/0048-dlink-preserve-encoder-fps-across-daynight.patch",
+      "sha256": "0626dfa9ffcb97ec9d9f52deb6172004351d31c922ee23bbd0a7a49c71c1e36e",
+      "source": "patches/prudynt/0048-dlink-preserve-encoder-fps-across-daynight.patch"
+    },
+    {
+      "destination": "package/thingino-control/build-rust.py",
+      "sha256": "54a074dbcfab63610e92a7fbd713a4922fd8ff4d3345e2f0942fac63104f8ffe",
+      "source": "scripts/build_thingino_control.py"
+    },
+    {
+      "destination": "package/thingino-control/files/S95thingino-control",
+            "sha256": "fd5174bbd2b60fb4a4859a2d304d89d080a1e9ad64725efdcadf34242bb5b049",
+      "source": "components/thingino-control/integration/S95thingino-control"
+    },
+    {
+      "destination": "package/thingino-control/files/thingino-control.json",
+            "sha256": "b406e224b5df5ac7a876c9d08edc876ebe883cc48eb19811efed4d9ca904ef9e",
+      "source": "components/thingino-control/integration/thingino-control.json"
+    },
+    {
+      "destination": "package/thingino-control/rust/Cargo.lock",
+            "sha256": "c3b18a46ee1c19d5ecc3f5badb835718d8aed74d981b3014a93f7fce5c20a6cc",
+      "source": "components/thingino-control/Cargo.lock"
+    },
+    {
+      "destination": "package/thingino-control/rust/Cargo.toml",
+            "sha256": "6ce67a45267fc53cfaf6a367fef2ad5ba03fbc6ff6e2ec83b992970acd82e4c9",
+      "source": "components/thingino-control/Cargo.toml"
+    },
+    {
+      "destination": "package/thingino-control/rust/fixtures/motion-state-machine-v1.json",
+      "sha256": "50102b9ef1dd07fdc997d8b84368b249b6bfb9eb573950d69ca5ff6b03e0cfdc",
+      "source": "components/thingino-control/fixtures/motion-state-machine-v1.json"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera.rs",
+      "sha256": "23eececde204863d16d3f2788539330413414fbde41679898d6932bea47bb4a9",
+      "source": "components/thingino-control/src/camera.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/actions.rs",
+      "sha256": "bcfe3c71161bb8bdf64ca9621cfe649b4e683fdb767cff16f052f6ad714da351",
+      "source": "components/thingino-control/src/camera/actions.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/api.rs",
+      "sha256": "ae882b8109f895465d9d09f8937d000cc26e5dcbc3c870c329513b3c33a6d19c",
+      "source": "components/thingino-control/src/camera/api.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/config/access.rs",
+      "sha256": "763e150989c17fd5b77e25f931558fb789e65012730b0ef442be5f02cea0052e",
+      "source": "components/thingino-control/src/camera/config/access.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/config/crontab.rs",
+      "sha256": "7acc837912e19b0b6c430f5f0ed6eb1757a4c112f27368dd8f0725f9b6480f90",
+      "source": "components/thingino-control/src/camera/config/crontab.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/config/daynight.rs",
+      "sha256": "ed7773b308c07729ad9051e9f19f6e536ae47a5930071fd328dd23a5d45101ec",
+      "source": "components/thingino-control/src/camera/config/daynight.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/config/daynight_tests.rs",
+      "sha256": "d30b63daf0ed8ed12b5969cf74492371bd76d0b7025c94aebdceac306501f4a1",
+      "source": "components/thingino-control/src/camera/config/daynight_tests.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/config/domains.rs",
+      "sha256": "2617e7348c1f103a1ec5d4de14f943dbd006333a46a3b1814af7dc1caa4f8294",
+      "source": "components/thingino-control/src/camera/config/domains.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/config/domains_tests.rs",
+      "sha256": "4ad8493f9bc12e48a7117cb3bd78119407bd84190e0a7de9e32a65e0676afd81",
+      "source": "components/thingino-control/src/camera/config/domains_tests.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/config/gpio.rs",
+      "sha256": "99ded02003fe814167c4ac44c307515c61d319613ddb38c3c911551aa7ac9203",
+      "source": "components/thingino-control/src/camera/config/gpio.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/config/imaging.rs",
+      "sha256": "588688c28ed8033ca1562254e3927ffc85c3fa2164f9108d3701da8abfa3f520",
+      "source": "components/thingino-control/src/camera/config/imaging.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/config/mod.rs",
+      "sha256": "8ea535131695158c3bfd21a5f703340af7e9eec33172d2c0ac21e40da94322dd",
+      "source": "components/thingino-control/src/camera/config/mod.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/config/network.rs",
+      "sha256": "9ca196da9a20175ae091473c0aa93d66ab8ac99ef9f3e1269d17367b9272ba16",
+      "source": "components/thingino-control/src/camera/config/network.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/config/recorder.rs",
+      "sha256": "5d0309576cdd71977bc05aa1c374ff0a55098fb62cb5cd7f188e4567ab6979d2",
+      "source": "components/thingino-control/src/camera/config/recorder.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/config/schema.rs",
+      "sha256": "3996c9db28635c7b6e042e97f29ae33fc61c896c8fafc1f26b60cd00867b3da0",
+      "source": "components/thingino-control/src/camera/config/schema.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/config/send.rs",
+      "sha256": "2029bcb66ee520248c1892d3233fda1300eedac68df4fe8337fd38886c7d4547",
+      "source": "components/thingino-control/src/camera/config/send.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/config/time.rs",
+      "sha256": "f1394d0724692fe9ee0fd89d3804a036865461c4fee2d5b4b563925608e8330a",
+      "source": "components/thingino-control/src/camera/config/time.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/diagnostics.rs",
+      "sha256": "e04b3e7c55840e580c435ab7b55e05e2838919c3f831d3201dc43b8d65c7494d",
+      "source": "components/thingino-control/src/camera/diagnostics.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/files.rs",
+      "sha256": "3b837d361d25fb39658e420d787964c15234ba030b92c6fdbcf8cd38fc55963a",
+      "source": "components/thingino-control/src/camera/files.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/ha/commands.rs",
+      "sha256": "08c331c2aa428757039022ce5a7be216eddf2de931a198c69afc11b7e549180f",
+      "source": "components/thingino-control/src/camera/ha/commands.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/ha/config.rs",
+      "sha256": "4fc9bc5c0eb849f95e1b1fcb0ceb36ce08c934a7d1f7be53290d8f744c761ffc",
+      "source": "components/thingino-control/src/camera/ha/config.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/ha/discovery.rs",
+      "sha256": "b28914ad4b9d034aaa9dc7562c98f486ba523665d94a476e693f257aada3b95c",
+      "source": "components/thingino-control/src/camera/ha/discovery.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/ha/mod.rs",
+      "sha256": "07215785595304d0785ff2f47ca65ebb7965c24d97c3c83c3ba94596ac492a9f",
+      "source": "components/thingino-control/src/camera/ha/mod.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/ha/motion.rs",
+      "sha256": "a4c52d1e5cced7f473640c606bdf49578113324969d46401ef1f8136bf7d55dc",
+      "source": "components/thingino-control/src/camera/ha/motion.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/ha/mqtt.rs",
+      "sha256": "2c4b37f7f447a38a6f9f987c935869a0722b2cea8989e295cfe11cb29716b0a4",
+      "source": "components/thingino-control/src/camera/ha/mqtt.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/ha/mqtt_tests.rs",
+      "sha256": "6d582acc76576731d75c51dde46d7d77c929f960a21903bd709bc91312b8cb77",
+      "source": "components/thingino-control/src/camera/ha/mqtt_tests.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/ha/service.rs",
+      "sha256": "132b4da5c2587764470cc505cf99c0a6f03425b21fffbea561121af303536598",
+      "source": "components/thingino-control/src/camera/ha/service.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/ha/service_tests.rs",
+      "sha256": "e9aeec8bb284f64d0b8cc2e401d11be9bf4ef5a306a4cc60e511bebe14724505",
+      "source": "components/thingino-control/src/camera/ha/service_tests.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/ha/snapshot.rs",
+      "sha256": "851cdf99c34a177ab1e80ad90edebace6fad5f12883b5653843deaf69fcc94c2",
+      "source": "components/thingino-control/src/camera/ha/snapshot.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/ha/state.rs",
+      "sha256": "1ff39bed10e4aa759bbbc2aa5fd0b3b1402ccb162802c7531d650b9b7937f72f",
+      "source": "components/thingino-control/src/camera/ha/state.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/maintenance.rs",
+      "sha256": "cca4e20a207ab8566cfa2102f12579cf31622bcc1a7b05388c872fb32bdcf227",
+      "source": "components/thingino-control/src/camera/maintenance.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/motion.rs",
+      "sha256": "cb4a34c6f000282c7bd13686f1afe13d53e808e2a683d2928e66acb042f226b6",
+      "source": "components/thingino-control/src/camera/motion.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/motion_datagram.rs",
+      "sha256": "8718c99a40572e8c35c9d614f0a88bedfd502539dded09cfe801f7c0500d46b4",
+      "source": "components/thingino-control/src/camera/motion_datagram.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/motion_events.rs",
+      "sha256": "0af0396e9120860cc49d0e493379fc16e2857e092c9559cd4d4a36304ea0e312",
+      "source": "components/thingino-control/src/camera/motion_events.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/motion_queue.rs",
+      "sha256": "71a773b51e3d370fa0159a47624e03b5ae62de63e9ef79cf44d30614aefb3791",
+      "source": "components/thingino-control/src/camera/motion_queue.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/motion_state.rs",
+      "sha256": "af308f1c5a58b9067cbb3e79b87d9d0dc4375a988194a15c679163ed87677358",
+      "source": "components/thingino-control/src/camera/motion_state.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/motion_tests.rs",
+      "sha256": "72d0235ee780c01f9b2d03f3197b8091920f714e872fc12d271e1523a606fe52",
+      "source": "components/thingino-control/src/camera/motion_tests.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/network.rs",
+      "sha256": "0aba7c81f7808c1dd9c498a96f39adee3c21c6aa71438d2ad008912852636691",
+      "source": "components/thingino-control/src/camera/network.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/platform.rs",
+      "sha256": "f06466c6f614de7af15bc6025a91015bbff7b499bdd8fe67803c7d93cf693a89",
+      "source": "components/thingino-control/src/camera/platform.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/platform_tests.rs",
+      "sha256": "7a851716ca1c96cc144aa50cc590f5c8ce74b5162af8ca70ee0dca2ed1a68ffe",
+      "source": "components/thingino-control/src/camera/platform_tests.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/prudynt.rs",
+      "sha256": "b45a604596fdd903636b46b5aafd094d4d3bb5dbbca4d1a0ae02c7059f135b8e",
+      "source": "components/thingino-control/src/camera/prudynt.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/prudynt_tests.rs",
+      "sha256": "9414cb190b02fe83a28cf3a045d8453ecc65a7b5178a2365aaca1ea83ff21b84",
+      "source": "components/thingino-control/src/camera/prudynt_tests.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/runtime.rs",
+      "sha256": "b77ae54ca368e725eaf4970325f9447a63f520c9598703bf635ffb865f333e3c",
+      "source": "components/thingino-control/src/camera/runtime.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera/storage.rs",
+      "sha256": "d6274a89be100b6dfce49c5c8a032462f0af2c2677a4f06d400ca65b2efe5ceb",
+      "source": "components/thingino-control/src/camera/storage.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/camera_tests.rs",
+      "sha256": "803bba53ac145eb1f847f60b8e5110b73fcd3bfe536f6aef749a8046f87570a1",
+      "source": "components/thingino-control/src/camera_tests.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/decode.rs",
+      "sha256": "ca3ed4ac626273549df65b0a873b10347944a2551182de222b5c003b34db9442",
+      "source": "components/thingino-control/src/decode.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/json.rs",
+            "sha256": "4e3a3f678f557357b8a0a54725655f9472e0397b02d903f24ba7758a4ae0b3e7",
+      "source": "components/thingino-control/src/json.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/lib.rs",
+      "sha256": "011950c46aaa657b15b98c7c617d06088dcca270ed52a264e42e058ca867a2ad",
+      "source": "components/thingino-control/src/lib.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/main.rs",
+            "sha256": "d0d1cf7c3037abcbc0a4902a3da5d8292ed0cf9c00c6f96a33c213cb5c723fda",
+      "source": "components/thingino-control/src/main.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/protocol.rs",
+      "sha256": "16ceb4b570a300cccc6b525f865dbae8d0781c0238d38f142ac9df5aaa642a1f",
+      "source": "components/thingino-control/src/protocol.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/request.rs",
+      "sha256": "8ddd10dc303b5580b253579450e5b5133a2ca6abcc62098e7899657618f8bb5c",
+      "source": "components/thingino-control/src/request.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/request_parse.rs",
+      "sha256": "d5763b620170664ac2623a7dffc9ae0bc8658659556214a65081f967dd834033",
+      "source": "components/thingino-control/src/request_parse.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/response.rs",
+      "sha256": "58c9bd9b20f1fb7503bed4903570217e1c82d72cb1aeda03803c93314334d8d5",
+      "source": "components/thingino-control/src/response.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/router.rs",
+      "sha256": "a236441ee496e897de7be2f7d648c8647d98e37d3face46ec69473efa7377cf2",
+      "source": "components/thingino-control/src/router.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/server.rs",
+      "sha256": "c31fa786e4428fb3536082749ca7efa6a504ef650749d78ead49c1a21afacbd7",
+      "source": "components/thingino-control/src/server.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/web_auth.rs",
+      "sha256": "4cd745190bdff9169dd857a55095a6ff3f435f040dbdf78104bd8a930632c352",
+      "source": "components/thingino-control/src/web_auth.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/web_auth_tests.rs",
+      "sha256": "e986536793e264a41e445882bdba21560fc140e4e7f46f10dff68ee7eb7defc3",
+      "source": "components/thingino-control/src/web_auth_tests.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/src/whip.rs",
+      "sha256": "a40a290b368a1e3a198feee695bc393b4ca491b1d9fa454cb9ee509536e08fd4",
+      "source": "components/thingino-control/src/whip.rs"
+    },
+    {
+      "destination": "package/thingino-control/rust/storage-worker/mod.rs",
+      "sha256": "602ccc98703b80b71a67c1c98cb8f080f150cfb652bda9cfbc73779190f74278",
+      "source": "components/thingino-control/storage-worker/mod.rs"
+    },
+    {
+      "destination": "package/thingino-onvif/0001-persistent-httpd-no-request-children.patch",
+      "sha256": "5b7644af7e0f6ba512e109464921f24ae6c52363aead3dc5e55a2e6f99ea1000",
+      "source": "patches/onvif/0001-persistent-httpd-no-request-children.patch"
+    },
+    {
+      "destination": "package/thingino-uhttpd/0007-proxy-thingino-control.patch",
+      "sha256": "4b23ad48ad82a5559355597372792d35b8b0dcfd3b2053c24b0214ab939fd8e7",
+      "source": "patches/uhttpd/0007-proxy-thingino-control.patch"
+    },
+    {
+      "destination": "package/thingino-uhttpd/0008-disable-cgi-and-proxy-onvif.patch",
+      "sha256": "2f6b7c893a0def43c4b79f9489cd40dd81fb27758a7f63b6acffa52c0c05f53f",
+      "source": "patches/uhttpd/0008-disable-cgi-and-proxy-onvif.patch"
+    },
+    {
+      "destination": "package/thingino-uhttpd/0009-remove-request-script-runtime.patch",
+      "sha256": "28480e60a76c77c177cd4b510eaf7c8c5ede854c43fa6cf6bf2c1ef8b88eefa1",
+      "source": "patches/uhttpd/0009-remove-request-script-runtime.patch"
+    },
+    {
+      "destination": "package/thingino-uhttpd/0010-defer-control-proxy-pump.patch",
+      "sha256": "1db0d52e5b7621216f8149d4090b74ba40a9f450a8ad1e33c352e78f031b93f6",
+      "source": "patches/uhttpd/0010-defer-control-proxy-pump.patch"
+    },
+    {
+      "destination": "package/thingino-uhttpd/0011-account-tls-socket-backpressure.patch",
+      "sha256": "df2f6e16c027a53406a93d4b6834c474706abca6eec9248caaeacc0a8d617df7",
+      "source": "patches/uhttpd/0011-account-tls-socket-backpressure.patch"
+    },
+    {
+      "destination": "package/thingino-uhttpd/0012-keep-mjpeg-encoder-profile-static.patch",
+      "sha256": "a62bda3adb4847271d1b39aee8212c4004411fd035f1badb34608c35d38d274a",
+      "source": "patches/uhttpd/0012-keep-mjpeg-encoder-profile-static.patch"
+    },
+    {
+      "destination": "package/thingino-uhttpd/0013-never-cache-static-html-shell.patch",
+      "sha256": "11190746ab46bbe0a48686dff97412f14d7e5df16b4365ff9baeb9d34f897451",
+      "source": "patches/uhttpd/0013-never-cache-static-html-shell.patch"
+    },
+    {
+      "destination": "package/thingino-uhttpd/0014-allow-prometheus-control-responses.patch",
+      "sha256": "467f641461a03364b036a0bf413b864ee8181c9f1c77433da06f26af91d9b860",
+      "source": "patches/uhttpd/0014-allow-prometheus-control-responses.patch"
+    }
+  ],
+  "model": "DCS-6100LHV2",
+  "profile_name": "dlink_dcs6100lhv2_a1_t31n_os02g10_rtl8188fu",
+  "thingino_patches": [
+    {
+      "sha256": "1d89af2e94181ba6a193d977dcbc756eccca45d10258102b8753c049cd0c927e",
+      "source": "patches/thingino/0001-dlink-first-release-baseline.patch"
+    },
+    {
+      "sha256": "722ebb9371ae8367116ebd7e6c3176e6334d5b6e12142a61cdd05d0b45f7c13c",
+      "source": "patches/thingino/0002-dlink-glibc-imp114.patch"
+    },
+    {
+      "sha256": "502993a2c30ba2341d0f1503838a7dc97d01fd47c7ce2d04e7408e770f485138",
+      "source": "patches/thingino/0003-register-realtek-recovery-hostapd.patch"
+    },
+    {
+            "sha256": "940065a409f52d158607896f44e955c9281a91a1d427d902450e3ee7dca0840a",
+      "source": "patches/thingino/0005-add-thingino-control.patch"
+    },
+        {
+            "sha256": "6b32adfb7783fd26344a4d2a81b02bbe45fdf7361fdbf1d18463eef79e7c15fb",
+            "source": "patches/thingino/0009-remove-extension-cgi-and-mqtt-dispatch.patch"
+        },
+        {
+            "sha256": "d6d55c86d27b5048642b3284dc67cfea98d3594f475f1fd421fa1424ead3e692",
+            "source": "patches/thingino/0010-persistent-onvif-and-disable-cgi-ingress.patch"
+        },
+        {
+            "sha256": "1d019ad6b21a1e7b32af125e507e99fd8a71a1a753afcec7cc2d21ea5cfa046b",
+            "source": "patches/thingino/0011-install-static-dlink-webui.patch"
+        },
+        {
+            "sha256": "281184d31494d5237ae4855af177806779135704e3a2aadd4e8af315a788c926",
+            "source": "patches/thingino/0012-minimize-uhttpd-dependencies.patch"
+        },
+        {
+            "sha256": "1b227db02c25666980dda1e06dc58d9912bbd9c10d64457abe6dc73fdc769458",
+            "source": "patches/thingino/0013-sanitize-kernel-release-capture.patch"
+        },
+        {
+            "sha256": "cb69a5f90f865a50080a9535fc88db41435c3decb7e82894ff46ea1469a69ff2",
+            "source": "patches/thingino/0014-stop-uhttpd-by-verified-pid.patch"
+        },
+        {
+            "sha256": "362cba27cf2f0e81025a92a5fc6cedc6931ae40f0e56340d93b2d5444bd56042",
+            "source": "patches/thingino/0015-route-daynight-actuation-through-control.patch"
+        },
+        {
+            "sha256": "f1fc3560c4904d863bedd32c38e5f7735c7f97b462bfcf007d1a3ec51b869da4",
+            "source": "patches/thingino/0016-release-recovery-transfer-before-media.patch"
+        },
+        {
+            "sha256": "d32f39f437825cb1fd11e43fdb9edeb839d698e305f39a0913d664dd5ab1e146",
+            "source": "patches/thingino/0017-pass-camera-timezone-to-prudynt.patch"
+        },
+        {
+            "sha256": "82f752eaa761d5d6b645f178f939c1a33e5e05918666d558905e02bcdfca5c1c",
+            "source": "patches/thingino/0018-create-linux-patch-directories.patch"
+        },
+        {
+            "sha256": "0086c8edde871936c7ac417a8e5160131fa50cbd8430c2ef0de895c2d93dfd65",
+            "source": "patches/thingino/0019-reproducible-aac-link-order.patch"
+        },
+        {
+            "sha256": "916bb8475359d60fcf36a484baaab69afa22da9bdba82f6f3fdeea58b33e6810",
+            "source": "patches/thingino/0020-overlay-refuse-implicit-data-format.patch"
+        },
+        {
+            "sha256": "a109cfb91d81f3fe539c27170109c2bd8502137ed0bc20b493c8dc40574fa9d5",
+            "source": "patches/thingino/0021-harden-dlink-sd-automount.patch"
+        },
+        {
+            "sha256": "b7970424562eafb90b0d90f80fb742d3d3ed66fe168085dc9a777639543aa96a",
+            "source": "patches/thingino/0022-accept-verified-stage1-mtd-handoff.patch"
+        }
+  ]
+}

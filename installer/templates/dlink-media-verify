@@ -1,0 +1,4 @@
+#!/bin/sh
+
+# Explicit post-installer acceptance only. This file is not an rcS service.
+exec /etc/init.d/dlink-media-acceptance start

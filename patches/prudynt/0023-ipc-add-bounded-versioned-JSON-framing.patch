@@ -1,0 +1,141 @@
+diff --git a/src/IPCRequestFrame.hpp b/src/IPCRequestFrame.hpp
+new file mode 100644
+index 0000000..be588d4
+--- /dev/null
++++ b/src/IPCRequestFrame.hpp
+@@ -0,0 +1,40 @@
++#pragma once
++
++#include <cstddef>
++#include <string_view>
++
++enum class FramedJsonStatus { NotFramed, Valid, Invalid };
++
++struct FramedJsonRequest {
++  FramedJsonStatus status{FramedJsonStatus::NotFramed};
++  std::string_view payload;
++};
++
++inline FramedJsonRequest decodeFramedJson(std::string_view request,
++                                          std::size_t payload_limit) {
++  constexpr std::string_view prefix = "PRUDYNT/1 JSON ";
++  if (request.substr(0, prefix.size()) != prefix) {
++    return {};
++  }
++  const std::size_t newline = request.find('\n', prefix.size());
++  if (newline == std::string_view::npos || newline == prefix.size()) {
++    return {FramedJsonStatus::Invalid, {}};
++  }
++  std::size_t length = 0;
++  for (char value : request.substr(prefix.size(), newline - prefix.size())) {
++    if (value < '0' || value > '9') {
++      return {FramedJsonStatus::Invalid, {}};
++    }
++    const std::size_t digit = static_cast<std::size_t>(value - '0');
++    if (length > payload_limit / 10 ||
++        (length == payload_limit / 10 && digit > payload_limit % 10)) {
++      return {FramedJsonStatus::Invalid, {}};
++    }
++    length = length * 10 + digit;
++  }
++  if (length == 0 || length > payload_limit ||
++      request.size() - newline - 1 != length) {
++    return {FramedJsonStatus::Invalid, {}};
++  }
++  return {FramedJsonStatus::Valid, request.substr(newline + 1, length)};
++}
+diff --git a/src/IPCServer.cpp b/src/IPCServer.cpp
+index b8b10c3..ab383cb 100644
+--- a/src/IPCServer.cpp
++++ b/src/IPCServer.cpp
+@@ -1,5 +1,6 @@
+ #include "IPCServer.hpp"
+ #include "ClientCounterLease.hpp"
++#include "IPCRequestFrame.hpp"
+ #include "JPEGWorker.hpp"
+ #include "JsonAPI.hpp" // JSON processing via jct
+ #include "Logger.hpp"
+@@ -505,16 +506,41 @@ static bool starts_with(const std::string &s, const char *pfx) {
+ }
+ 
+ int IPCServer::handle_client(int fd) {
+-  // Read all into buffer until EOF
++  constexpr size_t kMaxRequestBytes = 16 * 1024;
+   std::string req;
+   char buf[2048];
+   ssize_t n;
+-  while ((n = read(fd, buf, sizeof(buf))) > 0)
++  while ((n = read(fd, buf, sizeof(buf))) > 0) {
++    if (req.size() + static_cast<size_t>(n) > kMaxRequestBytes) {
++      const char *err = "ERR request_too_large\n";
++      write(fd, err, strlen(err));
++      return 0;
++    }
+     req.append(buf, buf + n);
++  }
+ 
+   if (req.empty())
+     return 0;
+ 
++  const auto framed = decodeFramedJson(req, kMaxRequestBytes);
++  if (framed.status == FramedJsonStatus::Invalid) {
++    const char *err = "ERR invalid_frame\n";
++    write(fd, err, strlen(err));
++    return 0;
++  }
++  if (framed.status == FramedJsonStatus::Valid) {
++    std::string json(framed.payload);
++    std::string resp;
++    if (process_json_with_jct(json.c_str(), resp)) {
++      write(fd, resp.c_str(), resp.size());
++      write(fd, "\n", 1);
++    } else {
++      const char *err = "{\"error\":\"json_process_failed\"}\n";
++      write(fd, err, strlen(err));
++    }
++    return 0;
++  }
++
+   // Determine command
+   if (starts_with(req, "JSON ") || req[0] == '{') {
+     const char *json = req[0] == '{' ? req.c_str() : (req.c_str() + 5);
+diff --git a/tests/test_media_queue.cpp b/tests/test_media_queue.cpp
+index a479170..039b0d0 100644
+--- a/tests/test_media_queue.cpp
++++ b/tests/test_media_queue.cpp
+@@ -2,6 +2,7 @@
+ 
+ #include "FrameRecoveryGate.hpp"
+ #include "ClientCounterLease.hpp"
++#include "IPCRequestFrame.hpp"
+ #include "EncoderReceivePolicy.hpp"
+ #include "DLinkMediaProcessPolicy.hpp"
+ #include "DLinkLiveControlPolicy.hpp"
+@@ -95,6 +96,19 @@ static void test_recorder_start_requires_keyframe() {
+   assert(firstKeyframeIndex(keyframe_after_delta) == 1);
+ }
+ 
++static void test_versioned_json_frame_is_exact_and_bounded() {
++  const std::string request = "PRUDYNT/1 JSON 7\n{\"x\":1}";
++  const auto valid = decodeFramedJson(request, 64);
++  assert(valid.status == FramedJsonStatus::Valid);
++  assert(valid.payload == "{\"x\":1}");
++  assert(decodeFramedJson("{\"x\":1}", 64).status ==
++         FramedJsonStatus::NotFramed);
++  assert(decodeFramedJson("PRUDYNT/1 JSON 8\n{\"x\":1}", 64).status ==
++         FramedJsonStatus::Invalid);
++  assert(decodeFramedJson("PRUDYNT/1 JSON 65\n{}", 64).status ==
++         FramedJsonStatus::Invalid);
++}
++
+ static void test_jpeg_demand_deadline_and_idle_policy() {
+   assert(!jpegRequestDeadlineActive(1000, 1000));
+   assert(jpegRequestDeadlineActive(1000, 1001));
+@@ -426,6 +440,7 @@ int main() {
+   test_client_counter_lease_releases_once();
+   test_media_metrics_track_queue_high_water();
+   test_recorder_start_requires_keyframe();
++  test_versioned_json_frame_is_exact_and_bounded();
+   test_jpeg_demand_deadline_and_idle_policy();
+   test_mjpeg_request_policy();
+   test_http_bind_policy();

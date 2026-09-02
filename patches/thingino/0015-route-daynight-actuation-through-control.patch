@@ -1,0 +1,232 @@
+diff --git a/package/thingino-daynightd/files/daynightd.c b/package/thingino-daynightd/files/daynightd.c
+--- a/package/thingino-daynightd/files/daynightd.c
++++ b/package/thingino-daynightd/files/daynightd.c
+@@ -29,7 +29,6 @@
+ #include <time.h>
+ #include <sys/stat.h>
+ #include <sys/time.h>
+-#include <sys/wait.h>
+ #include <json_config.h>
+ #include <ctype.h>
+ #include <math.h>
+@@ -54,7 +53,6 @@
+ #define DEFAULT_DAY_COUNT           4
+ 
+ /* Thingino paths */
+-#define THINGINO_DAYNIGHT_SCRIPT   "/sbin/daynight"
+ #define ISP_M0_PATH                "/proc/jz/isp/isp-m0"   /* T31/T23/T21/T30 */
+ #define ISP_INFO_PATH              "/proc/jz/isp/isp_info" /* T20 */
+ 
+@@ -70,7 +68,6 @@
+ #define HISTORY_MAX_ENTRIES        300
+ 
+ /* Misc */
+-#define MAX_COMMAND_LEN            256
+ #define MAX_LINE_LEN               256
+ #define MAX_PATH_LEN               256
+ #define BRIGHTNESS_SAMPLES         10
+@@ -125,8 +122,6 @@
+ typedef struct {
+     char     config_file[MAX_PATH_LEN];
+     char     pid_file[MAX_PATH_LEN];
+-    char     script_path[MAX_PATH_LEN];
+-
+     /* Algorithm thresholds — EV log2 based (T31/T23/T20) */
+     int      ev_night_threshold;
+     int      ev_day_threshold;
+@@ -204,7 +199,6 @@
+ static int  parse_isp(sensor_sample_t *s);
+ static int  parse_isp_m0(sensor_sample_t *s);
+ static int  parse_isp_info(sensor_sample_t *s);
+-static int  execute_command(const char *command, char *output, size_t output_size);
+ static int  apply_mode(daynight_mode_t new_mode);
+ static void log_message(int level, const char *format, ...) __attribute__((format(printf, 2, 3)));
+ static int  create_pid_file(void);
+@@ -340,8 +334,6 @@
+ static void set_config_defaults(void) {
+     strncpy(g_config.config_file, DEFAULT_CONFIG_FILE, sizeof(g_config.config_file) - 1);
+     strncpy(g_config.pid_file, DEFAULT_PID_FILE, sizeof(g_config.pid_file) - 1);
+-    strncpy(g_config.script_path, THINGINO_DAYNIGHT_SCRIPT, sizeof(g_config.script_path) - 1);
+-
+     g_config.ev_night_threshold     = DEFAULT_EV_NIGHT_THRESHOLD;
+     g_config.ev_day_threshold       = DEFAULT_EV_DAY_THRESHOLD;
+     g_config.night_threshold_pct    = -1;
+@@ -422,12 +414,6 @@
+     v = get_nested_item(root, "daynight.transition_delay_s");
+     if (v && v->type == JSON_NUMBER)
+         g_config.transition_delay_s = (int)v->value.number.integer;
+-
+-    v = get_nested_item(root, "daynight.script_path");
+-    if (v && v->type == JSON_STRING && v->value.string) {
+-        strncpy(g_config.script_path, v->value.string, sizeof(g_config.script_path) - 1);
+-        g_config.script_path[sizeof(g_config.script_path) - 1] = '\0';
+-    }
+ 
+     v = get_nested_item(root, "daynight.loglevel");
+     if (v && v->type == JSON_STRING && v->value.string) {
+@@ -834,36 +820,6 @@
+         return cur_mins >= start_mins && cur_mins < stop_mins;
+     else
+         return cur_mins >= start_mins || cur_mins < stop_mins;
+-}
+-
+-/* =========================================================================
+- * Command execution
+- * ========================================================================= */
+-
+-static int execute_command(const char *command, char *output, size_t output_size) {
+-    if (output) output[0] = '\0';
+-    log_message(LOG_DEBUG, "Exec: %s", command);
+-
+-    FILE *fp = popen(command, "r");
+-    if (!fp) {
+-        log_message(LOG_ERR, "popen failed: %s", command);
+-        return -1;
+-    }
+-
+-    if (output && output_size > 0) {
+-        if (fgets(output, output_size, fp) != NULL) {
+-            size_t len = strlen(output);
+-            if (len > 0 && output[len - 1] == '\n')
+-                output[len - 1] = '\0';
+-        }
+-    }
+-
+-    int status = pclose(fp);
+-    if (status != 0) {
+-        log_message(LOG_DEBUG, "Command returned %d: %s", status, command);
+-        return -1;
+-    }
+-    return 0;
+ }
+ 
+ /* =========================================================================
+@@ -871,20 +827,12 @@
+  * ========================================================================= */
+ 
+ static int apply_mode(daynight_mode_t new_mode) {
+-    char command[MAX_COMMAND_LEN];
+-    const char *arg = (new_mode == MODE_DAY) ? "day" : "night";
+     const char *label = (new_mode == MODE_DAY) ? "DAY" : "NIGHT";
+-
+-    log_message(LOG_INFO, "Applying %s mode via %s", label, g_config.script_path);
+-
+-    snprintf(command, sizeof(command), "%s %s", g_config.script_path, arg);
+-    if (execute_command(command, NULL, 0) != 0) {
+-        log_message(LOG_ERR, "Failed to execute: %s", command);
+-        return -1;
+-    }
+ 
++    /* Thingino Control observes this canonical state file and owns all
++       Prudynt and GPIO actuation. Photosensing never spawns a helper. */
+     write_mode_file(new_mode);
+-    log_message(LOG_INFO, "%s mode applied successfully", label);
++    log_message(LOG_INFO, "%s mode requested from Thingino Control", label);
+     return 0;
+ }
+ 
+diff --git a/package/thingino-daynightd/thingino-daynightd.mk b/package/thingino-daynightd/thingino-daynightd.mk
+--- a/package/thingino-daynightd/thingino-daynightd.mk
++++ b/package/thingino-daynightd/thingino-daynightd.mk
+@@ -51,13 +51,10 @@
+ 	$(INSTALL) -D -m 0755 $(@D)/files/daynightd      $(TARGET_DIR)/usr/bin/daynightd
+ 	$(INSTALL) -D -m 0755 $(@D)/files/S10daynightd   $(TARGET_DIR)/etc/init.d/S10daynightd
+ 
+-	# Userspace control scripts (merged from thingino-daynight)
++	# D-Link boot-time IR-cut initialization. Control owns day/night actuation.
+ 	$(INSTALL) -D -m 0755 $(@D)/files/S06ircut       $(TARGET_DIR)/etc/init.d/S06ircut
+-	$(INSTALL) -D -m 0755 $(@D)/files/S07dusk2dawn   $(TARGET_DIR)/etc/init.d/S07dusk2dawn
+-	$(INSTALL) -D -m 0755 $(@D)/files/daynight       $(TARGET_DIR)/usr/sbin/daynight
+ 	$(INSTALL) -D -m 0755 $(@D)/files/light          $(TARGET_DIR)/usr/sbin/light
+ 	$(INSTALL) -D -m 0755 $(@D)/files/ircut          $(TARGET_DIR)/usr/sbin/ircut
+-	$(INSTALL) -D -m 0755 $(@D)/files/dusk2dawn      $(TARGET_DIR)/usr/sbin/dusk2dawn
+ 
+ 	# Stage defaults for later merge by thingino-core
+ 	$(INSTALL) -D -m 0644 $(@D)/files/daynightd.json \
+diff --git a/package/thingino-daynightd/Config.in b/package/thingino-daynightd/Config.in
+--- a/package/thingino-daynightd/Config.in
++++ b/package/thingino-daynightd/Config.in
+@@ -5,9 +5,9 @@
+ 	  for automatic day/night mode switching on Thingino.
+ 	  
+ 	  Reads ISP sensor data from /proc/jz/isp/, runs a
+-	  hysteresis-based algorithm, applies mode changes via
+-	  /sbin/daynight, and exports live telemetry to
+-	  /run/thingino/ for all consumers.
++	  hysteresis-based algorithm, and exports the selected mode and
++	  live telemetry to /run/thingino/. Thingino Control owns media
++	  and GPIO actuation without helper processes.
+ 
+ if BR2_PACKAGE_THINGINO_DAYNIGHTD
+ 
+diff --git a/package/thingino-daynightd/files/S06ircut b/package/thingino-daynightd/files/S06ircut
+--- a/package/thingino-daynightd/files/S06ircut
++++ b/package/thingino-daynightd/files/S06ircut
+@@ -3,9 +3,18 @@
+ start() {
+ 	echo -c 15 "Initializing IR-CUT"
+ 
+-	ircut off >/dev/null 2>&1
++	# DCS-6100LHV2 A1 uses a two-wire latching IR-cut motor. Initialize
++	# both directions and leave the daylight filter engaged. Runtime
++	# transitions are performed by Thingino Control, not helper commands.
++	printf 0 > /sys/class/gpio/gpio50/value
++	printf 1 > /sys/class/gpio/gpio49/value
++	usleep 100000
++	printf 0 > /sys/class/gpio/gpio49/value
+ 	sleep 0.5
+-	ircut on >/dev/null 2>&1
++	printf 0 > /sys/class/gpio/gpio49/value
++	printf 1 > /sys/class/gpio/gpio50/value
++	usleep 100000
++	printf 0 > /sys/class/gpio/gpio50/value
+ }
+ 
+ case "$1" in
+
+diff --git a/package/prudynt-t/files/S31prudynt b/package/prudynt-t/files/S31prudynt
+--- a/package/prudynt-t/files/S31prudynt
++++ b/package/prudynt-t/files/S31prudynt
+@@ -51,42 +51,6 @@
+ 	status=$?
+ 	if [ "$status" -eq 0 ]; then
+ 		restart_heartbeat
+-
+-		# Re-sync ISP daynight mode after prudynt is up.
+-		# daynightd starts at S10 (before prudynt), so any color
+-		# command it issued would have failed silently because
+-		# prudynt's HTTP API wasn't listening yet.
+-		(
+-			MODE_FILE="/run/thingino/daynight_mode"
+-			API_URL="http://127.0.0.1:8080/api/v1/config"
+-			API_KEY_FILE="/etc/thingino-api.key"
+-
+-			# Wait for prudynt's HTTP API to be available (up to 15 s)
+-			i=0
+-			while [ $i -lt 30 ]; do
+-				if curl -s "$API_URL" >/dev/null 2>&1; then
+-					break
+-				fi
+-				usleep 500000
+-				i=$((i + 1))
+-			done
+-
+-			if [ -f "$MODE_FILE" ] && [ -f "$API_KEY_FILE" ]; then
+-				MODE=$(cat "$MODE_FILE" 2>/dev/null)
+-				API_KEY=$(cat "$API_KEY_FILE" 2>/dev/null | tr -d '\n\r ')
+-				if [ "$MODE" = "night" ] && [ -n "$API_KEY" ]; then
+-					curl -s -X POST "$API_URL" \
+-						-H "X-API-Key: $API_KEY" \
+-						-H "Content-Type: application/json" \
+-						-d '{"image":{"running_mode":1}}' >/dev/null 2>&1 || true
+-				elif [ "$MODE" = "day" ] && [ -n "$API_KEY" ]; then
+-					curl -s -X POST "$API_URL" \
+-						-H "X-API-Key: $API_KEY" \
+-						-H "Content-Type: application/json" \
+-						-d '{"image":{"running_mode":0}}' >/dev/null 2>&1 || true
+-				fi
+-			fi
+-		) &
+ 	fi
+ 	return "$status"
+ }

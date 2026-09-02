@@ -1,0 +1,185 @@
+diff --git a/src/VideoWorker.cpp b/src/VideoWorker.cpp
+index 3c1cad0..71e7a7f 100644
+--- a/src/VideoWorker.cpp
++++ b/src/VideoWorker.cpp
+@@ -1421,9 +1421,6 @@ void *VideoWorker::thread_entry(void *arg) {
+   global_video[encChn]->run_for_jpeg.store(false,
+                                            std::memory_order_relaxed);
+ 
+-  // inform main that initialization is complete
+-  sh->has_started.release();
+-
+ #ifdef PREBUFFER_ENABLED
+   // Initialize prebuffer if enabled
+   if (cfg->recorder.prebuffer_enabled) {
+@@ -1445,8 +1442,16 @@ void *VideoWorker::thread_entry(void *arg) {
+ 
+   ret = IMP_Encoder_StartRecvPic(encChn);
+   LOG_DEBUG_OR_ERROR(ret, "IMP_Encoder_StartRecvPic(" << encChn << ")");
+-  if (ret != 0)
++  if (ret != 0) {
++    global_video[encChn]->imp_framesource->disable();
++    global_video[encChn]->imp_encoder->deinit(false);
++    delete global_video[encChn]->imp_encoder;
++    global_video[encChn]->imp_encoder = nullptr;
++    delete global_video[encChn]->imp_framesource;
++    global_video[encChn]->imp_framesource = nullptr;
++    sh->has_started.release();
+     return 0;
++  }
+ 
+ #if defined(DCS_DLINK_MEDIA_READY)
+   if (encChn == 0) {
+@@ -1459,6 +1464,16 @@ void *VideoWorker::thread_entry(void *arg) {
+       LOG_ERROR("Failed to publish D-Link media-ready marker");
+       if (ready_fd >= 0)
+         close(ready_fd);
++      int stop_ret = IMP_Encoder_StopRecvPic(encChn);
++      LOG_DEBUG_OR_ERROR(stop_ret,
++                         "IMP_Encoder_StopRecvPic(" << encChn << ")");
++      global_video[encChn]->imp_framesource->disable();
++      global_video[encChn]->imp_encoder->deinit(stop_ret != 0);
++      delete global_video[encChn]->imp_encoder;
++      global_video[encChn]->imp_encoder = nullptr;
++      delete global_video[encChn]->imp_framesource;
++      global_video[encChn]->imp_framesource = nullptr;
++      sh->has_started.release();
+       return 0;
+     }
+     close(ready_fd);
+@@ -1466,6 +1481,9 @@ void *VideoWorker::thread_entry(void *arg) {
+   }
+ #endif
+ 
++  sh->success.store(true, std::memory_order_release);
++  sh->has_started.release();
++
+   // Flush immediately after starting the encoder so the ring buffer contains
+   // only a fresh IDR with consistent timestamps.  Without this, the IMP
+   // encoder begins with a relative counter (starting at 0) and transitions to
+diff --git a/src/main.cpp b/src/main.cpp
+index 2453cd0..1cbc374 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -687,14 +687,21 @@ bool timesync_wait() {
+   return true;
+ }
+ 
+-void start_video(int encChn) {
++bool start_video(int encChn) {
+   StartHelper sh{encChn};
+   int ret = pthread_create(&global_video[encChn]->thread, nullptr,
+                            VideoWorker::thread_entry, static_cast<void *>(&sh));
+   LOG_DEBUG_OR_ERROR(ret, "create video[" << encChn << "] thread");
++  if (ret != 0) return false;
+ 
+-  // wait for initialization done
++  // Wait until StartRecvPic and the D-Link media-ready publication have
++  // completed, not merely until the frame source has been enabled.
+   sh.has_started.acquire();
++  bool ready = sh.success.load(std::memory_order_acquire);
++  if (!ready) {
++    pthread_join(global_video[encChn]->thread, nullptr);
++  }
++  return ready;
+ }
+ 
+ // ── TEMP DIAGNOSTIC: GOT corruption watchdog ────────────────────────────
+@@ -1006,27 +1013,34 @@ int main(int argc, const char *argv[]) {
+     }
+ 
+     if (global_restart_video || startup) {
++      bool video_ready = true;
+       if (cfg->stream0.enabled) {
+-        start_video(0);
++        video_ready = start_video(0);
++      }
++
++      if (video_ready && cfg->stream1.enabled) {
++        video_ready = start_video(1);
+       }
+ 
+-      if (cfg->stream1.enabled) {
+-        start_video(1);
++      if (!video_ready) {
++        LOG_ERROR("Video startup failed before the media-ready barrier");
++        global_shutdown_requested.store(true, std::memory_order_relaxed);
+       }
+ 
+       // Privacy cannot touch an OSD group before the corresponding encoder
+-      // has created and bound it. Apply persisted state and expose the legacy
+-      // control FIFO only after the initial video graph is ready.
+-      if (cfg->osd.privacy.enabled &&
++      // has created, bound and started it. Apply persisted state and expose
++      // the legacy control FIFO only after every enabled stream has crossed
++      // the media-ready barrier.
++      if (video_ready && cfg->osd.privacy.enabled &&
+           !VideoPrivacyControl::setPrivacy(true)) {
+         LOG_ERROR("Failed to apply configured privacy state");
+       }
+-      if (!privacy_control_started) {
++      if (video_ready && !privacy_control_started) {
+         std::thread(VideoPrivacyControl::run).detach();
+         privacy_control_started = true;
+       }
+ 
+-      if (cfg->stream2.enabled &&
++      if (video_ready && cfg->stream2.enabled &&
+           (cfg->stream2.jpeg_idle_fps > 0 || cfg->stream2.jpeg_refresh > 0)) {
+         StartHelper sh{2};
+         int ret =
+@@ -1041,7 +1055,7 @@ int main(int argc, const char *argv[]) {
+         }
+       }
+ 
+-      if (cfg->stream3.enabled &&
++      if (video_ready && cfg->stream3.enabled &&
+           (cfg->stream3.jpeg_idle_fps > 0 || cfg->stream3.jpeg_refresh > 0)) {
+         StartHelper sh{3};
+         int ret =
+@@ -1056,7 +1070,8 @@ int main(int argc, const char *argv[]) {
+         }
+       }
+ 
+-      if (cfg->osd.sei.enabled || cfg->osd.burnin.enabled) {
++      if (video_ready &&
++          (cfg->osd.sei.enabled || cfg->osd.burnin.enabled)) {
+         int ret = pthread_create(&osd_thread, nullptr, OSD::thread_entry, NULL);
+         LOG_DEBUG_OR_ERROR(ret, "create osd thread");
+       }
+@@ -1064,13 +1079,15 @@ int main(int argc, const char *argv[]) {
+       /* daynight photosensing thread removed — use daynightd daemon */
+     }
+ 
+-    if (cfg->motion.enabled && (global_restart_motion || startup)) {
++    if (!global_shutdown_requested.load(std::memory_order_relaxed) &&
++        cfg->motion.enabled && (global_restart_motion || startup)) {
+       int ret = pthread_create(&motion_thread, nullptr, Motion::run, &motion);
+       LOG_DEBUG_OR_ERROR(ret, "create motion thread");
+     }
+ 
+     // start rtsp server
+-    if (global_rtsp_thread_signal != 0 && (global_restart_rtsp || startup)) {
++    if (!global_shutdown_requested.load(std::memory_order_relaxed) &&
++        global_rtsp_thread_signal != 0 && (global_restart_rtsp || startup)) {
+       int ret = pthread_create(&rtsp_thread, nullptr, RTSP::run, &rtsp);
+       LOG_DEBUG_OR_ERROR(ret, "create rtsp thread");
+     }
+diff --git a/tests/run_host_tests.sh b/tests/run_host_tests.sh
+index e48c010..49f4a95 100755
+--- a/tests/run_host_tests.sh
++++ b/tests/run_host_tests.sh
+@@ -14,6 +14,13 @@ grep -q 'IMP_OSD_Stop(encGrp)' "$repo_dir/src/IMPEncoder.cpp"
+ ! grep -q 'IMP_OSD_Start(' "$repo_dir/src/OSD.cpp"
+ ! grep -q 'IMP_OSD_Start(' "$repo_dir/src/VideoPrivacyControl.cpp"
+ 
++start_recv_line=$(grep -n 'ret = IMP_Encoder_StartRecvPic(encChn);' \
++  "$repo_dir/src/VideoWorker.cpp" | tail -1 | cut -d: -f1)
++ready_release_line=$(grep -n 'sh->success.store(true' \
++  "$repo_dir/src/VideoWorker.cpp" | cut -d: -f1)
++test "$ready_release_line" -gt "$start_recv_line"
++grep -q 'if (video_ready && !privacy_control_started)' "$repo_dir/src/main.cpp"
++
+ ${CXX:-c++} -std=c++20 -Wall -Wextra -Werror -pthread \
+   -I"$repo_dir/src" "$repo_dir/tests/test_media_queue.cpp" -o "$test_bin"
+ "$test_bin"

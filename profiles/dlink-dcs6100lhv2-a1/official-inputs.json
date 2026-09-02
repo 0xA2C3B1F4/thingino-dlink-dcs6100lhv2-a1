@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "target": {
+    "model": "DCS-6100LHV2",
+    "hardware_revision": "A1"
+  },
+  "approved_inputs": [
+    {
+      "filename": "DCS-6100LHV2_REVA_FIRMWARE_v1.02.02.rar",
+      "format": "vendor-archive",
+      "sha256": "c5b591eb3cd9f5e24109cb852e139a98e74cb46d7d35426875bb6614d0db9cb1",
+      "size": 2601600,
+      "version": "1.02.02",
+      "stock_recovery_components": []
+    },
+    {
+      "filename": "DCS6100LHV2Ax_FW102B02.bin",
+      "format": "encrypted-application-update",
+      "sha256": "2b7ec9ad6dc3b0979cfaae8f748f05cadf40e18213abe7eea1fb08cdb575c1d9",
+      "size": 1884176,
+      "version": "1.02.02",
+      "stock_recovery_components": []
+    }
+  ],
+  "approved_stock_sd_packages": []
+}

@@ -1,0 +1,16 @@
+diff --git a/linux/linux-ext-thingino.mk b/linux/linux-ext-thingino.mk
+--- a/linux/linux-ext-thingino.mk
++++ b/linux/linux-ext-thingino.mk
+@@ -6,6 +6,12 @@
+ # The big cumulative patch is applied first, then follow-up text patches,
+ # then this hook extracts binary assets from a versioned tarball.
+ 
++define LINUX_CREATE_THINGINO_PATCH_DIRECTORIES
++	mkdir -p $(LINUX_DIR)/android/configs
++endef
++
++LINUX_PRE_PATCH_HOOKS += LINUX_CREATE_THINGINO_PATCH_DIRECTORIES
++
+ define LINUX_EXTRACT_THINGINO_BINARY_ASSETS
+ 	@echo ">>> Thingino: extracting binary assets for Linux $(LINUX_VERSION)"
+ 	$(TAR) -C $(@D) -xzf \

@@ -1,0 +1,22 @@
+#!/bin/sh
+
+READY=/run/prudynt-dlink-media.ready
+PIDFILE=/run/prudynt.pid
+
+start() {
+	[ "$(cat "$READY" 2>/dev/null || true)" = 1080p-started ] || {
+		printf '%s\n' 'D-Link media acceptance failed: readiness marker missing' >&2
+		return 1
+	}
+	[ -s "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null || {
+		printf '%s\n' 'D-Link media acceptance failed: final Prudynt is not running' >&2
+		return 1
+	}
+	printf '%s\n' 'D-Link media: 1080p-started'
+}
+
+case "${1:-}" in
+	start) start ;;
+	stop) true ;;
+	*) exit 1 ;;
+esac

@@ -1,0 +1,411 @@
+diff --git a/src/IPCServer.cpp b/src/IPCServer.cpp
+index ab383cb1828d82a0f0be8f41395b682dbea5bb13..ebb74ed8f7489d9c6ce36c5b687d7740b26fd605 100644
+--- a/src/IPCServer.cpp
++++ b/src/IPCServer.cpp
+@@ -1015,6 +1015,59 @@ int IPCServer::handle_client(int fd) {
+              static_cast<unsigned long long>(
+                  runtime_metrics.mjpeg_rejections_total.load()));
+     write(fd, line, strlen(line));
++    for (std::size_t channel = 0;
++         channel < MediaRuntimeMetrics::jpeg_channel_count; ++channel) {
++      snprintf(line, sizeof(line),
++               "prudynt_jpeg_worker_running{channel=\"%zu\"} %u\n", channel,
++               runtime_metrics.jpeg_worker_running[channel].load());
++      write(fd, line, strlen(line));
++      snprintf(line, sizeof(line),
++               "prudynt_jpeg_active{channel=\"%zu\"} %u\n", channel,
++               runtime_metrics.jpeg_active[channel].load());
++      write(fd, line, strlen(line));
++      snprintf(line, sizeof(line),
++               "prudynt_jpeg_receiving{channel=\"%zu\"} %u\n", channel,
++               runtime_metrics.jpeg_receiving[channel].load());
++      write(fd, line, strlen(line));
++      snprintf(line, sizeof(line),
++               "prudynt_jpeg_source_leased{channel=\"%zu\"} %u\n", channel,
++               runtime_metrics.jpeg_source_leased[channel].load());
++      write(fd, line, strlen(line));
++      snprintf(line, sizeof(line),
++               "prudynt_jpeg_receive_starts_total{channel=\"%zu\"} %llu\n",
++               channel, static_cast<unsigned long long>(
++                            runtime_metrics.jpeg_receive_starts_total[channel]
++                                .load()));
++      write(fd, line, strlen(line));
++      snprintf(line, sizeof(line),
++               "prudynt_jpeg_receive_stops_total{channel=\"%zu\"} %llu\n",
++               channel, static_cast<unsigned long long>(
++                            runtime_metrics.jpeg_receive_stops_total[channel]
++                                .load()));
++      write(fd, line, strlen(line));
++      snprintf(
++          line, sizeof(line),
++          "prudynt_jpeg_receive_start_failures_total{channel=\"%zu\"} %llu\n",
++          channel,
++          static_cast<unsigned long long>(
++              runtime_metrics.jpeg_receive_start_failures_total[channel]
++                  .load()));
++      write(fd, line, strlen(line));
++      snprintf(
++          line, sizeof(line),
++          "prudynt_jpeg_receive_stop_failures_total{channel=\"%zu\"} %llu\n",
++          channel,
++          static_cast<unsigned long long>(
++              runtime_metrics.jpeg_receive_stop_failures_total[channel]
++                  .load()));
++      write(fd, line, strlen(line));
++      snprintf(line, sizeof(line),
++               "prudynt_jpeg_source_timeouts_total{channel=\"%zu\"} %llu\n",
++               channel, static_cast<unsigned long long>(
++                            runtime_metrics.jpeg_source_timeouts_total[channel]
++                                .load()));
++      write(fd, line, strlen(line));
++    }
+ 
+     // Build info as a const gauge with labels
+     write(fd, "# HELP prudynt_build_info Build and commit info.\n",
+diff --git a/src/JPEGWorker.cpp b/src/JPEGWorker.cpp
+index 410951fa647ae934fe13fb5b31d85beb67e9edf5..8dbfe26e54fcb057de577fd77456c0e507a6dcbc 100644
+--- a/src/JPEGWorker.cpp
++++ b/src/JPEGWorker.cpp
+@@ -3,6 +3,7 @@
+ #include "Config.hpp"
+ #include "EncoderReceivePolicy.hpp"
+ #include "Logger.hpp"
++#include "MediaRuntimeMetrics.hpp"
+ #include "WorkerUtils.hpp"
+ #include "globals.hpp"
+ #include "imp_hal.hpp"
+@@ -17,6 +18,20 @@
+ 
+ namespace {
+ 
++class JpegRuntimeSession {
++public:
++  explicit JpegRuntimeSession(int channel) : channel_(channel) {
++    mediaRuntimeMetrics().setJpegWorkerRunning(channel_, true);
++  }
++
++  ~JpegRuntimeSession() {
++    mediaRuntimeMetrics().clearJpegRuntimeState(channel_);
++  }
++
++private:
++  int channel_;
++};
++
+ bool wait_for_source_video(const std::shared_ptr<jpeg_stream> &jpeg,
+                            const std::shared_ptr<video_stream> &source_video) {
+   const auto deadline = steady_clock::now() + seconds(5);
+@@ -115,6 +130,7 @@ bool JPEGWorker::run() {
+   // timestamp for stream stats calculation
+   unsigned long long ms{0};
+   EncoderReceiveLifecycle receive_lifecycle(true);
++  auto &runtime_metrics = mediaRuntimeMetrics();
+ 
+   // Initialize timestamp for stats calculation (ensure it's set before first
+   // use)
+@@ -150,6 +166,7 @@ bool JPEGWorker::run() {
+     if (request_or_overrun || targetFps) {
+       global_video[global_jpeg[jpgChn]->streamChn]->run_for_jpeg.store(
+           true, std::memory_order_release);
++      runtime_metrics.setJpegSourceLeased(jpgChn, true);
+       auto diff_last_image =
+           duration_cast<milliseconds>(now - global_jpeg[jpgChn]->last_image)
+               .count();
+@@ -178,6 +195,8 @@ bool JPEGWorker::run() {
+           if (!wait_for_source_video(global_jpeg[jpgChn], source_video)) {
+             source_video->run_for_jpeg.store(false,
+                                               std::memory_order_release);
++            runtime_metrics.setJpegSourceLeased(jpgChn, false);
++            runtime_metrics.recordJpegSourceTimeout(jpgChn);
+             source_video->should_grab_frames.notify_one();
+             LOG_WARN("JPEGWorker: source video activation timed out or worker "
+                      "stopped for JPEG channel "
+@@ -221,6 +240,7 @@ bool JPEGWorker::run() {
+               global_jpeg[jpgChn]->imp_encoder->deinit(
+                   receive_lifecycle.receiving());
+               receive_lifecycle.stopped();
++              runtime_metrics.setJpegReceiving(jpgChn, false);
+             }
+             global_jpeg[jpgChn]->stream->width = new_w;
+             global_jpeg[jpgChn]->stream->height = new_h;
+@@ -235,7 +255,9 @@ bool JPEGWorker::run() {
+                 IMP_Encoder_StartRecvPic(global_jpeg[jpgChn]->encChn);
+             if (start_ret == 0) {
+               receive_lifecycle.started();
++              runtime_metrics.recordJpegReceiveStart(jpgChn, true);
+             } else {
++              runtime_metrics.recordJpegReceiveStart(jpgChn, false);
+               LOG_ERROR("JPEGWorker: encoder restart failed on channel "
+                         << global_jpeg[jpgChn]->encChn << ": " << start_ret);
+             }
+@@ -367,6 +389,7 @@ bool JPEGWorker::run() {
+ 
+       std::unique_lock<std::mutex> lock_stream{mutex_main};
+       global_jpeg[jpgChn]->active = false;
++      runtime_metrics.setJpegActive(jpgChn, false);
+ 
+       while (global_jpeg[jpgChn]->running && !global_restart_video &&
+              !global_jpeg[jpgChn]->request_or_overrun()) {
+@@ -375,14 +398,17 @@ bool JPEGWorker::run() {
+               IMP_Encoder_StopRecvPic(global_jpeg[jpgChn]->encChn);
+           if (stop_ret == 0) {
+             receive_lifecycle.stopped();
++            runtime_metrics.recordJpegReceiveStop(jpgChn, true);
+             auto source_video =
+                 global_video[global_jpeg[jpgChn]->streamChn];
+             source_video->run_for_jpeg.store(false,
+                                               std::memory_order_release);
++            runtime_metrics.setJpegSourceLeased(jpgChn, false);
+             source_video->should_grab_frames.notify_one();
+             LOG_INFO("JPEGWorker: encoder receive stopped for standby on "
+                      << global_jpeg[jpgChn]->encChn);
+           } else {
++            runtime_metrics.recordJpegReceiveStop(jpgChn, false);
+             LOG_WARN("JPEGWorker: IMP_Encoder_StopRecvPic("
+                      << global_jpeg[jpgChn]->encChn
+                      << ") failed during standby: " << stop_ret);
+@@ -411,6 +437,7 @@ bool JPEGWorker::run() {
+         auto source_video =
+             global_video[global_jpeg[jpgChn]->streamChn];
+         source_video->run_for_jpeg.store(true, std::memory_order_release);
++        runtime_metrics.setJpegSourceLeased(jpgChn, true);
+         if (!source_video->active.load(std::memory_order_acquire)) {
+           source_video->should_grab_frames.notify_one();
+           lock_stream.unlock();
+@@ -420,6 +447,8 @@ bool JPEGWorker::run() {
+           if (!source_active) {
+             source_video->run_for_jpeg.store(false,
+                                               std::memory_order_release);
++            runtime_metrics.setJpegSourceLeased(jpgChn, false);
++            runtime_metrics.recordJpegSourceTimeout(jpgChn);
+             source_video->should_grab_frames.notify_one();
+             LOG_WARN("JPEGWorker: source video activation timed out or worker "
+                      "stopped after standby for JPEG channel "
+@@ -435,10 +464,12 @@ bool JPEGWorker::run() {
+               IMP_Encoder_StartRecvPic(global_jpeg[jpgChn]->encChn);
+           if (start_ret == 0) {
+             receive_lifecycle.started();
++            runtime_metrics.recordJpegReceiveStart(jpgChn, true);
+             LOG_INFO("JPEGWorker: encoder receive resumed from standby on "
+                      << global_jpeg[jpgChn]->encChn);
+             break;
+           }
++          runtime_metrics.recordJpegReceiveStart(jpgChn, false);
+           LOG_WARN("JPEGWorker: IMP_Encoder_StartRecvPic("
+                    << global_jpeg[jpgChn]->encChn
+                    << ") failed after standby: " << start_ret);
+@@ -453,6 +484,7 @@ bool JPEGWorker::run() {
+           global_jpeg[jpgChn]->request_or_overrun()) {
+         global_jpeg[jpgChn]->is_activated.release();
+         global_jpeg[jpgChn]->active = true;
++        runtime_metrics.setJpegActive(jpgChn, true);
+       }
+ 
+       LOG_DDEBUG("JPEG UNLOCK" << " channel:" << jpgChn);
+@@ -471,6 +503,8 @@ void *JPEGWorker::thread_entry(void *arg) {
+   const int impEncChn = sh->encChn;
+   int jpgChn = impEncChn - 2;
+   int ret;
++  JpegRuntimeSession runtime_session(jpgChn);
++  auto &runtime_metrics = mediaRuntimeMetrics();
+ 
+   // do not use the live config variable
+   auto *stream_cfg = global_jpeg[jpgChn]->stream;
+@@ -492,6 +526,7 @@ void *JPEGWorker::thread_entry(void *arg) {
+       global_jpeg[jpgChn]->streamChn, stream_name);
+ 
+   if (!global_jpeg[jpgChn]->imp_encoder) {
++    runtime_metrics.recordJpegReceiveStart(jpgChn, false);
+     LOG_ERROR("Failed to create JPEG encoder for channel " << jpgChn);
+     sh->has_started.release();
+     return nullptr;
+@@ -501,6 +536,7 @@ void *JPEGWorker::thread_entry(void *arg) {
+   LOG_DEBUG_OR_ERROR(ret, "IMP_Encoder_StartRecvPic("
+                               << global_jpeg[jpgChn]->encChn << ")");
+   if (ret != 0) {
++    runtime_metrics.recordJpegReceiveStart(jpgChn, false);
+     global_jpeg[jpgChn]->imp_encoder->deinit(false);
+     delete global_jpeg[jpgChn]->imp_encoder;
+     global_jpeg[jpgChn]->imp_encoder = nullptr;
+@@ -508,7 +544,9 @@ void *JPEGWorker::thread_entry(void *arg) {
+     return nullptr;
+   }
+ 
++  runtime_metrics.recordJpegReceiveStart(jpgChn, true);
+   global_jpeg[jpgChn]->active = true;
++  runtime_metrics.setJpegActive(jpgChn, true);
+   global_jpeg[jpgChn]->running = true;
+   sh->success.store(true, std::memory_order_release);
+   sh->has_started.release();
+diff --git a/src/MediaRuntimeMetrics.hpp b/src/MediaRuntimeMetrics.hpp
+index 07fc745e1cfff06adf040f9a82a03e95a9fe47d7..adf96d85b8c6795192fdca667aa8c0905151f199 100644
+--- a/src/MediaRuntimeMetrics.hpp
++++ b/src/MediaRuntimeMetrics.hpp
+@@ -1,11 +1,14 @@
+ #pragma once
+ 
++#include <array>
+ #include <atomic>
+ #include <cstddef>
+ #include <cstdint>
+ 
+ class MediaRuntimeMetrics {
+ public:
++  static constexpr std::size_t jpeg_channel_count = 2;
++
+   void observeRtspQueueBytes(std::size_t bytes) {
+     rtsp_queue_bytes.store(bytes, std::memory_order_relaxed);
+     std::uint64_t high =
+@@ -25,6 +28,71 @@ public:
+     rtsp_recoveries_total.fetch_add(1, std::memory_order_relaxed);
+   }
+ 
++  void setJpegWorkerRunning(int channel, bool running) {
++    if (validJpegChannel(channel))
++      jpeg_worker_running[channel].store(running ? 1U : 0U,
++                                         std::memory_order_relaxed);
++  }
++
++  void setJpegActive(int channel, bool active) {
++    if (validJpegChannel(channel))
++      jpeg_active[channel].store(active ? 1U : 0U,
++                                  std::memory_order_relaxed);
++  }
++
++  void setJpegSourceLeased(int channel, bool leased) {
++    if (validJpegChannel(channel))
++      jpeg_source_leased[channel].store(leased ? 1U : 0U,
++                                         std::memory_order_relaxed);
++  }
++
++  void setJpegReceiving(int channel, bool receiving) {
++    if (validJpegChannel(channel))
++      jpeg_receiving[channel].store(receiving ? 1U : 0U,
++                                     std::memory_order_relaxed);
++  }
++
++  void recordJpegReceiveStart(int channel, bool success) {
++    if (!validJpegChannel(channel))
++      return;
++    if (success) {
++      jpeg_receiving[channel].store(1U, std::memory_order_relaxed);
++      jpeg_receive_starts_total[channel].fetch_add(1,
++                                                    std::memory_order_relaxed);
++    } else {
++      jpeg_receive_start_failures_total[channel].fetch_add(
++          1, std::memory_order_relaxed);
++    }
++  }
++
++  void recordJpegReceiveStop(int channel, bool success) {
++    if (!validJpegChannel(channel))
++      return;
++    if (success) {
++      jpeg_receiving[channel].store(0U, std::memory_order_relaxed);
++      jpeg_receive_stops_total[channel].fetch_add(1,
++                                                   std::memory_order_relaxed);
++    } else {
++      jpeg_receive_stop_failures_total[channel].fetch_add(
++          1, std::memory_order_relaxed);
++    }
++  }
++
++  void recordJpegSourceTimeout(int channel) {
++    if (validJpegChannel(channel))
++      jpeg_source_timeouts_total[channel].fetch_add(
++          1, std::memory_order_relaxed);
++  }
++
++  void clearJpegRuntimeState(int channel) {
++    if (!validJpegChannel(channel))
++      return;
++    jpeg_worker_running[channel].store(0U, std::memory_order_relaxed);
++    jpeg_active[channel].store(0U, std::memory_order_relaxed);
++    jpeg_receiving[channel].store(0U, std::memory_order_relaxed);
++    jpeg_source_leased[channel].store(0U, std::memory_order_relaxed);
++  }
++
+   std::atomic<std::uint64_t> rtsp_queue_bytes{0};
+   std::atomic<std::uint64_t> rtsp_queue_high_water_bytes{0};
+   std::atomic<std::uint64_t> rtsp_queue_drops_total{0};
+@@ -32,6 +100,26 @@ public:
+   std::atomic<unsigned> ipc_mjpeg_clients{0};
+   std::atomic<unsigned> http_client_threads{0};
+   std::atomic<std::uint64_t> mjpeg_rejections_total{0};
++  std::array<std::atomic<unsigned>, jpeg_channel_count> jpeg_worker_running{};
++  std::array<std::atomic<unsigned>, jpeg_channel_count> jpeg_active{};
++  std::array<std::atomic<unsigned>, jpeg_channel_count> jpeg_receiving{};
++  std::array<std::atomic<unsigned>, jpeg_channel_count> jpeg_source_leased{};
++  std::array<std::atomic<std::uint64_t>, jpeg_channel_count>
++      jpeg_receive_starts_total{};
++  std::array<std::atomic<std::uint64_t>, jpeg_channel_count>
++      jpeg_receive_stops_total{};
++  std::array<std::atomic<std::uint64_t>, jpeg_channel_count>
++      jpeg_receive_start_failures_total{};
++  std::array<std::atomic<std::uint64_t>, jpeg_channel_count>
++      jpeg_receive_stop_failures_total{};
++  std::array<std::atomic<std::uint64_t>, jpeg_channel_count>
++      jpeg_source_timeouts_total{};
++
++private:
++  static bool validJpegChannel(int channel) {
++    return channel >= 0 &&
++           static_cast<std::size_t>(channel) < jpeg_channel_count;
++  }
+ };
+ 
+ inline MediaRuntimeMetrics &mediaRuntimeMetrics() {
+diff --git a/tests/test_media_queue.cpp b/tests/test_media_queue.cpp
+index 7b39b837c8cb39b7a940bbf0232721ac68d4c9b7..5ecc4a957d7f235b4fb8de95d21aeadb9cd054ce 100644
+--- a/tests/test_media_queue.cpp
++++ b/tests/test_media_queue.cpp
+@@ -87,6 +87,39 @@ static void test_media_metrics_track_queue_high_water() {
+   assert(metrics.rtsp_recoveries_total.load() == 1);
+ }
+ 
++static void test_media_metrics_track_jpeg_lifecycle_per_channel() {
++  MediaRuntimeMetrics metrics;
++  metrics.setJpegWorkerRunning(1, true);
++  metrics.setJpegActive(1, true);
++  metrics.setJpegSourceLeased(1, true);
++  metrics.recordJpegReceiveStart(1, true);
++  assert(metrics.jpeg_worker_running[1].load() == 1);
++  assert(metrics.jpeg_active[1].load() == 1);
++  assert(metrics.jpeg_receiving[1].load() == 1);
++  assert(metrics.jpeg_source_leased[1].load() == 1);
++  assert(metrics.jpeg_receive_starts_total[1].load() == 1);
++
++  metrics.recordJpegReceiveStop(1, false);
++  assert(metrics.jpeg_receiving[1].load() == 1);
++  assert(metrics.jpeg_receive_stop_failures_total[1].load() == 1);
++  metrics.recordJpegReceiveStop(1, true);
++  metrics.setJpegSourceLeased(1, false);
++  assert(metrics.jpeg_receiving[1].load() == 0);
++  assert(metrics.jpeg_receive_stops_total[1].load() == 1);
++
++  metrics.recordJpegReceiveStart(1, false);
++  metrics.recordJpegSourceTimeout(1);
++  assert(metrics.jpeg_receive_start_failures_total[1].load() == 1);
++  assert(metrics.jpeg_source_timeouts_total[1].load() == 1);
++
++  metrics.clearJpegRuntimeState(1);
++  assert(metrics.jpeg_worker_running[1].load() == 0);
++  assert(metrics.jpeg_active[1].load() == 0);
++  assert(metrics.jpeg_receiving[1].load() == 0);
++  assert(metrics.jpeg_source_leased[1].load() == 0);
++  assert(metrics.jpeg_worker_running[0].load() == 0);
++}
++
+ static void test_recorder_start_requires_keyframe() {
+   struct Frame {
+     bool is_keyframe;
+@@ -457,6 +490,7 @@ int main() {
+   test_jpeg_idle_policy();
+   test_client_counter_lease_releases_once();
+   test_media_metrics_track_queue_high_water();
++  test_media_metrics_track_jpeg_lifecycle_per_channel();
+   test_recorder_start_requires_keyframe();
+   test_versioned_json_frame_is_exact_and_bounded();
+   test_rtsp_socket_queue_has_element_and_byte_limits();
+-- 
+2.51.0

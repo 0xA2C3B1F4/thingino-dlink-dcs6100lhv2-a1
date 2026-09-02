@@ -1,0 +1,233 @@
+diff --git a/src/IMPEncoder.cpp b/src/IMPEncoder.cpp
+index a3789a5..9d88ab9 100644
+--- a/src/IMPEncoder.cpp
++++ b/src/IMPEncoder.cpp
+@@ -500,20 +500,25 @@ int IMPEncoder::init() {
+         LOG_ERROR("IMP_OSD_CreateGroup(" << encGrp << ") failed ret=" << ret);
+         return ret;
+       }
++      osd_group_created = true;
+       ret = IMP_System_Bind(&fs, &osd_cell);
+       if (ret != 0) {
+         LOG_ERROR("IMP_System_Bind(&fs, &osd) failed ret=" << ret);
+-        IMP_OSD_DestroyGroup(encGrp);
+         return ret;
+       }
++      fs_to_osd_bound = true;
+       ret = IMP_System_Bind(&osd_cell, &enc);
+       if (ret != 0) {
+         LOG_ERROR("IMP_System_Bind(&osd, &enc) failed ret=" << ret);
+-        IMP_System_UnBind(&fs, &osd_cell);
+-        IMP_OSD_DestroyGroup(encGrp);
+         return ret;
+       }
+-      fs_to_enc_bound = true;
++      osd_to_enc_bound = true;
++      ret = IMP_OSD_Start(encGrp);
++      if (ret != 0) {
++        LOG_ERROR("IMP_OSD_Start(" << encGrp << ") failed ret=" << ret);
++        return ret;
++      }
++      osd_group_started = true;
+     }
+     if (encChn >= 0 && encChn < NUM_VIDEO_CHANNELS && global_video[encChn]) {
+       global_video[encChn]->osd_ready.store(true, std::memory_order_release);
+@@ -531,6 +536,9 @@ int IMPEncoder::deinit(bool stop_receive) {
+   LOG_DEBUG("IMPEncoder::deinit(" << encChn << ", " << encGrp << ")");
+ 
+   int ret = 0;
++  auto remember_failure = [&ret](int cleanup_ret) {
++    if (cleanup_ret != 0 && ret == 0) ret = cleanup_ret;
++  };
+ 
+   if (!is_jpeg_stream && ownsGroupResources()) {
+     if (encChn >= 0 && encChn < NUM_VIDEO_CHANNELS && global_video[encChn]) {
+@@ -543,35 +551,61 @@ int IMPEncoder::deinit(bool stop_receive) {
+       delete osd;
+       osd = nullptr;
+     }
+-    if (fs_to_enc_bound) {
++    if (osd_group_created) {
+       std::lock_guard<std::mutex> hardware_lock(global_osd_hardware_mutex);
+       IMPCell osd_cell = {DEV_ID_OSD, encGrp, 0};
+-      ret = IMP_System_UnBind(&osd_cell, &enc);
+-      LOG_DEBUG_OR_ERROR(ret, "IMP_System_UnBind(&osd, &enc)");
+-      ret = IMP_System_UnBind(&fs, &osd_cell);
+-      LOG_DEBUG_OR_ERROR(ret, "IMP_System_UnBind(&fs, &osd)");
+-      IMP_OSD_DestroyGroup(encGrp);
+-      fs_to_enc_bound = false;
++      if (osd_group_started) {
++        int cleanup_ret = IMP_OSD_Stop(encGrp);
++        LOG_DEBUG_OR_ERROR(cleanup_ret, "IMP_OSD_Stop(" << encGrp << ")");
++        remember_failure(cleanup_ret);
++        if (cleanup_ret == 0) osd_group_started = false;
++      }
++      if (osd_to_enc_bound) {
++        int cleanup_ret = IMP_System_UnBind(&osd_cell, &enc);
++        LOG_DEBUG_OR_ERROR(cleanup_ret, "IMP_System_UnBind(&osd, &enc)");
++        remember_failure(cleanup_ret);
++        if (cleanup_ret == 0) osd_to_enc_bound = false;
++      }
++      if (fs_to_osd_bound) {
++        int cleanup_ret = IMP_System_UnBind(&fs, &osd_cell);
++        LOG_DEBUG_OR_ERROR(cleanup_ret, "IMP_System_UnBind(&fs, &osd)");
++        remember_failure(cleanup_ret);
++        if (cleanup_ret == 0) fs_to_osd_bound = false;
++      }
++      if (!osd_group_started && !osd_to_enc_bound && !fs_to_osd_bound) {
++        int cleanup_ret = IMP_OSD_DestroyGroup(encGrp);
++        LOG_DEBUG_OR_ERROR(cleanup_ret,
++                           "IMP_OSD_DestroyGroup(" << encGrp << ")");
++        remember_failure(cleanup_ret);
++        if (cleanup_ret == 0) osd_group_created = false;
++      } else {
++        LOG_ERROR("OSD group " << encGrp
++                                << " teardown remains incomplete");
++      }
+     }
+   }
+ 
+   if (chn_created && stop_receive) {
+-    ret = IMP_Encoder_StopRecvPic(encChn);
+-    LOG_DEBUG_OR_ERROR(ret, "IMP_Encoder_StopRecvPic(" << encChn << ")");
++    int cleanup_ret = IMP_Encoder_StopRecvPic(encChn);
++    LOG_DEBUG_OR_ERROR(cleanup_ret,
++                       "IMP_Encoder_StopRecvPic(" << encChn << ")");
++    remember_failure(cleanup_ret);
+   }
+ 
+   if (chn_registered) {
+-    ret = IMP_Encoder_UnRegisterChn(encChn);
+-    LOG_DEBUG_OR_ERROR_AND_EXIT(ret,
+-                                "IMP_Encoder_UnRegisterChn(" << encChn << ")");
+-    chn_registered = false;
++    int cleanup_ret = IMP_Encoder_UnRegisterChn(encChn);
++    LOG_DEBUG_OR_ERROR(cleanup_ret,
++                       "IMP_Encoder_UnRegisterChn(" << encChn << ")");
++    remember_failure(cleanup_ret);
++    if (cleanup_ret == 0) chn_registered = false;
+   }
+ 
+   if (chn_created) {
+-    ret = IMP_Encoder_DestroyChn(encChn);
+-    LOG_DEBUG_OR_ERROR_AND_EXIT(ret,
+-                                "IMP_Encoder_DestroyChn(" << encChn << ")");
+-    chn_created = false;
++    int cleanup_ret = IMP_Encoder_DestroyChn(encChn);
++    LOG_DEBUG_OR_ERROR(cleanup_ret,
++                       "IMP_Encoder_DestroyChn(" << encChn << ")");
++    remember_failure(cleanup_ret);
++    if (cleanup_ret == 0) chn_created = false;
+   }
+ 
+   return ret;
+diff --git a/src/IMPEncoder.hpp b/src/IMPEncoder.hpp
+index e664b55..55f7eb7 100644
+--- a/src/IMPEncoder.hpp
++++ b/src/IMPEncoder.hpp
+@@ -33,8 +33,22 @@ public:
+   }
+ 
+   ~IMPEncoder() {
+-    deinit();
+-    destroy();
++    int cleanup_ret = deinit();
++    if (cleanup_ret != 0) {
++      LOG_WARN("Retrying incomplete encoder teardown for channel " << encChn);
++      cleanup_ret = deinit();
++      if (cleanup_ret != 0) {
++        LOG_ERROR("Encoder teardown remains incomplete for channel " << encChn
++                                                                       << " ret="
++                                                                       << cleanup_ret);
++      }
++    }
++    int destroy_ret = destroy();
++    if (destroy_ret != 0) {
++      LOG_ERROR("Encoder group teardown failed for channel " << encChn
++                                                               << " ret="
++                                                               << destroy_ret);
++    }
+   };
+ 
+   int init();
+@@ -58,7 +72,10 @@ private:
+   bool group_created{false};
+   bool chn_created{false};
+   bool chn_registered{false};
+-  bool fs_to_enc_bound{false};
++  bool osd_group_created{false};
++  bool fs_to_osd_bound{false};
++  bool osd_to_enc_bound{false};
++  bool osd_group_started{false};
+ 
+ 
+   _stream *stream{};
+diff --git a/src/OSD.cpp b/src/OSD.cpp
+index 42893a9..6fc7a9b 100644
+--- a/src/OSD.cpp
++++ b/src/OSD.cpp
+@@ -548,10 +548,6 @@ void OSD::updateTimestampOverlay() {
+     grp.bgAlhpa = 0;
+     IMP_OSD_SetGrpRgnAttr(ts_rgn_, osdGrp, &grp);
+ 
+-    if (!osd_group_started_) {
+-      IMP_OSD_Start(osdGrp);
+-      osd_group_started_ = true;
+-    }
+     ts_region_created_ = true;
+     LOG_INFO("OSD: burned-in timestamp overlay enabled ("
+              << ts_width_ << "x" << ts_height_ << ", scale " << ts_scale_
+diff --git a/src/OSD.hpp b/src/OSD.hpp
+index 6eeaec8..b0aaad8 100644
+--- a/src/OSD.hpp
++++ b/src/OSD.hpp
+@@ -126,7 +126,6 @@ private:
+   int ts_scale_{2};
+   int ts_margin_{8};
+   bool ts_region_created_{false};
+-  bool osd_group_started_{false};
+   std::string last_ts_text_;
+ #endif
+ 
+diff --git a/src/VideoPrivacyControl.cpp b/src/VideoPrivacyControl.cpp
+index df8f59f..fa9723c 100644
+--- a/src/VideoPrivacyControl.cpp
++++ b/src/VideoPrivacyControl.cpp
+@@ -229,20 +229,6 @@ bool createPrivacyCover(int ch) {
+     IMP_OSD_DestroyRgn(handle);
+     return false;
+   }
+-  ret = IMP_OSD_Start(encGrp);
+-  if (ret != 0) {
+-    LOG_ERROR("VideoPrivacyControl: IMP_OSD_Start(" << encGrp
+-              << ") failed ret=" << ret);
+-    if (IMP_OSD_UnRegisterRgn(handle, encGrp) != 0) {
+-      vs->privacy_osd_handle = static_cast<int>(handle);
+-      vs->privacy_requested.store(true, std::memory_order_release);
+-      (void)write_privacy_state_file();
+-      return false;
+-    }
+-    IMP_OSD_DestroyRgn(handle);
+-    return false;
+-  }
+-
+   vs->privacy_osd_handle = static_cast<int>(handle);
+   LOG_INFO("VideoPrivacyControl: OSD cover enabled on ch" << ch << " ("
+            << sw << "x" << sh << ")");
+diff --git a/tests/run_host_tests.sh b/tests/run_host_tests.sh
+index a6b6152..e48c010 100755
+--- a/tests/run_host_tests.sh
++++ b/tests/run_host_tests.sh
+@@ -8,6 +8,12 @@ test_bin=$(mktemp "${TMPDIR%/}/prudynt-media-queue.XXXXXX")
+ motion_bin=$(mktemp "${TMPDIR%/}/prudynt-motion-event.XXXXXX")
+ trap 'rm -f "$test_bin" "$motion_bin"' EXIT HUP INT TERM
+ 
++osd_start_owners=$(grep -l 'IMP_OSD_Start(' "$repo_dir"/src/*.cpp || true)
++test "$osd_start_owners" = "$repo_dir/src/IMPEncoder.cpp"
++grep -q 'IMP_OSD_Stop(encGrp)' "$repo_dir/src/IMPEncoder.cpp"
++! grep -q 'IMP_OSD_Start(' "$repo_dir/src/OSD.cpp"
++! grep -q 'IMP_OSD_Start(' "$repo_dir/src/VideoPrivacyControl.cpp"
++
+ ${CXX:-c++} -std=c++20 -Wall -Wextra -Werror -pthread \
+   -I"$repo_dir/src" "$repo_dir/tests/test_media_queue.cpp" -o "$test_bin"
+ "$test_bin"

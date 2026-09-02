@@ -1,0 +1,53 @@
+diff --git a/scripts/rootfs_script.sh b/scripts/rootfs_script.sh
+--- a/scripts/rootfs_script.sh
++++ b/scripts/rootfs_script.sh
+@@ -173,3 +173,47 @@ fi
+ # Thingino disables CONFIG_LONG_OPTS; --long-options silently fail at runtime.
+ # ---------------------------------------------------------------------------
+ $BR2_EXTERNAL/scripts/check-busybox-lopts.sh "${TARGET_DIR}" 1
++
++# The D-Link profile has one source-built static WebUI. Replace the complete
++# package-contributed tree here, after every package install hook has run, so
++# extension packages cannot restore CGI, helper scripts, or stale assets.
++DCS6100_WEBUI_DIST="${BR2_EXTERNAL}/dcs6100-webui/dist"
++test -d "${DCS6100_WEBUI_DIST}"
++test -z "$(find "${DCS6100_WEBUI_DIST}" -type l -print -quit)"
++DCS6100_WEBUI_FILES="$(
++	cd "${DCS6100_WEBUI_DIST}"
++	find . -type f -print | LC_ALL=C sort
++)"
++test "${DCS6100_WEBUI_FILES}" = "./assets/app.css
++./assets/app.js
++./index.html
++./manifest.webmanifest"
++
++rm -rf "${TARGET_DIR}/var/www"
++install -d -m 0755 "${TARGET_DIR}/var/www/assets"
++install -m 0644 "${DCS6100_WEBUI_DIST}/index.html" \
++	"${TARGET_DIR}/var/www/index.html"
++install -m 0644 "${DCS6100_WEBUI_DIST}/manifest.webmanifest" \
++	"${TARGET_DIR}/var/www/manifest.webmanifest"
++install -m 0644 "${DCS6100_WEBUI_DIST}/assets/app.css" \
++	"${TARGET_DIR}/var/www/assets/app.css"
++install -m 0644 "${DCS6100_WEBUI_DIST}/assets/app.js" \
++	"${TARGET_DIR}/var/www/assets/app.js"
++touch -d "@${SOURCE_DATE_EPOCH}" \
++	"${TARGET_DIR}/var/www" \
++	"${TARGET_DIR}/var/www/assets" \
++	"${TARGET_DIR}/var/www/index.html" \
++	"${TARGET_DIR}/var/www/manifest.webmanifest" \
++	"${TARGET_DIR}/var/www/assets/app.css" \
++	"${TARGET_DIR}/var/www/assets/app.js"
++
++rm -rf "${TARGET_DIR}/usr/libexec/thingino-webui"
++rm -f "${TARGET_DIR}/etc/init.d/S48webui-config" \
++	"${TARGET_DIR}/etc/init.d/S91mqttsub" \
++	"${TARGET_DIR}/etc/init.d/S95recordmgr" \
++	"${TARGET_DIR}/usr/sbin/formatsd" \
++	"${TARGET_DIR}/usr/sbin/envfromcard" \
++	"${TARGET_DIR}/usr/sbin/mqtt-sub-dispatcher" \
++	"${TARGET_DIR}/usr/sbin/recordmgr" \
++	"${TARGET_DIR}/usr/sbin/telegram-cam-register" \
++	"${TARGET_DIR}/usr/sbin/telegram-cam-agent"
+-- 
+2.50.1

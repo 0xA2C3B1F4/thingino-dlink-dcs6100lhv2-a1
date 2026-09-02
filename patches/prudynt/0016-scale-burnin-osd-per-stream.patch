@@ -1,0 +1,33 @@
+diff --git a/src/OSD.cpp b/src/OSD.cpp
+--- a/src/OSD.cpp
++++ b/src/OSD.cpp
+@@ -28,4 +28,11 @@ constexpr float DEFAULT_DAY_BRIGHTNESS = 70.0f;
+ constexpr float DEFAULT_NIGHT_BRIGHTNESS = 25.0f;
+ 
++static int automaticBurninScale(uint16_t streamWidth) {
++  constexpr int kAutoScaleWidth = 480;
++  const int roundedUp =
++      (static_cast<int>(streamWidth) + kAutoScaleWidth - 1) /
++      kAutoScaleWidth;
++  return std::clamp(roundedUp, 1, kBurninMaxScale);
++}
+ 
+ } // namespace
+@@ -496,7 +503,7 @@ void OSD::updateTimestampOverlay() {
+   if (cfg && cfg->osd.burnin.scale > 0)
+     new_scale = std::clamp(cfg->osd.burnin.scale, 1, kBurninMaxScale);
+   else
+-    new_scale = std::clamp(stream_width / 480, 1, kBurninMaxScale);
++    new_scale = automaticBurninScale(stream_width);
+   bool scale_changed = (new_scale != ts_scale_);
+   if (scale_changed)
+     ts_scale_ = new_scale;
+@@ -589,7 +596,7 @@ void OSD::init() {
+   if (cfg && cfg->osd.burnin.scale > 0)
+     ts_scale_ = std::clamp(cfg->osd.burnin.scale, 1, kBurninMaxScale);
+   else
+-    ts_scale_ = std::clamp(stream_width / 480, 1, kBurninMaxScale);
++    ts_scale_ = automaticBurninScale(stream_width);
+ #endif
+ 
+   // stream rotation from whichever stream we're attached to

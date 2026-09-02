@@ -1,0 +1,183 @@
+#!/bin/sh
+# Read-only bounded runtime evidence for diagnose-dcs6100-runtime.
+set -eu
+
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+
+pid_value() {
+	for candidate in "$@"; do
+		if [ -s "$candidate" ]; then
+			IFS= read -r value <"$candidate"
+			case "$value" in ''|*[!0-9]*) continue ;; esac
+			[ -d "/proc/$value" ] && { printf '%s' "$value"; return 0; }
+		fi
+	done
+	printf '0'
+}
+
+process_json() {
+	pid=$1
+	if [ "$pid" -eq 0 ] || [ ! -r "/proc/$pid/status" ]; then
+		printf '{"cpu_ticks":null,"fd_count":null,"pid":null,"private_kib":null,"pss_kib":null,"rss_kib":null,"shared_kib":null,"state":null,"threads":null}'
+		return
+	fi
+	state=$(awk '/^State:/ {print $2}' "/proc/$pid/status")
+	rss=$(awk '/^VmRSS:/ {print $2}' "/proc/$pid/status")
+	threads=$(awk '/^Threads:/ {print $2}' "/proc/$pid/status")
+	fds=$(find "/proc/$pid/fd" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l)
+	cpu_ticks=$(awk '{print $14+$15}' "/proc/$pid/stat" 2>/dev/null || true)
+	if [ -r "/proc/$pid/smaps" ]; then
+		smaps=$(awk '
+			/^Pss:/ { pss += $2; seen = 1 }
+			/^Private_Clean:/ { private += $2 }
+			/^Private_Dirty:/ { private += $2 }
+			/^Shared_Clean:/ { shared += $2 }
+			/^Shared_Dirty:/ { shared += $2 }
+			END {
+				if (seen) printf "%d %d %d", pss, private, shared
+				else printf "null null null"
+			}' "/proc/$pid/smaps")
+	else
+		smaps='null null null'
+	fi
+	set -- $smaps
+	pss=$1
+	private=$2
+	shared=$3
+	case "$rss" in ''|*[!0-9]*) rss=null ;; esac
+	case "$threads" in ''|*[!0-9]*) threads=null ;; esac
+	case "$fds" in ''|*[!0-9]*) fds=null ;; esac
+	case "$cpu_ticks" in ''|*[!0-9]*) cpu_ticks=null ;; esac
+	case "$state" in [A-Z]) ;; *) state='?' ;; esac
+	printf '{"cpu_ticks":%s,"fd_count":%s,"pid":%s,"private_kib":%s,"pss_kib":%s,"rss_kib":%s,"shared_kib":%s,"state":"%s","threads":%s}' \
+		"$cpu_ticks" "$fds" "$pid" "$private" "$pss" "$rss" "$shared" "$state" "$threads"
+}
+
+exe_sha() {
+	pid=$1
+	if [ "$pid" -gt 0 ] && [ -r "/proc/$pid/exe" ]; then
+		value=$(sha256sum "/proc/$pid/exe" 2>/dev/null || true)
+		value=${value%% *}
+		case "$value" in
+			????????????????????????????????????????????????????????????????) printf '"%s"' "$value"; return ;;
+		esac
+	fi
+	printf 'null'
+}
+
+count_pattern() {
+	file=$1
+	pattern=$2
+	if [ -r "$file" ]; then
+		grep -Eic "$pattern" "$file" 2>/dev/null || true
+	else
+		printf '0'
+	fi
+}
+
+control_pid=$(pid_value /run/thingino-controld.pid /var/run/thingino-controld.pid)
+prudynt_pid=$(pid_value /run/prudynt.pid /var/run/prudynt.pid)
+uhttpd_pid=$(pid_value /run/uhttpd.pid /var/run/uhttpd.pid)
+messages=/var/log/messages
+observed_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || printf 'unknown')
+tcp_entries=$(awk 'NR>1 {count++} END {print count+0}' /proc/net/tcp 2>/dev/null || printf '0')
+tcp_established=$(awk 'NR>1 && $4 == "01" {count++} END {print count+0}' /proc/net/tcp 2>/dev/null || printf '0')
+tcp_listen=$(awk 'NR>1 && $4 == "0A" {count++} END {print count+0}' /proc/net/tcp 2>/dev/null || printf '0')
+tcp_time_wait=$(awk 'NR>1 && $4 == "06" {count++} END {print count+0}' /proc/net/tcp 2>/dev/null || printf '0')
+udp_entries=$(awk 'NR>1 {count++} END {print count+0}' /proc/net/udp 2>/dev/null || printf '0')
+media_ready=false
+[ "$(cat /run/prudynt-dlink-media.ready 2>/dev/null || true)" = 1080p-started ] && media_ready=true
+prudynt_errors=$(count_pattern "$messages" 'prudynt.*(error|fail|timeout)|jpeg.*(error|fail|timeout)|rtsp.*(error|fail|timeout)')
+isp_errors=$(count_pattern "$messages" 'IMP_|TISP|tx-isp|private_kmalloc|page allocation failure|encoder.*(error|fail)')
+m_total=0
+m_free=0
+m_buffers=0
+m_cached=0
+m_reclaimable=0
+m_shmem=0
+while IFS=' ' read -r m_key m_value m_rest; do
+	case "$m_key" in
+		MemTotal:) m_total=$m_value ;;
+		MemFree:) m_free=$m_value ;;
+		Buffers:) m_buffers=$m_value ;;
+		Cached:) m_cached=$m_value ;;
+		SReclaimable:) m_reclaimable=$m_value ;;
+		Shmem:) m_shmem=$m_value ;;
+	esac
+done </proc/meminfo
+m_available_proxy=$((m_free + m_buffers + m_cached + m_reclaimable - m_shmem))
+[ "$m_available_proxy" -ge 0 ] || m_available_proxy=0
+rmem_reserved_kib=null
+for token in $(cat /proc/cmdline); do
+	case "$token" in
+		rmem=[0-9]*M@*)
+			rmem_mib=${token#rmem=}
+			rmem_mib=${rmem_mib%%M@*}
+			case "$rmem_mib" in ''|*[!0-9]*) ;; *) rmem_reserved_kib=$((rmem_mib * 1024)) ;; esac
+			;;
+	esac
+done
+rmem_device_present=false
+[ -c /dev/rmem ] && rmem_device_present=true
+mtd3_sha=$(sha256sum /dev/mtd3 2>/dev/null || true); mtd3_sha=${mtd3_sha%% *}
+case "$mtd3_sha" in
+	????????????????????????????????????????????????????????????????) mtd3_json="\"$mtd3_sha\"" ;;
+	*) mtd3_json=null ;;
+esac
+split_layout=false
+data_sha_json=null
+data_jffs2_mounted=false
+root_overlay_mounted=false
+overlay_reset_pending=false
+if [ "$(wc -l </proc/mtd 2>/dev/null || printf '0')" -eq 8 ] &&
+	grep -Fqx 'mtd3: 00650000 00008000 "system"' /proc/mtd &&
+	grep -Fqx 'mtd4: 00170000 00008000 "data"' /proc/mtd &&
+	grep -Fqx 'mtd5: 00180000 00008000 "vendor"' /proc/mtd &&
+	grep -Fqx 'mtd6: 00040000 00008000 "factory"' /proc/mtd; then
+	split_layout=true
+	data_sha=$(sha256sum /dev/mtd4 2>/dev/null || true); data_sha=${data_sha%% *}
+	case "$data_sha" in
+		????????????????????????????????????????????????????????????????) data_sha_json="\"$data_sha\"" ;;
+		*) data_sha_json=null ;;
+	esac
+	awk '$5 == "/overlay" {
+		for (i = 6; i <= NF; i++)
+			if ($i == "-" && $(i + 1) == "jffs2" && $(i + 2) == "/dev/mtdblock4") found = 1
+	} END { exit !found }' /proc/self/mountinfo 2>/dev/null && data_jffs2_mounted=true
+	awk '$5 == "/" {
+		for (i = 6; i <= NF; i++)
+			if ($i == "-" && ($(i + 1) == "overlay" || $(i + 1) == "overlayfs")) found = 1
+	} END { exit !found }' /proc/self/mountinfo 2>/dev/null && root_overlay_mounted=true
+	[ ! -e /overlay/.thingino-factory-reset ] || overlay_reset_pending=true
+fi
+
+printf '{'
+printf '"binary_identity":{"mtd3_sha256":%s,"prudynt_sha256":' "$mtd3_json"
+exe_sha "$prudynt_pid"
+printf ',"source_commit":null,"thingino_control_sha256":'
+exe_sha "$control_pid"
+printf ',"uhttpd_sha256":'
+exe_sha "$uhttpd_pid"
+printf '},'
+printf '"control":{"admission_metrics_available":false,"timeout_metrics_available":false},'
+printf '"kernel_media":{"error_count":%s,"rmem_device_present":%s,"rmem_reserved_kib":%s},' \
+	"$isp_errors" "$rmem_device_present" "$rmem_reserved_kib"
+printf '"memory":{"available_proxy_kib":%s,"buffers_kib":%s,"cached_kib":%s,"free_kib":%s,"reclaimable_kib":%s,"shmem_kib":%s,"total_kib":%s},' \
+	"$m_available_proxy" "$m_buffers" "$m_cached" "$m_free" "$m_reclaimable" "$m_shmem" "$m_total"
+printf '"network":{"tcp_entries":%s,"tcp_established":%s,"tcp_listen":%s,"tcp_time_wait":%s,"udp_entries":%s},' \
+	"$tcp_entries" "$tcp_established" "$tcp_listen" "$tcp_time_wait" "$udp_entries"
+printf '"observed_at":"%s",' "$observed_at"
+printf '"processes":{"prudynt":'
+process_json "$prudynt_pid"
+printf ',"thingino_control":'
+process_json "$control_pid"
+printf ',"uhttpd":'
+process_json "$uhttpd_pid"
+printf '},'
+printf '"prudynt":{"error_count":%s,"media_ready":%s},' "$prudynt_errors" "$media_ready"
+printf '"schema_version":1,'
+printf '"storage":{"data_jffs2_mounted":%s,"data_sha256":%s,"overlay_reset_pending":%s,"root_overlay_mounted":%s,"split_layout":%s,"system_sha256":%s},' \
+	"$data_jffs2_mounted" "$data_sha_json" "$overlay_reset_pending" "$root_overlay_mounted" "$split_layout" "$mtd3_json"
+printf '"uhttpd":{"event_loop_metrics_available":false}'
+printf '}\n'

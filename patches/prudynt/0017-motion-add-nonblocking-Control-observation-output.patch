@@ -1,0 +1,391 @@
+diff --git a/src/Motion.cpp b/src/Motion.cpp
+index cd172e2..297c444 100644
+--- a/src/Motion.cpp
++++ b/src/Motion.cpp
+@@ -68,6 +68,10 @@ void Motion::detect() {
+   if (init() != 0)
+     return;
+ 
++  MotionEventOutput event_output;
++  event_output.startSession(ignoreInitialPeriod);
++  event_output.send(MotionObservationState::Monitoring,
++                    cfg->motion.monitor_stream, 0);
+   write_motion_detection_state_file();
+ 
+   global_motion_thread_signal = true;
+@@ -79,6 +82,8 @@ void Motion::detect() {
+     // Skip motion detection during privacy mode
+     if (global_video[0] &&
+         global_video[0]->privacy_requested.load(std::memory_order_acquire)) {
++      event_output.send(MotionObservationState::Monitoring,
++                        cfg->motion.monitor_stream, 0);
+       std::this_thread::sleep_for(
+           std::chrono::milliseconds(cfg->motion.ivs_polling_timeout_ms));
+       continue;
+@@ -95,6 +100,13 @@ void Motion::detect() {
+       LOG_WARN("IMP_IVS_GetResult error: " << ret);
+       continue;
+     }
++    auto releaseResult = [&]() {
++      int releaseRet = IMP_IVS_ReleaseResult(ivsChn, (void *)result);
++      if (releaseRet < 0) {
++        LOG_WARN("IMP_IVS_ReleaseResult error: " << releaseRet);
++      }
++      return releaseRet;
++    };
+ 
+     auto currentTime = steady_clock::now();
+     auto elapsedTime = duration_cast<seconds>(currentTime - startTime);
+@@ -130,7 +142,22 @@ void Motion::detect() {
+     }
+     motorMovementActive = motorActiveOrSettling;
+ 
++    std::uint64_t roiMask = 0;
++    if (!motorMovementActive) {
++      for (int i = 0; i < IMP_IVS_MOVE_MAX_ROI_CNT && i < 64; i++) {
++        if (result->retRoi[i]) {
++          roiMask |= (std::uint64_t{1} << i);
++        }
++      }
++    }
++    event_output.send(motorMovementActive
++                          ? MotionObservationState::Suppressed
++                          : roiMask != 0 ? MotionObservationState::Detected
++                                         : MotionObservationState::Clear,
++                      cfg->motion.monitor_stream, roiMask);
++
+     if (ignoreInitialPeriod && elapsedTime.count() < cfg->motion.init_time_s) {
++      releaseResult();
+       continue;
+     } else {
+       ignoreInitialPeriod = false;
+@@ -139,6 +166,7 @@ void Motion::detect() {
+     if (isInCooldown &&
+         duration_cast<seconds>(currentTime - cooldownEndTime).count() <
+             cfg->motion.cooldown_time_s) {
++      releaseResult();
+       continue;
+     } else {
+       isInCooldown = false;
+@@ -196,13 +224,13 @@ void Motion::detect() {
+       }
+     }
+ 
+-    ret = IMP_IVS_ReleaseResult(ivsChn, (void *)result);
+-    if (ret < 0) {
+-      LOG_WARN("IMP_IVS_ReleaseResult error: " << ret);
++    if (releaseResult() < 0) {
+       continue;
+     }
+   }
+ 
++  event_output.send(MotionObservationState::Stopped,
++                    cfg->motion.monitor_stream, 0);
+   exit();
+   remove_motion_detection_state_file();
+ 
+diff --git a/src/Motion.hpp b/src/Motion.hpp
+index 1798bf6..eb42fbf 100644
+--- a/src/Motion.hpp
++++ b/src/Motion.hpp
+@@ -3,6 +3,7 @@
+ 
+ #include "Config.hpp"
+ #include "Logger.hpp"
++#include "MotionEventOutput.hpp"
+ #include "globals.hpp"
+ #include "imp/imp_ivs.h"
+ #include "imp/imp_ivs_move.h"
+diff --git a/src/MotionEventOutput.cpp b/src/MotionEventOutput.cpp
+new file mode 100644
+index 0000000..f8944f0
+--- /dev/null
++++ b/src/MotionEventOutput.cpp
+@@ -0,0 +1,131 @@
++#include "MotionEventOutput.hpp"
++
++#include <cerrno>
++#include <cstdio>
++#include <cstring>
++#include <fcntl.h>
++#include <sys/socket.h>
++#include <sys/un.h>
++#include <time.h>
++#include <unistd.h>
++
++namespace {
++constexpr std::size_t kMaxMessageBytes = 512;
++}
++
++MotionEventOutput::MotionEventOutput(std::string socketPath)
++    : socketPath_(std::move(socketPath)) {}
++
++MotionEventOutput::~MotionEventOutput() {
++  if (socketFd_ >= 0) {
++    ::close(socketFd_);
++  }
++}
++
++void MotionEventOutput::startSession(bool initialGrace) {
++  monitoringSinceMs_ = monotonicMilliseconds();
++  initialGrace_ = initialGrace;
++  sequence_ = 0;
++}
++
++std::uint64_t MotionEventOutput::monotonicMilliseconds() {
++  struct timespec now {};
++  if (::clock_gettime(CLOCK_MONOTONIC, &now) != 0) {
++    return 0;
++  }
++  return static_cast<std::uint64_t>(now.tv_sec) * 1000ULL +
++         static_cast<std::uint64_t>(now.tv_nsec / 1000000L);
++}
++
++const char *MotionEventOutput::stateName(MotionObservationState state) {
++  switch (state) {
++  case MotionObservationState::Monitoring:
++    return "monitoring";
++  case MotionObservationState::Detected:
++    return "detected";
++  case MotionObservationState::Clear:
++    return "clear";
++  case MotionObservationState::Suppressed:
++    return "suppressed";
++  case MotionObservationState::Stopped:
++    return "stopped";
++  }
++  return "stopped";
++}
++
++bool MotionEventOutput::ensureSocket() {
++  if (socketFd_ >= 0) {
++    return true;
++  }
++#ifdef SOCK_NONBLOCK
++  socketFd_ = ::socket(AF_UNIX, SOCK_DGRAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
++  if (socketFd_ < 0 && (errno == EINVAL || errno == EPROTONOSUPPORT)) {
++    socketFd_ = ::socket(AF_UNIX, SOCK_DGRAM, 0);
++  }
++#else
++  socketFd_ = ::socket(AF_UNIX, SOCK_DGRAM, 0);
++#endif
++  if (socketFd_ < 0) {
++    return false;
++  }
++  int flags = ::fcntl(socketFd_, F_GETFL, 0);
++  int descriptorFlags = ::fcntl(socketFd_, F_GETFD, 0);
++  if (flags < 0 || descriptorFlags < 0 ||
++      ::fcntl(socketFd_, F_SETFL, flags | O_NONBLOCK) != 0 ||
++      ::fcntl(socketFd_, F_SETFD, descriptorFlags | FD_CLOEXEC) != 0) {
++    ::close(socketFd_);
++    socketFd_ = -1;
++    return false;
++  }
++  return true;
++}
++
++MotionEventSendResult MotionEventOutput::send(MotionObservationState state,
++                                               int channel,
++                                               std::uint64_t roiMask) {
++  if (monitoringSinceMs_ == 0) {
++    startSession();
++  }
++  if (socketPath_.empty() || socketPath_.size() >= sizeof(sockaddr_un::sun_path) ||
++      channel < 0 || channel > 1 || !ensureSocket()) {
++    droppedCount_++;
++    return MotionEventSendResult::Dropped;
++  }
++
++  const std::uint64_t nowMs = monotonicMilliseconds();
++  const std::uint64_t nextSequence = sequence_ + 1;
++  char message[kMaxMessageBytes];
++  int length = std::snprintf(
++      message, sizeof(message),
++      "{\"version\":1,\"event\":\"motion\",\"state\":\"%s\",\"channel\":%d,"
++      "\"monotonic_ms\":%llu,\"monitoring_since_ms\":%llu,\"sequence\":%llu,"
++      "\"producer_pid\":%ld,\"roi_mask\":%llu,\"initial_grace\":%s}",
++      stateName(state), channel, static_cast<unsigned long long>(nowMs),
++      static_cast<unsigned long long>(monitoringSinceMs_),
++      static_cast<unsigned long long>(nextSequence), static_cast<long>(::getpid()),
++      static_cast<unsigned long long>(roiMask), initialGrace_ ? "true" : "false");
++  if (length <= 0 || static_cast<std::size_t>(length) >= sizeof(message)) {
++    droppedCount_++;
++    return MotionEventSendResult::Dropped;
++  }
++
++  struct sockaddr_un destination {};
++  destination.sun_family = AF_UNIX;
++  std::memcpy(destination.sun_path, socketPath_.c_str(), socketPath_.size() + 1);
++  ssize_t written = ::sendto(
++      socketFd_, message, static_cast<std::size_t>(length),
++#ifdef MSG_NOSIGNAL
++      MSG_DONTWAIT | MSG_NOSIGNAL,
++#else
++      MSG_DONTWAIT,
++#endif
++      reinterpret_cast<const struct sockaddr *>(&destination),
++      sizeof(destination));
++  if (written != length) {
++    droppedCount_++;
++    return MotionEventSendResult::Dropped;
++  }
++  sequence_ = nextSequence;
++  sentCount_++;
++  return MotionEventSendResult::Sent;
++}
+diff --git a/src/MotionEventOutput.hpp b/src/MotionEventOutput.hpp
+new file mode 100644
+index 0000000..0112e9d
+--- /dev/null
++++ b/src/MotionEventOutput.hpp
+@@ -0,0 +1,50 @@
++#ifndef MotionEventOutput_hpp
++#define MotionEventOutput_hpp
++
++#include <cstdint>
++#include <string>
++
++enum class MotionObservationState {
++  Monitoring,
++  Detected,
++  Clear,
++  Suppressed,
++  Stopped,
++};
++
++enum class MotionEventSendResult {
++  Sent,
++  Dropped,
++};
++
++class MotionEventOutput {
++public:
++  explicit MotionEventOutput(
++      std::string socketPath = "/run/thingino-control/motion.sock");
++  ~MotionEventOutput();
++
++  MotionEventOutput(const MotionEventOutput &) = delete;
++  MotionEventOutput &operator=(const MotionEventOutput &) = delete;
++
++  void startSession(bool initialGrace = true);
++  MotionEventSendResult send(MotionObservationState state, int channel,
++                             std::uint64_t roiMask);
++
++  std::uint64_t sentCount() const { return sentCount_; }
++  std::uint64_t droppedCount() const { return droppedCount_; }
++
++private:
++  static std::uint64_t monotonicMilliseconds();
++  static const char *stateName(MotionObservationState state);
++  bool ensureSocket();
++
++  std::string socketPath_;
++  int socketFd_{-1};
++  std::uint64_t monitoringSinceMs_{0};
++  bool initialGrace_{true};
++  std::uint64_t sequence_{0};
++  std::uint64_t sentCount_{0};
++  std::uint64_t droppedCount_{0};
++};
++
++#endif
+diff --git a/tests/run_host_tests.sh b/tests/run_host_tests.sh
+index b525e7c..a6b6152 100755
+--- a/tests/run_host_tests.sh
++++ b/tests/run_host_tests.sh
+@@ -5,8 +5,14 @@ set -eu
+ 
+ repo_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+ test_bin=$(mktemp "${TMPDIR%/}/prudynt-media-queue.XXXXXX")
+-trap 'rm -f "$test_bin"' EXIT HUP INT TERM
++motion_bin=$(mktemp "${TMPDIR%/}/prudynt-motion-event.XXXXXX")
++trap 'rm -f "$test_bin" "$motion_bin"' EXIT HUP INT TERM
+ 
+ ${CXX:-c++} -std=c++20 -Wall -Wextra -Werror -pthread \
+   -I"$repo_dir/src" "$repo_dir/tests/test_media_queue.cpp" -o "$test_bin"
+ "$test_bin"
++
++${CXX:-c++} -std=c++20 -Wall -Wextra -Werror -pthread \
++  -I"$repo_dir/src" "$repo_dir/src/MotionEventOutput.cpp" \
++  "$repo_dir/tests/test_motion_event_output.cpp" -o "$motion_bin"
++"$motion_bin"
+diff --git a/tests/test_motion_event_output.cpp b/tests/test_motion_event_output.cpp
+new file mode 100644
+index 0000000..88fd279
+--- /dev/null
++++ b/tests/test_motion_event_output.cpp
+@@ -0,0 +1,72 @@
++#include "MotionEventOutput.hpp"
++
++#include <cassert>
++#include <chrono>
++#include <cstring>
++#include <filesystem>
++#include <iostream>
++#include <string>
++#include <sys/socket.h>
++#include <sys/un.h>
++#include <unistd.h>
++
++namespace fs = std::filesystem;
++
++std::string receiveMessage(int receiver) {
++  char buffer[513] = {};
++  ssize_t length = ::recv(receiver, buffer, sizeof(buffer) - 1, 0);
++  assert(length > 0);
++  return std::string(buffer, static_cast<std::size_t>(length));
++}
++
++int main() {
++  const char *tmpdir = std::getenv("TMPDIR");
++  assert(tmpdir != nullptr && tmpdir[0] != '\0');
++  fs::path root = fs::path(tmpdir) /
++                  ("prudynt-motion-event-" + std::to_string(::getpid()));
++  fs::create_directories(root);
++  fs::path socketPath = root / "motion.sock";
++
++  int receiver = ::socket(AF_UNIX, SOCK_DGRAM, 0);
++  assert(receiver >= 0);
++  struct timeval timeout {1, 0};
++  assert(::setsockopt(receiver, SOL_SOCKET, SO_RCVTIMEO, &timeout,
++                      sizeof(timeout)) == 0);
++  struct sockaddr_un address {};
++  address.sun_family = AF_UNIX;
++  assert(socketPath.string().size() < sizeof(address.sun_path));
++  std::memcpy(address.sun_path, socketPath.c_str(), socketPath.string().size() + 1);
++  assert(::bind(receiver, reinterpret_cast<struct sockaddr *>(&address),
++                sizeof(address)) == 0);
++
++  MotionEventOutput output(socketPath.string());
++  output.startSession();
++  assert(output.send(MotionObservationState::Monitoring, 0, 0) ==
++         MotionEventSendResult::Sent);
++  assert(output.send(MotionObservationState::Detected, 0, 3) ==
++         MotionEventSendResult::Sent);
++  std::string monitoring = receiveMessage(receiver);
++  std::string detected = receiveMessage(receiver);
++  assert(monitoring.find("\"version\":1") != std::string::npos);
++  assert(monitoring.find("\"state\":\"monitoring\"") != std::string::npos);
++  assert(detected.find("\"state\":\"detected\"") != std::string::npos);
++  assert(detected.find("\"roi_mask\":3") != std::string::npos);
++  assert(detected.size() <= 512);
++  assert(output.sentCount() == 2);
++  assert(output.droppedCount() == 0);
++
++  ::close(receiver);
++  ::unlink(socketPath.c_str());
++  fs::path absent = root / "absent.sock";
++  MotionEventOutput missing(absent.string());
++  auto started = std::chrono::steady_clock::now();
++  assert(missing.send(MotionObservationState::Clear, 0, 0) ==
++         MotionEventSendResult::Dropped);
++  assert(std::chrono::steady_clock::now() - started <
++         std::chrono::milliseconds(50));
++  assert(missing.droppedCount() == 1);
++
++  fs::remove_all(root);
++  std::cout << "motion event output tests passed\n";
++  return 0;
++}
+-- 
+2.54.0
