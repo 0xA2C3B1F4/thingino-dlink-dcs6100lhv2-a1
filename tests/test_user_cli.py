@@ -9,7 +9,12 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-from installer import user_cli, user_cli_parser, user_cli_stock_recovery
+from installer import (
+    user_cli,
+    user_cli_parser,
+    user_cli_stock_recovery,
+    user_cli_universal,
+)
 
 
 class UserCliTests(unittest.TestCase):
@@ -256,6 +261,304 @@ class UserCliTests(unittest.TestCase):
         self.assertEqual(provision.universal_command, "provision")
         self.assertEqual(provision.functional_recovery_dir, Path("functional"))
         self.assertIsNone(provision.recovery_dir)
+
+    def test_universal_build_minimum_needs_only_the_vendor_bundle(self) -> None:
+        arguments = user_cli.build_parser().parse_args(
+            [
+                "local-build",
+                "build-universal",
+                "--vendor-bundle-dir",
+                "vendor",
+            ]
+        )
+        self.assertIsNone(arguments.media_closure_dir)
+        self.assertIsNone(arguments.raptor_rwd_artifact)
+        self.assertIsNone(arguments.signing_key)
+        self.assertIs(arguments.handler, user_cli._local_build_build_universal)
+
+    def test_universal_build_generates_a_stable_default_model_signer(self) -> None:
+        root = Path("/external/build")
+        arguments = SimpleNamespace(
+            build_root=root,
+            work_dir=Path("/state"),
+            vendor_bundle_dir=Path("/camera/vendor"),
+            media_closure_dir=None,
+            raptor_rwd_artifact=None,
+            signing_key=None,
+            signing_public_key=None,
+        )
+        keypair = {
+            "created": True,
+            "key_id": "a" * 64,
+            "private_key": "/external/build-private/model-signing/release-ed25519.pem",
+            "public_key": "/external/build-private/model-signing/release-ed25519.pub",
+        }
+        with (
+            mock.patch.object(user_cli, "resolve_local_build_workspace", return_value=root),
+            mock.patch.object(
+                user_cli, "ensure_ed25519_keypair", return_value=keypair
+            ) as ensure,
+            mock.patch.object(
+                user_cli,
+                "build_local_universal_install_set",
+                return_value={"artifact_scope": "model-universal"},
+            ) as build,
+        ):
+            result = user_cli._local_build_build_universal(arguments)
+        ensure.assert_called_once_with(
+            Path("/external/build-private/model-signing/release-ed25519.pem"),
+            None,
+        )
+        self.assertIsNone(build.call_args.kwargs["media_closure_dir"])
+        self.assertIsNone(build.call_args.kwargs["raptor_rwd_artifact"])
+        self.assertEqual(result["result"]["model_signing"], keypair)
+
+    def test_universal_configure_binds_private_inputs_to_the_session(self) -> None:
+        parsed = user_cli.build_parser().parse_args(
+            [
+                "universal",
+                "configure",
+                "--session-dir",
+                "/private/session",
+                "--output-dir",
+                "/private/camera/install-config",
+            ]
+        )
+        self.assertIs(parsed.handler, user_cli._universal_configure)
+        self.assertFalse(hasattr(parsed, "ssid"))
+        self.assertFalse(hasattr(parsed, "passphrase"))
+
+        session = SimpleNamespace(identity=Path("/private/session/host/identity"))
+        generated = SimpleNamespace(output_dir=Path("/private/camera/install-config"))
+        private = SimpleNamespace(credential_set_id="b" * 64)
+        keypair = {
+            "created": True,
+            "key_id": "c" * 64,
+            "private_key": "/private/camera/authorization-signing/ed25519.pem",
+            "public_key": "/private/camera/authorization-signing/ed25519.pub",
+        }
+        arguments = SimpleNamespace(
+            session_dir=Path("/private/session"),
+            output_dir=Path("/private/camera/install-config"),
+            signing_key=None,
+            signing_public_key=None,
+            secrets_fd=7,
+        )
+        with (
+            mock.patch.object(user_cli, "load_host_session", return_value=session),
+            mock.patch.object(user_cli, "ensure_ed25519_keypair", return_value=keypair),
+            mock.patch.object(
+                user_cli,
+                "read_confirmed_private_input",
+                return_value=("wifi", "password", "wifi", "password"),
+            ),
+            mock.patch.object(user_cli, "render_private_wpa_config", return_value=b"wpa"),
+            mock.patch.object(
+                user_cli, "read_authorized_key", return_value=b"ssh-ed25519 key\n"
+            ),
+            mock.patch.object(user_cli, "load_service_credential", return_value=b"d" * 64),
+            mock.patch.object(user_cli, "generate_private_config", return_value=generated) as generate,
+            mock.patch.object(
+                user_cli, "load_private_config_for_session", return_value=private
+            ) as load_private,
+        ):
+            result = user_cli._universal_configure(arguments)
+        self.assertEqual(
+            generate.call_args.kwargs["credential"], b"d" * 64 + b"\n"
+        )
+        load_private.assert_called_once_with(
+            output_dir=Path("/private/camera/install-config"),
+            session_dir=Path("/private/session"),
+        )
+        self.assertEqual(result["phase"], "camera-private-inputs-configured")
+        self.assertEqual(result["result"]["write_set"], [])
+
+    def test_universal_stage_requires_the_full_declared_write_set(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            root = Path(directory_name)
+            card = root / "card"
+            work = root / "work"
+            card.mkdir()
+            arguments = SimpleNamespace(
+                recovery_dir=None,
+                functional_recovery_dir=root / "functional",
+                preserved_readback_dir=root / "preserved",
+                install_set_dir=root / "install-set",
+                universal_public_key=root / "model.pub",
+                provisioning=root / "provisioning.zip",
+                provisioning_data=root / "provisioning.jffs2",
+                authorization_dir=root / "authorization",
+                authorization_public_key=root / "authorization.pub",
+                session_dir=root / "session",
+                whole_device="/dev/test-card",
+                mount_root=card,
+                confirm_physical_device="/dev/test-card",
+                confirm_target="DCS-6100LHV2-A1",
+                confirm_write_set=(
+                    user_cli_universal.UNIVERSAL_WRITE_CONFIRMATION
+                ),
+                work_dir=work,
+                json=True,
+            )
+            recovery = SimpleNamespace(camera_identity_sha256="a" * 64)
+            preflight = SimpleNamespace(
+                physical_device="/dev/test-card",
+                mount_root=card.resolve(),
+            )
+            validated = SimpleNamespace()
+            with (
+                mock.patch.object(
+                    user_cli,
+                    "validate_functional_recovery_boundary",
+                    return_value=recovery,
+                ),
+                mock.patch.object(
+                    user_cli,
+                    "create_preflight_document",
+                    return_value={"schema_version": 1},
+                ),
+                mock.patch.object(
+                    user_cli, "load_media_preflight", return_value=preflight
+                ),
+                mock.patch.object(
+                    user_cli, "recovery_session_identity", return_value="b" * 64
+                ),
+                mock.patch.object(
+                    user_cli,
+                    "validate_camera_bound_universal_install",
+                    return_value=validated,
+                ) as validate,
+                mock.patch.object(
+                    user_cli,
+                    "stage_camera_bound_universal_install",
+                    return_value={"bootstrap": "c" * 64},
+                ) as stage,
+            ):
+                result = user_cli._universal_stage(arguments)
+            self.assertIs(validate.call_args.kwargs["recovery"], recovery)
+            stage.assert_called_once_with(
+                validated,
+                root=card,
+                preflight=preflight,
+                confirmed_physical_device="/dev/test-card",
+            )
+            self.assertTrue(result["result"]["armed"])
+            self.assertFalse(result["result"]["nor_written_by_host"])
+            self.assertEqual(
+                result["result"]["safe_next_action"],
+                "boot-stock-updater-once-then-return-sd-for-universal-handoff",
+            )
+            self.assertEqual(result["result"]["write_set"], [])
+
+    def test_universal_handoff_revalidates_tuple_before_passivation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            root = Path(directory_name)
+            card = root / "card"
+            work = root / "work"
+            card.mkdir()
+            arguments = SimpleNamespace(
+                recovery_dir=None,
+                functional_recovery_dir=root / "functional",
+                preserved_readback_dir=root / "preserved",
+                install_set_dir=root / "install-set",
+                universal_public_key=root / "model.pub",
+                provisioning=root / "provisioning.zip",
+                provisioning_data=root / "provisioning.jffs2",
+                authorization_dir=root / "authorization",
+                authorization_public_key=root / "authorization.pub",
+                session_dir=root / "session",
+                whole_device="/dev/test-card",
+                mount_root=card,
+                confirm_physical_device="/dev/test-card",
+                confirm_target="DCS-6100LHV2-A1",
+                confirm_stock_uboot_result=(
+                    user_cli_universal.UNIVERSAL_HANDOFF_CONFIRMATION
+                ),
+                work_dir=work,
+                json=True,
+            )
+            recovery = SimpleNamespace(camera_identity_sha256="a" * 64)
+            preflight = SimpleNamespace(
+                physical_device="/dev/test-card",
+                mount_root=card.resolve(),
+            )
+            validated = SimpleNamespace()
+            with (
+                mock.patch.object(
+                    user_cli,
+                    "validate_functional_recovery_boundary",
+                    return_value=recovery,
+                ),
+                mock.patch.object(
+                    user_cli,
+                    "create_preflight_document",
+                    return_value={"schema_version": 1},
+                ),
+                mock.patch.object(
+                    user_cli, "load_media_preflight", return_value=preflight
+                ),
+                mock.patch.object(
+                    user_cli, "recovery_session_identity", return_value="b" * 64
+                ),
+                mock.patch.object(
+                    user_cli,
+                    "validate_camera_bound_universal_install",
+                    return_value=validated,
+                ) as validate,
+                mock.patch.object(
+                    user_cli,
+                    "handoff_camera_bound_universal_install",
+                    return_value={"STAGE1.PKG": "c" * 64},
+                ) as handoff,
+            ):
+                result = user_cli._universal_handoff(arguments)
+            self.assertIs(validate.call_args.kwargs["recovery"], recovery)
+            handoff.assert_called_once_with(
+                validated,
+                root=card,
+                preflight=preflight,
+                confirmed_physical_device="/dev/test-card",
+            )
+            self.assertFalse(result["result"]["armed"])
+            self.assertFalse(result["result"]["nor_written_by_host"])
+            self.assertEqual(
+                result["result"]["safe_next_action"],
+                "boot-camera-with-passive-card-to-run-stage1",
+            )
+
+    def test_universal_handoff_parser_requires_stock_result_confirmation(self) -> None:
+        parsed = user_cli.build_parser().parse_args(
+            [
+                "universal",
+                "handoff",
+                "--functional-recovery-dir",
+                "functional",
+                "--preserved-readback-dir",
+                "preserved",
+                "--install-set-dir",
+                "install-set",
+                "--universal-public-key",
+                "model.pub",
+                "--provisioning",
+                "provisioning.zip",
+                "--provisioning-data",
+                "provisioning.jffs2",
+                "--authorization-dir",
+                "authorization",
+                "--authorization-public-key",
+                "authorization.pub",
+                "--session-dir",
+                "session",
+                "--whole-device",
+                "/dev/disk9",
+                "--mount-root",
+                "card",
+                "--confirm-stock-uboot-result",
+                "MTD1-MTD2-WRITTEN",
+            ]
+        )
+        self.assertIs(parsed.handler, user_cli._universal_handoff)
+        self.assertEqual(parsed.confirm_stock_uboot_result, "MTD1-MTD2-WRITTEN")
 
     def test_local_build_prepare_defaults_to_two_clean_builds(self) -> None:
         parser = user_cli.build_parser()

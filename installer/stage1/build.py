@@ -81,6 +81,18 @@ SOURCE_BUILT_INIT_IDENTITIES = {
         "491761453de5c8dc9eee17d1cf5775530f683ab5df4ca8894bd910882c51a861"
     ),
 }
+SOURCE_NATIVE_MEDIA_RUNTIME = "source-built-prudynt-stock-vendor-native-media"
+STOCK_VENDOR_IDENTITIES = {
+    "usr/lib/libimp.so": "14b18d23964f18b63cef3a32ca7a6dc7ae8ee6ebb001c646ffa0ace72c2273fe",
+    "usr/lib/libalog.so": "40fd7eb9237772f705a92e9792325f07f0fe022479923f8dc67653cc11450ea1",
+    "usr/lib/libsysutils.so": "befca6166d2e25b749cc9fff4798332f42a2d997b00d4aee713358d803353b79",
+    "usr/lib/libaudioProcess.so": "0f03bee6156b3a570c4af8cc199a53b1302fb4450570a53222107ff498a3ae72",
+}
+SOURCE_NATIVE_MEDIA_PATHS = {
+    "usr/lib/modules/3.10.14__isvp_swan_1.0__/ingenic/tx-isp-t31.ko",
+    "usr/lib/modules/3.10.14__isvp_swan_1.0__/ingenic/sensor_os02g10_t31.ko",
+    "usr/share/sensor/os02g10-t31.bin",
+}
 PRUDYNT_START = b'start-stop-daemon -S -b -m -p "$PIDFILE" -x "$DAEMON"\n'
 PRUDYNT_RING_START = (
     b'PRUDYNT_RAPTOR_RING=1 start-stop-daemon -S -b -m -p "$PIDFILE" '

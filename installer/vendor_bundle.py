@@ -496,7 +496,11 @@ def prepare_vendor_build_site(
     """Materialize only the three validated link/runtime libraries for Buildroot."""
 
     bundle = load_vendor_bundle(vendor_bundle_dir, catalog_path=catalog_path)
-    rootfs_artifacts = tuple(artifact for artifact in bundle.artifacts if artifact.rootfs)
+    rootfs_artifacts = tuple(
+        artifact
+        for artifact in bundle.artifacts
+        if artifact.name in {"libimp.so", "libalog.so", "libsysutils.so"}
+    )
     expected = ("libimp.so", "libalog.so", "libsysutils.so")
     if tuple(artifact.name for artifact in rootfs_artifacts) != expected:
         raise VendorBundleError("vendor build-site closure is incomplete or reordered")

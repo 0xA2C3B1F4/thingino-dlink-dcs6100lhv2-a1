@@ -40,10 +40,13 @@ test -f "$download_cache"
 test -f "$vendor_site/build-site.private.json"
 test -f "$audio_link"
 test ! -L "$audio_link"
-test "$(wc -c <"$audio_link")" -eq 75168
-printf '%s  %s\n' \
-	f892759f47e0296ea175bf4247f661a11381037bafec7800326298d73d0a7273 "$audio_link" \
-	| sha256sum -c -
+audio_link_size=$(wc -c <"$audio_link")
+audio_link_sha=$(sha256sum "$audio_link"); audio_link_sha=${audio_link_sha%% *}
+case "$audio_link_size:$audio_link_sha" in
+	75168:f892759f47e0296ea175bf4247f661a11381037bafec7800326298d73d0a7273) ;;
+	697757:0f03bee6156b3a570c4af8cc199a53b1302fb4450570a53222107ff498a3ae72) ;;
+	*) echo "audioProcess link input is not an accepted A1 identity" >&2; exit 1 ;;
+esac
 test -x "$rust_toolchain/bin/rustc"
 test -f "$rust_source/library/Cargo.toml"
 test -f "$ingenic_toolchain_archive"

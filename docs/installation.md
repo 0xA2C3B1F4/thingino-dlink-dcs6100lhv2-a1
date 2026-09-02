@@ -28,7 +28,7 @@ The finished installation workflow is:
 1. verify the exact model, A1 revision, NOR geometry, and stock source state;
 2. capture and validate that camera's complete duplicate private recovery set;
 3. verify the current read-only mtd0/mtd4/mtd5 same-device binding;
-4. build from pinned public source and owner-acquired private inputs;
+4. build from pinned public source and the owner-acquired stock vendor bundle;
 5. validate every artifact, partition limit, dependency, credential role, and
    manifest;
 6. identify the exact external SD card and preserve unrelated files when the
@@ -113,9 +113,10 @@ thingino-dlink stock-recovery backup-validate \
 
 Stop unless duplicate partition sets, both reconstructed 16 MiB images, and all
 storage readbacks pass. Keep the output private and never substitute another
-camera's backup. The remaining vendor-bundle, protected-readback, media-closure,
-and Raptor inputs must still pass their own documented producers and validators
-before `local-build configure`.
+camera's backup. The vendor bundle and protected readback must pass their own
+documented producers and validators. A private media closure and reviewed
+Raptor artifact are optional advanced inputs, not prerequisites for the
+source-native universal build.
 
 ## UARTless functional-capture alternative
 
@@ -185,7 +186,7 @@ This result may report `functional_recovery_accepted: true` only after duplicate
 reads, both 16 MiB functional reconstructions, mtd1/mtd2 replacement identity,
 the read-only preserved-partition readback, the camera vendor bundle, and all
 storage readbacks pass. The private result contains `vendor/` for
-`local-build configure` and `preserved/` for the later same-device gate.
+`local-build build-universal` and `preserved/` for the later same-device gate.
 It always reports `original_complete_backup_accepted: false`.
 
 Functional recovery is accepted only through explicitly functional-aware CLI
@@ -213,9 +214,8 @@ accepted D-Link kernel/rootfs restoration pair.
 ## Files acquired from the camera
 
 For a stock `DCS-6100LHV2` revision `A1`, the acquisition step mounts mtd3
-read-only and copies `/lib/libimp.so`, `/lib/libalog.so`, and
-`/lib/libsysutils.so`. It also retains `/lib/libaudioProcess.so` when the
-optional catalog identity matches. The installer validates the file names,
+read-only and copies `/lib/libimp.so`, `/lib/libalog.so`,
+`/lib/libsysutils.so`, and `/lib/libaudioProcess.so`. The installer validates the file names,
 sizes, SHA-256 values and MIPS ABI against
 `profiles/dlink-dcs6100lhv2-a1/vendor-closure.json`, then writes the accepted
 metadata to `vendor-bundle.private.json`.
@@ -248,6 +248,9 @@ cameras therefore fails before bootstrap removal and before NOR erase.
 
 The immutable universal root initially has no usable private credential or
 network startup. Private values are not members of the signed universal bundle.
+Create the per-camera configuration with `universal configure`; the command
+accepts Wi-Fi values only through hidden prompts or an inherited secrets file
+descriptor and binds the generated credentials to that recovery session.
 After authorization, Stage 1 commits a read-back stock-mtd3 backup and
 checkpoint, writes and verifies the complete private data overlay, writes the
 system and kernel tail, and writes the final kernel activation eraseblock last.
@@ -259,9 +262,15 @@ The complete physical write declaration is stock-updater mtd1+mtd2, followed by
 Stage-1 final mtd1 and physical mtd3. Physical mtd0/mtd4/mtd5 remain preserved.
 The SD transaction also creates `STOCKM3.BIN` and `STOCKM3.OK` and consumes its
 active selector and camera files. No staging operation may hide any part of
-that declaration. Physical interruption, successful provisioned boot, and
-second-camera acceptance remain open release gates, so no guided universal
-staging command is exposed yet.
+that declaration. The host lifecycle has two explicit SD mutations:
+`universal stage` validates the full tuple and activates the stock updater; after
+that updater reports verified mtd1+mtd2 completion and the powered-off card is
+returned to the host, `universal handoff` revalidates the full tuple and live
+media identity before making the updater inert. Stage 1 requires that handoff
+and will not run while the stock-matching bootstrap remains active. Physical
+interruption, successful provisioned boot, and second-camera acceptance remain
+open release gates. These guided commands do not close those gates or authorize
+an SD-card change without a current user request.
 
 ## Data actions
 
@@ -291,7 +300,9 @@ No mode silently repairs or reformats corrupt JFFS2 data.
   the candidate.
 
 The CLI exposes the implemented development commands through
-`python3 -m installer --help` and `dcs6100-thingino --help`. Their presence does
+`python3 -m installer.user_cli --help`, `thingino-dlink --help`, and
+`dcs6100-thingino --help`. The `python3 -m installer` module is the lower-level
+artifact CLI and does not contain `local-build` or `universal`. Command presence does
 not make an artifact public or authorize a write.
 
 ## Local install set and supported host systems

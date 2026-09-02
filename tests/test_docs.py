@@ -23,11 +23,9 @@ class DocumentationTests(unittest.TestCase):
         build = (docs_root / "docs/build.md").read_text(encoding="utf-8")
         for source in (readme, build):
             self.assertIn("DCS6100_BUILD_ROOT", source)
-            self.assertIn(
-                "thingino-dlink local-build configure\nthingino-dlink local-build build",
-                source,
-            )
-            self.assertIn("thingino-dlink local-build build", source)
+            self.assertIn("thingino-dlink local-build build-universal", source)
+            self.assertIn("thingino-dlink universal configure", source)
+            self.assertIn("thingino-dlink universal handoff", source)
             self.assertNotIn(
                 '--expected-wpa-config "${DCS6100_BUILD_ROOT}-private/expected-wpa.conf"',
                 source,
@@ -35,7 +33,7 @@ class DocumentationTests(unittest.TestCase):
             self.assertNotIn("/path/to/external", source)
         self.assertIn("Windows PowerShell", readme)
         self.assertIn("Linux uses a whole-disk node", readme)
-        self.assertIn("macOS:", readme)
+        self.assertIn("macOS example:", readme)
 
     def test_current_public_markdown_links_pass(self) -> None:
         checked = DOCS.validate()

@@ -286,19 +286,34 @@ def _local_build_build_universal(
     facade: object, arguments: argparse.Namespace
 ) -> dict[str, object]:
     _document = getattr(facade, "_document")
+    Path = getattr(facade, "Path")
     build = getattr(facade, "build_local_universal_install_set")
     resolve = getattr(facade, "resolve_local_build_workspace")
     build_root = resolve(
         build_root=arguments.build_root,
         work_dir=arguments.work_dir,
     )
+    ensure_keypair = getattr(facade, "ensure_ed25519_keypair")
+    signing_key = arguments.signing_key
+    if signing_key is None:
+        signing_key = (
+            build_root.parent
+            / f"{build_root.name}-private"
+            / "model-signing"
+            / "release-ed25519.pem"
+        )
+    keypair = ensure_keypair(
+        signing_key,
+        getattr(arguments, "signing_public_key", None),
+    )
     result = build(
         build_root=build_root,
         vendor_bundle_dir=arguments.vendor_bundle_dir,
         media_closure_dir=arguments.media_closure_dir,
         raptor_rwd_artifact=arguments.raptor_rwd_artifact,
-        signing_key=arguments.signing_key,
+        signing_key=Path(str(keypair["private_key"])),
     )
+    result = {**result, "model_signing": keypair}
     return _document(
         "local-build build-universal",
         ok=True,

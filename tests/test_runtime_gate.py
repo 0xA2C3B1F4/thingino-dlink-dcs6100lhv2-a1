@@ -51,7 +51,7 @@ class RuntimeGateTests(unittest.TestCase):
             with self.assertRaisesRegex(runtime_gate.RuntimeGateError, "1080p color"):
                 runtime_gate.validate_runtime_report(path, bundle)
 
-    def test_audio_process_is_archived_but_requires_observed_runtime_use(self) -> None:
+    def test_audio_process_is_installed_when_runtime_use_is_observed(self) -> None:
         with tempfile.TemporaryDirectory() as directory_name:
             root = Path(directory_name)
             bundle_path, catalog_path, _raws = make_bundle(root)
@@ -66,8 +66,8 @@ class RuntimeGateTests(unittest.TestCase):
 
             self.assertTrue(decision.audio_process_required)
             audio = next(artifact for artifact in bundle.artifacts if artifact.name == "libaudioProcess.so")
-            self.assertFalse(audio.rootfs)
-            self.assertIsNone(audio.destination)
+            self.assertTrue(audio.rootfs)
+            self.assertEqual(audio.destination, "usr/lib/libaudioProcess.so")
 
 
 if __name__ == "__main__":

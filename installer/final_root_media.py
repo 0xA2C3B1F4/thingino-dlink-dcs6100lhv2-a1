@@ -64,16 +64,134 @@ def _install_vendor_bundle(facade: object, root: Path, bundle: VendorBundle) -> 
         "libimp.so",
         "libalog.so",
         "libsysutils.so",
+        "libaudioProcess.so",
     }:
         raise FinalRootError("camera-local vendor library closure is incomplete")
     for artifact in rootfs_artifacts:
         if artifact.destination is None:
             raise FinalRootError("rootfs vendor artifact lacks a destination")
         path = root / artifact.destination
-        if path.is_symlink() or not path.is_file():
+        if path.is_symlink() or (
+            not path.is_file() and artifact.name != "libaudioProcess.so"
+        ):
             raise FinalRootError(f"base root lacks the vendor library destination: {artifact.destination}")
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(artifact.raw)
         path.chmod(0o644)
+
+
+def _record_source_media(
+    facade: object,
+    root: Path,
+    bundle: VendorBundle,
+) -> dict[str, object]:
+    """Bind the public source build and stock vendor runtime without a private closure."""
+
+    FinalRootError = getattr(facade, "FinalRootError")
+    KERNEL_RELEASE = getattr(facade, "KERNEL_RELEASE")
+    NATIVE_MEDIA_PATHS = getattr(facade, "NATIVE_MEDIA_PATHS")
+    hashlib = getattr(facade, "hashlib")
+
+    prudynt_path = root / "usr/bin/prudynt"
+    config_path = root / "etc/prudynt.json"
+    if prudynt_path.is_symlink() or not prudynt_path.is_file():
+        raise FinalRootError("base root lacks its source-built Prudynt")
+    if config_path.is_symlink() or not config_path.is_file():
+        raise FinalRootError("base root lacks its source-built Prudynt configuration")
+
+    source_built_init: list[dict[str, object]] = []
+    for name in ("F01datetime", "S06ircut", "S10daynightd", "S11modules", "S31prudynt"):
+        path = root / "etc/init.d" / name
+        if path.is_symlink() or not path.is_file():
+            raise FinalRootError(f"base root lacks source-built media init: {name}")
+        raw = path.read_bytes()
+        source_built_init.append(
+            {
+                "destination": f"/etc/init.d/{name}",
+                "origin": "pinned-source-build",
+                "path": f"init/{name}",
+                "sha256": hashlib.sha256(raw).hexdigest(),
+                "size": len(raw),
+            }
+        )
+
+    files: list[dict[str, object]] = []
+    config = config_path.read_bytes()
+    config_sha256 = hashlib.sha256(config).hexdigest()
+    files.append(
+        {
+            "destination": "/etc/prudynt.json",
+            "origin": "pinned-source-build",
+            "path": "etc/prudynt.json",
+            "sha256": config_sha256,
+            "size": len(config),
+            "source_sha256": config_sha256,
+        }
+    )
+    for relative in NATIVE_MEDIA_PATHS:
+        path = root / relative
+        if path.is_symlink() or not path.is_file():
+            raise FinalRootError(f"base root lacks Thingino native media input: {relative}")
+        raw = path.read_bytes()
+        files.append(
+            {
+                "destination": "/" + relative,
+                "origin": "pinned-source-build",
+                "path": relative,
+                "sha256": hashlib.sha256(raw).hexdigest(),
+                "size": len(raw),
+            }
+        )
+
+    vendor_names = {
+        "libimp.so",
+        "libalog.so",
+        "libsysutils.so",
+        "libaudioProcess.so",
+    }
+    artifacts = {artifact.name: artifact for artifact in bundle.artifacts}
+    if set(artifacts) != vendor_names:
+        raise FinalRootError("camera-local vendor runtime closure is incomplete")
+    for name in sorted(vendor_names):
+        artifact = artifacts[name]
+        if artifact.destination is None:
+            raise FinalRootError("camera-local vendor runtime lacks a destination")
+        destination = root / artifact.destination
+        if destination.is_symlink() or not destination.is_file():
+            raise FinalRootError(f"camera-local vendor runtime is missing: {name}")
+        raw = destination.read_bytes()
+        if hashlib.sha256(raw).hexdigest() != artifact.sha256:
+            raise FinalRootError(f"camera-local vendor runtime changed: {name}")
+        files.append(
+            {
+                "destination": "/" + artifact.destination,
+                "origin": "camera-read-only-stock-mtd3",
+                "path": f"vendor/{name}",
+                "sha256": artifact.sha256,
+                "size": len(raw),
+            }
+        )
+
+    prudynt = prudynt_path.read_bytes()
+    return {
+        "schema_version": 4,
+        "target": "DCS-6100LHV2-A1",
+        "runtime": "source-built-prudynt-stock-vendor-native-media",
+        "prudynt": {
+            "origin": "pinned-source-build",
+            "sha256": hashlib.sha256(prudynt).hexdigest(),
+            "size": len(prudynt),
+        },
+        "source_built_init": source_built_init,
+        "startup_order": ["S06ircut", "S10daynightd", "S11modules", "S31prudynt"],
+        "runtime_dlopen": ["libaudioProcess.so"],
+        "runtime_config_sha256": config_sha256,
+        "runtime_config_source_sha256": config_sha256,
+        "vendor_bundle_sha256": bundle.bundle_sha256,
+        "vendor_manifest_sha256": bundle.manifest_sha256,
+        "kernel_release": KERNEL_RELEASE,
+        "files": files,
+    }
 
 def _install_media_closure(facade: object,
     root: Path,

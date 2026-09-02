@@ -50,6 +50,7 @@ class FinalRootTests(unittest.TestCase):
                 ("libimp.so", b"\x7fELFcamera-1.1.4\0"),
                 ("libalog.so", b"\x7fELFcamera-alog"),
                 ("libsysutils.so", b"\x7fELFcamera-sysutils"),
+                ("libaudioProcess.so", b"\x7fELFcamera-audio-process"),
             )
         )
         return VendorBundle(
@@ -906,6 +907,76 @@ class FinalRootTests(unittest.TestCase):
                     ).iterdir()
                 },
                 {Path(path).name for path in final_root.UNIVERSAL_DISABLED_INIT},
+            )
+
+    def test_source_native_media_provenance_binds_build_and_stock_inputs(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            root = Path(directory_name)
+            files = {
+                "usr/bin/prudynt": b"source-prudynt",
+                "etc/prudynt.json": b'{"rtsp":{}}\n',
+                "etc/init.d/F01datetime": b"datetime",
+                "etc/init.d/S06ircut": b"ircut",
+                "etc/init.d/S10daynightd": b"daynight",
+                "etc/init.d/S11modules": b"modules",
+                "etc/init.d/S31prudynt": b"prudynt-init",
+                **{
+                    relative: relative.encode("ascii")
+                    for relative in final_root.NATIVE_MEDIA_PATHS
+                },
+            }
+            vendor_raw = {
+                "libimp.so": b"stock-imp",
+                "libalog.so": b"stock-alog",
+                "libsysutils.so": b"stock-sysutils",
+                "libaudioProcess.so": b"stock-audio",
+            }
+            for name, raw in vendor_raw.items():
+                files[f"usr/lib/{name}"] = raw
+            for relative, raw in files.items():
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(raw)
+            bundle = VendorBundle(
+                artifacts=tuple(
+                    VendorArtifact(
+                        name=name,
+                        destination=f"usr/lib/{name}",
+                        source_path=f"lib/{name}",
+                        raw=raw,
+                        sha256=hashlib.sha256(raw).hexdigest(),
+                        elf=ElfMetadata(flags=0x70001007, needed=(), soname=name),
+                        rootfs=True,
+                    )
+                    for name, raw in vendor_raw.items()
+                ),
+                bundle_sha256="b" * 64,
+                firmware_version="1.02.02",
+                manifest_sha256="c" * 64,
+            )
+
+            provenance = final_root._record_source_media(root, bundle)
+
+            self.assertEqual(
+                provenance["runtime"],
+                "source-built-prudynt-stock-vendor-native-media",
+            )
+            self.assertEqual(provenance["vendor_bundle_sha256"], "b" * 64)
+            origins = {
+                entry["destination"]: entry["origin"]
+                for entry in provenance["files"]
+            }
+            self.assertEqual(
+                origins["/usr/lib/libaudioProcess.so"],
+                "camera-read-only-stock-mtd3",
+            )
+            self.assertEqual(
+                origins["/usr/share/sensor/os02g10-t31.bin"],
+                "pinned-source-build",
+            )
+            self.assertEqual(
+                provenance["runtime_config_source_sha256"],
+                provenance["runtime_config_sha256"],
             )
 
     def test_runtime_gate_requires_glibc_imp114_and_normal_hardware_osd(self) -> None:

@@ -12,7 +12,7 @@ from installer.collector.build import CollectorBuildError
 
 
 class CollectorBuildTests(unittest.TestCase):
-    def test_contract_binds_module_catalog_and_both_manifest_closures(self) -> None:
+    def test_contract_binds_module_and_exact_vendor_manifest(self) -> None:
         module = b"reviewed-mmc-module"
         contract = build.render_contract(mmc_module=module).decode("ascii")
         self.assertIn(f"#define MMC_MODULE_SIZE {len(module)}U", contract)
@@ -24,8 +24,8 @@ class CollectorBuildTests(unittest.TestCase):
             ("LIBAUDIOPROCESS", 697_757),
         ):
             self.assertIn(f"#define {symbol}_SIZE {size}U", contract)
-        self.assertIn("VENDOR_MANIFEST_REQUIRED_JSON", contract)
-        self.assertIn("VENDOR_MANIFEST_OPTIONAL_JSON", contract)
+        self.assertIn("VENDOR_MANIFEST_JSON", contract)
+        self.assertNotIn("VENDOR_MANIFEST_OPTIONAL_JSON", contract)
         self.assertIn("DEVICE_LAYOUT_JSON", contract)
         self.assertNotIn("mtd5.bin", contract)
 
@@ -129,7 +129,7 @@ class CollectorBuildTests(unittest.TestCase):
     def test_completion_record_does_not_disclose_preserved_hashes(self) -> None:
         source = build.SOURCE.read_text(encoding="utf-8")
         records = []
-        for audio in ("true", "false"):
+        for audio in ("true",):
             prefix = f'"{{\\"audio_process_archived\\":{audio}'
             start = source.index(prefix) + 1
             end = source.index('\\n"', start) + 2

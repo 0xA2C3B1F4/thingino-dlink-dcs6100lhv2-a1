@@ -599,7 +599,6 @@ static void load_mmc_and_mount_card(void)
 #if !FULL_BACKUP_CAPTURE && !FUNCTIONAL_CAPTURE && !PROTECTED_CAPTURE
 static void collect_existing_recovery_preflight(void)
 {
-    int audio_present;
     load_mmc_and_mount_card();
     make_new_directory(OUTPUT_ROOT, 0700);
     make_new_directory(VENDOR_ROOT, 0700);
@@ -629,29 +628,17 @@ static void collect_existing_recovery_preflight(void)
     copy_vendor_file(
         "/stock/lib/libsysutils.so", VENDOR_FILES "/libsysutils.so",
         LIBSYSUTILS_SIZE, LIBSYSUTILS_SHA256, 1);
-    audio_present = copy_vendor_file(
+    copy_vendor_file(
         "/stock/lib/libaudioProcess.so", VENDOR_FILES "/libaudioProcess.so",
-        LIBAUDIOPROCESS_SIZE, LIBAUDIOPROCESS_SHA256, 0);
-    if (audio_present)
-        write_new_file(
-            VENDOR_ROOT "/vendor-bundle.private.json",
-            VENDOR_MANIFEST_OPTIONAL_JSON,
-            sizeof(VENDOR_MANIFEST_OPTIONAL_JSON) - 1);
-    else
-        write_new_file(
-            VENDOR_ROOT "/vendor-bundle.private.json",
-            VENDOR_MANIFEST_REQUIRED_JSON,
-            sizeof(VENDOR_MANIFEST_REQUIRED_JSON) - 1);
-    if (audio_present)
-        write_new_file(
-            OUTPUT_ROOT "/COLLECT.OK",
-            "{\"audio_process_archived\":true,\"mode\":\"existing-verified-same-device-pair\",\"nor_writes\":false,\"schema_version\":1}\n",
-            sizeof("{\"audio_process_archived\":true,\"mode\":\"existing-verified-same-device-pair\",\"nor_writes\":false,\"schema_version\":1}\n") - 1);
-    else
-        write_new_file(
-            OUTPUT_ROOT "/COLLECT.OK",
-            "{\"audio_process_archived\":false,\"mode\":\"existing-verified-same-device-pair\",\"nor_writes\":false,\"schema_version\":1}\n",
-            sizeof("{\"audio_process_archived\":false,\"mode\":\"existing-verified-same-device-pair\",\"nor_writes\":false,\"schema_version\":1}\n") - 1);
+        LIBAUDIOPROCESS_SIZE, LIBAUDIOPROCESS_SHA256, 1);
+    write_new_file(
+        VENDOR_ROOT "/vendor-bundle.private.json",
+        VENDOR_MANIFEST_JSON,
+        sizeof(VENDOR_MANIFEST_JSON) - 1);
+    write_new_file(
+        OUTPUT_ROOT "/COLLECT.OK",
+        "{\"audio_process_archived\":true,\"mode\":\"existing-verified-same-device-pair\",\"nor_writes\":false,\"schema_version\":1}\n",
+        sizeof("{\"audio_process_archived\":true,\"mode\":\"existing-verified-same-device-pair\",\"nor_writes\":false,\"schema_version\":1}\n") - 1);
     if (call1(SYSCALL_SYNC, 0) != 0)
         FAIL("COLLECT FAIL final_sync\n");
     EMIT("COLLECT COMPLETE host_validation_required\n");
@@ -691,7 +678,6 @@ static void capture_protected_readback(void)
 static void capture_complete_backup(void)
 {
 #if FUNCTIONAL_CAPTURE
-    int audio_present;
 #endif
     load_mmc_and_mount_card();
     make_new_directory(FULL_BACKUP_ROOT, 0700);
@@ -741,19 +727,13 @@ static void capture_complete_backup(void)
     copy_vendor_file(
         "/stock/lib/libsysutils.so", VENDOR_FILES "/libsysutils.so",
         LIBSYSUTILS_SIZE, LIBSYSUTILS_SHA256, 1);
-    audio_present = copy_vendor_file(
+    copy_vendor_file(
         "/stock/lib/libaudioProcess.so", VENDOR_FILES "/libaudioProcess.so",
-        LIBAUDIOPROCESS_SIZE, LIBAUDIOPROCESS_SHA256, 0);
-    if (audio_present)
-        write_new_file(
-            VENDOR_ROOT "/vendor-bundle.private.json",
-            VENDOR_MANIFEST_OPTIONAL_JSON,
-            sizeof(VENDOR_MANIFEST_OPTIONAL_JSON) - 1);
-    else
-        write_new_file(
-            VENDOR_ROOT "/vendor-bundle.private.json",
-            VENDOR_MANIFEST_REQUIRED_JSON,
-            sizeof(VENDOR_MANIFEST_REQUIRED_JSON) - 1);
+        LIBAUDIOPROCESS_SIZE, LIBAUDIOPROCESS_SHA256, 1);
+    write_new_file(
+        VENDOR_ROOT "/vendor-bundle.private.json",
+        VENDOR_MANIFEST_JSON,
+        sizeof(VENDOR_MANIFEST_JSON) - 1);
 
     write_new_file(
         FULL_BACKUP_ROOT "/device-layout.private.json",

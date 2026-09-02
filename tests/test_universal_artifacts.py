@@ -33,6 +33,7 @@ from installer.universal_install import (
     AUTHORIZATION_CARD_NAME,
     AUTHORIZATION_SIGNATURE_CARD_NAME,
     PROVISIONING_CARD_NAME,
+    handoff_camera_bound_universal_install,
     stage_camera_bound_universal_install,
 )
 
@@ -420,6 +421,106 @@ class UniversalArtifactTests(unittest.TestCase):
                 AUTHORIZATION_BINARY_CARD_NAME,
             ):
                 self.assertFalse((root / name).exists())
+
+    def test_universal_handoff_verifies_sidecars_and_passivates_bootstrap(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            root = Path(directory_name)
+            authorization = SimpleNamespace(
+                raw_manifest=b"authorization",
+                signature=b"signature",
+                binary=b"binary-authorization",
+            )
+            validated = SimpleNamespace(
+                authorization=authorization,
+                provisioning_data=b"private-provisioning-data",
+                bootstrap=b"bootstrap",
+                stage2=SimpleNamespace(raw=b"stage2"),
+                manifest=b"manifest",
+            )
+            payloads = {
+                PROVISIONING_CARD_NAME: validated.provisioning_data,
+                AUTHORIZATION_CARD_NAME: authorization.raw_manifest,
+                AUTHORIZATION_SIGNATURE_CARD_NAME: authorization.signature,
+                AUTHORIZATION_BINARY_CARD_NAME: authorization.binary,
+            }
+            for name, raw in payloads.items():
+                (root / name).write_bytes(raw)
+            preflight = SimpleNamespace(
+                physical_device="/dev/test-media",
+                mount_root=root.resolve(),
+            )
+            with (
+                mock.patch(
+                    "installer.universal_install.media.validate_sd_root"
+                ) as validate_root,
+                mock.patch(
+                    "installer.universal_install.media.deactivate_staged_install_set",
+                    return_value={"STAGE1.PKG": "a" * 64},
+                ) as deactivate,
+            ):
+                result = handoff_camera_bound_universal_install(
+                    validated,
+                    root=root,
+                    preflight=preflight,
+                    confirmed_physical_device="/dev/test-media",
+                )
+            validate_root.assert_called_once_with(
+                root,
+                allowed_matching_filename="DCS6100LHV2Ax_FW000B00_THINGINO_SD.bin",
+            )
+            deactivate.assert_called_once_with(
+                bootstrap_bytes=b"bootstrap",
+                stage2_bytes=b"stage2",
+                manifest_bytes=b"manifest",
+                root=root,
+                bootstrap_name="DCS6100LHV2Ax_FW000B00_THINGINO_SD.bin",
+                preflight=preflight,
+                confirmed_physical_device="/dev/test-media",
+            )
+            self.assertEqual(result["STAGE1.PKG"], "a" * 64)
+            for name, raw in payloads.items():
+                self.assertEqual(result[name], hashlib.sha256(raw).hexdigest())
+
+    def test_universal_handoff_rejects_tampered_camera_sidecar_before_passivation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            root = Path(directory_name)
+            authorization = SimpleNamespace(
+                raw_manifest=b"authorization",
+                signature=b"signature",
+                binary=b"binary-authorization",
+            )
+            validated = SimpleNamespace(
+                authorization=authorization,
+                provisioning_data=b"private-provisioning-data",
+                bootstrap=b"bootstrap",
+                stage2=SimpleNamespace(raw=b"stage2"),
+                manifest=b"manifest",
+            )
+            (root / PROVISIONING_CARD_NAME).write_bytes(b"tampered")
+            for name, raw in {
+                AUTHORIZATION_CARD_NAME: authorization.raw_manifest,
+                AUTHORIZATION_SIGNATURE_CARD_NAME: authorization.signature,
+                AUTHORIZATION_BINARY_CARD_NAME: authorization.binary,
+            }.items():
+                (root / name).write_bytes(raw)
+            preflight = SimpleNamespace(
+                physical_device="/dev/test-media",
+                mount_root=root.resolve(),
+            )
+            with (
+                mock.patch("installer.universal_install.media.validate_sd_root"),
+                mock.patch(
+                    "installer.universal_install.media.deactivate_staged_install_set"
+                ) as deactivate,
+                self.assertRaisesRegex(ValueError, "sidecar differs at handoff"),
+            ):
+                handoff_camera_bound_universal_install(
+                    validated,
+                    root=root,
+                    preflight=preflight,
+                    confirmed_physical_device="/dev/test-media",
+                )
+            deactivate.assert_not_called()
 
     def test_provisioning_data_requires_private_single_link_file(self) -> None:
         with tempfile.TemporaryDirectory() as directory_name:

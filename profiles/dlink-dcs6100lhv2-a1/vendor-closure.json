@@ -63,15 +63,15 @@
       "source_path": "lib/libsysutils.so"
     },
     {
-      "destination": null,
+      "destination": "usr/lib/libaudioProcess.so",
       "elf": {
         "flags": "0x70001007",
         "needed": ["libstdc++.so.6", "libm.so.6", "libgcc_s.so.1", "libc.so.6"],
         "soname": "libaudioProcess.so"
       },
       "name": "libaudioProcess.so",
-      "required": false,
-      "rootfs": false,
+      "required": true,
+      "rootfs": true,
       "sha256": "0f03bee6156b3a570c4af8cc199a53b1302fb4450570a53222107ff498a3ae72",
       "size": 697757,
       "source_path": "lib/libaudioProcess.so"

@@ -177,23 +177,31 @@ are private recovery inputs, not public firmware artifacts.
 ## Build one reusable A1 firmware
 
 The model-universal path is separate from the older personalized configure
-path. It accepts only model inputs and one stable model signing key:
+path. The default profile accepts public source plus the four catalog-locked
+stock libraries acquired read-only from the owner's matching camera:
 
 ```bash
 thingino-dlink local-build build-universal \
   --build-root /path/to/two-build-workspace \
-  --vendor-bundle-dir /private/model/vendor-bundle \
-  --media-closure-dir /private/model/media-closure \
-  --raptor-rwd-artifact /private/model/raptor-rwd.tar.gz \
-  --signing-key /private/model/release-ed25519.pem
+  --vendor-bundle-dir /private/model/vendor-bundle
 ```
 
-The vendor and media directories are private because redistribution is not yet
-cleared, but their public catalogs fix the accepted runtime bytes. A second
-camera acquisition may be used as compatibility evidence only; it must
-normalize to the same catalog identities and must not select different model
-bytes. The signing key is also a model input: changing it intentionally changes
-the signed bundle.
+The vendor directory is private because redistribution is not cleared, but its
+public catalog fixes the accepted runtime bytes. It is camera-acquired data, not
+a private source repository. A second camera acquisition may be used as
+compatibility evidence only; it must normalize to the same catalog identities
+and must not select different model bytes. When `--signing-key` is omitted, the
+command creates or reuses one stable Ed25519 key pair beneath the build root's
+adjacent private directory and reports both paths and the public key identity.
+Changing that key intentionally changes the signed bundle.
+
+The default `source-built-prudynt-stock-vendor-native-media` profile uses the
+source-built Prudynt, init, kernel modules, and IQ files together with the exact
+stock vendor libraries. It provides RTSP and MJPEG without requiring the legacy
+private media closure. `--media-closure-dir` selects the older accepted closure,
+and `--raptor-rwd-artifact` adds the separately reviewed WebRTC component. Both
+are optional advanced inputs, and neither may be synthesized or fetched from a
+private repository.
 
 The command has no arguments for camera recovery, WPA, recovery session,
 management credential, API key, hostname, or SSH identity. It creates a
@@ -202,8 +210,18 @@ member. The immutable system has a locked root account, no private Wi-Fi/API/
 SSH files, and non-executable network-facing startup scripts. Two clean builds
 must remain byte-identical.
 
-For each camera, create separate audit, data, and authorization artifacts after
-its own recovery boundary passes. On macOS the repository wrapper executes the
+For each camera, first create the private configuration and local authorization
+signer from its recovery session. Wi-Fi values are requested twice with hidden
+input and never accepted as command-line values:
+
+```bash
+thingino-dlink universal configure \
+  --session-dir /private/camera/recovery-session \
+  --output-dir /private/camera/install-config
+```
+
+Then create separate audit, data, and authorization artifacts after that
+camera's recovery boundary passes. On macOS the repository wrapper executes the
 locked builder image offline; Linux may instead supply its reviewed regular
 `mkfs.jffs2` binary directly:
 
@@ -216,7 +234,7 @@ thingino-dlink universal provision \
   --universal-public-key /model/release.pub \
   --private-config-dir /private/camera/install-config \
   --session-dir /private/camera/recovery-session \
-  --signing-key /private/camera/authorization.pem \
+  --signing-key /private/camera/authorization-signing/ed25519.pem \
   --unsquashfs /path/to/unsquashfs \
   --mkfs-jffs2 ./scripts/run_container_mkfs_jffs2.sh \
   --output /private/camera/provisioning.private.zip \
@@ -229,9 +247,9 @@ thingino-dlink universal authorize \
   --universal-public-key /model/release.pub \
   --provisioning /private/camera/provisioning.private.zip \
   --provisioning-data /private/camera/provisioning.data.jffs2 \
-  --provisioning-public-key /private/camera/authorization.pub \
+  --provisioning-public-key /private/camera/authorization-signing/ed25519.pub \
   --session-dir /private/camera/recovery-session \
-  --signing-key /private/camera/authorization.pem \
+  --signing-key /private/camera/authorization-signing/ed25519.pem \
   --output-dir /private/camera/authorization
 ```
 
@@ -246,10 +264,62 @@ validated, never-written mtd0/mtd4/mtd5 contents. Neither per-camera artifact
 is a compiler input, so two cameras reference the same universal firmware
 SHA-256.
 
-Physical provisioning write/readback and interruption acceptance are still
-blocked release gates. Consequently no guided staging command exposes this new
-path yet. Host artifact success must not be interpreted as installation
-support.
+After those artifacts validate, the guided stager can prepare only the exact
+confirmed removable device. It declares the complete future physical write set
+and writes no NOR itself:
+
+```bash
+thingino-dlink universal stage \
+  --functional-recovery-dir /private/camera/functional-recovery \
+  --preserved-readback-dir /private/camera/functional-recovery/preserved \
+  --install-set-dir /model/install-set \
+  --universal-public-key /model/release-ed25519.pub \
+  --provisioning /private/camera/provisioning.private.zip \
+  --provisioning-data /private/camera/provisioning.data.jffs2 \
+  --authorization-dir /private/camera/authorization \
+  --authorization-public-key /private/camera/authorization-signing/ed25519.pub \
+  --session-dir /private/camera/recovery-session \
+  --whole-device /dev/diskN \
+  --mount-root /path/to/mounted-card \
+  --confirm-physical-device /dev/diskN \
+  --confirm-target DCS-6100LHV2-A1 \
+  --confirm-write-set STOCK-MTD1-MTD2-THEN-FINAL-MTD1-MTD3
+```
+
+Boot that card once only after reviewing the command result. The stock updater
+must write and read back mtd1+mtd2, then stop. Power the camera off, return the
+same card to the host, and passivate its stock-matching selector. Handoff
+revalidates the same firmware, camera, recovery, provisioning, authorization,
+session, and live-media identities before renaming the exact bootstrap:
+
+```bash
+thingino-dlink universal handoff \
+  --functional-recovery-dir /private/camera/functional-recovery \
+  --preserved-readback-dir /private/camera/functional-recovery/preserved \
+  --install-set-dir /model/install-set \
+  --universal-public-key /model/release-ed25519.pub \
+  --provisioning /private/camera/provisioning.private.zip \
+  --provisioning-data /private/camera/provisioning.data.jffs2 \
+  --authorization-dir /private/camera/authorization \
+  --authorization-public-key /private/camera/authorization-signing/ed25519.pub \
+  --session-dir /private/camera/recovery-session \
+  --whole-device /dev/diskN \
+  --mount-root /path/to/mounted-card \
+  --confirm-physical-device /dev/diskN \
+  --confirm-target DCS-6100LHV2-A1 \
+  --confirm-stock-uboot-result MTD1-MTD2-WRITTEN
+```
+
+The result must report `armed: false` and
+`safe_next_action: boot-camera-with-passive-card-to-run-stage1`. Only then can
+the next boot enter Stage 1 and its separately authorized final mtd1+mtd3 phase.
+This host handoff writes no NOR.
+
+Physical provisioning write/readback, interruption, and second-camera
+acceptance are still open release gates. The command is therefore a gated
+development workflow, not proof of a supported public firmware release. It
+requires current authorization to modify the SD card and does not itself write
+the camera or NOR.
 
 ## Legacy personalized configure inputs
 
@@ -339,9 +409,9 @@ checks every profile input hash, and applies the ordered patches offline.
 
 The legacy personalized build also needs:
 
-- `/lib/libimp.so`, `/lib/libalog.so`, and `/lib/libsysutils.so` acquired from
-  the owner's matching DCS-6100LHV2 A1 stock mtd3;
-- optional `/lib/libaudioProcess.so` when its catalog identity matches;
+- `/lib/libimp.so`, `/lib/libalog.so`, `/lib/libsysutils.so`, and
+  `/lib/libaudioProcess.so` acquired from the owner's matching DCS-6100LHV2 A1
+  stock mtd3;
 - the separately validated media closure required by the selected profile;
 - unique local WebUI, RTSP, ONVIF, Wi-Fi, API, and SSH credentials;
 - the pinned Rust 1.95.0 source and host toolchain;
@@ -377,28 +447,28 @@ network-free after the source, toolchains, package cache, and local vendor build
 site are ready. The container builds the Rust Control service and the static
 WebUI from their locked source inputs.
 
-## Final Raptor overlay
+## Optional Raptor overlay
 
-`prepare-final-root` produces the accepted private base root. It is not the
-final firmware candidate for the current WebRTC profile. Before split-kernel
-or stage-1 packaging, run `components/raptor-rwd/build_persistent.py` with the
-accepted base root and provenance, the source-built Raptor artifact, its exact
-digest, and `--static-rwd-tls --split-mtd3`.
+`prepare-final-root` produces the source-native RTSP/MJPEG base root. To build
+the optional WebRTC profile, run `components/raptor-rwd/build_persistent.py`
+before split-kernel or stage-1 packaging with the accepted base root and
+provenance, the source-built Raptor artifact, its exact digest, and
+`--static-rwd-tls --split-mtd3`.
 
 The overlay must install `usr/bin/rwd`, `etc/init.d/S96rwd`, and
 `etc/raptor.conf`; retain the bounded static DTLS-SRTP closure; switch Prudynt
 to the lifecycle-safe RSS publisher; and record the source-bound
 `raptor_rwd.source_provenance_sha256`. The overlay audit and final stage-1
-validator must both pass. A base root without these files and provenance is
-not a firmware or final-root candidate.
+validator must both pass for the WebRTC profile. Their absence is valid only
+when the manifest records the source-native base profile and no Raptor overlay.
 
 ## Output gates
 
 A build manifest must bind every input and output hash, size, effective
-configuration, source revision, toolchain, and Raptor source provenance. The
-image validators enforce the fixed kernel, bootstrap, system, data, and
-partition limits plus the `rwd` service, configuration, library isolation, and
-Prudynt RSS-publisher closure.
+configuration, source revision, toolchain, and selected media profile. When
+Raptor is selected, it must also bind the Raptor source provenance and the image
+validators enforce its service, configuration, library isolation, and Prudynt
+RSS-publisher closure.
 
 Two isolated clean builds must produce byte-identical release components and
 normalized inventories. A successful compile is still not an installable

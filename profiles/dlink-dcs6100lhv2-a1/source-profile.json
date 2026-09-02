@@ -756,7 +756,7 @@
       "source": "patches/thingino/0001-dlink-first-release-baseline.patch"
     },
     {
-      "sha256": "722ebb9371ae8367116ebd7e6c3176e6334d5b6e12142a61cdd05d0b45f7c13c",
+      "sha256": "1620ef8d0d1c5300ee78cc61f84f6fc02af53ac993ec39d051f737c05e93f5df",
       "source": "patches/thingino/0002-dlink-glibc-imp114.patch"
     },
     {

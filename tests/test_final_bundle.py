@@ -14,6 +14,7 @@ from installer.final_bundle import (
     build_final_bundle,
     build_universal_final_bundle,
     derive_final_layout,
+    ensure_ed25519_keypair,
     final_kernel_command_line,
     final_bundle_images,
     render_final_kernel_fragment,
@@ -72,6 +73,31 @@ class FinalBundleTests(unittest.TestCase):
             stderr=subprocess.DEVNULL,
         )
         return private_key, public_key
+
+    def test_ensure_keypair_creates_and_reuses_one_stable_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            directory = Path(directory_name) / "private"
+            private_key = directory / "release.pem"
+            public_key = directory / "release.pub"
+            first = ensure_ed25519_keypair(private_key, public_key)
+            second = ensure_ed25519_keypair(private_key, public_key)
+            self.assertTrue(first["created"])
+            self.assertFalse(second["created"])
+            self.assertEqual(first["key_id"], second["key_id"])
+            self.assertEqual(private_key.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(public_key.stat().st_mode & 0o777, 0o644)
+
+    def test_ensure_keypair_rejects_a_different_existing_public_key(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            directory = Path(directory_name)
+            private_key, _ = self._keys(directory)
+            other = directory / "other"
+            other.mkdir(mode=0o700)
+            _, other_public = self._keys(other)
+            public_key = directory / "public.pem"
+            public_key.write_bytes(other_public.read_bytes())
+            with self.assertRaisesRegex(BundleError, "differs"):
+                ensure_ed25519_keypair(private_key, public_key)
 
     def test_signed_bundle_round_trip_and_layout(self) -> None:
         with tempfile.TemporaryDirectory() as directory_name:

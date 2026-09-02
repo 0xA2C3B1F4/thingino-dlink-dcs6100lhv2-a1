@@ -179,6 +179,9 @@ def validate_final_root(facade: object,
     Path = getattr(facade, 'Path')
     SOURCE_BUILT_INIT_IDENTITIES = getattr(facade, 'SOURCE_BUILT_INIT_IDENTITIES')
     SOURCE_BUILT_PRUDYNT_MARKERS = getattr(facade, 'SOURCE_BUILT_PRUDYNT_MARKERS')
+    SOURCE_NATIVE_MEDIA_PATHS = getattr(facade, 'SOURCE_NATIVE_MEDIA_PATHS')
+    SOURCE_NATIVE_MEDIA_RUNTIME = getattr(facade, 'SOURCE_NATIVE_MEDIA_RUNTIME')
+    STOCK_VENDOR_IDENTITIES = getattr(facade, 'STOCK_VENDOR_IDENTITIES')
     Stage1BuildError = getattr(facade, 'Stage1BuildError')
     _listing_modes = getattr(facade, '_listing_modes')
     _listing_paths = getattr(facade, '_listing_paths')
@@ -217,7 +220,7 @@ def validate_final_root(facade: object,
                 f"final root extraction of {path}",
             )
 
-        exact_media = {
+        legacy_exact_media = {
             "usr/lib/ld.so.1": "lib/ld.so.1",
             "usr/lib/libimp.so": "lib/libimp.so",
             "usr/lib/libalog.so": "lib/libalog.so",
@@ -227,15 +230,56 @@ def validate_final_root(facade: object,
             "usr/lib/modules/3.10.14__isvp_swan_1.0__/ingenic/sensor_os02g10_t31.ko": "modules/sensor_os02g10_t31.ko",
             "usr/share/sensor/os02g10-t31.bin": "sensor/os02g10-t31.bin",
         }
-        for final_path, closure_path in exact_media.items():
-            if hashlib.sha256(extract(final_path)).hexdigest() != PROVEN_IDENTITIES[closure_path]:
-                raise Stage1BuildError(f"final root changed C1 media identity: {final_path}")
         prudynt_config = extract("etc/prudynt.json")
         try:
             provenance = json.loads(extract("etc/dlink-media-closure.private.json"))
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise Stage1BuildError("final media provenance is invalid JSON") from exc
         raptor_rwd = _valid_raptor_rwd_provenance(provenance.get("raptor_rwd"))
+        source_native = (
+            provenance.get("runtime") == SOURCE_NATIVE_MEDIA_RUNTIME
+            or provenance.get("media_base_runtime") == SOURCE_NATIVE_MEDIA_RUNTIME
+        )
+        if source_native:
+            entries = provenance.get("files")
+            if not isinstance(entries, list):
+                raise Stage1BuildError("source-native media provenance lacks files")
+            by_destination = {
+                str(entry.get("destination", "")).removeprefix("/"): entry
+                for entry in entries
+                if isinstance(entry, dict)
+            }
+            required = set(STOCK_VENDOR_IDENTITIES) | set(SOURCE_NATIVE_MEDIA_PATHS)
+            if not required.issubset(by_destination):
+                raise Stage1BuildError("source-native media provenance is incomplete")
+            for final_path in sorted(required):
+                raw = extract(final_path)
+                digest = hashlib.sha256(raw).hexdigest()
+                entry = by_destination[final_path]
+                if entry.get("sha256") != digest or entry.get("size") != len(raw):
+                    raise Stage1BuildError(
+                        f"source-native media provenance changed: {final_path}"
+                    )
+                if final_path in STOCK_VENDOR_IDENTITIES:
+                    if digest != STOCK_VENDOR_IDENTITIES[final_path] or entry.get(
+                        "origin"
+                    ) != "camera-read-only-stock-mtd3":
+                        raise Stage1BuildError(
+                            f"stock vendor media identity changed: {final_path}"
+                        )
+                elif entry.get("origin") != "pinned-source-build":
+                    raise Stage1BuildError(
+                        f"source-built native media origin changed: {final_path}"
+                    )
+        else:
+            for final_path, closure_path in legacy_exact_media.items():
+                if (
+                    hashlib.sha256(extract(final_path)).hexdigest()
+                    != PROVEN_IDENTITIES[closure_path]
+                ):
+                    raise Stage1BuildError(
+                        f"final root changed C1 media identity: {final_path}"
+                    )
         source_init_raw = {
             path: extract(path) for path in SOURCE_BUILT_INIT_IDENTITIES
         }
@@ -278,7 +322,11 @@ def validate_final_root(facade: object,
         expected_runtime = (
             "source-built-prudynt-with-rss-publisher"
             if raptor_rwd
-            else "source-built-prudynt-global-glibc-c1-closure"
+            else (
+                SOURCE_NATIVE_MEDIA_RUNTIME
+                if source_native
+                else "source-built-prudynt-global-glibc-c1-closure"
+            )
         )
         expected_origin = (
             "pinned-source-build-with-rss-publisher"
@@ -324,22 +372,25 @@ def validate_final_root(facade: object,
                 if raptor_rwd and path == "etc/init.d/S31prudynt"
                 else "pinned-source-build"
             )
-            if (
-                not isinstance(entry, dict)
-                or entry.get("origin") != expected_init_origin
-                or entry.get("path") != closure_path
-                or entry.get("reference_sha256")
-                != PROVEN_IDENTITIES[closure_path]
-                or entry.get("sha256") != hashlib.sha256(raw).hexdigest()
-                or entry.get("size") != len(raw)
-            ):
+            if source_native:
+                init_valid = (
+                    isinstance(entry, dict)
+                    and entry.get("origin") == expected_init_origin
+                    and entry.get("path") == closure_path
+                    and entry.get("sha256") == hashlib.sha256(raw).hexdigest()
+                    and entry.get("size") == len(raw)
+                )
+            else:
+                init_valid = (
+                    isinstance(entry, dict)
+                    and entry.get("origin") == expected_init_origin
+                    and entry.get("path") == closure_path
+                    and entry.get("reference_sha256") == PROVEN_IDENTITIES[closure_path]
+                    and entry.get("sha256") == hashlib.sha256(raw).hexdigest()
+                    and entry.get("size") == len(raw)
+                )
+            if not init_valid:
                 raise Stage1BuildError("final source-built init provenance changed")
-        source_hash = PROVEN_IDENTITIES["etc/prudynt.json"]
-        if (
-            provenance.get("runtime_config_source_sha256") != source_hash
-            or provenance.get("runtime_config_sha256") != runtime_hash
-        ):
-            raise Stage1BuildError("final Prudynt configuration provenance changed")
         runtime_entries = [
             entry
             for entry in provenance.get("files", [])
@@ -348,6 +399,18 @@ def validate_final_root(facade: object,
         if len(runtime_entries) != 1:
             raise Stage1BuildError("final Prudynt configuration file provenance changed")
         runtime_entry = runtime_entries[0]
+        source_hash = (
+            runtime_entry.get("source_sha256")
+            if source_native
+            else PROVEN_IDENTITIES["etc/prudynt.json"]
+        )
+        if not isinstance(source_hash, str):
+            raise Stage1BuildError("final Prudynt configuration source is invalid")
+        if (
+            provenance.get("runtime_config_source_sha256") != source_hash
+            or provenance.get("runtime_config_sha256") != runtime_hash
+        ):
+            raise Stage1BuildError("final Prudynt configuration provenance changed")
         if (
             runtime_entry.get("source_sha256") != source_hash
             or runtime_entry.get("sha256") != runtime_hash

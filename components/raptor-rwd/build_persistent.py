@@ -379,6 +379,9 @@ def _update_embedded_media_provenance(
             "size": len(init),
         }
     )
+    previous_runtime = document.get("runtime")
+    if previous_runtime == "source-built-prudynt-stock-vendor-native-media":
+        document["media_base_runtime"] = previous_runtime
     document["runtime"] = "source-built-prudynt-with-rss-publisher"
     source_provenance_sha256 = hashlib.sha256(
         json.dumps(source_provenance, sort_keys=True, separators=(",", ":")).encode()

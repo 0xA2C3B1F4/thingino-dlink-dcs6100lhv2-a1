@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import os
 import subprocess
 import tempfile
 import zipfile
@@ -27,6 +28,7 @@ from .mtd3_split import (
     derive_final_layout,
     final_kernel_command_line,
 )
+from .sd_package import atomic_write
 
 
 MAX_FINAL_BUNDLE_SIZE = (
@@ -159,6 +161,70 @@ def _public_key_id(public_key: Path) -> str:
         ["pkey", "-pubin", "-in", str(public_key), "-outform", "DER"]
     )
     return hashlib.sha256(public_der).hexdigest()
+
+
+def ensure_ed25519_keypair(
+    private_key: Path,
+    public_key: Path | None = None,
+) -> dict[str, object]:
+    """Create or validate one stable private Ed25519 signer and public key."""
+
+    private_key = private_key.expanduser()
+    if not private_key.is_absolute():
+        private_key = Path.cwd() / private_key
+    private_key = private_key.resolve(strict=False)
+    public_key = (
+        public_key.expanduser().resolve(strict=False)
+        if public_key is not None
+        else private_key.with_suffix(".pub")
+    )
+    if private_key == public_key:
+        raise BundleError("signing private and public key paths must differ")
+    parent = private_key.parent
+    if parent.exists():
+        if parent.is_symlink() or not parent.is_dir() or parent.stat().st_mode & 0o077:
+            raise BundleError("signing key directory must be private mode 0700")
+    else:
+        parent.mkdir(parents=True, mode=0o700)
+        parent.chmod(0o700)
+    if public_key.parent != parent:
+        raise BundleError("signing public key must share the private key directory")
+
+    created = False
+    if private_key.exists() or private_key.is_symlink():
+        _regular_private_key(private_key)
+    else:
+        if public_key.exists() or public_key.is_symlink():
+            raise BundleError("signing public key exists without its private key")
+        with tempfile.TemporaryDirectory(prefix=".keygen-", dir=parent) as name:
+            temporary = Path(name) / "private.pem"
+            _openssl(
+                ["genpkey", "-algorithm", "ED25519", "-out", str(temporary)]
+            )
+            temporary.chmod(0o600)
+            _regular_private_key(temporary)
+            os.replace(temporary, private_key)
+        created = True
+    private_key.chmod(0o600)
+    public_pem = _openssl(
+        ["pkey", "-in", str(private_key), "-pubout"]
+    )
+    if public_key.exists() or public_key.is_symlink():
+        if public_key.is_symlink() or not public_key.is_file():
+            raise BundleError("signing public key is not a regular file")
+        if public_key.read_bytes() != public_pem:
+            raise BundleError("signing public key differs from its private key")
+    else:
+        atomic_write(public_key, public_pem, mode=0o644)
+    key_id = _public_key_id_from_private(private_key)
+    if _public_key_id(public_key) != key_id:
+        raise BundleError("signing key pair identity differs")
+    return {
+        "created": created,
+        "key_id": key_id,
+        "private_key": str(private_key),
+        "public_key": str(public_key),
+    }
 
 
 def _sign(manifest: bytes, private_key: Path) -> bytes:

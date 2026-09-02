@@ -63,7 +63,7 @@ def _target_document() -> dict[str, object]:
     }
 
 
-def _manifest(catalog: dict[str, object], *, include_optional: bool) -> str:
+def _manifest(catalog: dict[str, object]) -> str:
     source = catalog["source"]
     assert isinstance(source, dict)
     files = catalog["files"]
@@ -71,15 +71,14 @@ def _manifest(catalog: dict[str, object], *, include_optional: bool) -> str:
     selected = []
     for entry in files:
         assert isinstance(entry, dict)
-        if entry["required"] is True or include_optional:
-            selected.append(
-                {
-                    "name": entry["name"],
-                    "sha256": entry["sha256"],
-                    "size": entry["size"],
-                    "source_path": entry["source_path"],
-                }
-            )
+        selected.append(
+            {
+                "name": entry["name"],
+                "sha256": entry["sha256"],
+                "size": entry["size"],
+                "source_path": entry["source_path"],
+            }
+        )
     document = {
         "schema_version": 1,
         "target": catalog["target"],
@@ -115,7 +114,7 @@ def render_contract(
     )
     if tuple(entry.get("name") for entry in files if isinstance(entry, dict)) != expected_names:
         raise CollectorBuildError("collector vendor catalog is reordered or incomplete")
-    if tuple(entry.get("required") for entry in files) != (True, True, True, False):
+    if tuple(entry.get("required") for entry in files) != (True, True, True, True):
         raise CollectorBuildError("collector vendor dispositions changed")
     if any(
         type(entry.get("size")) is not int
@@ -161,8 +160,7 @@ def render_contract(
             f"#define DEVICE_LAYOUT_JSON {_c_string(json.dumps(layout, indent=2, sort_keys=True) + chr(10))}",
             f"#define FULL_BACKUP_LAYOUT_JSON {_c_string(json.dumps(target_layout_document(), indent=2, sort_keys=True) + chr(10))}",
             f"#define FUNCTIONAL_LAYOUT_JSON {_c_string(json.dumps(functional_target_layout_document(), indent=2, sort_keys=True) + chr(10))}",
-            f"#define VENDOR_MANIFEST_REQUIRED_JSON {_c_string(_manifest(catalog, include_optional=False))}",
-            f"#define VENDOR_MANIFEST_OPTIONAL_JSON {_c_string(_manifest(catalog, include_optional=True))}",
+            f"#define VENDOR_MANIFEST_JSON {_c_string(_manifest(catalog))}",
             "#endif",
             "",
         )

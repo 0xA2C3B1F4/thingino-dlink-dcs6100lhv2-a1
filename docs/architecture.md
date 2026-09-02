@@ -9,17 +9,19 @@ Browser or API client
       uhttpd
         |-- /          static WebUI
         |-- /api/v1    Thingino Control ---- Prudynt Unix socket
-        |                    `-- WHIP ---- loopback Raptor rwd
+        |                    `-- WHIP ---- optional loopback Raptor rwd
         |-- /media/v1  authorized Prudynt or file relay
         `-- ONVIF      persistent loopback service
 
-Prudynt H.264 encoders -- Annex-B RSS rings -- Raptor rwd -- DTLS-SRTP
+Prudynt H.264 encoders -- optional Annex-B RSS rings -- Raptor rwd -- DTLS-SRTP
 ```
 
 ## Universal firmware and camera-private state
 
 The immutable model layer contains the signed A1 kernel, permanent bootstrap,
-closed unprovisioned system SquashFS, model media closure, and Raptor runtime.
+closed unprovisioned system SquashFS, source-built Prudynt and native media
+inputs, and the catalog-locked owner-acquired stock libraries. The legacy
+private media closure and Raptor runtime are optional profile additions.
 It contains no camera recovery identity, WPA configuration, hostname, SSH key,
 management credential, API key, or writable data image. One exact model build
 is content-addressed and reusable.

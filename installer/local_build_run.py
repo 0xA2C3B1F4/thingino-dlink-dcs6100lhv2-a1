@@ -851,11 +851,11 @@ def _build_local_install_set(
     *,
     build_root: Path,
     vendor_bundle_dir: Path,
-    media_closure_dir: Path,
+    media_closure_dir: Path | None,
     private_config_dir: Path | None,
     expected_wpa_config_path: Path | None,
     session_dir: Path | None,
-    raptor_rwd_artifact: Path,
+    raptor_rwd_artifact: Path | None,
     data_mode: str,
     artifact_scope: str,
     signing_key: Path | None,
@@ -882,15 +882,17 @@ def _build_local_install_set(
     root = _project_root().resolve(strict=True)
     build_root = Path(str(workspace["build_root"]))
     vendor_bundle_dir = _directory(vendor_bundle_dir, "model vendor bundle")
-    media_closure_dir = _directory(media_closure_dir, "model media closure")
     if artifact_scope == "device-personalized":
         if (
             private_config_dir is None
             or expected_wpa_config_path is None
             or session_dir is None
+            or media_closure_dir is None
+            or raptor_rwd_artifact is None
             or signing_key is not None
         ):
             raise LocalBuildRunError("personalized build inputs are incomplete")
+        media_closure_dir = _directory(media_closure_dir, "model media closure")
         private_config_dir = _directory(
             private_config_dir, "private install configuration"
         )
@@ -911,23 +913,35 @@ def _build_local_install_set(
                 "model-universal build accepts no camera inputs and requires signing"
             )
         signing_key = _regular(signing_key, "model-universal signing key", limit=64 * 1024)
-    raptor_rwd_artifact = _regular(
-        raptor_rwd_artifact,
-        "Raptor RWD artifact",
-        limit=MAX_RAPTOR_ARTIFACT_BYTES,
-    )
     try:
-        load_vendor_bundle(vendor_bundle_dir)
-        media_closure = load_media_closure(media_closure_dir)
+        vendor_bundle = load_vendor_bundle(vendor_bundle_dir)
+        media_closure = (
+            load_media_closure(_directory(media_closure_dir, "model media closure"))
+            if media_closure_dir is not None
+            else None
+        )
     except (VendorBundleError, MediaClosureError) as exc:
         raise LocalBuildRunError(str(exc)) from exc
-    audio = media_closure.by_path().get("lib/libaudioProcess.so")
-    if audio is None:
-        raise LocalBuildRunError("private media closure lacks libaudioProcess.so")
-    audio_link = _regular(
-        media_closure_dir / "files/lib/libaudioProcess.so",
-        "private media audio link",
-    )
+    if raptor_rwd_artifact is not None:
+        raptor_rwd_artifact = _regular(
+            raptor_rwd_artifact,
+            "Raptor RWD artifact",
+            limit=MAX_RAPTOR_ARTIFACT_BYTES,
+        )
+    if media_closure is not None:
+        audio = media_closure.by_path().get("lib/libaudioProcess.so")
+        if audio is None:
+            raise LocalBuildRunError("private media closure lacks libaudioProcess.so")
+        assert media_closure_dir is not None
+        audio_link = _regular(
+            media_closure_dir / "files/lib/libaudioProcess.so",
+            "private media audio link",
+        )
+    else:
+        audio_link = _regular(
+            vendor_bundle_dir / "files/libaudioProcess.so",
+            "stock vendor audio link",
+        )
 
     head = str(workspace["current_head"])
     run_dir = build_root / "runs" / _run_id(head)
@@ -1040,7 +1054,7 @@ def _build_local_install_set(
             prepared_root = run_dir / "universal-final-root"
             prepare_universal_final_root(
                 base_rootfs=(build_a / "thingino-base.squashfs").read_bytes(),
-                vendor_bundle=load_vendor_bundle(vendor_bundle_dir),
+                vendor_bundle=vendor_bundle,
                 media_closure=media_closure,
                 output_dir=prepared_root,
                 mksquashfs=mksquashfs,
@@ -1067,24 +1081,27 @@ def _build_local_install_set(
             prepared_system_name = "system.private.squashfs"
             prepared_manifest_name = "final-root.private.json"
 
-        raptor = _raptor_module(root)
-        raptor_root = run_dir / "raptor-final-root"
-        raptor_result = raptor.build_persistent_root(
-            base_rootfs_path=prepared_root / prepared_system_name,
-            base_provenance_path=prepared_root / prepared_manifest_name,
-            artifact_path=raptor_rwd_artifact,
-            artifact_sha256=_sha256(raptor_rwd_artifact),
-            supervisor_path=root / "components/raptor-rwd/S13prudynt-rwd",
-            service_path=root / "components/raptor-rwd/S96rwd",
-            output_dir=raptor_root,
-            mksquashfs=mksquashfs,
-            unsquashfs=unsquashfs,
-            static_rwd_tls=True,
-            split_mtd3=True,
-            artifact_scope=artifact_scope,
-        )
-        if not isinstance(raptor_result, dict) or "raptor_rwd" not in raptor_result:
-            raise LocalBuildRunError("Raptor overlay lacks raptor_rwd provenance")
+        if raptor_rwd_artifact is not None:
+            raptor = _raptor_module(root)
+            raptor_root = run_dir / "raptor-final-root"
+            raptor_result = raptor.build_persistent_root(
+                base_rootfs_path=prepared_root / prepared_system_name,
+                base_provenance_path=prepared_root / prepared_manifest_name,
+                artifact_path=raptor_rwd_artifact,
+                artifact_sha256=_sha256(raptor_rwd_artifact),
+                supervisor_path=root / "components/raptor-rwd/S13prudynt-rwd",
+                service_path=root / "components/raptor-rwd/S96rwd",
+                output_dir=raptor_root,
+                mksquashfs=mksquashfs,
+                unsquashfs=unsquashfs,
+                static_rwd_tls=True,
+                split_mtd3=True,
+                artifact_scope=artifact_scope,
+            )
+            if not isinstance(raptor_result, dict) or "raptor_rwd" not in raptor_result:
+                raise LocalBuildRunError("Raptor overlay lacks raptor_rwd provenance")
+        else:
+            raptor_root = prepared_root
         system_rootfs = raptor_root / (
             "system.universal.squashfs"
             if artifact_scope == "model-universal"
@@ -1161,7 +1178,7 @@ def _build_local_install_set(
                 )
             except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
                 raise LocalBuildRunError(
-                    "universal Raptor provenance is invalid"
+                    "universal final-root provenance is invalid"
                 ) from exc
             build_universal_install_set(
                 **install_arguments,
@@ -1190,7 +1207,7 @@ def _build_local_install_set(
                 else "embedded-device-personalization"
             ),
             "public_firmware_release_gate_consulted": False,
-            "raptor_rwd_overlay": True,
+            "raptor_rwd_overlay": raptor_rwd_artifact is not None,
             "reproducibility": reproducibility,
             "schema_version": RUN_SCHEMA_VERSION,
             "sources_lock_sha256": lock_sha256,
@@ -1231,7 +1248,7 @@ def _build_local_install_set(
         "inspection": inspection,
         "nor_writes": False,
         "public_firmware_release_gate_consulted": False,
-        "raptor_rwd_overlay": True,
+        "raptor_rwd_overlay": raptor_rwd_artifact is not None,
         "reproducible": True,
         "run_dir": str(run_dir),
         "schema_version": 2,
@@ -1275,8 +1292,8 @@ def build_local_universal_install_set(
     *,
     build_root: Path,
     vendor_bundle_dir: Path,
-    media_closure_dir: Path,
-    raptor_rwd_artifact: Path,
+    media_closure_dir: Path | None = None,
+    raptor_rwd_artifact: Path | None = None,
     signing_key: Path,
 ) -> dict[str, object]:
     """Build once for A1 cameras; authorization and provisioning stay separate."""

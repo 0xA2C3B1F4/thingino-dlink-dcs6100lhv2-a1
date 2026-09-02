@@ -43,7 +43,11 @@ from .camera_authorization import (
     CameraAuthorizationError,
     create_camera_authorization,
 )
-from .final_bundle import BundleError, validate_universal_final_bundle
+from .final_bundle import (
+    BundleError,
+    ensure_ed25519_keypair,
+    validate_universal_final_bundle,
+)
 from .provisioning import (
     ProvisioningError,
     create_provisioning_sidecar,
@@ -102,9 +106,13 @@ from .mtd3_image import Mtd3ImageError, validate_personal_mtd3_image
 from .platform_wifi import PlatformWifiError, join_recovery_ap, join_station_wifi
 from .private_config import (
     PrivateConfigError,
+    generate_private_config,
     inspect_private_config,
+    load_private_config_for_session,
+    read_authorized_key,
     read_confirmed_private_input,
     read_private_input,
+    render_private_wpa_config,
     rotate_private_config_role,
 )
 from .ram_boot import build_ramdisk_uimage
@@ -180,6 +188,12 @@ from .workflow_preflight import (
     WorkflowPreflightError,
     observe_camera_state,
     run_workflow_preflight,
+)
+from .universal_install import (
+    UniversalInstallError,
+    handoff_camera_bound_universal_install,
+    stage_camera_bound_universal_install,
+    validate_camera_bound_universal_install,
 )
 
 
@@ -666,8 +680,26 @@ def _universal_provision(arguments: argparse.Namespace) -> dict[str, object]:
     return implementation(sys.modules[__name__], arguments)
 
 
+def _universal_configure(arguments: argparse.Namespace) -> dict[str, object]:
+    from .user_cli_universal import _universal_configure as implementation
+
+    return implementation(sys.modules[__name__], arguments)
+
+
 def _universal_authorize(arguments: argparse.Namespace) -> dict[str, object]:
     from .user_cli_universal import _universal_authorize as implementation
+
+    return implementation(sys.modules[__name__], arguments)
+
+
+def _universal_stage(arguments: argparse.Namespace) -> dict[str, object]:
+    from .user_cli_universal import _universal_stage as implementation
+
+    return implementation(sys.modules[__name__], arguments)
+
+
+def _universal_handoff(arguments: argparse.Namespace) -> dict[str, object]:
+    from .user_cli_universal import _universal_handoff as implementation
 
     return implementation(sys.modules[__name__], arguments)
 
@@ -903,6 +935,7 @@ def main(argv: list[str] | None = None) -> int:
                 "build-personal-mtd3",
                 "workflow-preflight",
                 "local-build",
+                "universal",
                 "runtime-candidate",
                 "private-config",
                 "candidate",
@@ -966,6 +999,7 @@ def main(argv: list[str] | None = None) -> int:
         StockRestoreKernelError,
         StockRestoreSetError,
         UserInstallerError,
+        UniversalInstallError,
         WorkflowPreflightError,
         OSError,
     ) as exc:

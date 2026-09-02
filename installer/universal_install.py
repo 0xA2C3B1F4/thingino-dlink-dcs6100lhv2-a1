@@ -311,3 +311,67 @@ def stage_camera_bound_universal_install(
                 removed = True
         if removed:
             media._sync_directory(root)
+
+
+def handoff_camera_bound_universal_install(
+    validated: ValidatedUniversalInstall,
+    *,
+    root: Path,
+    preflight: MediaPreflight,
+    confirmed_physical_device: str,
+) -> dict[str, str]:
+    """Make the stock selector inert after its verified mtd1+mtd2 phase."""
+
+    if confirmed_physical_device != preflight.physical_device:
+        raise UniversalInstallError("physical-device confirmation differs")
+    if root.resolve(strict=True) != preflight.mount_root:
+        raise UniversalInstallError("universal handoff root changed after preflight")
+    root_identity = root.stat(follow_symlinks=False)
+    if (
+        getattr(preflight, "mount_device_id", 0)
+        and (
+            root_identity.st_dev != preflight.mount_device_id
+            or root_identity.st_ino != preflight.mount_inode
+        )
+    ):
+        raise UniversalInstallError(
+            "universal handoff media identity changed after preflight"
+        )
+    media.validate_sd_root(root, allowed_matching_filename=BOOTSTRAP_FILENAME)
+
+    authorization = validated.authorization
+    payloads = {
+        PROVISIONING_CARD_NAME: validated.provisioning_data,
+        AUTHORIZATION_CARD_NAME: authorization.raw_manifest,
+        AUTHORIZATION_SIGNATURE_CARD_NAME: authorization.signature,
+        AUTHORIZATION_BINARY_CARD_NAME: authorization.binary,
+    }
+
+    def verify_camera_payloads() -> None:
+        for name, raw in payloads.items():
+            path = root / name
+            sidecar = root / ("._" + name)
+            if (
+                path.is_symlink()
+                or not path.is_file()
+                or sidecar.exists()
+                or path.read_bytes() != raw
+            ):
+                raise UniversalInstallError(
+                    f"universal camera sidecar differs at handoff: {name}"
+                )
+
+    verify_camera_payloads()
+    deactivated = media.deactivate_staged_install_set(
+        bootstrap_bytes=validated.bootstrap,
+        stage2_bytes=validated.stage2.raw,
+        manifest_bytes=validated.manifest,
+        root=root,
+        bootstrap_name=BOOTSTRAP_FILENAME,
+        preflight=preflight,
+        confirmed_physical_device=confirmed_physical_device,
+    )
+    verify_camera_payloads()
+    return deactivated | {
+        name: hashlib.sha256(raw).hexdigest() for name, raw in payloads.items()
+    }

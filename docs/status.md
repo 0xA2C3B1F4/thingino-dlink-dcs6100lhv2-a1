@@ -36,7 +36,7 @@ still needs an upstream grant before firmware distribution.
 ## Source and host gates
 
 The current checkout passes its fail-closed public-tree gate with 493
-allowlisted text files, 24 Markdown checks, and 559 Python tests.
+allowlisted text files, 24 Markdown checks, and 570 Python tests.
 The refactored Control previously passed 186 library tests, eight binary and
 storage-worker tests, 16 contract tests, a release build, and the 1,000-request
 soak. WebUI code did not change in this refactor; its latest retained gate is 98
@@ -79,9 +79,12 @@ accepted stock-functional mtd1/mtd2 source remain release gates. Post-run atomic
 rollback hardening has host and MIPS-build evidence but has not been repeated
 on physical hardware.
 
-The source also has an additive model-universal build path. Its API has no
-camera configuration or recovery arguments, emits an empty data member, locks
-the unprovisioned root, and disables network-facing startup. Separate signed
+The source also has a model-universal build path whose default media profile
+uses source-built Prudynt and camera-acquired, catalog-locked stock vendor
+libraries. It no longer requires the legacy private media closure or Raptor;
+Raptor is an optional WebRTC profile. The build API has no camera configuration
+or recovery arguments, emits an empty data member, locks the unprovisioned root,
+and disables network-facing startup. Separate signed
 audit sidecars, exact-span JFFS2 overlays, and authorizations bind one camera,
 session, provisioning payload, universal bundle, exact stage 2, and data
 action. The JFFS2 overlay is built twice with fixed geometry and checked with
@@ -96,9 +99,13 @@ an exact provisioning retry.
 
 This is not yet physical provisioning acceptance. Slow-card timing, physical
 power interruption, one-use cleanup, and successful boot with camera-specific
-credentials remain blocked. The guided CLI can build the universal artifact and
-create provisioning/authorization artifacts, but does not expose universal SD
-staging while that gate is open.
+credentials remain blocked. The guided CLI can build the universal artifact,
+create session-bound configuration and provisioning/authorization artifacts,
+stage the validated tuple to an exactly confirmed removable device, and perform
+the separately confirmed post-stock `universal handoff`. The handoff
+revalidates the tuple and makes the stock selector inert before Stage 1. Neither
+host command writes NOR, and their availability does not close those physical
+gates.
 
 ## Open release gates
 
@@ -106,7 +113,6 @@ A public installer or firmware release remains blocked by:
 
 - unresolved Prudynt source and patch-context terms;
 - incomplete RTL8188FU license-file provenance;
-- exact corresponding-source and notice review for Raptor rwd and its closure;
 - a clean reproducible firmware build using only documented public and
   owner-acquired inputs;
 - full content-addressed candidate acceptance with a real browser;

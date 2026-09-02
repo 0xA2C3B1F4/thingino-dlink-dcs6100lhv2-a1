@@ -53,12 +53,6 @@
           ]
         },
         {
-          "id": "raptor-corresponding-source",
-          "status": "blocked",
-          "requirement": "The exact Raptor rwd link closure, notices, local patches, and corresponding-source delivery are reviewed together.",
-          "evidence": ["components/raptor-rwd/raptor-lock.json", "third_party/NOTICE.md"]
-        },
-        {
           "id": "reproducible-firmware",
           "status": "blocked",
           "requirement": "Two clean builds from documented public and owner-acquired inputs are byte-identical.",
@@ -99,6 +93,18 @@
           "status": "blocked",
           "requirement": "The macOS, Linux, and Windows host contracts pass CI; each claimed physical-media path still needs recorded removable-media acceptance.",
           "evidence": [".github/workflows/check.yml", "docs/installation.md", "docs/status.md"]
+        }
+      ]
+    },
+    {
+      "id": "optional-webrtc-profile-release",
+      "ready": false,
+      "gates": [
+        {
+          "id": "raptor-corresponding-source",
+          "status": "blocked",
+          "requirement": "The optional Raptor rwd link closure, notices, local patches, and corresponding-source delivery are reviewed together before distributing that WebRTC profile.",
+          "evidence": ["components/raptor-rwd/raptor-lock.json", "third_party/NOTICE.md"]
         }
       ]
     }

@@ -38,12 +38,11 @@ Firmware is built on your computer from pinned public sources and the matching
 camera's owner-acquired libraries and recovery material.
 
 The camera-acquisition step mounts stock mtd3 read-only and copies
-`/lib/libimp.so`, `/lib/libalog.so`, and `/lib/libsysutils.so`.
-`/lib/libaudioProcess.so` is retained as an optional archive entry when its
-catalog identity matches. The client validates these paths against the public
-profile catalog. During setup, you supply the station
-network details and the installer creates installation-specific management,
-API, and SSH material locally. Shared caches hold locked public inputs. Camera
+`/lib/libimp.so`, `/lib/libalog.so`, `/lib/libsysutils.so`, and
+`/lib/libaudioProcess.so`. The client validates these paths against the public
+profile catalog. No private source repository is needed. During setup, you
+supply the station network details and the installer creates installation-specific
+management, API, and SSH material locally. Shared caches hold locked public inputs. Camera
 libraries, credentials, build runs, and install sets stay in your private
 workspace.
 
@@ -56,14 +55,21 @@ management credential. Its data member is empty and its network-facing startup
 scripts remain non-executable until separate provisioning succeeds.
 
 `thingino-dlink local-build build-universal` creates those identical model
-bytes. `thingino-dlink universal provision` creates a private signed audit
+bytes from public source and the owner-acquired stock vendor bundle. The default
+source-native media profile provides RTSP and MJPEG; the separately reviewed
+Raptor artifact is an optional WebRTC addition. `thingino-dlink universal
+configure` creates the session-bound camera configuration and a stable local
+authorization signer. `thingino-dlink universal provision` creates a private signed audit
 sidecar plus a deterministic, exact-span per-camera JFFS2 overlay image.
 `thingino-dlink universal authorize` binds both and the exact universal firmware
 digest to that camera's independently validated mtd0/mtd4/mtd5 identity. Stage
-1 snapshots and verifies a camera-keyed HMAC authorization, exact stage 2, data
-action, and JFFS2 image before removing the bootstrap or entering any final NOR
-write phase. It writes and reads back the complete private overlay before the
-final kernel activation eraseblock.
+the card with `thingino-dlink universal stage`, boot the stock updater once,
+then return the card to the host and run `thingino-dlink universal handoff`.
+The handoff revalidates the same tuple and makes the stock selector inert before
+Stage 1 can boot. Stage 1 snapshots and verifies a camera-keyed HMAC
+authorization, exact stage 2, data action, and JFFS2 image before removing the
+bootstrap or entering any final NOR write phase. It writes and reads back the
+complete private overlay before the final kernel activation eraseblock.
 
 Backups, protected readbacks, factory partitions, recovery sessions, and
 provisioning sidecars must never be copied between cameras. The older
@@ -84,7 +90,7 @@ device-specific implementation.
 | Control plane | CGI, shell helpers, `curl`, `jct`, and a compatibility Agent | One Rust service, `thingino-controld` | Centralizes authentication, configuration, actions, and errors |
 | HTTP ingress | CGI and request plugins | Static files plus bounded nonblocking proxies | Keeps slow media clients out of control workers |
 | Media ownership | Request handlers mixed control and transport duties | Prudynt owns ISP, frame sources, encoders, RTSP, JPEG, and recording | Prevents a second ISP or encoder owner |
-| Browser preview | About 5 fps MJPEG | H.264 WebRTC through Raptor `rwd`, with MJPEG fallback | The tested camera delivered about 15 fps on both streams |
+| Browser preview | About 5 fps MJPEG | MJPEG in the base profile; optional H.264 WebRTC through Raptor `rwd` | The tested Raptor camera candidate delivered about 15 fps on both streams |
 | Home Assistant | Shell and helper processes | Native MQTT and Motion handling in Control | Removes request-time processes and bounds reconnect state |
 | Hardware settings | Generic GPIO and light choices | Fixed A1 capabilities and ownership | Prevents unsupported or unsafe output controls |
 | Installation | Generic full-flash assumptions | Stock-U-Boot bootstrap plus fixed mtd3 system/data regions | Preserves the stock bootloader and device data partitions |
@@ -105,7 +111,7 @@ compatible with this camera.
 ## Main features
 
 - main and substream H.264 at the selected 15 fps profile;
-- native browser WebRTC for both streams with MJPEG fallback;
+- MJPEG browser preview, with native two-stream WebRTC in the optional Raptor profile;
 - RTSP, snapshots, ONVIF, OSD, Motion, privacy, audio, recording, and timelapse;
 - Day, Night, and Auto with fixed IR-cut and 850 nm illumination controls;
 - static responsive WebUI with a same-origin authenticated Control API;
@@ -116,12 +122,12 @@ See [features.md](docs/features.md) for the validation level of each group.
 
 ## Installation quickstart
 
-There is no supported public firmware download yet. A source checkout alone
-cannot produce a safe image because the reusable model build still needs the
-allowlisted model media closure and reviewed Raptor input. Each installation
-then needs that camera's own recovery set, authorization, and private
-provisioning sidecar; those camera inputs do not change the universal firmware
-bytes.
+There is no supported public firmware download yet. A public checkout can build
+the reusable base image after a read-only acquisition of the four allowlisted
+stock libraries from the owner's matching camera. It does not need a private
+repository, a private media closure, or Raptor. Each installation still needs
+that camera's own recovery set, authorization, and private provisioning
+sidecar; those camera inputs do not change the universal firmware bytes.
 
 The commands below show the current installation workflow for a reviewed private
 candidate. Stop if the [release status](docs/status.md) lists an open gate for
@@ -135,7 +141,7 @@ Use Python 3.11 or newer from a clean, reviewed checkout:
 make check
 python3 -m pip install -e .
 thingino-dlink --help
-python3 -m installer --help
+python3 -m installer.user_cli --help
 ```
 
 Run these commands from the repository root. Editable-install metadata is
@@ -165,8 +171,11 @@ thingino-dlink local-build bootstrap
 thingino-dlink local-build acquire
 thingino-dlink local-build recovery-assets
 # Complete stock-recovery backup-prepare, backup-capture, and backup-validate.
-thingino-dlink local-build configure
-thingino-dlink local-build build
+thingino-dlink local-build build-universal \
+  --vendor-bundle-dir /path/from/recovery/vendor
+thingino-dlink universal configure \
+  --session-dir /path/to/private/recovery-session \
+  --output-dir /path/to/private/install-config
 ```
 
 `recovery-assets` is the public bridge between `acquire` and the camera backup.
@@ -187,26 +196,25 @@ The UARTless package remains inert until the separate
 Follow [installation](docs/installation.md) for the SD handoff and the exact
 transport-specific safety boundary.
 
-`configure` explains and asks for every private path and the intended data
-action. It validates all non-secret artifacts before asking for the station
-Wi-Fi SSID and passphrase twice through hidden terminal input. It derives the
-64-hex WPA PSK, generates the per-install credentials, writes mode-restricted
-private files, and records their paths for `build`. You do not create
-`expected-wpa.conf` or calculate a PSK yourself. Wi-Fi details enter through
-the hidden prompts.
+`universal configure` validates the recovery session before asking for the
+station Wi-Fi SSID and passphrase twice through hidden terminal input. It
+derives the 64-hex WPA PSK, generates the per-install credentials, binds them
+to that session, and creates or reuses a local authorization key pair. You do
+not create a WPA file or calculate a PSK yourself.
 
-Four inputs must already exist: the owner-acquired vendor bundle, the validated
-media closure, the private recovery session, and the reviewed source-built
-Raptor RWD artifact. These are device/workflow evidence, not values to invent.
-The guided command names the missing input and stops before asking for Wi-Fi.
-[Build inputs](docs/build.md#what-configure-asks) explains the source and format
-of every answer.
+The preferred universal build needs only the owner-acquired vendor bundle.
+Its model signer is generated in private build storage when one is not supplied.
+The media closure and reviewed source-built Raptor RWD artifact remain optional
+advanced inputs for the legacy tested WebRTC profile. Camera Wi-Fi and
+credentials are created later with `universal configure` and never enter the
+universal firmware build. [Build inputs](docs/build.md) explains the boundaries.
 
-A successful `build` reports its private `install_set_dir` after two
-byte-identical clean builds, the private final-root and Raptor RWD overlay,
-split-kernel packaging, and a passing schema-2 inspection. SD-card staging and
-camera installation are separate, explicitly confirmed steps. Keep secret
-values in the mode-restricted input files.
+A successful `build-universal` reports its private `install_set_dir` after two
+byte-identical clean builds, source-native final-root preparation, split-kernel
+packaging, and a passing schema-2 inspection. If the optional Raptor artifact
+is supplied, its overlay is validated and added. SD-card staging and camera
+installation are separate, explicitly confirmed steps. Keep secret values in
+the mode-restricted input files.
 
 ### 2. Inspect the finished install set
 
@@ -231,14 +239,14 @@ reads them back, and activates the verified files last.
 
 Each value below has one exact meaning:
 
-- `--install-set-dir` is the `install_set_dir` printed by the successful
-  `local-build build`; do not select a parent run directory.
+- `--install-set-dir` is the `install_set_dir` printed by the successful build;
+  do not select a parent run directory.
 - `--recovery-dir` is this same camera's already validated complete duplicate
   mtd0-mtd5 backup. It is not a directory to create empty for this command.
 - `--preserved-readback-dir` is the current read-only protected-partition
   evidence for the same camera. It is likewise an earlier workflow output.
-- `--expected-data-mode` must equal the data action chosen during
-  `local-build configure`: `initialize`, `preserve`, or `factory-reset`.
+- `--expected-data-mode` applies only to the legacy personalized path and must
+  equal its configured `initialize`, `preserve`, or `factory-reset` action.
 - `--whole-device` is the physical SD-card disk reported by the operating
   system, while `--mount-root` is that card's mounted FAT32 volume.
 - `--confirm-physical-device` repeats the exact `--whole-device` value and
@@ -246,7 +254,7 @@ Each value below has one exact meaning:
   arguments so a reusable settings file cannot silently authorize another
   physical disk.
 
-macOS:
+Legacy personalized macOS example:
 
 ```bash
 thingino-dlink stage-install-set \
@@ -259,6 +267,16 @@ thingino-dlink stage-install-set \
   --confirm-physical-device /dev/diskN \
   --confirm-target DCS-6100LHV2-A1
 ```
+
+That `stage-install-set` example is the legacy personalized path. For the
+preferred universal path, first run `universal provision` and `universal
+authorize`, then use the fully bound `universal stage` command shown in
+[build.md](docs/build.md#build-one-reusable-a1-firmware). It additionally
+requires the provisioning data, authorization, universal public key, recovery
+session, and the exact
+`STOCK-MTD1-MTD2-THEN-FINAL-MTD1-MTD3` write-set confirmation.
+After the verified stock mtd1+mtd2 boot, return the card to the host and run the
+documented `universal handoff` before the Stage-1 boot.
 
 Linux uses a whole-disk node such as `/dev/sdb`, not `/dev/sdb1`:
 
@@ -340,9 +358,9 @@ python3 scripts/source_prepare.py \
 Firmware compilation also needs the pinned builder inputs and the validated
 four-path vendor bundle acquired from the owner's matching camera. The bundle
 stays in the local private workspace while redistribution terms remain
-unresolved.
-The resulting accepted base root is not the WebRTC firmware candidate until
-the required Raptor `rwd` overlay and its provenance gates pass.
+unresolved. The resulting source-native base includes RTSP and MJPEG. WebRTC is
+present only when the optional Raptor `rwd` overlay and its provenance gates
+pass.
 Continue with [build.md](docs/build.md).
 
 ## Repository map

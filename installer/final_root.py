@@ -212,6 +212,12 @@ def _install_vendor_bundle(root: Path, bundle: VendorBundle) -> None:
     return _impl(sys.modules[__name__], root, bundle)
 
 
+def _record_source_media(root: Path, bundle: VendorBundle) -> dict[str, object]:
+    from .final_root_media import _record_source_media as _impl
+
+    return _impl(sys.modules[__name__], root, bundle)
+
+
 def _install_media_closure(
     root: Path,
     closure: MediaClosure,
@@ -630,7 +636,7 @@ def prepare_universal_final_root(
     *,
     base_rootfs: bytes,
     vendor_bundle: VendorBundle,
-    media_closure: MediaClosure,
+    media_closure: MediaClosure | None,
     output_dir: Path,
     mksquashfs: Path,
     unsquashfs: Path,
@@ -658,9 +664,12 @@ def prepare_universal_final_root(
         _install_vendor_bundle(root, vendor_bundle)
         _require_native_media_unchanged(root, native_media)
         _require_proven_media_runtime(root)
-        media_provenance = _install_media_closure(root, media_closure)
-        _require_proven_media_runtime(root)
         _configure_media_first_init(root)
+        if media_closure is None:
+            media_provenance = _record_source_media(root, vendor_bundle)
+        else:
+            media_provenance = _install_media_closure(root, media_closure)
+        _require_proven_media_runtime(root)
         _configure_no_default_route(root)
         _sanitize_universal_secret_paths(root)
         _disable_universal_network_services(root)
@@ -773,7 +782,14 @@ def prepare_universal_final_root(
             },
             "target": {"hardware_revision": "A1", "model": "DCS-6100LHV2"},
             "vendor_bundle_sha256": vendor_bundle.bundle_sha256,
-            "media_closure_sha256": media_closure.closure_sha256,
+            "media_profile": (
+                "source-native-stock-vendor-v1"
+                if media_closure is None
+                else "accepted-private-c1-closure"
+            ),
+            "media_closure_sha256": (
+                None if media_closure is None else media_closure.closure_sha256
+            ),
         }
         atomic_write(
             work / "final-root.universal.json",

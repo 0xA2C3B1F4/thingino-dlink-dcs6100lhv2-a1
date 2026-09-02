@@ -37,6 +37,14 @@ class ReleaseGateTests(unittest.TestCase):
             "prudynt-license-grant",
             summaries["firmware-release"]["blocked"],
         )
+        self.assertNotIn(
+            "raptor-corresponding-source",
+            summaries["firmware-release"]["blocked"],
+        )
+        self.assertEqual(
+            summaries["optional-webrtc-profile-release"]["blocked"],
+            ["raptor-corresponding-source"],
+        )
 
     def test_rtl_license_copies_match_the_reviewed_primary_sources(self) -> None:
         expected = {

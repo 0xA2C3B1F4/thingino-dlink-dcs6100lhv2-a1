@@ -26,7 +26,10 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
     _local_build_recovery_assets = getattr(facade, '_local_build_recovery_assets')
     _local_build_status = getattr(facade, '_local_build_status')
     _universal_authorize = getattr(facade, '_universal_authorize')
+    _universal_configure = getattr(facade, '_universal_configure')
+    _universal_handoff = getattr(facade, '_universal_handoff')
     _universal_provision = getattr(facade, '_universal_provision')
+    _universal_stage = getattr(facade, '_universal_stage')
     _preflight = getattr(facade, '_preflight')
     _prepare_card = getattr(facade, '_prepare_card')
     _private_config_inspect = getattr(facade, '_private_config_inspect')
@@ -340,12 +343,25 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
         "--vendor-bundle-dir", type=Path, required=True
     )
     local_build_universal.add_argument(
-        "--media-closure-dir", type=Path, required=True
+        "--media-closure-dir",
+        type=Path,
+        help="advanced: accepted legacy C1 closure instead of the public source-native profile",
     )
     local_build_universal.add_argument(
-        "--raptor-rwd-artifact", type=Path, required=True
+        "--raptor-rwd-artifact",
+        type=Path,
+        help="advanced: add the optional reviewed WebRTC component",
     )
-    local_build_universal.add_argument("--signing-key", type=Path, required=True)
+    local_build_universal.add_argument(
+        "--signing-key",
+        type=Path,
+        help="stable model signer; generated in private build storage when omitted",
+    )
+    local_build_universal.add_argument(
+        "--signing-public-key",
+        type=Path,
+        help="public half written or validated beside --signing-key",
+    )
     local_build_universal.set_defaults(handler=_local_build_build_universal)
 
     universal = commands.add_parser("universal")
@@ -358,6 +374,27 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
         recovery.add_argument("--recovery-dir", type=Path)
         recovery.add_argument("--functional-recovery-dir", type=Path)
         parser.add_argument("--preserved-readback-dir", type=Path, required=True)
+
+    universal_configure = universal_commands.add_parser("configure")
+    _add_common(universal_configure, inherited=True)
+    universal_configure.add_argument("--session-dir", type=Path, required=True)
+    universal_configure.add_argument("--output-dir", type=Path, required=True)
+    universal_configure.add_argument(
+        "--signing-key",
+        type=Path,
+        help="stable camera signer; generated beside the output directory when omitted",
+    )
+    universal_configure.add_argument(
+        "--signing-public-key",
+        type=Path,
+        help="public half written or validated beside --signing-key",
+    )
+    universal_configure.add_argument(
+        "--secrets-fd",
+        type=int,
+        help="inherited descriptor containing confirmed Wi-Fi JSON; never argv",
+    )
+    universal_configure.set_defaults(handler=_universal_configure)
 
     universal_provision = universal_commands.add_parser("provision")
     _add_common(universal_provision, inherited=True)
@@ -394,6 +431,56 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
         "--data-action", choices=("initialize",), default="initialize"
     )
     universal_authorize.set_defaults(handler=_universal_authorize)
+
+    universal_stage = universal_commands.add_parser("stage")
+    _add_common(universal_stage, inherited=True)
+    add_recovery_inputs(universal_stage)
+    universal_stage.add_argument("--install-set-dir", type=Path, required=True)
+    universal_stage.add_argument(
+        "--universal-public-key", type=Path, required=True
+    )
+    universal_stage.add_argument("--provisioning", type=Path, required=True)
+    universal_stage.add_argument("--provisioning-data", type=Path, required=True)
+    universal_stage.add_argument("--authorization-dir", type=Path, required=True)
+    universal_stage.add_argument(
+        "--authorization-public-key", type=Path, required=True
+    )
+    universal_stage.add_argument("--session-dir", type=Path, required=True)
+    universal_stage.add_argument(
+        "--whole-device", required=True, help="physical removable whole-disk ID"
+    )
+    universal_stage.add_argument(
+        "--mount-root", type=Path, required=True, help="mounted FAT32 card root"
+    )
+    universal_stage.add_argument("--confirm-physical-device")
+    universal_stage.add_argument("--confirm-target")
+    universal_stage.add_argument("--confirm-write-set")
+    universal_stage.set_defaults(handler=_universal_stage)
+
+    universal_handoff = universal_commands.add_parser("handoff")
+    _add_common(universal_handoff, inherited=True)
+    add_recovery_inputs(universal_handoff)
+    universal_handoff.add_argument("--install-set-dir", type=Path, required=True)
+    universal_handoff.add_argument(
+        "--universal-public-key", type=Path, required=True
+    )
+    universal_handoff.add_argument("--provisioning", type=Path, required=True)
+    universal_handoff.add_argument("--provisioning-data", type=Path, required=True)
+    universal_handoff.add_argument("--authorization-dir", type=Path, required=True)
+    universal_handoff.add_argument(
+        "--authorization-public-key", type=Path, required=True
+    )
+    universal_handoff.add_argument("--session-dir", type=Path, required=True)
+    universal_handoff.add_argument(
+        "--whole-device", required=True, help="physical removable whole-disk ID"
+    )
+    universal_handoff.add_argument(
+        "--mount-root", type=Path, required=True, help="mounted FAT32 card root"
+    )
+    universal_handoff.add_argument("--confirm-physical-device")
+    universal_handoff.add_argument("--confirm-target")
+    universal_handoff.add_argument("--confirm-stock-uboot-result")
+    universal_handoff.set_defaults(handler=_universal_handoff)
 
     runtime = commands.add_parser("runtime-candidate")
     runtime_commands = runtime.add_subparsers(dest="runtime_command", required=True)
