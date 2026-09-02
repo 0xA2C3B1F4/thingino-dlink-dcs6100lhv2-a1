@@ -409,7 +409,7 @@
     },
     {
       "destination": "package/thingino-control/rust/src/camera.rs",
-      "sha256": "23eececde204863d16d3f2788539330413414fbde41679898d6932bea47bb4a9",
+      "sha256": "243c265969940feb0322758b1214b6971b183d15920d4788cf9cba2dbb44f4d1",
       "source": "components/thingino-control/src/camera.rs"
     },
     {
@@ -629,7 +629,7 @@
     },
     {
       "destination": "package/thingino-control/rust/src/camera_tests.rs",
-      "sha256": "803bba53ac145eb1f847f60b8e5110b73fcd3bfe536f6aef749a8046f87570a1",
+      "sha256": "732d0b5135f41b62b04fa0ff744f4438dfa175976cb289d94e6008930c0fb866",
       "source": "components/thingino-control/src/camera_tests.rs"
     },
     {
@@ -674,7 +674,7 @@
     },
     {
       "destination": "package/thingino-control/rust/src/router.rs",
-      "sha256": "a236441ee496e897de7be2f7d648c8647d98e37d3face46ec69473efa7377cf2",
+      "sha256": "21170d502c871b1931273b4a20b707560544f1635f6e9f138e7be5e69561e906",
       "source": "components/thingino-control/src/router.rs"
     },
     {
@@ -746,6 +746,11 @@
       "destination": "package/thingino-uhttpd/0014-allow-prometheus-control-responses.patch",
       "sha256": "467f641461a03364b036a0bf413b864ee8181c9f1c77433da06f26af91d9b860",
       "source": "patches/uhttpd/0014-allow-prometheus-control-responses.patch"
+    },
+    {
+      "destination": "package/thingino-uhttpd/0015-require-authenticated-tls-ingress.patch",
+      "sha256": "8d6f9028d88daa2d313a35cdf33e722a894f708145b647246b7fe4d4a9d864aa",
+      "source": "patches/uhttpd/0015-require-authenticated-tls-ingress.patch"
     }
   ],
   "model": "DCS-6100LHV2",

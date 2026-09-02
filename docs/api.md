@@ -6,7 +6,7 @@ schema contract is
 
 ## Authentication
 
-- Browser login creates a SameSite=Strict HttpOnly session cookie.
+- Browser login creates a Secure, SameSite=Strict, HttpOnly session cookie.
 - Direct API clients use `Authorization: Bearer <64 lowercase hex>`.
 - The browser never reads the cookie or the service API key.
 - URL query parameters are never accepted as credentials.
@@ -17,6 +17,15 @@ schema contract is
   a browser session. API-key GET returns only whether a key exists; a newly
   generated key is returned once.
 - Camera mode listens only on loopback behind uhttpd.
+
+WebUI, Control API, media, and snapshot ingress require HTTPS. The plain HTTP
+listener remains available only for ONVIF SOAP compatibility and does not
+serve the WebUI or management routes. TLS responses include HSTS.
+
+uhttpd accepts management requests only when `Host` is an IP literal, a
+single-label local hostname, a `.local` name, or a `.home.arpa` name. When a
+browser sends `Origin`, its scheme and authority must exactly match the TLS
+request. This rejects public DNS names used for DNS-rebinding access.
 
 The standard JSON error envelope contains a stable code, message, and
 retryable flag. Authentication errors use HTTP 401. Invalid input, size limits,
@@ -61,8 +70,10 @@ minutes old; an older valid session must sign in again first.
 - three-second accepted-request deadline.
 
 uhttpd relays MJPEG, snapshots, recordings, and ONVIF responses after Control
-authorizes the exact request. Large media bodies do not occupy a Control
-worker.
+authorizes the exact request. `/onvif/image.cgi` and `/onvif/image1.cgi` use
+the same session, API-key, or bearer authentication as other snapshot routes;
+there is no unauthenticated ONVIF snapshot bypass. Large media bodies do not
+occupy a Control worker.
 
 ## Worker and native-IPC lifecycle
 

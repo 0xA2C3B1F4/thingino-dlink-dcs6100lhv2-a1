@@ -93,8 +93,10 @@ never return it.
 
 ## uhttpd owns ingress
 
-uhttpd terminates HTTP or TLS, serves four static WebUI files, and proxies the
-fixed Control, media, and ONVIF routes. Its pumps are nonblocking and bounded.
+uhttpd terminates TLS for the WebUI, Control, media, and snapshot routes,
+serves four static WebUI files, and proxies fixed routes through Host and
+Origin checks. Plain HTTP is limited to ONVIF SOAP compatibility. Its pumps
+are nonblocking and bounded.
 CGI, dynamic request plugins, script queues, and request-time child processes
 are absent from the target build.
 

@@ -174,7 +174,7 @@ class SourceProfileTests(unittest.TestCase):
         self.assertEqual(profile["model"], "DCS-6100LHV2")
         self.assertEqual(profile["hardware_revision"], "A1")
         self.assertEqual(len(profile["thingino_patches"]), 19)
-        self.assertEqual(len(profile["installed_files"]), 149)
+        self.assertEqual(len(profile["installed_files"]), 150)
         self.assertEqual(
             profile["installed_files"][0]["destination"],
             "configs/cameras-exp/"
@@ -303,6 +303,7 @@ class SourceProfileTests(unittest.TestCase):
                 "package/thingino-uhttpd/0012-keep-mjpeg-encoder-profile-static.patch",
                 "package/thingino-uhttpd/0013-never-cache-static-html-shell.patch",
                 "package/thingino-uhttpd/0014-allow-prometheus-control-responses.patch",
+                "package/thingino-uhttpd/0015-require-authenticated-tls-ingress.patch",
             }
             <= installed_destinations
         )
@@ -1151,7 +1152,6 @@ class SourceProfileTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         for required in (
             "CONTROL_ONVIF_PORT 1999",
-            "X-Thingino-Proxy: 2",
             "control_proxy_is_media_url(url)",
             "uh_dispatch_add(&control_proxy_dispatch)",
             "CGI execution is disabled",
@@ -1160,6 +1160,23 @@ class SourceProfileTests(unittest.TestCase):
             self.assertIn(required, no_cgi_proxy)
         self.assertNotIn("+\tpid = fork();", no_cgi_proxy)
         self.assertNotIn("+\t\t\texecl(", no_cgi_proxy)
+        hardened_ingress = (
+            ROOT / "patches/uhttpd/0015-require-authenticated-tls-ingress.patch"
+        ).read_text(encoding="utf-8")
+        for required in (
+            '"; Path=/; Max-Age=86400; Secure; HttpOnly; SameSite=Strict"',
+            '"thingino_session=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=Strict"',
+            "control_proxy_host_allowed",
+            "control_proxy_origin_matches",
+            "if (!control_proxy_tls(cl) && !proxy->onvif)",
+            'control_proxy_fail(cl, 426, "Upgrade Required", "https_required")',
+            'control_proxy_fail(cl, 421, "Misdirected Request", "invalid_origin")',
+            '"Strict-Transport-Security"',
+            '"X-Thingino-Proxy: 1\\r\\nX-Thingino-Remote-Addr: %s\\r\\n"',
+        ):
+            self.assertIn(required, hardened_ingress)
+        self.assertIn('-\t\t\t\t"X-Thingino-Proxy: 2\\r\\n");', hardened_ingress)
+        self.assertNotIn('+\t\t\t\t"X-Thingino-Proxy: 2\\r\\n");', hardened_ingress)
         no_script_runtime = (
             ROOT / "patches/uhttpd/0009-remove-request-script-runtime.patch"
         ).read_text(encoding="utf-8")

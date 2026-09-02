@@ -6,6 +6,7 @@ import os
 import queue
 import socket
 import socketserver
+import ssl
 import subprocess
 import sys
 import tempfile
@@ -84,6 +85,21 @@ class Handler(socketserver.StreamRequestHandler):
             )
             return
         if target.startswith("/api/v1/internal/media-authorize?target="):
+            values = dict(headers)
+            authorized = any(
+                values.get(name)
+                for name in ("authorization", "cookie", "x-api-key")
+            )
+            if values.get("x-thingino-proxy") != "1" or not authorized:
+                payload = b'{"status":"error","error":{"code":"unauthorized"}}\n'
+                self.wfile.write(
+                    b"HTTP/1.1 401 Unauthorized\r\n"
+                    b"Content-Type: application/json\r\nContent-Length: "
+                    + str(len(payload)).encode()
+                    + b"\r\nConnection: close\r\n\r\n"
+                    + payload
+                )
+                return
             self.wfile.write(
                 b"HTTP/1.1 204 No Content\r\nContent-Type: application/json\r\n"
                 b"Content-Length: 0\r\nConnection: close\r\n\r\n"
@@ -114,7 +130,7 @@ class Handler(socketserver.StreamRequestHandler):
             self.wfile.write(
                 b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
                 b"Set-Cookie: thingino_session=0123456789abcdef0123456789abcdef; "
-                b"Path=/; Max-Age=86400; HttpOnly; SameSite=Strict\r\n"
+                b"Path=/; Max-Age=86400; Secure; HttpOnly; SameSite=Strict\r\n"
                 b"Content-Length: "
                 + str(len(payload)).encode()
                 + b"\r\nConnection: close\r\n\r\n"
@@ -124,7 +140,7 @@ class Handler(socketserver.StreamRequestHandler):
         if target == "/api/v1/auth/logout":
             self.wfile.write(
                 b"HTTP/1.1 204 No Content\r\nContent-Type: application/json\r\n"
-                b"Set-Cookie: thingino_session=; Path=/; Max-Age=0; HttpOnly; "
+                b"Set-Cookie: thingino_session=; Path=/; Max-Age=0; Secure; HttpOnly; "
                 b"SameSite=Strict\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
             )
             return
@@ -155,8 +171,16 @@ class Handler(socketserver.StreamRequestHandler):
         )
 
 
-def request(method, path, headers=None, body=b"", timeout=7):
-    connection = http.client.HTTPConnection("127.0.0.1", 18080, timeout=timeout)
+def request(method, path, headers=None, body=b"", timeout=7, secure=True):
+    if secure:
+        connection = http.client.HTTPSConnection(
+            "127.0.0.1",
+            18443,
+            timeout=timeout,
+            context=ssl._create_unverified_context(),
+        )
+    else:
+        connection = http.client.HTTPConnection("127.0.0.1", 18080, timeout=timeout)
     connection.request(method, path, body=body, headers=headers or {})
     response = connection.getresponse()
     payload = response.read()
@@ -190,6 +214,29 @@ def main():
     with tempfile.TemporaryDirectory(prefix="thingino-uhttpd-proxy-") as root:
         with open(os.path.join(root, "ready.txt"), "wb") as output:
             output.write(b"ready\n")
+        certificate = os.path.join(root, "test.crt")
+        private_key = os.path.join(root, "test.key")
+        subprocess.run(
+            [
+                "openssl",
+                "req",
+                "-x509",
+                "-newkey",
+                "rsa:2048",
+                "-nodes",
+                "-days",
+                "1",
+                "-subj",
+                "/CN=127.0.0.1",
+                "-keyout",
+                private_key,
+                "-out",
+                certificate,
+            ],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
         backend = Backend(("127.0.0.1", 1998))
         backend_thread = threading.Thread(target=backend.serve_forever, daemon=True)
         backend_thread.start()
@@ -207,6 +254,12 @@ def main():
                 root,
                 "-p",
                 "127.0.0.1:18080",
+                "-s",
+                "127.0.0.1:18443",
+                "-C",
+                certificate,
+                "-K",
+                private_key,
                 "-T",
                 "8",
                 "-E",
@@ -218,8 +271,13 @@ def main():
         )
         try:
             wait_ready(process)
-            fallback_status, _, fallback_body = request("GET", "/preview.html")
+            assert request("GET", "/ready.txt", secure=False)[0] == 426
+            assert request("GET", "/api/v1/health", secure=False)[0] == 426
+            fallback_status, fallback_headers, fallback_body = request(
+                "GET", "/preview.html"
+            )
             assert fallback_status == 200 and fallback_body == b"ready\n"
+            assert fallback_headers["Strict-Transport-Security"] == "max-age=31536000"
             status, response_headers, payload = request(
                 "GET",
                 "/api/v1/health",
@@ -234,6 +292,7 @@ def main():
             )
             assert status == 200
             assert response_headers["Cache-Control"] == "no-store"
+            assert response_headers["Strict-Transport-Security"] == "max-age=31536000"
             assert payload == b'{"target":"/api/v1/health"}\n'
             method, target, version, headers, body = backend.requests.get(timeout=1)
             assert (method, target, version, body) == ("GET", "/api/v1/health", "HTTP/1.1", b"")
@@ -242,6 +301,22 @@ def main():
             assert one_header(headers, "x-api-key") == "fixture-key"
             assert one_header(headers, "x-thingino-proxy") == "1"
             assert one_header(headers, "x-thingino-remote-addr") == "127.0.0.1"
+
+            assert request(
+                "GET", "/api/v1/health", {"Host": "camera.example.com"}
+            )[0] == 421
+            assert request(
+                "GET",
+                "/api/v1/health",
+                {"Host": "camera.local", "Origin": "https://attacker.example"},
+            )[0] == 421
+            assert request(
+                "GET",
+                "/api/v1/health",
+                {"Host": "camera.local", "Origin": "https://camera.local"},
+            )[0] == 200
+            _, same_origin_target, _, _, _ = backend.requests.get(timeout=1)
+            assert same_origin_target == "/api/v1/health"
 
             metrics_status, metrics_headers, metrics_body = request(
                 "GET", "/api/v1/runtime/media/metrics"
@@ -282,6 +357,7 @@ def main():
                 "%2Fapi%2Fv1%2Factions%2Fsnapshot%3Fstream_id%3D0"
             )
             assert one_header(headers, "cookie") == "thingino_session=fixture"
+            assert one_header(headers, "x-thingino-proxy") == "1"
             method, target, version, headers, body = media_backend.requests.get(
                 timeout=1
             )
@@ -293,8 +369,20 @@ def main():
             )
             assert all(name != "cookie" for name, _ in headers)
 
+            assert request("GET", "/onvif/image1.cgi")[0] == 401
+            method, target, version, headers, body = backend.requests.get(timeout=1)
+            assert method == "GET" and version == "HTTP/1.1" and body == b""
+            assert target == (
+                "/api/v1/internal/media-authorize?target=%2Fonvif%2Fimage1.cgi"
+            )
+            assert one_header(headers, "x-thingino-proxy") == "1"
+            assert all(
+                name not in ("authorization", "cookie", "x-api-key")
+                for name, _ in headers
+            )
+
             onvif_status, onvif_headers, onvif_body = request(
-                "GET", "/onvif/image1.cgi"
+                "GET", "/onvif/image1.cgi", {"X-API-Key": "fixture-key"}
             )
             assert onvif_status == 200
             assert onvif_headers["Content-Type"] == "image/jpeg"
@@ -307,7 +395,8 @@ def main():
             assert target == (
                 "/api/v1/internal/media-authorize?target=%2Fonvif%2Fimage1.cgi"
             )
-            assert one_header(headers, "x-thingino-proxy") == "2"
+            assert one_header(headers, "x-thingino-proxy") == "1"
+            assert one_header(headers, "x-api-key") == "fixture-key"
             method, target, version, headers, body = media_backend.requests.get(
                 timeout=1
             )
@@ -348,14 +437,14 @@ def main():
             assert login_status == 200 and login_body
             assert login_headers["Set-Cookie"] == (
                 "thingino_session=0123456789abcdef0123456789abcdef; "
-                "Path=/; Max-Age=86400; HttpOnly; SameSite=Strict"
+                "Path=/; Max-Age=86400; Secure; HttpOnly; SameSite=Strict"
             )
             logout_status, logout_headers, logout_body = request(
                 "POST", "/api/v1/auth/logout"
             )
             assert logout_status == 204 and logout_body == b""
             assert logout_headers["Set-Cookie"] == (
-                "thingino_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict"
+                "thingino_session=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=Strict"
             )
             assert request("GET", "/api/v1/bad-cookie")[0] == 502
 

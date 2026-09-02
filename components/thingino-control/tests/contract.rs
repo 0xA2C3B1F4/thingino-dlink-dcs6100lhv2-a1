@@ -69,6 +69,16 @@ impl FakeBackend {
 }
 
 impl Backend for FakeBackend {
+    fn authorize_media(&self, target: &str) -> bool {
+        matches!(
+            target,
+            "/api/v1/actions/snapshot?stream_id=0"
+                | "/api/v1/actions/snapshot?stream_id=1"
+                | "/onvif/image.cgi"
+                | "/onvif/image1.cgi"
+        )
+    }
+
     fn request(
         &self,
         route: BackendRoute,
@@ -331,12 +341,15 @@ impl AuthFixture {
                 .unwrap()],
         )
         .unwrap();
-        headers
+        let cookie = headers
             .lines()
             .find_map(|line| line.strip_prefix("Set-Cookie: thingino_session="))
-            .and_then(|value| value.split(';').next())
-            .unwrap()
-            .to_owned()
+            .unwrap();
+        assert!(
+            cookie.ends_with("; Path=/; Max-Age=86400; Secure; HttpOnly; SameSite=Strict"),
+            "session cookie is missing its security attributes: {cookie}"
+        );
+        cookie.split(';').next().unwrap().to_owned()
     }
 }
 
@@ -722,42 +735,36 @@ fn whip_proxy_timeout_is_bounded() {
 }
 
 #[test]
-fn onvif_snapshot_bridge_is_exact_and_internal_only() {
-    let server = RunningServer::start(Arc::new(FakeBackend::new(Behavior::Success)));
+fn onvif_snapshots_use_the_normal_authenticated_media_path() {
+    let fixture = AuthFixture::new();
+    let server = RunningServer::start_with_web_auth(
+        Arc::new(FakeBackend::new(Behavior::Success)),
+        fixture.web_auth(),
+    );
 
     for target in ["%2Fonvif%2Fimage.cgi", "%2Fonvif%2Fimage1.cgi"] {
-        let response = raw_request(
+        let unauthorized = raw_request(
             &server,
             format!(
-                "GET /api/v1/internal/media-authorize?target={target} HTTP/1.1\r\nHost: fixture\r\nX-Thingino-Proxy: 2\r\nContent-Length: 0\r\n\r\n"
+                "GET /api/v1/internal/media-authorize?target={target} HTTP/1.1\r\nHost: fixture\r\nX-Thingino-Proxy: 1\r\nContent-Length: 0\r\n\r\n"
             )
             .as_bytes(),
         );
-        assert_eq!(response, (204, Vec::new()));
-    }
+        assert_eq!(unauthorized.0, 401);
 
-    for stream_id in [0, 1] {
-        let response = raw_exchange(
+        let authorized = raw_request(
             &server,
             format!(
-                "GET /api/v1/internal/onvif-snapshot?stream={stream_id} HTTP/1.1\r\nHost: fixture\r\nX-Thingino-Proxy: 2\r\nContent-Length: 0\r\n\r\n"
+                "GET /api/v1/internal/media-authorize?target={target} HTTP/1.1\r\nHost: fixture\r\nX-Thingino-Proxy: 1\r\nX-API-Key: fixture-api-key\r\nContent-Length: 0\r\n\r\n"
             )
             .as_bytes(),
         );
-        let (status, body) = read_response_bytes(response.clone());
-        assert_eq!(status, 200);
-        assert_eq!(body, [0xff, 0xd8, stream_id, 0xff, 0xd9]);
-        assert!(
-            !response
-                .windows(b"Content-Disposition".len())
-                .any(|value| value == b"Content-Disposition")
-        );
+        assert_eq!(authorized, (204, Vec::new()));
     }
 
     for request in [
-        b"GET /api/v1/internal/onvif-snapshot?stream=0 HTTP/1.1\r\nHost: fixture\r\nContent-Length: 0\r\n\r\n".as_slice(),
-        b"GET /api/v1/internal/onvif-snapshot?stream=2 HTTP/1.1\r\nHost: fixture\r\nX-Thingino-Proxy: 2\r\nContent-Length: 0\r\n\r\n".as_slice(),
-        b"GET /api/v1/internal/media-authorize?target=%2Fonvif%2Fimage.cgi HTTP/1.1\r\nHost: fixture\r\nContent-Length: 0\r\n\r\n".as_slice(),
+        b"GET /api/v1/internal/media-authorize?target=%2Fonvif%2Fimage.cgi HTTP/1.1\r\nHost: fixture\r\nX-Thingino-Proxy: 2\r\nContent-Length: 0\r\n\r\n".as_slice(),
+        b"GET /api/v1/internal/onvif-snapshot?stream=0 HTTP/1.1\r\nHost: fixture\r\nX-Thingino-Proxy: 2\r\nContent-Length: 0\r\n\r\n".as_slice(),
         b"GET /api/v1/health HTTP/1.1\r\nHost: fixture\r\nX-Thingino-Proxy: 2\r\nContent-Length: 0\r\n\r\n".as_slice(),
     ] {
         assert_eq!(raw_request(&server, request).0, 401);

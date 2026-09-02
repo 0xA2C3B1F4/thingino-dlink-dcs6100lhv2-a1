@@ -10,7 +10,7 @@ still required for a public release.
 | MJPEG fallback | Implemented for both streams | Browser and camera checks passed; remains available if rwd fails |
 | Snapshots | Separate stream0 and stream1 JPEG paths | Both returned complete JPEG responses on the tested candidate |
 | RTSP | Authenticated Prudynt RTSP | H.264 main stream and concurrent preview passed |
-| ONVIF | Persistent loopback service behind uhttpd | WS-Security and snapshot paths passed on the development camera |
+| ONVIF | Persistent loopback service behind uhttpd | SOAP retains its compatibility listener; snapshot paths now require management authentication and need renewed device acceptance |
 | Day and night | Auto, Day, Night, IR-cut, and 850 nm IR | Physical transitions passed; selected encoder rate remains 15 fps |
 | Audio | Microphone, speaker state, and AAC path | Device checks passed; talkback is separate from the first WebRTC scope |
 | OSD and privacy | Prudynt hardware-OSD pipeline | Main and substream behavior passed on the development camera |

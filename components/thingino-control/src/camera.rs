@@ -347,7 +347,10 @@ impl Backend for PrudyntBackend {
     fn authorize_media(&self, target: &str) -> bool {
         if matches!(
             target,
-            "/api/v1/actions/snapshot?stream_id=0" | "/api/v1/actions/snapshot?stream_id=1"
+            "/api/v1/actions/snapshot?stream_id=0"
+                | "/api/v1/actions/snapshot?stream_id=1"
+                | "/onvif/image.cgi"
+                | "/onvif/image1.cgi"
         ) {
             return true;
         }

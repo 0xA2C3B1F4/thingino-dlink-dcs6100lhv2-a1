@@ -1,0 +1,210 @@
+diff --git a/control_proxy.c b/control_proxy.c
+--- a/control_proxy.c
++++ b/control_proxy.c
+@@ -43,9 +43,9 @@ static bool control_proxy_session_cookie(const char *value)
+ {
+ 	static const char prefix[] = "thingino_session=";
+ 	static const char login_suffix[] =
+-		"; Path=/; Max-Age=86400; HttpOnly; SameSite=Strict";
++		"; Path=/; Max-Age=86400; Secure; HttpOnly; SameSite=Strict";
+ 	static const char logout[] =
+-		"thingino_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict";
++		"thingino_session=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=Strict";
+ 	const char *session;
+ 	unsigned int i;
+ 
+@@ -191,6 +191,111 @@ static const char *control_proxy_header(struct client *cl, const char *name)
+ 			return blobmsg_get_string(cur);
+ 	}
+ 	return NULL;
++}
++
++static bool control_proxy_tls(struct client *cl)
++{
++#ifdef HAVE_TLS
++	return cl->tls;
++#else
++	(void) cl;
++	return false;
++#endif
++}
++
++static bool control_proxy_valid_port(const char *value)
++{
++	char *end;
++	long port;
++
++	if (!value || !*value)
++		return false;
++	errno = 0;
++	port = strtol(value, &end, 10);
++	return !errno && !*end && port >= 1 && port <= 65535;
++}
++
++static bool control_proxy_valid_dns_name(char *name)
++{
++	char *cursor, *label;
++	size_t length;
++
++	length = strlen(name);
++	if (length && name[length - 1] == '.')
++		name[--length] = 0;
++	if (!length || length > 253)
++		return false;
++	label = name;
++	for (cursor = name; ; cursor++) {
++		if (*cursor && *cursor != '.')
++			continue;
++		if (cursor == label || cursor - label > 63 ||
++		    !isalnum((unsigned char) label[0]) ||
++		    !isalnum((unsigned char) cursor[-1]))
++			return false;
++		for (char *value = label; value < cursor; value++) {
++			if (!isalnum((unsigned char) *value) && *value != '-')
++				return false;
++		}
++		if (!*cursor)
++			break;
++		label = cursor + 1;
++	}
++	return true;
++}
++
++static bool control_proxy_host_allowed(const char *value)
++{
++	struct in_addr ipv4;
++	struct in6_addr ipv6;
++	const char *close, *colon;
++	char host[256];
++	size_t length;
++
++	if (!value || !*value || strlen(value) >= sizeof(host))
++		return false;
++	if (value[0] == '[') {
++		close = strchr(value, ']');
++		if (!close || close == value + 1 ||
++		    (close[1] && (close[1] != ':' ||
++		     !control_proxy_valid_port(close + 2))))
++			return false;
++		length = close - value - 1;
++		memcpy(host, value + 1, length);
++		host[length] = 0;
++		return inet_pton(AF_INET6, host, &ipv6) == 1;
++	}
++	colon = strrchr(value, ':');
++	if (colon) {
++		if (strchr(value, ':') != colon ||
++		    !control_proxy_valid_port(colon + 1))
++			return false;
++		length = colon - value;
++	} else {
++		length = strlen(value);
++	}
++	if (!length || length >= sizeof(host))
++		return false;
++	memcpy(host, value, length);
++	host[length] = 0;
++	if (inet_pton(AF_INET, host, &ipv4) == 1)
++		return true;
++	if (!control_proxy_valid_dns_name(host))
++		return false;
++	length = strlen(host);
++	return !strchr(host, '.') ||
++	       (length > 6 && !strcasecmp(host + length - 6, ".local")) ||
++	       (length > 10 && !strcasecmp(host + length - 10, ".home.arpa"));
++}
++
++static bool control_proxy_origin_matches(const char *origin, const char *host,
++					 bool tls)
++{
++	const char *scheme = tls ? "https://" : "http://";
++	size_t length = strlen(scheme);
++
++	return !origin || (!strncasecmp(origin, scheme, length) &&
++			   origin[length] && !strcasecmp(origin + length, host));
+ }
+ 
+ static bool control_proxy_status(struct dispatch_control_proxy *proxy, char *line)
+@@ -336,6 +441,9 @@ static bool control_proxy_finish_headers(struct client *cl)
+ 	if (proxy->stream_until_eof)
+ 		cl->request.connection_close = true;
+ 	blobmsg_add_string(&proxy->hdr, "Cache-Control", "no-store");
++	if (control_proxy_tls(cl))
++		blobmsg_add_string(&proxy->hdr, "Strict-Transport-Security",
++			"max-age=31536000");
+ 	uh_http_header(cl, proxy->status_code, proxy->status_msg);
+ 	blob_for_each_attr(cur, proxy->hdr.head, rem)
+ 		ustream_printf(cl->us, "%s: %s\r\n", blobmsg_name(cur),
+@@ -870,6 +978,7 @@ static void control_proxy_request(struct client *cl, char *url,
+ {
+ 	struct dispatch_control_proxy *proxy = &cl->dispatch.control_proxy;
+ 	const char *authorization, *cookie, *api_key, *accept, *content_type;
++	const char *host, *origin;
+ 	char remote[INET6_ADDRSTRLEN];
+ 	const void *remote_address;
+ 	bool media, onvif, onvif_snapshot;
+@@ -888,7 +997,19 @@ static void control_proxy_request(struct client *cl, char *url,
+ 	proxy->media = media;
+ 	proxy->onvif = onvif && !onvif_snapshot;
+ 	proxy->onvif_snapshot = onvif_snapshot;
++	host = control_proxy_header(cl, "host");
++	origin = control_proxy_header(cl, "origin");
+ 
++	if (!control_proxy_tls(cl) && !proxy->onvif) {
++		control_proxy_fail(cl, 426, "Upgrade Required", "https_required");
++		return;
++	}
++	if (!control_proxy_host_allowed(host) ||
++	    !control_proxy_origin_matches(origin, host, control_proxy_tls(cl))) {
++		control_proxy_fail(cl, 421, "Misdirected Request", "invalid_origin");
++		return;
++	}
++
+ 	if (cl->request.transfer_chunked) {
+ 		control_proxy_fail(cl, 400, "Bad Request", "bad_request");
+ 		return;
+@@ -947,9 +1068,6 @@ static void control_proxy_request(struct client *cl, char *url,
+ 			"GET /api/v1/internal/media-authorize?target=%s HTTP/1.1\r\n"
+ 			"Host: %s:%d\r\nConnection: close\r\nContent-Length: 0\r\n",
+ 			encoded_target, CONTROL_PROXY_HOST, CONTROL_PROXY_PORT);
+-		if (onvif_snapshot)
+-			ustream_printf(&proxy->backend.stream,
+-				"X-Thingino-Proxy: 2\r\n");
+ 	} else {
+ 		ustream_printf(&proxy->backend.stream,
+ 			"%s %s HTTP/1.1\r\nHost: %s:%d\r\nConnection: close\r\n"
+@@ -983,7 +1101,7 @@ static void control_proxy_request(struct client *cl, char *url,
+ 		if (onvif && !onvif_snapshot)
+ 			ustream_printf(&proxy->backend.stream,
+ 				"X-Thingino-Remote-Addr: %s\r\n", remote);
+-		else if (!onvif_snapshot)
++		else
+ 			ustream_printf(&proxy->backend.stream,
+ 				"X-Thingino-Proxy: 1\r\nX-Thingino-Remote-Addr: %s\r\n",
+ 				remote);
+diff --git a/file.c b/file.c
+--- a/file.c
++++ b/file.c
+@@ -635,6 +635,22 @@ static bool uh_file_is_html(const char *name)
+ 
+ static void uh_file_data(struct client *cl, struct path_info *pi, int fd)
+ {
++	bool tls = false;
++
++#ifdef HAVE_TLS
++	tls = cl->tls;
++#endif
++	if (!tls) {
++		close(fd);
++		cl->request.disable_chunked = true;
++		uh_http_header(cl, 426, "Upgrade Required");
++		ustream_printf(cl->us, "Content-Length: 0\r\n\r\n");
++		uh_request_done(cl);
++		return;
++	}
++	blobmsg_add_string(&cl->hdr_response, "Strict-Transport-Security",
++		"max-age=31536000");
++
+ 	/*
+ 	 * The D-Link WebUI shell selects content-addressed JavaScript and CSS.
+ 	 * Never let a cached HTML shell retain an older unversioned asset URL

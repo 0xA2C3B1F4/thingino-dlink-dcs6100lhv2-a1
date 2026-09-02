@@ -116,7 +116,7 @@ pub(crate) fn handle_public_auth_route(
                         }
                     );
                     let cookie = format!(
-                        "thingino_session={}; Path=/; Max-Age=86400; HttpOnly; SameSite=Strict",
+                        "thingino_session={}; Path=/; Max-Age=86400; Secure; HttpOnly; SameSite=Strict",
                         result.session_id
                     );
                     let _ = send_response_headers(
@@ -170,7 +170,7 @@ pub(crate) fn handle_public_auth_route(
                 b"",
                 &[(
                     "Set-Cookie",
-                    "thingino_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict",
+                    "thingino_session=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=Strict",
                 )],
             );
             true
@@ -187,7 +187,7 @@ pub(crate) fn handle_public_auth_route(
                 &[
                     (
                         "Set-Cookie",
-                        "thingino_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict",
+                        "thingino_session=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=Strict",
                     ),
                     ("Location", "/login.html"),
                 ],
@@ -667,55 +667,6 @@ pub(crate) fn handle_client(mut stream: TcpStream, state: &SharedState, deadline
 
     if handle_public_auth_route(&mut stream, &request, state, deadline) {
         return;
-    }
-
-    if request.proxy_marker.as_deref() == Some(b"2")
-        && request.method == "GET"
-        && request.body.is_empty()
-    {
-        let media_target = request
-            .target
-            .strip_prefix("/api/v1/internal/media-authorize?target=")
-            .and_then(percent_decode);
-        if media_target
-            .as_deref()
-            .is_some_and(|target| matches!(target, "/onvif/image.cgi" | "/onvif/image1.cgi"))
-        {
-            let _ = send_response(
-                &mut stream,
-                deadline,
-                204,
-                "No Content",
-                "application/json",
-                b"",
-            );
-            return;
-        }
-        let route = match request.target.as_str() {
-            "/api/v1/internal/onvif-snapshot?stream=0" => Some(BackendRoute::Snapshot(0)),
-            "/api/v1/internal/onvif-snapshot?stream=1" => Some(BackendRoute::Snapshot(1)),
-            _ => None,
-        };
-        if let Some(route) = route {
-            let backend_deadline = deadline.checked_sub(RESPONSE_RESERVE).unwrap_or(deadline);
-            let Some(_permit) = state.gate.acquire(backend_deadline) else {
-                let _ = send_error(
-                    &mut stream,
-                    deadline,
-                    504,
-                    "backend_timeout",
-                    "backend timed out",
-                );
-                return;
-            };
-            send_backend_result(
-                &mut stream,
-                deadline,
-                state.backend.request(route, backend_deadline),
-                None,
-            );
-            return;
-        }
     }
 
     if !request_authorized(&request, state) {

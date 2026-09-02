@@ -144,8 +144,11 @@ fn media_authorization_allows_only_canonical_snapshot_urls() {
     let backend = PrudyntBackend::new(CameraPaths::default());
     assert!(backend.authorize_media("/api/v1/actions/snapshot?stream_id=0"));
     assert!(backend.authorize_media("/api/v1/actions/snapshot?stream_id=1"));
+    assert!(backend.authorize_media("/onvif/image.cgi"));
+    assert!(backend.authorize_media("/onvif/image1.cgi"));
     assert!(!backend.authorize_media("/api/v1/actions/snapshot?stream_id=2"));
     assert!(!backend.authorize_media("/api/v1/actions/snapshot?stream_id=0&download=1"));
+    assert!(!backend.authorize_media("/onvif/image.cgi?stream=1"));
 }
 
 #[test]
