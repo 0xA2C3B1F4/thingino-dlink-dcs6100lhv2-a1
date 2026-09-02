@@ -13,10 +13,10 @@ index 87443a6..5f3433a 100644
  	ADD_DEFINITIONS(-DHAVE_TLS)
 diff --git a/control_proxy.c b/control_proxy.c
 new file mode 100644
-index 0000000..914f709
+index 0000000..cfccb97
 --- /dev/null
 +++ b/control_proxy.c
-@@ -0,0 +1,827 @@
+@@ -0,0 +1,832 @@
 +/*
 + * D-Link Thingino Thingino Control reverse proxy.
 + *

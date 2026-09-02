@@ -67,6 +67,72 @@ class SourceProfileTests(unittest.TestCase):
                     f"project patch has identity metadata: {patch_path.relative_to(ROOT)}",
                 )
 
+    def test_uhttpd_onvif_patch_preserves_control_proxy_headers(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as raw_directory:
+            checkout = Path(raw_directory)
+            git(checkout, "init", "-q")
+            git(
+                checkout,
+                "apply",
+                "--include=control_proxy.c",
+                str(
+                    ROOT
+                    / "patches"
+                    / "uhttpd"
+                    / "0007-proxy-thingino-control.patch"
+                ),
+            )
+            onvif_patch = (
+                ROOT
+                / "patches"
+                / "uhttpd"
+                / "0008-disable-cgi-and-proxy-onvif.patch"
+            ).read_text(encoding="utf-8")
+            control_start = onvif_patch.index(
+                "diff --git a/control_proxy.c b/control_proxy.c\n"
+            )
+            control_end = onvif_patch.index(
+                "diff --git a/main.c b/main.c\n", control_start
+            )
+            strict_patch = subprocess.run(
+                ["patch", "-F0", "-p1", "--batch"],
+                cwd=checkout,
+                check=False,
+                input=onvif_patch[control_start:control_end],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            )
+            self.assertEqual(strict_patch.returncode, 0, strict_patch.stdout)
+
+            control_proxy = (checkout / "control_proxy.c").read_text(
+                encoding="utf-8"
+            )
+            for required in (
+                "const char *requested_with;",
+                'requested_with = control_proxy_header(cl, "x-requested-with");',
+                '"X-Requested-With: Thingino-WebUI\\r\\n"',
+                "CONTROL_ONVIF_PORT 1999",
+                "onvif_snapshot",
+                "struct dispatch_handler control_proxy_dispatch = {",
+                ".check_url = control_proxy_url,",
+                ".handle_request = control_proxy_request,",
+            ):
+                self.assertIn(required, control_proxy)
+
+        static_html_numstat = git(
+            ROOT,
+            "apply",
+            "--numstat",
+            str(
+                ROOT
+                / "patches"
+                / "uhttpd"
+                / "0013-never-cache-static-html-shell.patch"
+            ),
+        )
+        self.assertEqual(static_html_numstat, "34\t0\tfile.c")
+
     def test_static_webui_cleanup_requires_all_legacy_helpers(self) -> None:
         source = b'''rm -rf "${TARGET_DIR}/var/www"\nrm -rf "${TARGET_DIR}/usr/libexec/thingino-webui"\nrm -f "${TARGET_DIR}/usr/sbin/formatsd" \\\n+    "${TARGET_DIR}/usr/sbin/envfromcard" \\\n+    "${TARGET_DIR}/usr/sbin/telegram-cam-register" \\\n+    "${TARGET_DIR}/usr/sbin/telegram-cam-agent"\n'''
         PREP.validate_static_webui_cleanup(source)

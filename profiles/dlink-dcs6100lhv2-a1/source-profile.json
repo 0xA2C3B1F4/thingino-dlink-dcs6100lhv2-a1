@@ -709,12 +709,12 @@
     },
     {
       "destination": "package/thingino-uhttpd/0007-proxy-thingino-control.patch",
-      "sha256": "4b23ad48ad82a5559355597372792d35b8b0dcfd3b2053c24b0214ab939fd8e7",
+      "sha256": "010a31277f9b7faf5bc379fe820db53d8093983e9e4cfbeb57ce0bb8234ab1a5",
       "source": "patches/uhttpd/0007-proxy-thingino-control.patch"
     },
     {
       "destination": "package/thingino-uhttpd/0008-disable-cgi-and-proxy-onvif.patch",
-      "sha256": "2f6b7c893a0def43c4b79f9489cd40dd81fb27758a7f63b6acffa52c0c05f53f",
+      "sha256": "562c75f5448ee8d79e785a09af44f820a563de41e6637a6e05196dcf6cd483b3",
       "source": "patches/uhttpd/0008-disable-cgi-and-proxy-onvif.patch"
     },
     {
@@ -739,7 +739,7 @@
     },
     {
       "destination": "package/thingino-uhttpd/0013-never-cache-static-html-shell.patch",
-      "sha256": "11190746ab46bbe0a48686dff97412f14d7e5df16b4365ff9baeb9d34f897451",
+      "sha256": "d92fba9d96b980473b85f3d475887a9474c2ae37c33c964c6893e050b6373b3b",
       "source": "patches/uhttpd/0013-never-cache-static-html-shell.patch"
     },
     {

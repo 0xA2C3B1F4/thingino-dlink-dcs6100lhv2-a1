@@ -38,10 +38,10 @@ index 23072c8..c001d7a 100644
  
  static void cgi_handle_request(struct client *cl, char *url, struct path_info *pi)
 diff --git a/control_proxy.c b/control_proxy.c
-index 914f709..29d2874 100644
+index cfccb97..b1fa374 100644
 --- a/control_proxy.c
 +++ b/control_proxy.c
-@@ -19,8 +19,10 @@
+@@ -20,8 +20,10 @@
  #define CONTROL_PROXY_HOST "127.0.0.1"
  #define CONTROL_PROXY_PORT 1998
  #define CONTROL_MEDIA_PORT 8080
@@ -52,7 +52,7 @@ index 914f709..29d2874 100644
  #define CONTROL_PROXY_MAX_RESPONSE (2 * 1024 * 1024)
  #define CONTROL_PROXY_WRITE_BUFFER 8192
  #define CONTROL_LOCAL_FILE_PATH_MAX 512
-@@ -143,6 +145,14 @@ static bool control_proxy_status(struct dispatch_control_proxy *proxy, char *lin
+@@ -182,6 +184,14 @@ static bool control_proxy_status(struct dispatch_control_proxy *proxy, char *lin
  	return true;
  }
  
@@ -67,7 +67,7 @@ index 914f709..29d2874 100644
  static bool control_proxy_response_header(struct client *cl, char *line)
  {
  	struct dispatch_control_proxy *proxy = &cl->dispatch.control_proxy;
-@@ -168,11 +178,17 @@ static bool control_proxy_response_header(struct client *cl, char *line)
+@@ -207,11 +217,17 @@ static bool control_proxy_response_header(struct client *cl, char *line)
  
  	if (!strcasecmp(line, "Content-Type")) {
  		if (proxy->content_type_seen ||
@@ -90,7 +90,7 @@ index 914f709..29d2874 100644
  			return false;
  		proxy->content_type_seen = true;
  		blobmsg_add_string(&proxy->hdr, "Content-Type", value);
-@@ -207,6 +223,15 @@ static bool control_proxy_response_header(struct client *cl, char *line)
+@@ -247,6 +263,15 @@ static bool control_proxy_response_header(struct client *cl, char *line)
  		return true;
  	}
  
@@ -106,7 +106,7 @@ index 914f709..29d2874 100644
  	if (!strcasecmp(line, "Transfer-Encoding"))
  		return false;
  
-@@ -557,6 +582,7 @@ static void control_proxy_reset_response(struct dispatch_control_proxy *proxy)
+@@ -624,6 +649,7 @@ static void control_proxy_reset_response(struct dispatch_control_proxy *proxy)
  	proxy->content_disposition_seen = false;
  	proxy->location_seen = false;
  	proxy->set_cookie_seen = false;
@@ -114,7 +114,7 @@ index 914f709..29d2874 100644
  	proxy->headers_done = false;
  	proxy->stream_until_eof = false;
  	blob_buf_free(&proxy->hdr);
-@@ -652,7 +678,16 @@ static bool control_proxy_encode_target(const char *input, char *output,
+@@ -719,7 +745,16 @@ static bool control_proxy_encode_target(const char *input, char *output,
  static bool control_proxy_url(const char *url)
  {
  	return !strncmp(url, "/api/v1/", 8) || !strcmp(url, "/api/v1") ||
@@ -132,8 +132,8 @@ index 914f709..29d2874 100644
  }
  
  static void control_proxy_request(struct client *cl, char *url,
-@@ -662,7 +697,8 @@ static void control_proxy_request(struct client *cl, char *url,
- 	const char *authorization, *cookie, *api_key, *accept, *content_type;
+@@ -730,7 +765,8 @@ static void control_proxy_request(struct client *cl, char *url,
+ 	const char *requested_with;
  	char remote[INET6_ADDRSTRLEN];
  	const void *remote_address;
 -	bool media;
@@ -142,7 +142,7 @@ index 914f709..29d2874 100644
  	char encoded_target[PATH_MAX * 3];
  	(void) pi;
  
-@@ -671,13 +707,19 @@ static void control_proxy_request(struct client *cl, char *url,
+@@ -739,13 +775,19 @@ static void control_proxy_request(struct client *cl, char *url,
  	cl->dispatch.free = control_proxy_free;
  	proxy->finish.cb = control_proxy_finish;
  	media = control_proxy_is_media_url(url);
@@ -163,7 +163,7 @@ index 914f709..29d2874 100644
  		control_proxy_fail(cl, 413, "Payload Too Large", "payload_too_large");
  		return;
  	}
-@@ -688,6 +730,16 @@ static void control_proxy_request(struct client *cl, char *url,
+@@ -756,6 +798,16 @@ static void control_proxy_request(struct client *cl, char *url,
  		control_proxy_fail(cl, 400, "Bad Request", "bad_media_request");
  		return;
  	}
@@ -180,7 +180,7 @@ index 914f709..29d2874 100644
  	if (cl->request.method != UH_HTTP_MSG_GET &&
  	    cl->request.method != UH_HTTP_MSG_POST &&
  	    cl->request.method != UH_HTTP_MSG_PUT &&
-@@ -696,7 +748,9 @@ static void control_proxy_request(struct client *cl, char *url,
+@@ -764,7 +816,9 @@ static void control_proxy_request(struct client *cl, char *url,
  		return;
  	}
  
@@ -191,7 +191,7 @@ index 914f709..29d2874 100644
  		control_proxy_fail(cl, 502, "Bad Gateway", "bad_gateway");
  		return;
  	}
-@@ -718,12 +772,15 @@ static void control_proxy_request(struct client *cl, char *url,
+@@ -786,12 +840,15 @@ static void control_proxy_request(struct client *cl, char *url,
  			"GET /api/v1/internal/media-authorize?target=%s HTTP/1.1\r\n"
  			"Host: %s:%d\r\nConnection: close\r\nContent-Length: 0\r\n",
  			encoded_target, CONTROL_PROXY_HOST, CONTROL_PROXY_PORT);
@@ -208,7 +208,7 @@ index 914f709..29d2874 100644
  			cl->request.content_length);
  	}
  
-@@ -739,18 +800,23 @@ static void control_proxy_request(struct client *cl, char *url,
+@@ -808,9 +865,9 @@ static void control_proxy_request(struct client *cl, char *url,
  		ustream_printf(&proxy->backend.stream, "Cookie: %s\r\n", cookie);
  	if (api_key)
  		ustream_printf(&proxy->backend.stream, "X-API-Key: %s\r\n", api_key);
@@ -219,6 +219,8 @@ index 914f709..29d2874 100644
 +	if (!media && !onvif_snapshot && content_type)
  		ustream_printf(&proxy->backend.stream, "Content-Type: %s\r\n",
  			content_type);
+ 	if (!media && requested_with && !strcmp(requested_with, "Thingino-WebUI"))
+@@ -819,14 +876,19 @@ static void control_proxy_request(struct client *cl, char *url,
  
  	remote_address = cl->peer_addr.family == AF_INET6 ?
  		(const void *) &cl->peer_addr.in6 : (const void *) &cl->peer_addr.in;
@@ -238,6 +240,11 @@ index 914f709..29d2874 100644
  	ustream_printf(&proxy->backend.stream, "\r\n");
  }
  
+ struct dispatch_handler control_proxy_dispatch = {
+ 	.check_url = control_proxy_url,
+ 	.handle_request = control_proxy_request,
+ };
+
 diff --git a/main.c b/main.c
 index 542e890..1ae146a 100644
 --- a/main.c
