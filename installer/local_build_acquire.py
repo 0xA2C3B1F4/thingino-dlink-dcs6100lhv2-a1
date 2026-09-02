@@ -71,6 +71,15 @@ RUST_SOURCE_ALLOWED_CASEFOLD_ALIASES = frozenset(
         for skipped in RUST_SOURCE_SKIPPED_MEMBERS
     }
 )
+
+
+def _cache_generation_identity(label: str, *parts: str) -> str:
+    """Return a domain-separated identity for one immutable cache generation."""
+
+    document = json.dumps([label, *parts], separators=(",", ":"))
+    return hashlib.sha256(document.encode("ascii")).hexdigest()
+
+
 INGENIC_ARCHIVE_TOP = "ingenic-glibc216-toolchain"
 INGENIC_ARCHIVE_REQUIRED = frozenset(
     {
@@ -1037,7 +1046,12 @@ def acquire_locked_public_inputs(*, build_root: Path) -> dict[str, object]:
         "sources_lock_sha256": lock_sha256,
         "thingino_toolchain": dict(thingino_toolchain),
     }
-    manifest_path = cache_root / f"public-inputs-{lock_sha256}.json"
+    manifest_identity = _cache_generation_identity(
+        "public-inputs-v1",
+        lock_sha256,
+        builder_receipt_sha256,
+    )
+    manifest_path = cache_root / f"public-inputs-{manifest_identity}.json"
     if manifest_path.exists() or manifest_path.is_symlink():
         existing = _load_json_object(manifest_path, "public input manifest")
         if existing != result:

@@ -13,6 +13,7 @@ from installer import local_build_acquire
 
 
 IMAGE_ID = "sha256:" + "a" * 64
+SECOND_IMAGE_ID = "sha256:" + "c" * 64
 LOCK_SHA256 = "b" * 64
 ARCHIVE_SHA256 = hashlib.sha256(b"locked archive").hexdigest()
 
@@ -373,8 +374,19 @@ class LocalBuildAcquireTests(unittest.TestCase):
                     rust_source_component_sha256="e" * 64,
                     identity="c" * 64,
                 )
+                next_builder = local_build_acquire._install_rust_toolchain(
+                    cache_root=cache,
+                    builder_image_id=SECOND_IMAGE_ID,
+                    rust_distribution=distribution,
+                    rust_distribution_sha256="d" * 64,
+                    rust_source_component=source_component,
+                    rust_source_component_sha256="e" * 64,
+                    identity="c" * 64,
+                )
             self.assertEqual(first, second)
-            self.assertEqual(run.call_count, 3)
+            self.assertNotEqual(first[0], next_builder[0])
+            self.assertEqual(next_builder[1]["builder_image_id"], SECOND_IMAGE_ID)
+            self.assertEqual(run.call_count, 5)
 
             toolchain = first[0]
             (toolchain / "bin/cargo").write_bytes(b"changed")
@@ -534,6 +546,22 @@ class LocalBuildAcquireTests(unittest.TestCase):
                     build_root=build_root
                 )
             manifest = json.loads(Path(str(result["manifest"])).read_text())
+            builder_receipt_sha256 = hashlib.sha256(b"{}\n").hexdigest()
+            manifest_identity = local_build_acquire._cache_generation_identity(
+                "public-inputs-v1",
+                LOCK_SHA256,
+                builder_receipt_sha256,
+            )
+            next_manifest_identity = local_build_acquire._cache_generation_identity(
+                "public-inputs-v1",
+                LOCK_SHA256,
+                hashlib.sha256(b'{"generation":2}\n').hexdigest(),
+            )
+            self.assertNotEqual(manifest_identity, next_manifest_identity)
+            self.assertEqual(
+                Path(str(result["manifest"])).name,
+                f"public-inputs-{manifest_identity}.json",
+            )
             self.assertEqual(manifest["builder_image"]["id"], IMAGE_ID)
             self.assertEqual(
                 manifest["next_action"],

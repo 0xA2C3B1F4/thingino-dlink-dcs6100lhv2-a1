@@ -266,6 +266,7 @@ def _install_rust_toolchain(facade: object,
     Path = getattr(facade, 'Path')
     RUST_RECEIPT = getattr(facade, 'RUST_RECEIPT')
     RUST_TOOLCHAIN_SCHEMA_VERSION = getattr(facade, 'RUST_TOOLCHAIN_SCHEMA_VERSION')
+    _cache_generation_identity = getattr(facade, '_cache_generation_identity')
     _directory = getattr(facade, '_directory')
     _load_json_object = getattr(facade, '_load_json_object')
     _private_child_directory = getattr(facade, '_private_child_directory')
@@ -285,7 +286,12 @@ def _install_rust_toolchain(facade: object,
     ):
         raise LocalBuildAcquireError("Rust toolchain input identity is invalid")
     parent = _private_child_directory(cache_root, "toolchains")
-    destination = parent / f"rust-arm64-{identity}"
+    cache_identity = _cache_generation_identity(
+        "rust-toolchain-v1",
+        identity,
+        builder_image_id,
+    )
+    destination = parent / f"rust-arm64-{cache_identity}"
     receipt_path = destination / RUST_RECEIPT
     receipt_base: dict[str, object] = {
         "builder_image_id": builder_image_id,
