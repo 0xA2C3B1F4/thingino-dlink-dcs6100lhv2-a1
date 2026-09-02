@@ -16,9 +16,8 @@ from collections.abc import Callable
 from pathlib import Path
 
 from .artifacts import SOURCE_DATE_EPOCH, validate_squashfs
-from .layout import TARGET
 from .media_closure import MediaClosure, load_media_closure
-from .mtd3_image import FOOTER_SIZE
+from .mtd3_split import SYSTEM_FLASH_SPAN
 from .private_config import (
     PrivateConfigError,
     load_private_config_for_session,
@@ -63,6 +62,7 @@ SHA512_CRYPT_PATTERN = re.compile(r"\$6\$[./0-9A-Za-z]{1,16}\$[./0-9A-Za-z]{86}"
 TEMPLATE_ROOT = Path(__file__).with_name("templates")
 EXPECTED_IMAGE_ID = "dlink_dcs6100lhv2_a1_t31n_os02g10_rtl8188fu"
 HA_LIVE_IMAGE_INTERVAL_SECONDS = 5
+FINAL_ROOT_SQUASHFS_BLOCK_SIZE = 1024 * 1024
 MEDIA_MARKERS = (
     b"D-Link 1080p encoder receive path is ready",
     b"/run/prudynt-dlink-media.ready",
@@ -119,6 +119,30 @@ def _write_executable(path: Path, raw: bytes) -> None:
     from .final_root_security import _write_executable as _impl
 
     return _impl(sys.modules[__name__], path, raw)
+
+
+def _build_final_root_squashfs(
+    *, mksquashfs: Path, root: Path, output: Path, label: str
+) -> None:
+    _run(
+        [
+            str(mksquashfs),
+            str(root),
+            str(output),
+            "-comp",
+            "xz",
+            "-b",
+            str(FINAL_ROOT_SQUASHFS_BLOCK_SIZE),
+            "-noappend",
+            "-no-tailends",
+            "-all-root",
+            "-no-xattrs",
+            "-no-progress",
+            "-repro-time",
+            str(SOURCE_DATE_EPOCH),
+        ],
+        label,
+    )
 
 
 def _extract_base_root(*, unsquashfs: Path, source: Path, destination: Path) -> None:
@@ -299,10 +323,10 @@ def prepare_final_root(
     unsquashfs: Path,
     output_size: int | None = None,
 ) -> dict[str, object]:
-    payload_limit = TARGET.partition(3).size - FOOTER_SIZE
+    payload_limit = SYSTEM_FLASH_SPAN
     if output_size is not None and output_size > payload_limit:
         raise FinalRootError(
-            "requested final-root output size exceeds mtd3 SquashFS payload"
+            "requested final-root output size exceeds the fixed mtd3 system region"
         )
     if output_size is not None and output_size <= 0:
         raise FinalRootError("requested final-root output size must be positive")
@@ -438,29 +462,16 @@ def prepare_final_root(
             root / "usr/sbin/dlink-runtime-snapshot",
             (TEMPLATE_ROOT / "dlink-runtime-snapshot").read_bytes(),
         )
-        _run(
-            [
-                str(mksquashfs),
-                str(root),
-                str(output),
-                "-comp",
-                "xz",
-                "-b",
-                "262144",
-                "-noappend",
-                "-no-tailends",
-                "-all-root",
-                "-no-xattrs",
-                "-no-progress",
-                "-repro-time",
-                str(SOURCE_DATE_EPOCH),
-            ],
-            "private final-root build",
+        _build_final_root_squashfs(
+            mksquashfs=mksquashfs,
+            root=root,
+            output=output,
+            label="private final-root build",
         )
         raw = output.read_bytes()
         validate_squashfs(raw)
         if len(raw) > payload_limit:
-            raise FinalRootError("private final-root exceeds mtd3 SquashFS payload")
+            raise FinalRootError("private final-root exceeds the fixed mtd3 system region")
         if output_size is not None:
             if output_size < len(raw):
                 raise FinalRootError(
@@ -644,7 +655,7 @@ def prepare_universal_final_root(
 ) -> dict[str, object]:
     """Build one closed, unprovisioned system image reusable across A1 cameras."""
 
-    payload_limit = TARGET.partition(3).size - FOOTER_SIZE
+    payload_limit = SYSTEM_FLASH_SPAN
     if output_size is not None and not 0 < output_size <= payload_limit:
         raise FinalRootError("requested universal-root output size is invalid")
     validate_squashfs(base_rootfs)
@@ -736,29 +747,16 @@ def prepare_universal_final_root(
         for name in ("thingino-health", "dlink-media-verify", "dlink-runtime-snapshot"):
             _write_executable(root / f"usr/sbin/{name}", (TEMPLATE_ROOT / name).read_bytes())
         _validate_universal_tree(root)
-        _run(
-            [
-                str(mksquashfs),
-                str(root),
-                str(output),
-                "-comp",
-                "xz",
-                "-b",
-                "262144",
-                "-noappend",
-                "-no-tailends",
-                "-all-root",
-                "-no-xattrs",
-                "-no-progress",
-                "-repro-time",
-                str(SOURCE_DATE_EPOCH),
-            ],
-            "universal final-root build",
+        _build_final_root_squashfs(
+            mksquashfs=mksquashfs,
+            root=root,
+            output=output,
+            label="universal final-root build",
         )
         raw = output.read_bytes()
         validate_squashfs(raw)
         if len(raw) > payload_limit:
-            raise FinalRootError("universal final-root exceeds mtd3 SquashFS payload")
+            raise FinalRootError("universal final-root exceeds the fixed mtd3 system region")
         if output_size is not None:
             if output_size < len(raw):
                 raise FinalRootError("requested universal-root size is smaller than SquashFS")

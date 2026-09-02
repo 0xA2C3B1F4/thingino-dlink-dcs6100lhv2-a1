@@ -307,6 +307,11 @@ def _inspect_install_set(facade: object, arguments: argparse.Namespace) -> None:
         "THINGINO2.BIN": stage2,
         "stage1-bootstrap.squashfs": rootfs,
     }
+    if manifest.get("artifact_scope") == "model-universal":
+        universal_path = arguments.install_set_dir / "thingino-universal.tgb"
+        if universal_path.is_symlink() or not universal_path.is_file():
+            raise MediaError("install set is missing a regular universal bundle")
+        expected_artifacts[universal_path.name] = read_snapshot(universal_path)
     artifacts = manifest.get("artifacts")
     if not isinstance(artifacts, dict) or set(artifacts) != set(expected_artifacts):
         raise MediaError("install-set manifest artifact allowlist changed")

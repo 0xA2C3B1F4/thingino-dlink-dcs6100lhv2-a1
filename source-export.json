@@ -522,7 +522,7 @@
       "source": "production/docs/recovery.md"
     },
     "docs/status.md": {
-      "sha256": "f4d99c119c09d243e73e5ec228083641a39da5568b89cea35a59b4903c8dfd5a",
+      "sha256": "e8b8146c00263e1e7ba2b7a4c7d5f11ecb2ad15e0f5272438be527eb1f80928b",
       "source": "production/docs/status.md"
     },
     "docs/testing.md": {
@@ -554,7 +554,7 @@
       "source": "installer/cli_commands_build.py"
     },
     "installer/cli_commands_media.py": {
-      "sha256": "8bee1ae6d3cd7b50116ad84d97564e7641370bdefe116e8a08785d14b4d7688c",
+      "sha256": "3d4a68ce6bf62a7934b34a3ee9139b3dd2bcda8abb9e59e7f48b5c5b63e7932c",
       "source": "installer/cli_commands_media.py"
     },
     "installer/cli_commands_recovery.py": {
@@ -610,7 +610,7 @@
       "source": "installer/final_bundle.py"
     },
     "installer/final_root.py": {
-      "sha256": "7b31fe9dcafb04566121e974b34bb79f1e6447355871d772f8f8c6b521933c2b",
+      "sha256": "37aeda95098a2ea789415f24a0e1cc4704978a91e5565a1054e100dd15cc54b8",
       "source": "installer/final_root.py"
     },
     "installer/final_root_media.py": {
@@ -1470,7 +1470,7 @@
       "source": "tests/test_candidate_log.py"
     },
     "tests/test_cli.py": {
-      "sha256": "3af61d5478c51448f4f6524d6592e0f481f8c12203601be92278f4ec1bdd81c1",
+      "sha256": "b37379aa95b6a0dc898252f26c4ecb82b0eefb913bd3b326f3583c83dd8ad204",
       "source": "tests/test_cli.py"
     },
     "tests/test_collector_build.py": {
@@ -1506,7 +1506,7 @@
       "source": "tests/test_final_bundle.py"
     },
     "tests/test_final_root.py": {
-      "sha256": "96f73a93610dc77c12d8d16813b54d68803b6fd86b9b5c502e1fb5c915cbc0bc",
+      "sha256": "3116e84933d02b78d7438bee129f28d167ef2dc16d8e092a8424c187cbca83db",
       "source": "tests/test_final_root.py"
     },
     "tests/test_full_backup.py": {

@@ -67,6 +67,49 @@ class CliTests(unittest.TestCase):
             self.assertEqual(result["data_mode"], "initialize")
             self.assertEqual(set(result["artifact_sizes"]), set(artifacts))
 
+    def test_inspect_install_set_validates_universal_bundle(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            root = Path(directory_name)
+            artifacts = {
+                cli.DEFAULT_SD_NAME: b"bootstrap",
+                "THINGINO2.BIN": b"stage2",
+                "stage1-bootstrap.squashfs": b"rootfs",
+                "thingino-universal.tgb": b"universal",
+            }
+            for name, raw in artifacts.items():
+                (root / name).write_bytes(raw)
+            (root / "install-set.manifest.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 2,
+                        "artifact_scope": "model-universal",
+                        "artifacts": {
+                            name: {
+                                "size": len(raw),
+                                "sha256": hashlib.sha256(raw).hexdigest(),
+                            }
+                            for name, raw in artifacts.items()
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            payload = mock.Mock(
+                data_mode="initialize",
+                data_flash_span=1_507_328,
+                system_flash_span=6_619_136,
+            )
+            output = io.StringIO()
+            with (
+                mock.patch.object(cli, "validate_install_set", return_value=payload),
+                contextlib.redirect_stdout(output),
+            ):
+                cli._inspect_install_set(argparse.Namespace(install_set_dir=root))
+
+            result = json.loads(output.getvalue())
+            self.assertTrue(result["ok"])
+            self.assertEqual(set(result["artifact_sizes"]), set(artifacts))
+
     def test_stage_media_handler_activates_and_emits_one_result(self) -> None:
         with tempfile.TemporaryDirectory() as directory_name:
             root = Path(directory_name)

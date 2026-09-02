@@ -257,8 +257,8 @@ class FinalRootTests(unittest.TestCase):
         ):
             final_root._configure_ha_live_image({})
 
-    def test_requested_output_size_cannot_exceed_physical_mtd3(self) -> None:
-        with self.assertRaisesRegex(final_root.FinalRootError, "exceeds mtd3 SquashFS payload"):
+    def test_requested_output_size_cannot_exceed_fixed_system_region(self) -> None:
+        with self.assertRaisesRegex(final_root.FinalRootError, "fixed mtd3 system region"):
             final_root.prepare_final_root(
                 base_rootfs=b"hsqs" + b"\0" * 44,
                 wpa_config=b'ssid="test"\npsk=' + b"a" * 64 + b"\n",
@@ -272,7 +272,48 @@ class FinalRootTests(unittest.TestCase):
                 output_dir=Path("unused"),
                 mksquashfs=Path("mksquashfs"),
                 unsquashfs=Path("unsquashfs"),
-                output_size=final_root.TARGET.partition(3).size - 511,
+                output_size=final_root.SYSTEM_FLASH_SPAN + 1,
+            )
+
+    def test_final_root_uses_space_efficient_supported_squashfs_blocks(self) -> None:
+        with patch.object(final_root, "_run") as run:
+            final_root._build_final_root_squashfs(
+                mksquashfs=Path("mksquashfs"),
+                root=Path("root"),
+                output=Path("system.squashfs"),
+                label="test final-root build",
+            )
+
+        run.assert_called_once_with(
+            [
+                "mksquashfs",
+                "root",
+                "system.squashfs",
+                "-comp",
+                "xz",
+                "-b",
+                "1048576",
+                "-noappend",
+                "-no-tailends",
+                "-all-root",
+                "-no-xattrs",
+                "-no-progress",
+                "-repro-time",
+                str(final_root.SOURCE_DATE_EPOCH),
+            ],
+            "test final-root build",
+        )
+
+    def test_universal_output_size_cannot_exceed_fixed_system_region(self) -> None:
+        with self.assertRaisesRegex(final_root.FinalRootError, "output size is invalid"):
+            final_root.prepare_universal_final_root(
+                base_rootfs=b"",
+                vendor_bundle=SimpleNamespace(),
+                media_closure=None,
+                output_dir=Path("unused"),
+                mksquashfs=Path("mksquashfs"),
+                unsquashfs=Path("unsquashfs"),
+                output_size=final_root.SYSTEM_FLASH_SPAN + 1,
             )
 
     def test_private_input_must_be_a_bounded_regular_file(self) -> None:
