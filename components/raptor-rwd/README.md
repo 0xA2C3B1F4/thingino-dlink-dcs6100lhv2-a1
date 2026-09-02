@@ -59,7 +59,6 @@ closure from the recorded source commits. Keep binaries outside the repository.
 For the fixed split-mtd3 system region, build rwd with static LTO mbedTLS and
 verify that the ELF has no mbedTLS `DT_NEEDED` entry.
 
-The source tree does not contain private libraries, IQ data, credentials,
-certificates, or generated firmware. Licensing and corresponding-source gates
-are tracked in [`third_party/NOTICE.md`](../../third_party/NOTICE.md) and
+Licensing and corresponding-source gates are tracked in
+[`third_party/NOTICE.md`](../../third_party/NOTICE.md) and
 [`docs/status.md`](../../docs/status.md).

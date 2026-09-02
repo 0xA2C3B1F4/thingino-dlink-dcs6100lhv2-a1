@@ -1,9 +1,7 @@
 # Contributing
 
-Pull requests and suggestions are proposals. The maintainers decide which
-changes fit the project's scope and whether they will be reviewed, accepted,
-merged, or included in a release. Following these guidelines does not
-guarantee acceptance.
+Maintainers review pull requests and suggestions against the project's scope,
+release gates, and licensing requirements.
 
 Any accepted change must keep the DCS-6100LHV2 A1 source, installer, recovery,
 and licensing boundaries explicit.
@@ -44,7 +42,7 @@ Keep commits focused. Before committing, run `git diff --cached --check` and
 review every staged file for identifiers, secrets, binaries, private data, and
 licensing problems.
 
-## Files that do not belong here
+## Keep private and generated files out
 
 Do not submit firmware images, dumps, device backups, credentials, private
 keys, certificates, packet captures, raw UART logs, vendor payloads, extracted

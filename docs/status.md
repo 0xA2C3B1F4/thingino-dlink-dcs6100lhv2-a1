@@ -2,10 +2,10 @@
 
 Status date: 2026-09-01.
 
-This is a reviewed source snapshot, not a supported public firmware release.
-It contains no firmware binaries or device-private inputs. The exact
-development source commit used for the export is recorded in
-[`source-export.json`](../source-export.json).
+This reviewed snapshot publishes the source and host tools. A supported public
+firmware release still has open gates. Device-specific build inputs stay with
+their owner. The exact development source commit used for the export is
+recorded in [`source-export.json`](../source-export.json).
 
 ## What has been demonstrated
 
@@ -24,26 +24,26 @@ included:
 A direct 25 fps trial reached about 24.8 fps on Day stream0, but Day stream1
 and both Night streams ran at 12.5 fps. The selected profile remains 15 fps.
 
-These are live-device results for one private candidate. The raw private logs,
-identifiers, credentials, and device-specific hashes are not part of this
-repository.
+These are live-device results for one private candidate. The public evidence is
+a summary; raw logs, identifiers, credentials, and device-specific hashes stay
+private.
 
-This source snapshot intentionally includes all 48 required Prudynt patches.
-Their unresolved upstream license status is disclosed in the third-party
-notice; the snapshot does not claim that Prudynt-derived context is MIT-licensed
-or open source. The unresolved grant remains a firmware-distribution blocker.
+This source snapshot includes all 48 required Prudynt patches. The third-party
+notice records their unresolved upstream license status. The project MIT
+license covers project-authored work, while the Prudynt-derived patch context
+still needs an upstream grant before firmware distribution.
 
 ## Source and host gates
 
-Before export, the current development source passed its 542-file fail-closed
-public-tree gate, 71 Markdown checks, and 510 Python tests. The refactored
+Before export, the current development source passed its 548-file fail-closed
+public-tree gate, 72 Markdown checks, and 531 Python tests. The refactored
 Control passed 186 library tests, eight binary and storage-worker tests, 16
-contract tests, a release build, and the 1,000-request soak. WebUI code did not
-change in this refactor; its latest retained gate is 98 tests plus typecheck and
-bundle scan. The production export contains 474 allowlisted text files and 472
+contract tests, a release build, and the 1,000-request soak. WebUI evidence for
+this checkpoint is 98 tests plus typecheck and bundle scan. The production
+export contains 479 allowlisted text files and 477
 `source-export.json` provenance entries. Its canonical `make check` passed 20
-Markdown checks and 502 Python tests. The most recent 15-test Chromium fixture
-run is earlier browser evidence and was not repeated for this checkpoint.
+Markdown checks and 523 Python tests. The browser evidence comes from the
+earlier 15-test Chromium fixture run.
 
 The local install-set stager has native Linux and Windows CI contract coverage
 plus the macOS adapter, and it performs common file readback before activation.
@@ -91,8 +91,8 @@ A public installer or firmware release remains blocked by:
 `policy/release-gates.json` is the machine-readable ledger. Run
 `make release-status` to inspect it. `make release-ready-source` validates this
 disclosed source snapshot. `make release-ready-public-firmware` remains nonzero
-while the public firmware scope has any blocked gate. A private local build is
-validated independently and does not change those publication gates.
+while the public firmware scope has any blocked gate. Private local-build
+acceptance and public release acceptance remain independent.
 
 Do not publish an installer artifact or describe the source snapshot as an
 installable release until every applicable gate has recorded evidence.

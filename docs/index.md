@@ -9,7 +9,8 @@
 - [API](api.md) summarizes the stable Thingino Control v1 boundary.
 - [Build](build.md) covers source preparation, private inputs, and build gates.
 - [Installation](installation.md) defines the installation boundary and flow.
-- [Recovery](recovery.md) explains what can and cannot recover this layout.
+- [Recovery](recovery.md) covers required backups, the restore flow, and its
+  remaining evidence gates.
 - [Testing](testing.md) lists host, build, browser, and device evidence levels.
 
 Third-party source and redistribution notes are in

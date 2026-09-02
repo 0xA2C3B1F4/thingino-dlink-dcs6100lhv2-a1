@@ -26,7 +26,7 @@ helper for each request.
 - `protocol.rs` defines the shared routes, responses, and error model.
 
 `camera.rs` is the composition root for paths, shared camera types, the backend,
-and common bounded helpers. It no longer owns the route table.
+and common bounded helpers. `camera/api.rs` owns the route table.
 
 Camera mode listens only on loopback behind uhttpd. Four worker threads serve
 a 16-connection queue, with at most two backend operations and fixed deadlines.

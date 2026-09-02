@@ -1,23 +1,23 @@
 # Build
 
-The repository is source-first. It pins upstream source, toolchains, container
-bases, package revisions, profile inputs, and local patches. It does not carry
-firmware binaries or proprietary camera files.
+The repository pins upstream source, toolchains, container bases, package
+revisions, profile inputs, and local patches. A device-specific build combines
+them with owner-acquired camera files kept in a private workspace.
 
 ## Host gate
 
 Python 3.11 or newer and a running Docker-compatible container runtime are
 required. The guided builder currently requires Apple Silicon macOS. Install
-and start Docker Desktop once; the project installer creates the build
-location and later manages project images and containers. It does not install
-or start the host container runtime itself.
+and start Docker Desktop first. The project installer then creates the build
+location and manages project images and containers.
 
 ```bash
 make check
 ```
 
 This checks the explicit public tree, source lock, Markdown links, Control API
-contract, and host tests. It does not build firmware or authorize a device.
+contract, and host tests. Firmware building and device acceptance have their
+own gates.
 
 ## Create the local build location
 
@@ -35,9 +35,10 @@ The command creates a mode-0700 workspace with separate public-input caches and
 per-run directories and stores a hash-bound pointer to that workspace in the
 installer state. Later commands resolve an explicit `--build-root` first, then
 `DCS6100_BUILD_ROOT`, then the prepare-recorded pointer. They fail if explicit
-and environment paths disagree. The workspace requires 160 GiB free, rejects
-symlinked or unowned nonempty paths, and never places private inputs in the
-shared cache. `local-build build` requires the default two-build plan; a
+and environment paths disagree. The workspace requires 160 GiB free and
+rejects symlinked or unowned nonempty paths. Public inputs use the shared cache;
+private inputs use the per-run workspace. `local-build build` requires the
+default two-build plan; a
 `--build-count 1` workspace is only for a bounded investigation and still
 requires 80 GiB. Check an existing workspace without modifying it:
 
@@ -47,10 +48,10 @@ thingino-dlink local-build status
 
 `ready_to_build` remains false until the checkout is clean, the locked source
 identity still matches, the capacity gate passes, and Docker is reachable.
-Workspace creation alone does not download sources, compile firmware, or make
-an artifact installable. The complete guided build currently runs on Apple
-Silicon macOS. It creates task-owned ext4 Buildroot workspaces on the selected
-volume; Linux and Windows are not reported as guided-build-ready.
+`prepare` creates the workspace. `bootstrap` and `acquire` populate its public
+inputs, and `build` compiles the firmware. The complete guided build currently
+runs on Apple Silicon macOS and creates task-owned ext4 Buildroot workspaces on
+the selected volume.
 
 Acquire the immutable Thingino/Buildroot checkout and build the pinned local
 ARM64 builder image:
@@ -64,7 +65,7 @@ commit, tree, remote, submodule, package pins, and clean state before reuse. The
 built image is recorded by immutable Docker image ID together with the project
 HEAD, source-lock digest, Containerfile digest, and platform. A missing image is
 built automatically; an existing unowned tag or a tag that changed after its
-receipt was recorded is rejected. No private camera file is read in this phase.
+receipt was recorded is rejected. This phase reads locked public inputs.
 
 Download and validate the remaining Rust archives, use the immutable builder
 image to install the pinned Rust 1.95.0 ARM64 Linux toolchain into the external
@@ -87,14 +88,15 @@ repository. Its case-distinct headers cannot be represented safely in the
 default macOS filesystem, so `acquire` exports the exact tree to a validated
 tar archive without extracting it on the host. Each clean firmware build
 extracts that archive inside its case-sensitive ext4 workspace. This phase
-downloads only locked public build inputs. It neither reads private camera
-files nor makes the locally cached Ingenic toolchain redistributable.
+adds locked public inputs to the shared cache. Private camera data enters later
+in the per-run workspace. The Ingenic source keeps its upstream licensing
+terms when cached locally.
 
-The Thingino MIPS build toolchain is deliberately absent from `acquire`.
+`local-build build` constructs the Thingino MIPS toolchain from pinned source.
 Upstream replaces its same-named release assets, so a release URL is not an
-immutable input even when an old checksum remains in this repository. During
-`local-build build`, the builder instead fetches the recursive source closure
-of the Buildroot `toolchain` target for the exact Thingino and Buildroot
+immutable input even when an old checksum remains in this repository. The
+builder fetches the recursive source closure of the Buildroot `toolchain`
+target for the exact Thingino and Buildroot
 commits, validates its pinned inventory, and builds the ARM64-hosted MIPS SDK
 with networking disabled. The recipe makes the SDK relocatable without running
 the unrelated firmware package graph or camera-kernel target; the pinned Linux
@@ -102,9 +104,8 @@ the unrelated firmware package graph or camera-kernel target; the pinned Linux
 The generated SDK is packed with the locked deterministic tar and gzip recipe,
 then its archive must match the SHA-256 in `sources.lock.json` before it can
 enter the firmware download cache. A changed upstream release asset is never
-trusted or used as a fallback. The one networked toolchain-source fetch mounts
-only the verified public checkout and its public cache workspace; no private
-configuration, camera file, or generated credential enters that container.
+trusted or used as a fallback. The networked toolchain-source fetch mounts the
+verified public checkout and its public cache workspace.
 
 Configure the private build inputs in a terminal, then build with the recorded
 plan:
@@ -118,10 +119,10 @@ thingino-dlink local-build build
 The SSID and passphrase are requested twice with hidden terminal input. The
 command derives the WPA PSK locally, creates the session-bound installation
 configuration and a separate confirmation file, generates the management and
-WebUI API credentials, and saves only paths plus the selected data action in a
-mode-0600 settings file. It never accepts an SSID, passphrase, credential, or
-API key in argv or the environment. `build` loads the recorded plan, so the
-normal command needs no private path arguments.
+WebUI API credentials, and saves paths plus the selected data action in a
+mode-0600 settings file. Wi-Fi details enter through the hidden prompts.
+`build` loads the recorded plan, so the normal command needs no private path
+arguments.
 
 `build` prepares the locked source, creates the source-built Thingino toolchain,
 then generates and validates the immutable Buildroot download cache. Toolchain
@@ -134,9 +135,8 @@ private run and `install_set_dir`. The persistent overlay installs only the
 Raptor delta; base-owned Control, WebUI, uhttpd, init, and Prudynt files are
 preserved and hash-checked instead of being restored from the artifact.
 
-The command does not call `make release-ready-public-firmware`, change any
-release-gate status, publish an artifact, stage media, or write NOR. Its output
-is host-built and inspected evidence, not installation authorization.
+`build` ends with a locally inspected install set. Public release acceptance,
+SD-card staging, and camera installation are separate steps.
 
 The same prepared source includes two bounded offline kernel builds. The
 collector uses `collector-kernel.fragment` and
@@ -158,9 +158,9 @@ as an absolute path. Do not create empty placeholder files or directories.
 | --- | --- | --- |
 | Private input root | `${DCS6100_BUILD_ROOT}-private` | A directory owned by the current user with mode 0700. Generated credentials, Wi-Fi files, and the saved plan are written here. |
 | Vendor bundle directory | `<private-root>/vendor-bundle` | `vendor-bundle.private.json` and the closed library set acquired from this camera's stock mtd3 through the read-only vendor acquisition workflow. `inspect-vendor-bundle` must accept it. |
-| Media closure directory | `<private-root>/media-closure` | `media-closure.private.json` and its exact hash-locked C1 runtime files. This is an accepted private acquisition output; the public `local-build` commands do not currently create it. |
+| Media closure directory | `<private-root>/media-closure` | An accepted private acquisition output containing `media-closure.private.json` and its exact hash-locked C1 runtime files. |
 | Recovery session directory | `<private-root>/recovery-session` | The private recovery workflow's session containing `host/identity.pub`, `host/service.credential`, and the validated session metadata. It binds SSH and management access to this build. An empty directory is invalid. |
-| Raptor RWD artifact | `<private-root>/raptor-rwd.tar.gz` | The reviewed, source-built archive matching `components/raptor-rwd/raptor-lock.json`, its patches, member list, checksums, and checkout supervisor. The public repository defines and validates this artifact but does not yet provide a one-command producer. |
+| Raptor RWD artifact | `<private-root>/raptor-rwd.tar.gz` | A separately prepared, reviewed source-built archive matching `components/raptor-rwd/raptor-lock.json`, its patches, member list, checksums, and checkout supervisor. |
 | Data action | `initialize` | `initialize` creates the first private stock-mtd3 backup/checkpoint and erases the new data region; `preserve` requires the complete data region to remain byte-identical; `factory-reset` explicitly erases only that data region. |
 | Station Wi-Fi SSID and passphrase | none | Enter each twice through the hidden prompts. SSID is 1-32 UTF-8 bytes and a WPA-PSK passphrase is 8-63 UTF-8 bytes without control characters. The command derives the 64-hex PSK with the standard WPA PBKDF2 rule. |
 
@@ -171,15 +171,14 @@ mismatch, nothing is generated. A successful run creates:
   selected recovery session;
 - `<private-root>/expected-wpa.conf`, a separate mode-0600 confirmation file;
   and
-- `<private-root>/local-build-settings.private.json`, which contains paths and
-  the data action but no SSID, PSK, passphrase, credential, or API key.
+- `<private-root>/local-build-settings.private.json`, which stores the paths
+  and selected data action.
 
-The vendor bundle, media closure, recovery session, and Raptor artifact are
-deliberately not synthesized from names or downloaded from an untrusted URL.
-If one is missing or violates its manifest, `configure` identifies that input
-and stops before collecting Wi-Fi. This is also the current source-only public
-boundary: a clean clone alone cannot produce those device-specific and
-previously accepted artifacts.
+`configure` validates the vendor bundle, media closure, recovery session, and
+Raptor artifact against their manifests. If one is missing or invalid, the
+command identifies it and stops before collecting Wi-Fi. A clean clone supplies
+the source and validators; each operator supplies the accepted device-specific
+artifacts.
 
 For automation, ordinary non-secret paths and the data action may be supplied
 with the documented `local-build configure --help` options. Wi-Fi must still

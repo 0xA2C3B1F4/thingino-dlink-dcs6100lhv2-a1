@@ -1,13 +1,10 @@
 # Thingino for D-Link DCS-6100LHV2 A1
 
 This is a local-first Thingino port for the D-Link DCS-6100LHV2 hardware
-revision A1. After installation, its WebUI, RTSP, ONVIF, and Home Assistant
-integration run without a D-Link cloud account or cloud connection. Firmware is
-built locally on your computer; GitHub's hosted runner
-is used only for source and host checks. The local build is not a camera runtime
-dependency and this repository deploys no hosted builder. This port is specific
-to the A1 model and revision. Do not use its installer or images on another
-camera.
+revision A1. Firmware is built locally on your computer. After installation,
+the WebUI, RTSP, ONVIF, and Home Assistant integration run on your local network
+without a D-Link cloud account or cloud connection. This port is specific to
+the A1 model and revision. Do not use its installer or images on another camera.
 
 This is an independent project. It is not affiliated with, endorsed by, or
 maintained by D-Link or the Thingino project.
@@ -19,10 +16,8 @@ maintained by D-Link or the Thingino project.
 
 ## Local device-specific build
 
-Firmware is built on your computer from pinned public sources and
-the minimum owner-acquired inputs that cannot be redistributed. The repository
-does not upload those inputs, run a hosted firmware builder, or exchange an
-encrypted build package through GitHub.
+Firmware is built on your computer from pinned public sources and the matching
+camera's owner-acquired libraries and recovery material.
 
 The camera-acquisition step mounts stock mtd3 read-only and copies
 `/lib/libimp.so`, `/lib/libalog.so`, and `/lib/libsysutils.so`.
@@ -30,9 +25,9 @@ The camera-acquisition step mounts stock mtd3 read-only and copies
 catalog identity matches. The client validates these paths against the public
 profile catalog. During setup, you supply the station
 network details and the installer creates installation-specific management,
-API, and SSH material locally. Shared caches contain only locked public input;
-camera libraries, credentials, build runs, and install sets stay in your
-private workspace.
+API, and SSH material locally. Shared caches hold locked public inputs. Camera
+libraries, credentials, build runs, and install sets stay in your private
+workspace.
 
 ## What this build changes
 
@@ -127,23 +122,22 @@ thingino-dlink local-build build
 action. It validates all non-secret artifacts before asking for the station
 Wi-Fi SSID and passphrase twice through hidden terminal input. It derives the
 64-hex WPA PSK, generates the per-install credentials, writes mode-restricted
-private files, and records their paths for `build`; you do not create
-`expected-wpa.conf` or calculate a PSK yourself. No secret is accepted through
-an argument or environment variable.
+private files, and records their paths for `build`. You do not create
+`expected-wpa.conf` or calculate a PSK yourself. Wi-Fi details enter through
+the hidden prompts.
 
 Four inputs must already exist: the owner-acquired vendor bundle, the validated
 media closure, the private recovery session, and the reviewed source-built
 Raptor RWD artifact. These are device/workflow evidence, not values to invent.
 The guided command names the missing input and stops before asking for Wi-Fi.
-[Build inputs](docs/build.md#what-configure-asks) explains the producer and
-format of every answer, including the current public-workflow boundaries.
+[Build inputs](docs/build.md#what-configure-asks) explains the source and format
+of every answer.
 
 A successful `build` reports its private `install_set_dir` after two
 byte-identical clean builds, the private final-root and Raptor RWD overlay,
-split-kernel packaging, and a passing schema-2 inspection. It does not consult
-or change the public firmware-release gate, write an SD card, or authorize an
-installation. Secret values remain in the mode-restricted input files; do not
-put them in environment variables.
+split-kernel packaging, and a passing schema-2 inspection. SD-card staging and
+camera installation are separate, explicitly confirmed steps. Keep secret
+values in the mode-restricted input files.
 
 ### 2. Inspect the finished install set
 

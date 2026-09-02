@@ -2,12 +2,11 @@
 
 ## Supported state
 
-There is no supported installable release yet. The two-stage installer and
-persistent boot path completed one authorized private A1 validation, including
-read-back verification and a clean reboot. A reproducible public-source build,
-interrupted-write recovery, original-stock restoration, and release licensing
-remain incomplete. Source or test success does not authorize another live
-installation.
+There is no supported installable release yet. One authorized private A1
+completed the two-stage installation and a same-device D-Link 1.02.02 restore,
+including storage and NOR readback. A reproducible public-source build, the
+physical interruption and retry matrix, and release licensing remain open.
+Source or test success does not authorize another live installation.
 
 The authoritative readiness and release-gate list is maintained in
 `docs/status.md`.
@@ -16,7 +15,7 @@ The authoritative readiness and release-gate list is maintained in
 
 Report vulnerabilities privately through the repository's
 [GitHub Security Advisory form](https://github.com/0xA2C3B1F4/thingino-dlink-dcs6100lhv2-a1/security/advisories/new).
-If that form is unavailable before the repository becomes public, contact
+If that form is unavailable, contact
 [`0xA2C3B1F4`](https://github.com/0xA2C3B1F4) without sensitive details and ask
 for a private reporting channel.
 

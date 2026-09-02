@@ -54,11 +54,10 @@ dispatch, and the common temporary-write/readback/activation sequence. These
 are native host contracts, not firmware builds or real SD-card and camera
 acceptance.
 
-`make release-status` validates the evidence ledger without pretending that
-open gates have passed. `make release-ready-source` validates the disclosed
-source snapshot. `make release-ready-public-firmware` fails until every public
-firmware-release gate is closed. A private local build does not consult that
-publication gate.
+`make release-status` reads the evidence ledger and reports open gates.
+`make release-ready-source` validates the disclosed source snapshot.
+`make release-ready-public-firmware` fails until every public firmware-release
+gate is closed. Private local-build acceptance is tracked separately.
 
 ## Candidate acceptance
 

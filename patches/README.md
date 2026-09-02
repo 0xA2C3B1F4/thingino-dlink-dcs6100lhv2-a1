@@ -146,18 +146,13 @@ digest before installing or applying them.
   entropy for the Linux 3.10 camera runtime, and balances RSS reader ownership.
   Neither patch introduces Raptor HAL, libimp, or another media owner.
 
-Incremental-build helpers, experimental uhttpd performance profiles, and
-X-DCS-RTSP-Stats are intentionally absent. They must not enter this tree
-without a separate scope, provenance, license, and acceptance review.
-
 ## Provenance and validation
 
 The D-Link-specific hunks were decomposed from the reviewed private research
 workspace. The earlier selected glibc/IMP 1.1.4 normal-media closure restored
 color in a live checkpoint; the new Thingino-module/native-IQ candidate still
-requires its bound live rerun. No private blob, content, or device-private
-identity is included here. Single-variable IQ and IR-cut experiments are not
-treated as equivalent evidence.
+requires its bound live rerun. Single-variable IQ and IR-cut experiments are
+not treated as equivalent evidence.
 
 All eighteen Thingino patches have been checked in order against firmware commit
 94d140dc0a458a23eb48a598e633324ea533f97c. The static TypeScript frontend has
@@ -177,5 +172,4 @@ separately and must not be inferred from a clean application result.
 Patch context remains subject to the license of the source it modifies. The
 exact pinned Prudynt tree contains no LICENSE, COPYING, or NOTICE file, so
 publication and binary redistribution remain blocked until its terms are
-established. This local repository does not treat the patch set as license
-closure.
+established. Publishing the patch set does not close that license gate.

@@ -22,6 +22,5 @@ still required for a public release.
 | Persistent settings | Fixed JFFS2 data region and OverlayFS | Preserve update passed on one camera; corruption and interruption matrix remains open |
 | UART-free install | Stock-U-Boot SD bootstrap and fixed stage 1 | Host and one private flow exist; it is not a supported public installer yet |
 
-Unsupported A1 features remain absent. The WebUI does not offer IR940, white
-light, generic GPIO remapping, generic firmware flashing, or whole-card
-repartitioning.
+The A1 control scope excludes IR940, white light, generic GPIO remapping,
+generic firmware flashing, and whole-card repartitioning.
