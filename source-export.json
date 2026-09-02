@@ -34,7 +34,7 @@
       "source": "Makefile"
     },
     "README.md": {
-      "sha256": "c36460e3949bc3fbb07a1cedaf36889f253442078f149fdb4d7d9f5ce0b9bdc7",
+      "sha256": "9b516ee0620c44f54946bf68fa3f5c889870d640d6a1052e575ec2984cfdd271",
       "source": "production/README.md"
     },
     "SECURITY.md": {
@@ -498,7 +498,7 @@
       "source": "production/docs/architecture.md"
     },
     "docs/build.md": {
-      "sha256": "c04477989c364a1583eb7f889f18cb028ecee0c65b63a01938820c018494da02",
+      "sha256": "fe3a3bed97b2a39f7c81f6b82b55179f01259ec84564b20a1c4398f76936a158",
       "source": "production/docs/build.md"
     },
     "docs/features.md": {
@@ -638,7 +638,7 @@
       "source": "installer/live_ram.py"
     },
     "installer/local_build.py": {
-      "sha256": "121c5ae5792640ae3a8abe0cee92f6b2759caf9ecca8167bd5a065170b62b1b7",
+      "sha256": "e53e37ea6b197cb8807dcc804c394baa9b1c91f34e5549e009d1c14ab7086c72",
       "source": "installer/local_build.py"
     },
     "installer/local_build_acquire.py": {
@@ -654,7 +654,7 @@
       "source": "installer/local_build_bootstrap.py"
     },
     "installer/local_build_run.py": {
-      "sha256": "5d5c9f723be020b438905893458a6b140a9e5dce583f959389731e50950c443d",
+      "sha256": "f6a71ea663d8b95c3706a19f54b986ebc40b62b2f030330f34f98d36522b3a6d",
       "source": "installer/local_build_run.py"
     },
     "installer/local_build_toolchain.py": {
@@ -902,7 +902,7 @@
       "source": "installer/user_cli.py"
     },
     "installer/user_cli_build.py": {
-      "sha256": "327b19ea840c26932b418bafe0cce1c57e948a79280d266a288612dcb1f17731",
+      "sha256": "510741206f9070adf3707418081ba30b325e5d05cd20eafce5d9a023087da233",
       "source": "installer/user_cli_build.py"
     },
     "installer/user_cli_diagnostics.py": {
@@ -914,7 +914,7 @@
       "source": "installer/user_cli_guided.py"
     },
     "installer/user_cli_parser.py": {
-      "sha256": "5a6e425f7270e627257105b6b7766c2965a5086768dc01d5adb332f294a4105c",
+      "sha256": "989ed78ca75e9a84ba3e0645116183666b2c1d5eccbd9a47371bfd54c18a32b6",
       "source": "installer/user_cli_parser.py"
     },
     "installer/user_cli_parser_stock_recovery.py": {
@@ -1526,7 +1526,7 @@
       "source": "tests/test_live_ram.py"
     },
     "tests/test_local_build.py": {
-      "sha256": "e954b21c293c03bf9d6600d76b773b8da263b6fa93f2f3dfab4ef9f87042e019",
+      "sha256": "0e9478c0753131f6c88c846f5b7cb6bad20743e618f2a8f5cb9cf7c53b3d1220",
       "source": "tests/test_local_build.py"
     },
     "tests/test_local_build_acquire.py": {
@@ -1538,7 +1538,7 @@
       "source": "tests/test_local_build_bootstrap.py"
     },
     "tests/test_local_build_run.py": {
-      "sha256": "7378009e382585314cc64d251938b4c4d13b2a739d60a4c2bf2b03ceb9106429",
+      "sha256": "b88e8faea442aac677bf72e89cdab6ee905b7f387559a23bc4bf075d10420ac1",
       "source": "tests/test_local_build_run.py"
     },
     "tests/test_macos_media_preflight.py": {
@@ -1702,7 +1702,7 @@
       "source": "tests/test_uartless_gate.py"
     },
     "tests/test_user_cli.py": {
-      "sha256": "a897d0733cd33739188bd89a4ec48f54f7e52b935f9ab3450473e09ec6392e60",
+      "sha256": "1a70b844e1bbbe56fb7e1eab7028463f9ca765b688375f44f5996e2eec900126",
       "source": "tests/test_user_cli.py"
     },
     "tests/test_vendor_bundle.py": {

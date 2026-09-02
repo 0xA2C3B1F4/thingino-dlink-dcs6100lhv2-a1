@@ -274,6 +274,7 @@ class UserCliTests(unittest.TestCase):
         self.assertIsNone(arguments.media_closure_dir)
         self.assertIsNone(arguments.raptor_rwd_artifact)
         self.assertIsNone(arguments.signing_key)
+        self.assertEqual(arguments.build_count, 1)
         self.assertIs(arguments.handler, user_cli._local_build_build_universal)
 
     def test_universal_build_generates_a_stable_default_model_signer(self) -> None:
@@ -311,6 +312,7 @@ class UserCliTests(unittest.TestCase):
         )
         self.assertIsNone(build.call_args.kwargs["media_closure_dir"])
         self.assertIsNone(build.call_args.kwargs["raptor_rwd_artifact"])
+        self.assertEqual(build.call_args.kwargs["build_count"], 1)
         self.assertEqual(result["result"]["model_signing"], keypair)
 
     def test_universal_configure_binds_private_inputs_to_the_session(self) -> None:
@@ -560,13 +562,13 @@ class UserCliTests(unittest.TestCase):
         self.assertIs(parsed.handler, user_cli._universal_handoff)
         self.assertEqual(parsed.confirm_stock_uboot_result, "MTD1-MTD2-WRITTEN")
 
-    def test_local_build_prepare_defaults_to_two_clean_builds(self) -> None:
+    def test_local_build_prepare_defaults_to_one_clean_build(self) -> None:
         parser = user_cli.build_parser()
         arguments = parser.parse_args(
             ["local-build", "prepare", "--build-root", "/external/build"]
         )
         self.assertEqual(arguments.build_root, Path("/external/build"))
-        self.assertEqual(arguments.build_count, 2)
+        self.assertEqual(arguments.build_count, 1)
         self.assertIs(arguments.handler, user_cli._local_build_prepare)
 
     def test_local_build_document_keeps_host_action_separate_from_creation(self) -> None:
@@ -697,6 +699,7 @@ class UserCliTests(unittest.TestCase):
             ]
         )
         self.assertIsNone(arguments.build_root)
+        self.assertEqual(arguments.build_count, 1)
         self.assertIsNone(arguments.data_mode)
         self.assertFalse(hasattr(arguments, "password"))
         self.assertFalse(hasattr(arguments, "token"))
@@ -737,6 +740,7 @@ class UserCliTests(unittest.TestCase):
         ):
             result = user_cli._local_build_build(arguments)
         self.assertEqual(result["phase"], "local-build-install-set-inspected")
+        self.assertEqual(build.call_args.kwargs["build_count"], 1)
         self.assertEqual(build.call_args.kwargs["data_mode"], "preserve")
         self.assertEqual(
             build.call_args.kwargs["expected_wpa_config_path"],

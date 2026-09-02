@@ -29,7 +29,7 @@ own gates.
 Run the following commands from the repository root. This single non-secret
 variable puts the workspace beside the checkout on the same writable volume;
 override it once when another volume is required. The path does not need to
-exist. The default reserves capacity for two independent clean builds:
+exist. The default reserves capacity for one clean build:
 
 ```bash
 export DCS6100_BUILD_ROOT="$(cd .. && pwd)/dcs6100-build"
@@ -40,12 +40,12 @@ The command creates a mode-0700 workspace with separate public-input caches and
 per-run directories and stores a hash-bound pointer to that workspace in the
 installer state. Later commands resolve an explicit `--build-root` first, then
 `DCS6100_BUILD_ROOT`, then the prepare-recorded pointer. They fail if explicit
-and environment paths disagree. The workspace requires 160 GiB free and
+and environment paths disagree. The default workspace requires 80 GiB free and
 rejects symlinked or unowned nonempty paths. Public inputs use the shared cache;
-private inputs use the per-run workspace. `local-build build` requires the
-default two-build plan; a
-`--build-count 1` workspace is only for a bounded investigation and still
-requires 80 GiB. Check an existing workspace without modifying it:
+private inputs use the per-run workspace. Normal installation uses one clean
+build. Use `--build-count 2` with both `prepare` and `build` only when collecting
+byte-identical reproducibility evidence; that workspace requires 160 GiB. Check
+an existing workspace without modifying it:
 
 ```bash
 thingino-dlink local-build status
@@ -152,12 +152,12 @@ arguments.
 `build` revalidates and reuses the source-built Thingino toolchain and immutable
 Buildroot download cache produced by `recovery-assets`; advanced workflows that
 already possess accepted private inputs can let `build` create those caches on
-demand. Toolchain compilation and both clean firmware builds run without
-networking in separate ext4 workspaces. The two firmware builds must export byte-identical base
-artifacts. The command then creates the private final-root, applies the
-source-bound Raptor RWD overlay, builds both fixed-layout kernels, packages the
-schema-2 install set, and runs `inspect-install-set`. The output JSON names the
-private run and `install_set_dir`. The persistent overlay installs only the
+demand. Toolchain compilation and each requested clean firmware build run
+without networking in separate ext4 workspaces. An explicit two-build run must
+export byte-identical base artifacts. The command then creates the private
+final-root, applies the source-bound Raptor RWD overlay, builds both fixed-layout
+kernels, packages the schema-2 install set, and runs `inspect-install-set`. The
+output JSON names the private run and `install_set_dir`. The persistent overlay installs only the
 Raptor delta; base-owned Control, WebUI, uhttpd, init, and Prudynt files are
 preserved and hash-checked instead of being restored from the artifact.
 
@@ -207,8 +207,9 @@ The command has no arguments for camera recovery, WPA, recovery session,
 management credential, API key, hostname, or SSH identity. It creates a
 `model-universal` install set and `thingino-universal.tgb` with an empty data
 member. The immutable system has a locked root account, no private Wi-Fi/API/
-SSH files, and non-executable network-facing startup scripts. Two clean builds
-must remain byte-identical.
+SSH files, and non-executable network-facing startup scripts. The normal path
+runs one clean build; `--build-count 2` adds byte-identical reproducibility
+evidence for release work.
 
 For each camera, first create the private configuration and local authorization
 signer from its recovery session. Wi-Fi values are requested twice with hidden

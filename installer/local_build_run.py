@@ -483,7 +483,7 @@ def _compare_clean_builds(first: Path, second: Path) -> dict[str, object]:
             "sha256": first_sha256,
             "size": first_path.stat().st_size,
         }
-    return {"byte_identical": True, "files": files}
+    return {"builds": 2, "byte_identical": True, "files": files}
 
 
 def _workspace_tool(
@@ -859,6 +859,7 @@ def _build_local_install_set(
     data_mode: str,
     artifact_scope: str,
     signing_key: Path | None,
+    build_count: int,
 ) -> dict[str, object]:
     """Build one explicitly personalized or model-universal install set."""
 
@@ -876,8 +877,13 @@ def _build_local_install_set(
         raise LocalBuildRunError(
             f"local build workspace is not ready: {workspace.get('safe_next_action')}"
         )
-    if workspace.get("build_count") != 2:
-        raise LocalBuildRunError("local-build build requires a two-build workspace")
+    if build_count not in {1, 2}:
+        raise LocalBuildRunError("local-build build count must be one or two")
+    workspace_build_count = workspace.get("build_count")
+    if not isinstance(workspace_build_count, int) or workspace_build_count < build_count:
+        raise LocalBuildRunError(
+            "local-build workspace does not reserve capacity for the requested build count"
+        )
 
     root = _project_root().resolve(strict=True)
     build_root = Path(str(workspace["build_root"]))
@@ -1018,20 +1024,25 @@ def _build_local_install_set(
             rust_toolchain=rust_toolchain,
             ingenic_toolchain_archive=ingenic_toolchain_archive,
         )
-        build_b, _workspace_b = _run_clean_build(
-            root=root,
-            run_dir=run_dir,
-            label="build-b",
-            builder_image=builder_image,
-            prepared_source=prepared_source,
-            download_cache=download_cache,
-            vendor_site=vendor_site,
-            audio_link=audio_link,
-            rust_source=rust_source,
-            rust_toolchain=rust_toolchain,
-            ingenic_toolchain_archive=ingenic_toolchain_archive,
-        )
-        reproducibility = _compare_clean_builds(build_a, build_b)
+        reproducibility: dict[str, object] = {
+            "builds": 1,
+            "byte_identical": None,
+        }
+        if build_count == 2:
+            build_b, _workspace_b = _run_clean_build(
+                root=root,
+                run_dir=run_dir,
+                label="build-b",
+                builder_image=builder_image,
+                prepared_source=prepared_source,
+                download_cache=download_cache,
+                vendor_site=vendor_site,
+                audio_link=audio_link,
+                rust_source=rust_source,
+                rust_toolchain=rust_toolchain,
+                ingenic_toolchain_archive=ingenic_toolchain_archive,
+            )
+            reproducibility = _compare_clean_builds(build_a, build_b)
         atomic_write(
             run_dir / "reproducibility.json",
             (json.dumps(reproducibility, indent=2, sort_keys=True) + "\n").encode(),
@@ -1194,7 +1205,7 @@ def _build_local_install_set(
         )
         run_manifest = {
             "artifact_scope": artifact_scope,
-            "build_count": 2,
+            "build_count": build_count,
             "data_mode": data_mode,
             "download_cache": download_identity,
             "install_set": "install-set",
@@ -1241,7 +1252,7 @@ def _build_local_install_set(
 
     return {
         "artifact_scope": artifact_scope,
-        "build_count": 2,
+        "build_count": build_count,
         "build_root": str(build_root),
         "data_mode": data_mode,
         "install_set_dir": str(install_set),
@@ -1249,7 +1260,7 @@ def _build_local_install_set(
         "nor_writes": False,
         "public_firmware_release_gate_consulted": False,
         "raptor_rwd_overlay": raptor_rwd_artifact is not None,
-        "reproducible": True,
+        "reproducible": reproducibility.get("byte_identical") is True,
         "run_dir": str(run_dir),
         "schema_version": 2,
         "status": "host-built and inspected; live installation not authorized",
@@ -1271,6 +1282,7 @@ def build_local_install_set(
     session_dir: Path,
     raptor_rwd_artifact: Path,
     data_mode: str = "initialize",
+    build_count: int = 1,
 ) -> dict[str, object]:
     """Legacy personalized build; its bytes must not be shared as universal."""
 
@@ -1285,6 +1297,7 @@ def build_local_install_set(
         data_mode=data_mode,
         artifact_scope="device-personalized",
         signing_key=None,
+        build_count=build_count,
     )
 
 
@@ -1295,6 +1308,7 @@ def build_local_universal_install_set(
     media_closure_dir: Path | None = None,
     raptor_rwd_artifact: Path | None = None,
     signing_key: Path,
+    build_count: int = 1,
 ) -> dict[str, object]:
     """Build once for A1 cameras; authorization and provisioning stay separate."""
 
@@ -1309,4 +1323,5 @@ def build_local_universal_install_set(
         data_mode="initialize",
         artifact_scope="model-universal",
         signing_key=signing_key,
+        build_count=build_count,
     )

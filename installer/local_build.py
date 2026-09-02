@@ -303,7 +303,7 @@ def _workspace_result(root: Path, manifest: dict[str, object]) -> dict[str, obje
 
 
 def prepare_local_build_workspace(
-    *, build_root: Path, build_count: int = 2
+    *, build_root: Path, build_count: int = 1
 ) -> dict[str, object]:
     """Create a private, reusable local-build root or validate an exact rerun."""
 

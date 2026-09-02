@@ -192,6 +192,7 @@ class LocalBuildRunTests(unittest.TestCase):
                     expected_wpa_config_path=wpa,
                     session_dir=private / "session",
                     raptor_rwd_artifact=artifact,
+                    build_count=2,
                 )
 
             self.assertEqual(clean_calls, ["build-a", "build-b"])
@@ -207,6 +208,8 @@ class LocalBuildRunTests(unittest.TestCase):
                 run_manifest["thingino_toolchain"]["archive_sha256"],
                 "d" * 64,
             )
+            self.assertEqual(run_manifest["build_count"], 2)
+            self.assertEqual(run_manifest["reproducibility"]["builds"], 2)
 
     def test_recovery_assets_build_before_private_configuration(self) -> None:
         with tempfile.TemporaryDirectory() as name:
@@ -335,7 +338,7 @@ class LocalBuildRunTests(unittest.TestCase):
         self.assertEqual(values["data_mode"], "initialize")
         self.assertEqual(values["artifact_scope"], "model-universal")
 
-    def test_build_rejects_a_single_build_workspace(self) -> None:
+    def test_two_build_request_requires_matching_workspace_capacity(self) -> None:
         with mock.patch.object(
             local_build_run,
             "local_build_workspace_status",
@@ -348,7 +351,7 @@ class LocalBuildRunTests(unittest.TestCase):
         ):
             with self.assertRaisesRegex(
                 local_build_run.LocalBuildRunError,
-                "two-build workspace",
+                "does not reserve capacity",
             ):
                 local_build_run.build_local_install_set(
                     build_root=Path("/external/build"),
@@ -358,6 +361,7 @@ class LocalBuildRunTests(unittest.TestCase):
                     expected_wpa_config_path=Path("/private/wpa"),
                     session_dir=Path("/private/session"),
                     raptor_rwd_artifact=Path("/private/raptor.tar.gz"),
+                    build_count=2,
                 )
 
     def test_comparison_rejects_nonidentical_clean_builds(self) -> None:

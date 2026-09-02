@@ -209,10 +209,11 @@ advanced inputs for the legacy tested WebRTC profile. Camera Wi-Fi and
 credentials are created later with `universal configure` and never enter the
 universal firmware build. [Build inputs](docs/build.md) explains the boundaries.
 
-A successful `build-universal` reports its private `install_set_dir` after two
-byte-identical clean builds, source-native final-root preparation, split-kernel
-packaging, and a passing schema-2 inspection. If the optional Raptor artifact
-is supplied, its overlay is validated and added. SD-card staging and camera
+A successful `build-universal` reports its private `install_set_dir` after one
+clean build by default, source-native final-root preparation, split-kernel
+packaging, and a passing schema-2 inspection. `--build-count 2` adds a second
+clean build and requires byte-identical outputs for release evidence. If the
+optional Raptor artifact is supplied, its overlay is validated and added. SD-card staging and camera
 installation are separate, explicitly confirmed steps. Keep secret values in
 the mode-restricted input files.
 

@@ -274,6 +274,7 @@ def _local_build_build(facade: object, arguments: argparse.Namespace) -> dict[st
         session_dir=selected["session_dir"],
         raptor_rwd_artifact=selected["raptor_rwd_artifact"],
         data_mode=data_mode,
+        build_count=getattr(arguments, "build_count", 1),
     )
     return _document(
         "local-build build",
@@ -312,6 +313,7 @@ def _local_build_build_universal(
         media_closure_dir=arguments.media_closure_dir,
         raptor_rwd_artifact=arguments.raptor_rwd_artifact,
         signing_key=Path(str(keypair["private_key"])),
+        build_count=getattr(arguments, "build_count", 1),
     )
     result = {**result, "model_signing": keypair}
     return _document(

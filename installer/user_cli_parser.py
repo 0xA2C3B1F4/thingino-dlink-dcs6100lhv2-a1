@@ -238,8 +238,8 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
         "--build-count",
         type=int,
         choices=(1, 2),
-        default=2,
-        help="reserve capacity for one build or the two clean release builds",
+        default=1,
+        help="reserve capacity for one normal build or two reproducibility builds",
     )
     local_build_prepare.set_defaults(handler=_local_build_prepare)
     local_build_status = local_build_commands.add_parser("status")
@@ -301,6 +301,13 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
     _add_common(local_build_build, inherited=True)
     local_build_build.add_argument("--build-root", type=Path)
     local_build_build.add_argument(
+        "--build-count",
+        type=int,
+        choices=(1, 2),
+        default=1,
+        help="run one clean build, or two for reproducibility evidence",
+    )
+    local_build_build.add_argument(
         "--settings",
         type=Path,
         help="private settings file; defaults to the configure-recorded file",
@@ -339,6 +346,13 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
     local_build_universal = local_build_commands.add_parser("build-universal")
     _add_common(local_build_universal, inherited=True)
     local_build_universal.add_argument("--build-root", type=Path)
+    local_build_universal.add_argument(
+        "--build-count",
+        type=int,
+        choices=(1, 2),
+        default=1,
+        help="run one clean build, or two for reproducibility evidence",
+    )
     local_build_universal.add_argument(
         "--vendor-bundle-dir", type=Path, required=True
     )

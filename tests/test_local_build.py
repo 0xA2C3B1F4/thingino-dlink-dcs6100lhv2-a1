@@ -211,10 +211,7 @@ class LocalBuildWorkspaceTests(unittest.TestCase):
             build_root = Path(name) / "build"
             patches = self._patches()
             with patches[0], patches[1], patches[2], patches[3], patches[4]:
-                local_build.prepare_local_build_workspace(
-                    build_root=build_root,
-                    build_count=1,
-                )
+                local_build.prepare_local_build_workspace(build_root=build_root)
                 before = {
                     path: path.stat().st_mtime_ns for path in build_root.rglob("*")
                 }
