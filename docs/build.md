@@ -349,7 +349,7 @@ as an absolute path. Do not create empty placeholder files or directories.
 | Recovery session directory | `<private-root>/recovery-session` | The private recovery workflow's session containing `host/identity.pub`, `host/service.credential`, and the validated session metadata. It binds SSH and management access to this build. An empty directory is invalid. |
 | Raptor RWD artifact | `<private-root>/raptor-rwd.tar.gz` | A separately prepared, reviewed source-built archive matching `components/raptor-rwd/raptor-lock.json`, its patches, member list, checksums, and checkout supervisor. |
 | Data action | `initialize` | `initialize` creates the first private stock-mtd3 backup/checkpoint and erases the new data region; `preserve` requires the complete data region to remain byte-identical; `factory-reset` explicitly erases only that data region. |
-| Station Wi-Fi SSID and passphrase | none | Enter each twice through the hidden prompts. SSID is 1-32 UTF-8 bytes and a WPA-PSK passphrase is 8-63 UTF-8 bytes without control characters. The command derives the 64-hex PSK with the standard WPA PBKDF2 rule. |
+| Station Wi-Fi SSID and credential | none | Enter each twice through the hidden prompts. SSID is 1-32 UTF-8 bytes. The WPA credential is either an 8-63-byte UTF-8 passphrase without control characters or an exact 64-character hexadecimal raw PSK. The command derives the PSK from a passphrase and preserves a supplied raw PSK. |
 
 The last two Wi-Fi entries are confirmation, not a request for a PSK. On a
 mismatch, nothing is generated. A successful run creates:

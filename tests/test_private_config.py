@@ -42,6 +42,21 @@ class PrivateConfigTests(unittest.TestCase):
         self.assertRegex(text, r"(?m)^    psk=[0-9a-f]{64}$")
         self.assertNotIn("correct horse battery staple", text)
 
+    def test_guided_wifi_accepts_a_64_hex_raw_psk(self) -> None:
+        raw_psk = "A1" * 32
+        payload = render_private_wpa_config(
+            ssid="CameraLab",
+            passphrase=raw_psk,
+        )
+        self.assertIn(f"    psk={raw_psk.lower()}\n".encode(), payload)
+
+    def test_guided_wifi_rejects_a_non_hex_64_byte_credential(self) -> None:
+        with self.assertRaisesRegex(PrivateConfigError, "64 hexadecimal"):
+            render_private_wpa_config(
+                ssid="CameraLab",
+                passphrase="z" * 64,
+            )
+
     def test_confirmed_wifi_can_arrive_only_through_inherited_descriptor(self) -> None:
         read_fd, write_fd = os.pipe()
         try:

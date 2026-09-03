@@ -86,8 +86,14 @@ def _validate_wifi(ssid: str, passphrase: str) -> tuple[bytes, bytes]:
         raise PrivateConfigError("Wi-Fi input is not valid UTF-8") from exc
     if not 1 <= len(ssid_bytes) <= 32:
         raise PrivateConfigError("SSID must contain 1 to 32 UTF-8 bytes")
-    if not 8 <= len(passphrase_bytes) <= 63:
-        raise PrivateConfigError("WPA passphrase must contain 8 to 63 UTF-8 bytes")
+    raw_psk = len(passphrase_bytes) == 64 and all(
+        byte in b"0123456789abcdefABCDEF" for byte in passphrase_bytes
+    )
+    if not 8 <= len(passphrase_bytes) <= 63 and not raw_psk:
+        raise PrivateConfigError(
+            "WPA credential must contain 8 to 63 UTF-8 bytes or exactly "
+            "64 hexadecimal ASCII characters"
+        )
     if any(byte < 0x20 or byte == 0x7F for byte in ssid_bytes + passphrase_bytes):
         raise PrivateConfigError("Wi-Fi input contains a control character")
     return ssid_bytes, passphrase_bytes
@@ -699,9 +705,12 @@ def render_private_wpa_config(*, ssid: str, passphrase: str) -> bytes:
     """Derive one canonical WPA configuration without exposing the passphrase."""
 
     ssid_bytes, passphrase_bytes = _validate_wifi(ssid, passphrase)
-    wpa_psk = hashlib.pbkdf2_hmac(
-        "sha1", passphrase_bytes, ssid_bytes, 4096, dklen=32
-    ).hex()
+    if len(passphrase_bytes) == 64:
+        wpa_psk = passphrase_bytes.decode("ascii").lower()
+    else:
+        wpa_psk = hashlib.pbkdf2_hmac(
+            "sha1", passphrase_bytes, ssid_bytes, 4096, dklen=32
+        ).hex()
     wpa_config = "\n".join(
         (
             "ctrl_interface=/run/wpa_supplicant",
