@@ -63,10 +63,28 @@ def load_host_session(facade: object, session_dir: Path) -> RecoveryApHostSessio
     recorded_name = manifest.get("station_mdns_name", station_mdns_name)
     if recorded_name != station_mdns_name:
         raise RecoveryApHostError("recovery-AP station mDNS identity is invalid")
+    session_kind = manifest.get("session_kind", "recovery-ap")
+    camera_identity_sha256 = manifest.get("camera_identity_sha256")
+    transport_enabled = manifest.get("transport_enabled", True)
+    if session_kind == "recovery-ap":
+        if camera_identity_sha256 is not None or transport_enabled is not True:
+            raise RecoveryApHostError("recovery-AP session kind is invalid")
+    elif session_kind == "uartless-functional-provisioning":
+        if (
+            not isinstance(camera_identity_sha256, str)
+            or re.fullmatch(r"[0-9a-f]{64}", camera_identity_sha256) is None
+            or transport_enabled is not False
+        ):
+            raise RecoveryApHostError("UARTless provisioning session binding is invalid")
+    else:
+        raise RecoveryApHostError("recovery session kind is invalid")
     return RecoveryApHostSession(
         identity=identity,
         known_hosts=known_hosts,
         station_mdns_name=station_mdns_name,
+        session_kind=session_kind,
+        camera_identity_sha256=camera_identity_sha256,
+        transport_enabled=transport_enabled,
     )
 
 def load_service_credential(facade: object, session_dir: Path) -> bytes:
@@ -116,6 +134,8 @@ def resolve_recovery_ap_station_candidates(facade: object,
     threading = getattr(facade, 'threading')
     """Resolve all private IPv4 candidates for this session's .local name."""
     session = load_host_session(session_dir)
+    if not session.transport_enabled:
+        raise RecoveryApHostError("UARTless provisioning session has no recovery-AP transport")
     outcome: queue.Queue[object] = queue.Queue(maxsize=1)
 
     def resolve() -> None:
@@ -176,6 +196,8 @@ def ssh_arguments(facade: object,
     _host = getattr(facade, '_host')
     re = getattr(facade, 're')
     host = _host(host)
+    if not session.transport_enabled:
+        raise RecoveryApHostError("UARTless provisioning session has no recovery-AP transport")
     fixed = command in {
         "status",
         "thingino-failure",

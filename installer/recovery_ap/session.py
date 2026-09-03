@@ -25,6 +25,108 @@ class RecoveryApSession:
     setup_ssid: str
 
 
+def ensure_uartless_provisioning_session(
+    *,
+    output_dir: Path,
+    ssh_keygen: Path,
+    camera_identity_sha256: str,
+) -> RecoveryApSession:
+    """Create or validate a local-only session for one UARTless recovery."""
+
+    if (
+        len(camera_identity_sha256) != 64
+        or any(character not in "0123456789abcdef" for character in camera_identity_sha256)
+    ):
+        raise RecoveryApSessionError("UARTless camera identity is invalid")
+    if ssh_keygen.is_symlink() or not ssh_keygen.is_file() or not os.access(
+        ssh_keygen, os.X_OK
+    ):
+        raise RecoveryApSessionError("ssh-keygen is not an executable regular file")
+    if output_dir.exists() or output_dir.is_symlink():
+        from .host import load_host_session, load_service_credential
+
+        session = load_host_session(output_dir)
+        load_service_credential(output_dir)
+        if (
+            session.session_kind != "uartless-functional-provisioning"
+            or session.camera_identity_sha256 != camera_identity_sha256
+            or session.transport_enabled
+        ):
+            raise RecoveryApSessionError(
+                "existing UARTless provisioning session is bound elsewhere"
+            )
+        return RecoveryApSession(
+            output_dir=output_dir,
+            setup_ssid=f"DCS6100-{camera_identity_sha256[:8]}",
+        )
+
+    output_dir.parent.mkdir(parents=True, exist_ok=True)
+    temporary = Path(
+        tempfile.mkdtemp(prefix=f".{output_dir.name}.", dir=output_dir.parent)
+    )
+    temporary.chmod(0o700)
+    try:
+        host = temporary / "host"
+        host.mkdir(mode=0o700)
+        identity = host / "identity"
+        binding = host / ".binding-host-key"
+        for target, comment in (
+            (identity, "dcs6100-uartless-provisioning"),
+            (binding, "dcs6100-uartless-session-binding"),
+        ):
+            _run(
+                [
+                    str(ssh_keygen),
+                    "-q",
+                    "-t",
+                    "ed25519",
+                    "-N",
+                    "",
+                    "-C",
+                    comment,
+                    "-f",
+                    str(target),
+                ],
+                "ssh-keygen",
+            )
+        read_authorized_key(identity.with_suffix(".pub"))
+        binding_public = read_authorized_key(binding.with_suffix(".pub"))
+        binding.unlink()
+        binding.with_suffix(".pub").unlink()
+        setup_ssid = f"DCS6100-{camera_identity_sha256[:8]}"
+        station_mdns_name = f"{setup_ssid.lower()}.local"
+        _write(host / "known_hosts", b"192.168.88.1 " + binding_public)
+        _write(
+            host / "service.credential",
+            (secrets.token_hex(32) + "\n").encode("ascii"),
+        )
+        manifest = {
+            "ap_address": None,
+            "camera_identity_sha256": camera_identity_sha256,
+            "contains_secrets": True,
+            "control": "local-provisioning-only",
+            "nor_writes": False,
+            "schema_version": 1,
+            "session_kind": "uartless-functional-provisioning",
+            "setup_ssid": setup_ssid,
+            "station_mdns_name": station_mdns_name,
+            "transport_enabled": False,
+        }
+        _write(
+            host / "session.json",
+            (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode("ascii"),
+        )
+        for path in temporary.rglob("*"):
+            if path.is_file():
+                path.chmod(0o600)
+        os.replace(temporary, output_dir)
+    except BaseException:
+        if temporary.exists():
+            shutil.rmtree(temporary)
+        raise
+    return RecoveryApSession(output_dir=output_dir, setup_ssid=setup_ssid)
+
+
 def _run(arguments: list[str], label: str) -> bytes:
     try:
         result = subprocess.run(

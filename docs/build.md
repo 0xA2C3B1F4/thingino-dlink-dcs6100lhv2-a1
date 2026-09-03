@@ -211,13 +211,26 @@ SSH files, and non-executable network-facing startup scripts. The normal path
 runs one clean build; `--build-count 2` adds byte-identical reproducibility
 evidence for release work.
 
-For each camera, first create the private configuration and local authorization
-signer from its recovery session. Wi-Fi values are requested twice with hidden
-input and never accepted as command-line values:
+For an accepted UARTless functional recovery, first create or validate its
+local-only provisioning session. This session is bound to the functional
+recovery identity, contains no usable recovery-AP transport, and is safe to
+rerun with the same output directory:
+
+```bash
+thingino-dlink universal init-session \
+  --functional-recovery-dir /private/camera/functional-recovery \
+  --preserved-readback-dir /private/camera/functional-recovery/preserved \
+  --output-dir /private/camera/provisioning-session \
+  --config-output-dir /private/camera/install-config
+```
+
+Then create the private configuration and local authorization signer. Wi-Fi
+values are requested twice with hidden input and never accepted as command-line
+values:
 
 ```bash
 thingino-dlink universal configure \
-  --session-dir /private/camera/recovery-session \
+  --session-dir /private/camera/provisioning-session \
   --output-dir /private/camera/install-config
 ```
 
@@ -234,7 +247,7 @@ thingino-dlink universal provision \
   --universal-bundle /model/thingino-universal.tgb \
   --universal-public-key /model/release.pub \
   --private-config-dir /private/camera/install-config \
-  --session-dir /private/camera/recovery-session \
+  --session-dir /private/camera/provisioning-session \
   --signing-key /private/camera/authorization-signing/ed25519.pem \
   --unsquashfs /path/to/unsquashfs \
   --mkfs-jffs2 ./scripts/run_container_mkfs_jffs2.sh \
@@ -249,7 +262,7 @@ thingino-dlink universal authorize \
   --provisioning /private/camera/provisioning.private.zip \
   --provisioning-data /private/camera/provisioning.data.jffs2 \
   --provisioning-public-key /private/camera/authorization-signing/ed25519.pub \
-  --session-dir /private/camera/recovery-session \
+  --session-dir /private/camera/provisioning-session \
   --signing-key /private/camera/authorization-signing/ed25519.pem \
   --output-dir /private/camera/authorization
 ```

@@ -189,6 +189,21 @@ storage readbacks pass. The private result contains `vendor/` for
 `local-build build-universal` and `preserved/` for the later same-device gate.
 It always reports `original_complete_backup_accepted: false`.
 
+After the model-universal build, bridge this functional recovery to the
+camera-local provisioning flow without inventing a recovery-AP session:
+
+```bash
+thingino-dlink universal init-session \
+  --functional-recovery-dir /path/to/private/functional-recovery \
+  --preserved-readback-dir /path/to/private/functional-recovery/preserved \
+  --output-dir /path/to/private/provisioning-session \
+  --config-output-dir /path/to/private/install-config
+```
+
+The generated session is bound to the functional recovery identity and has no
+camera transport. Continue with the exact `universal configure` command printed
+by the installer; enter Wi-Fi values only through its hidden prompts.
+
 Functional recovery is accepted only through explicitly functional-aware CLI
 arguments. For example, later media staging uses:
 

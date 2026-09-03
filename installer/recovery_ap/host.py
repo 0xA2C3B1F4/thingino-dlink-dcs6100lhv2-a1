@@ -72,6 +72,9 @@ class RecoveryApHostSession:
     identity: Path
     known_hosts: Path
     station_mdns_name: str
+    session_kind: str = "recovery-ap"
+    camera_identity_sha256: str | None = None
+    transport_enabled: bool = True
 
 
 def _private_file(path: Path, label: str, limit: int) -> bytes:

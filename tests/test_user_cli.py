@@ -380,6 +380,9 @@ class UserCliTests(unittest.TestCase):
         self.assertIsNone(build.call_args.kwargs["raptor_rwd_artifact"])
         self.assertEqual(build.call_args.kwargs["build_count"], 1)
         self.assertEqual(result["result"]["model_signing"], keypair)
+        self.assertEqual(
+            result["next_command"], "thingino-dlink universal init-session"
+        )
 
     def test_universal_configure_binds_private_inputs_to_the_session(self) -> None:
         parsed = user_cli.build_parser().parse_args(
@@ -439,6 +442,56 @@ class UserCliTests(unittest.TestCase):
             session_dir=Path("/private/session"),
         )
         self.assertEqual(result["phase"], "camera-private-inputs-configured")
+        self.assertEqual(result["result"]["write_set"], [])
+
+    def test_uartless_session_init_bridges_functional_recovery_to_configure(self) -> None:
+        parsed = user_cli.build_parser().parse_args(
+            [
+                "universal",
+                "init-session",
+                "--functional-recovery-dir",
+                "/private/recovery",
+                "--preserved-readback-dir",
+                "/private/recovery/preserved",
+                "--output-dir",
+                "/private/camera/session",
+                "--config-output-dir",
+                "/private/camera/config with spaces",
+            ]
+        )
+        self.assertIs(parsed.handler, user_cli._universal_init_session)
+        recovery = SimpleNamespace(camera_identity_sha256="a" * 64)
+        session = SimpleNamespace(output_dir=Path("/private/camera/session"))
+        with (
+            mock.patch.object(
+                user_cli,
+                "validate_functional_recovery_boundary",
+                return_value=recovery,
+            ) as validate,
+            mock.patch.object(
+                user_cli,
+                "ensure_uartless_provisioning_session",
+                return_value=session,
+            ) as ensure,
+            mock.patch(
+                "installer.user_cli_universal.shutil.which",
+                return_value="/usr/bin/ssh-keygen",
+            ),
+        ):
+            result = user_cli._universal_init_session(parsed)
+        validate.assert_called_once_with(
+            recovery_dir=Path("/private/recovery"),
+            preserved_readback_dir=Path("/private/recovery/preserved"),
+        )
+        self.assertEqual(
+            ensure.call_args.kwargs["camera_identity_sha256"], "a" * 64
+        )
+        self.assertEqual(
+            result["next_command"],
+            "thingino-dlink universal configure "
+            "--session-dir /private/camera/session "
+            "--output-dir '/private/camera/config with spaces'",
+        )
         self.assertEqual(result["result"]["write_set"], [])
 
     def test_universal_stage_requires_the_full_declared_write_set(self) -> None:

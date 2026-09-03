@@ -134,6 +134,10 @@ from .recovery_ap.host import (
     prove_thingino_health,
     prove_thingino_media,
 )
+from .recovery_ap.session import (
+    RecoveryApSessionError,
+    ensure_uartless_provisioning_session,
+)
 from .recovery_package_binding import (
     RecoveryPackageBindingError,
     read_embedded_session_file,
@@ -697,6 +701,12 @@ def _universal_configure(arguments: argparse.Namespace) -> dict[str, object]:
     return implementation(sys.modules[__name__], arguments)
 
 
+def _universal_init_session(arguments: argparse.Namespace) -> dict[str, object]:
+    from .user_cli_universal import _universal_init_session as implementation
+
+    return implementation(sys.modules[__name__], arguments)
+
+
 def _universal_authorize(arguments: argparse.Namespace) -> dict[str, object]:
     from .user_cli_universal import _universal_authorize as implementation
 
@@ -1004,6 +1014,7 @@ def main(argv: list[str] | None = None) -> int:
         RecoveryError,
         RecoveryGateError,
         RecoveryApHostError,
+        RecoveryApSessionError,
         RtspVerificationError,
         RuntimeDiagnosticsError,
         RuntimeCandidateError,

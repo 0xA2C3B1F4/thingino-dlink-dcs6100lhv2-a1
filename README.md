@@ -177,8 +177,13 @@ thingino-dlink local-build recovery-assets
 # Complete stock-recovery backup-prepare, backup-capture, and backup-validate.
 thingino-dlink local-build build-universal \
   --vendor-bundle-dir /path/from/recovery/vendor
+thingino-dlink universal init-session \
+  --functional-recovery-dir /path/from/recovery \
+  --preserved-readback-dir /path/from/recovery/preserved \
+  --output-dir /path/to/private/provisioning-session \
+  --config-output-dir /path/to/private/install-config
 thingino-dlink universal configure \
-  --session-dir /path/to/private/recovery-session \
+  --session-dir /path/to/private/provisioning-session \
   --output-dir /path/to/private/install-config
 ```
 
@@ -200,7 +205,10 @@ The UARTless package remains inert until the separate
 Follow [installation](docs/installation.md) for the SD handoff and the exact
 transport-specific safety boundary.
 
-`universal configure` validates the recovery session before asking for the
+For the UARTless path, `universal init-session` validates the functional
+recovery boundary and creates a camera-bound local provisioning identity and
+management credential. It has no recovery-AP transport and cannot contact the
+camera. `universal configure` validates that session before asking for the
 station Wi-Fi SSID and passphrase twice through hidden terminal input. It
 derives the 64-hex WPA PSK, generates the per-install credentials, binds them
 to that session, and creates or reuses a local authorization key pair. You do

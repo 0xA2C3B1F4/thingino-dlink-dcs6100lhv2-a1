@@ -5,10 +5,54 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import shlex
+import shutil
 
 
 UNIVERSAL_WRITE_CONFIRMATION = "STOCK-MTD1-MTD2-THEN-FINAL-MTD1-MTD3"
 UNIVERSAL_HANDOFF_CONFIRMATION = "MTD1-MTD2-WRITTEN"
+
+
+def _universal_init_session(
+    facade: object, arguments: argparse.Namespace
+) -> dict[str, object]:
+    _document = getattr(facade, "_document")
+    UserInstallerError = getattr(facade, "UserInstallerError")
+    validate = getattr(facade, "validate_functional_recovery_boundary")
+    ensure = getattr(facade, "ensure_uartless_provisioning_session")
+    recovery = validate(
+        recovery_dir=arguments.functional_recovery_dir,
+        preserved_readback_dir=arguments.preserved_readback_dir,
+    )
+    ssh_keygen = arguments.ssh_keygen
+    if ssh_keygen is None:
+        discovered = shutil.which("ssh-keygen")
+        if discovered is None:
+            raise UserInstallerError("ssh-keygen is required for UARTless provisioning")
+        ssh_keygen = getattr(facade, "Path")(discovered)
+    session = ensure(
+        output_dir=arguments.output_dir,
+        ssh_keygen=ssh_keygen,
+        camera_identity_sha256=recovery.camera_identity_sha256,
+    )
+    next_command = (
+        "thingino-dlink universal configure "
+        f"--session-dir {shlex.quote(str(session.output_dir))} "
+        f"--output-dir {shlex.quote(str(arguments.config_output_dir))}"
+    )
+    return _document(
+        "universal init-session",
+        ok=True,
+        phase="uartless-local-provisioning-session-ready",
+        next_command=next_command,
+        result={
+            "camera_bound": True,
+            "contains_secrets": True,
+            "session_dir": str(session.output_dir),
+            "safe_next_action": "run-universal-configure-in-an-interactive-terminal",
+            "write_set": [],
+        },
+    )
 
 
 def _recovery(facade: object, arguments: argparse.Namespace):

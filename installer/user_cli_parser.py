@@ -29,6 +29,7 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
     _universal_authorize = getattr(facade, '_universal_authorize')
     _universal_configure = getattr(facade, '_universal_configure')
     _universal_handoff = getattr(facade, '_universal_handoff')
+    _universal_init_session = getattr(facade, '_universal_init_session')
     _universal_provision = getattr(facade, '_universal_provision')
     _universal_stage = getattr(facade, '_universal_stage')
     _preflight = getattr(facade, '_preflight')
@@ -394,6 +395,25 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
         recovery.add_argument("--recovery-dir", type=Path)
         recovery.add_argument("--functional-recovery-dir", type=Path)
         parser.add_argument("--preserved-readback-dir", type=Path, required=True)
+
+    universal_init_session = universal_commands.add_parser("init-session")
+    _add_common(universal_init_session, inherited=True)
+    universal_init_session.add_argument(
+        "--functional-recovery-dir", type=Path, required=True
+    )
+    universal_init_session.add_argument(
+        "--preserved-readback-dir", type=Path, required=True
+    )
+    universal_init_session.add_argument("--output-dir", type=Path, required=True)
+    universal_init_session.add_argument(
+        "--config-output-dir", type=Path, required=True
+    )
+    universal_init_session.add_argument(
+        "--ssh-keygen",
+        type=Path,
+        help="OpenSSH ssh-keygen; defaults to the reviewed host executable",
+    )
+    universal_init_session.set_defaults(handler=_universal_init_session)
 
     universal_configure = universal_commands.add_parser("configure")
     _add_common(universal_configure, inherited=True)

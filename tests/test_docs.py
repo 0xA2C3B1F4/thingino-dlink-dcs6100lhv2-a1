@@ -24,6 +24,7 @@ class DocumentationTests(unittest.TestCase):
         for source in (readme, build):
             self.assertIn("DCS6100_BUILD_ROOT", source)
             self.assertIn("thingino-dlink local-build build-universal", source)
+            self.assertIn("thingino-dlink universal init-session", source)
             self.assertIn("thingino-dlink universal configure", source)
             self.assertIn("thingino-dlink universal handoff", source)
             self.assertNotIn(

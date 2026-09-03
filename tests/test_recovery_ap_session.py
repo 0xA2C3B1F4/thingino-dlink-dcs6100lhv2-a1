@@ -8,9 +8,16 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from installer.recovery_ap.host import (
+    RecoveryApHostError,
+    load_host_session,
+    load_service_credential,
+    resolve_recovery_ap_station_candidates,
+)
 from installer.recovery_ap.session import (
     RecoveryApSessionError,
     create_recovery_ap_session,
+    ensure_uartless_provisioning_session,
     materialize_recovery_ap_session,
 )
 
@@ -40,6 +47,48 @@ def fake_dropbearkey(path: Path) -> None:
 
 
 class RecoveryApSessionTests(unittest.TestCase):
+    def test_uartless_provisioning_session_is_local_only_and_idempotent(self) -> None:
+        ssh_keygen = shutil.which("ssh-keygen")
+        if ssh_keygen is None:
+            self.skipTest("ssh-keygen is unavailable")
+        with tempfile.TemporaryDirectory() as name:
+            output = Path(name) / "session"
+            camera_identity = "a" * 64
+            first = ensure_uartless_provisioning_session(
+                output_dir=output,
+                ssh_keygen=Path(ssh_keygen),
+                camera_identity_sha256=camera_identity,
+            )
+            second = ensure_uartless_provisioning_session(
+                output_dir=output,
+                ssh_keygen=Path(ssh_keygen),
+                camera_identity_sha256=camera_identity,
+            )
+            self.assertEqual(first, second)
+            session = load_host_session(output)
+            self.assertEqual(
+                session.session_kind, "uartless-functional-provisioning"
+            )
+            self.assertEqual(session.camera_identity_sha256, camera_identity)
+            self.assertFalse(session.transport_enabled)
+            self.assertEqual(len(load_service_credential(output)), 64)
+            self.assertFalse((output / "media").exists())
+            with self.assertRaisesRegex(
+                RecoveryApHostError, "no recovery-AP transport"
+            ):
+                resolve_recovery_ap_station_candidates(output)
+            for path in output.rglob("*"):
+                if path.is_file():
+                    self.assertEqual(path.stat().st_mode & 0o077, 0)
+            with self.assertRaisesRegex(
+                RecoveryApSessionError, "bound elsewhere"
+            ):
+                ensure_uartless_provisioning_session(
+                    output_dir=output,
+                    ssh_keygen=Path(ssh_keygen),
+                    camera_identity_sha256="b" * 64,
+                )
+
     def test_private_session_has_unique_ap_and_pinned_key_material(self) -> None:
         ssh_keygen = shutil.which("ssh-keygen")
         if ssh_keygen is None:

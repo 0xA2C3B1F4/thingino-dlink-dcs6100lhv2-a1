@@ -349,7 +349,7 @@ def _local_build_build_universal(
         "local-build build-universal",
         ok=True,
         phase="local-build-model-universal-install-set-inspected",
-        next_command="thingino-dlink universal provision",
+        next_command="thingino-dlink universal init-session",
         result=result,
     )
 
