@@ -139,17 +139,21 @@ Use Python 3.11 or newer from a clean, reviewed checkout:
 
 ```bash
 make check
-python3 -m pip install -e .
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install -e .
 thingino-dlink --help
-python3 -m installer.user_cli --help
+python -m installer.user_cli --help
 ```
 
-Run these commands from the repository root. Editable-install metadata is
-ignored by the public-tree checker, so `make check` remains repeatable after
-installation. The default below creates the build workspace beside the
-checkout. Set `DCS6100_DATA_VOLUME` to the exact mounted volume root that
-contains both paths; a containing directory is not a mount root. Override the
-build path if that volume does not have enough free space:
+Run these commands from the repository root and keep the virtual environment
+active for the remaining host commands. This avoids modifying an
+externally-managed system Python. The `.venv` directory and editable-install
+metadata are ignored by the public-tree checker, so `make check` remains
+repeatable after installation. The default below creates the build workspace
+beside the checkout. Set `DCS6100_DATA_VOLUME` to the exact mounted volume root
+that contains both paths; a containing directory is not a mount root. Override
+the build path if that volume does not have enough free space:
 
 ```bash
 export DCS6100_BUILD_ROOT="$(cd .. && pwd)/dcs6100-build"

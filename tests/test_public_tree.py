@@ -89,6 +89,15 @@ class PublicTreeTests(unittest.TestCase):
             with mock.patch.object(POLICY, "ROOT", root):
                 self.assertEqual(POLICY.discover_public_files(), [])
 
+    def test_ignores_documented_repository_virtual_environment(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            package = root / ".venv" / "lib" / "python" / "site-packages"
+            package.mkdir(parents=True)
+            (package / "generated.py").write_text("generated", encoding="utf-8")
+            with mock.patch.object(POLICY, "ROOT", root):
+                self.assertEqual(POLICY.discover_public_files(), [])
+
     def test_ignores_nested_webui_build_and_dependency_data(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

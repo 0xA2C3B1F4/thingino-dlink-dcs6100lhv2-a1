@@ -71,6 +71,7 @@ LOCAL_ONLY_TOP_LEVEL = {
     ".cache",
     ".git",
     ".tmp",
+    ".venv",
     "AGENTS.md",
     "build",
     "captures",

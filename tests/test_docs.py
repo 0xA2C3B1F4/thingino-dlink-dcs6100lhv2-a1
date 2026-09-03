@@ -35,6 +35,14 @@ class DocumentationTests(unittest.TestCase):
         self.assertIn("Linux uses a whole-disk node", readme)
         self.assertIn("macOS example:", readme)
 
+    def test_host_tool_quickstart_uses_an_isolated_python(self) -> None:
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("python3 -m venv .venv", readme)
+        self.assertIn(". .venv/bin/activate", readme)
+        self.assertIn("python -m pip install -e .", readme)
+        self.assertNotIn("python3 -m pip install -e .", readme)
+        self.assertIn("externally-managed system Python", readme)
+
     def test_current_public_markdown_links_pass(self) -> None:
         checked = DOCS.validate()
         self.assertIn(Path("README.md"), checked)
