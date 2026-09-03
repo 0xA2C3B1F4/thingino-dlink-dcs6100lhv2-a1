@@ -210,6 +210,40 @@ class UserCliTests(unittest.TestCase):
         self.assertFalse(result["result"]["original_complete_backup_accepted"])
         self.assertEqual(result["result"]["write_set"], [])
 
+    def test_uartless_validation_points_to_the_model_universal_build(self) -> None:
+        output_dir = Path("/private/recovery with spaces")
+        arguments = SimpleNamespace(
+            collector_dir=Path("/card/DCS6100F"),
+            package=Path("/card/UARTCAP.PSV"),
+            output_dir=output_dir,
+            confirm_output_dir=output_dir,
+        )
+        decision = SimpleNamespace(
+            duplicate_partitions_accepted=True,
+            functional_recovery_accepted=True,
+            original_complete_backup_accepted=False,
+            original_preserved_mtd=(0, 3, 4, 5),
+            replacement_mtd=(1, 2),
+        )
+        with (
+            mock.patch.object(
+                user_cli,
+                "capture_functional_backup_from_uartless_collector",
+                return_value=decision,
+            ),
+            mock.patch.object(user_cli, "read_snapshot", return_value=b"package"),
+        ):
+            result = user_cli._stock_uartless_validate(arguments)
+        self.assertEqual(
+            result["next_command"],
+            "thingino-dlink local-build build-universal "
+            "--vendor-bundle-dir '/private/recovery with spaces/vendor'",
+        )
+        self.assertEqual(
+            result["result"]["safe_next_action"],
+            "build-one-model-universal-install-set",
+        )
+
     def test_guided_install_accepts_only_one_explicit_recovery_class(self) -> None:
         parser = user_cli.build_parser()
         functional = parser.parse_args(

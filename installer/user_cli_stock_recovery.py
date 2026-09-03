@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shlex
 import tempfile
 
 
@@ -337,11 +338,15 @@ def _stock_uartless_validate(
         output_dir=arguments.output_dir,
         confirmed_output_dir=arguments.confirm_output_dir,
     )
+    vendor_bundle_dir = arguments.output_dir / "vendor"
     return _document(
         "stock-recovery uartless-validate",
         ok=True,
         phase="uartless-functional-recovery-validated",
-        next_command="thingino-dlink local-build configure",
+        next_command=(
+            "thingino-dlink local-build build-universal "
+            f"--vendor-bundle-dir {shlex.quote(str(vendor_bundle_dir))}"
+        ),
         preserved_mtd=[0, 3, 4, 5],
         result={
             "armed": False,
@@ -353,7 +358,7 @@ def _stock_uartless_validate(
             "original_preserved_mtd": list(decision.original_preserved_mtd),
             "replacement_mtd": list(decision.replacement_mtd),
             "restoration_class": "recovery-functional",
-            "safe_next_action": "build-or-stage-an-accepted-post-capture-installer",
+            "safe_next_action": "build-one-model-universal-install-set",
             "write_set": [],
         },
     )
