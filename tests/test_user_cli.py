@@ -475,7 +475,7 @@ class UserCliTests(unittest.TestCase):
             ) as ensure,
             mock.patch(
                 "installer.user_cli_universal.shutil.which",
-                return_value="/usr/bin/ssh-keygen",
+                side_effect=lambda name: f"/usr/bin/{name}",
             ),
         ):
             result = user_cli._universal_init_session(parsed)
@@ -485,6 +485,9 @@ class UserCliTests(unittest.TestCase):
         )
         self.assertEqual(
             ensure.call_args.kwargs["camera_identity_sha256"], "a" * 64
+        )
+        self.assertEqual(
+            ensure.call_args.kwargs["dropbearkey"], Path("/usr/bin/dropbearkey")
         )
         self.assertEqual(
             result["next_command"],

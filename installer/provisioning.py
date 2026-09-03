@@ -147,6 +147,14 @@ def recovery_session_identity(session_dir: Path) -> str:
     ):
         digest.update(len(value).to_bytes(8, "big"))
         digest.update(value)
+    session_kind = getattr(session, "session_kind", "recovery-ap")
+    if session_kind == "uartless-functional-provisioning":
+        camera_identity = _require_digest(
+            session.camera_identity_sha256, "UARTless camera identity"
+        ).encode("ascii")
+        for value in (session_kind.encode("ascii"), camera_identity):
+            digest.update(len(value).to_bytes(8, "big"))
+            digest.update(value)
     return digest.hexdigest()
 
 
@@ -191,9 +199,17 @@ def create_provisioning_sidecar(
     except PrivateConfigError as exc:
         raise ProvisioningError(str(exc)) from exc
     session = load_host_session(session_dir)
+    if getattr(session, "session_kind", "recovery-ap") == "uartless-functional-provisioning":
+        if session.camera_identity_sha256 != camera_identity_sha256:
+            raise ProvisioningError("UARTless provisioning session is bound elsewhere")
+        dropbear_host_key_path = session_dir / "host/dropbear_ed25519_host_key"
+        dropbear_host_key_label = "provisioning Dropbear host key"
+    else:
+        dropbear_host_key_path = session_dir / "media/RECOVERY/HOST.KEY"
+        dropbear_host_key_label = "recovery Dropbear host key"
     dropbear_host_key = _read_private(
-        session_dir / "media/RECOVERY/HOST.KEY",
-        "recovery Dropbear host key",
+        dropbear_host_key_path,
+        dropbear_host_key_label,
         16 * 1024,
     )
     payloads = {

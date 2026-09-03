@@ -137,6 +137,13 @@ the operation you intend to perform.
 
 Use Python 3.11 or newer from a clean, reviewed checkout:
 
+On macOS, install the required host tools first with Homebrew. `dropbearkey`
+creates the per-camera SSH host key used after provisioning:
+
+```bash
+brew install llvm lld squashfs dropbear
+```
+
 ```bash
 make check
 python3 -m venv .venv

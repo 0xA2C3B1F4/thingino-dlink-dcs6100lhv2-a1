@@ -54,14 +54,18 @@ class RecoveryApSessionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as name:
             output = Path(name) / "session"
             camera_identity = "a" * 64
+            dropbearkey = Path(name) / "dropbearkey"
+            fake_dropbearkey(dropbearkey)
             first = ensure_uartless_provisioning_session(
                 output_dir=output,
                 ssh_keygen=Path(ssh_keygen),
+                dropbearkey=dropbearkey,
                 camera_identity_sha256=camera_identity,
             )
             second = ensure_uartless_provisioning_session(
                 output_dir=output,
                 ssh_keygen=Path(ssh_keygen),
+                dropbearkey=dropbearkey,
                 camera_identity_sha256=camera_identity,
             )
             self.assertEqual(first, second)
@@ -73,6 +77,10 @@ class RecoveryApSessionTests(unittest.TestCase):
             self.assertFalse(session.transport_enabled)
             self.assertEqual(len(load_service_credential(output)), 64)
             self.assertFalse((output / "media").exists())
+            self.assertEqual(
+                (output / "host/dropbear_ed25519_host_key").read_bytes(),
+                b"dropbear-ed25519-private",
+            )
             with self.assertRaisesRegex(
                 RecoveryApHostError, "no recovery-AP transport"
             ):
@@ -86,6 +94,7 @@ class RecoveryApSessionTests(unittest.TestCase):
                 ensure_uartless_provisioning_session(
                     output_dir=output,
                     ssh_keygen=Path(ssh_keygen),
+                    dropbearkey=dropbearkey,
                     camera_identity_sha256="b" * 64,
                 )
 

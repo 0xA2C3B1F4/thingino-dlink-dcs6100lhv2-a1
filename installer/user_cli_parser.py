@@ -413,6 +413,11 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
         type=Path,
         help="OpenSSH ssh-keygen; defaults to the reviewed host executable",
     )
+    universal_init_session.add_argument(
+        "--dropbearkey",
+        type=Path,
+        help="Dropbear host-key generator; defaults to the reviewed host executable",
+    )
     universal_init_session.set_defaults(handler=_universal_init_session)
 
     universal_configure = universal_commands.add_parser("configure")

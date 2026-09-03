@@ -29,6 +29,7 @@ def ensure_uartless_provisioning_session(
     *,
     output_dir: Path,
     ssh_keygen: Path,
+    dropbearkey: Path,
     camera_identity_sha256: str,
 ) -> RecoveryApSession:
     """Create or validate a local-only session for one UARTless recovery."""
@@ -38,10 +39,11 @@ def ensure_uartless_provisioning_session(
         or any(character not in "0123456789abcdef" for character in camera_identity_sha256)
     ):
         raise RecoveryApSessionError("UARTless camera identity is invalid")
-    if ssh_keygen.is_symlink() or not ssh_keygen.is_file() or not os.access(
-        ssh_keygen, os.X_OK
-    ):
-        raise RecoveryApSessionError("ssh-keygen is not an executable regular file")
+    for tool, label in ((ssh_keygen, "ssh-keygen"), (dropbearkey, "dropbearkey")):
+        if tool.is_symlink() or not tool.is_file() or not os.access(tool, os.X_OK):
+            raise RecoveryApSessionError(
+                f"{label} is not an executable regular file"
+            )
     if output_dir.exists() or output_dir.is_symlink():
         from .host import load_host_session, load_service_credential
 
@@ -55,6 +57,9 @@ def ensure_uartless_provisioning_session(
             raise RecoveryApSessionError(
                 "existing UARTless provisioning session is bound elsewhere"
             )
+        _ensure_uartless_dropbear_host_key(
+            host_dir=output_dir / "host", dropbearkey=dropbearkey
+        )
         return RecoveryApSession(
             output_dir=output_dir,
             setup_ssid=f"DCS6100-{camera_identity_sha256[:8]}",
@@ -100,6 +105,10 @@ def ensure_uartless_provisioning_session(
             host / "service.credential",
             (secrets.token_hex(32) + "\n").encode("ascii"),
         )
+        _generate_dropbear_host_key(
+            destination=host / "dropbear_ed25519_host_key",
+            dropbearkey=dropbearkey,
+        )
         manifest = {
             "ap_address": None,
             "camera_identity_sha256": camera_identity_sha256,
@@ -125,6 +134,49 @@ def ensure_uartless_provisioning_session(
             shutil.rmtree(temporary)
         raise
     return RecoveryApSession(output_dir=output_dir, setup_ssid=setup_ssid)
+
+
+def _generate_dropbear_host_key(*, destination: Path, dropbearkey: Path) -> None:
+    _run(
+        [str(dropbearkey), "-t", "ed25519", "-f", str(destination)],
+        "Dropbear host-key generation",
+    )
+    _public_key_from_output(
+        _run(
+            [str(dropbearkey), "-y", "-f", str(destination)],
+            "Dropbear host-key inspection",
+        )
+    )
+    companion = Path(str(destination) + ".pub")
+    if companion.exists() or companion.is_symlink():
+        if companion.is_symlink() or not companion.is_file():
+            raise RecoveryApSessionError("Dropbear companion public key is invalid")
+        companion.unlink()
+    destination.chmod(0o600)
+
+
+def _ensure_uartless_dropbear_host_key(*, host_dir: Path, dropbearkey: Path) -> None:
+    destination = host_dir / "dropbear_ed25519_host_key"
+    if destination.exists() or destination.is_symlink():
+        _read_private(destination, "provisioning Dropbear host key", 16 * 1024)
+        _public_key_from_output(
+            _run(
+                [str(dropbearkey), "-y", "-f", str(destination)],
+                "Dropbear host-key inspection",
+            )
+        )
+        return
+    temporary = Path(tempfile.mkdtemp(prefix=".dropbear-host-key.", dir=host_dir))
+    temporary.chmod(0o700)
+    try:
+        generated = temporary / "dropbear_ed25519_host_key"
+        _generate_dropbear_host_key(
+            destination=generated,
+            dropbearkey=dropbearkey,
+        )
+        os.replace(generated, destination)
+    finally:
+        shutil.rmtree(temporary)
 
 
 def _run(arguments: list[str], label: str) -> bytes:

@@ -600,6 +600,58 @@ class UniversalArtifactTests(unittest.TestCase):
                     expected_recovery_session_sha256="c" * 64,
                 )
 
+    def test_uartless_provisioning_uses_its_local_dropbear_host_key(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            root = Path(directory_name)
+            private_key, _public_key = self._keys(root)
+            session_dir = root / "session"
+            session = SimpleNamespace(
+                camera_identity_sha256="a" * 64,
+                session_kind="uartless-functional-provisioning",
+                station_mdns_name="dcs6100-a1234567.local",
+            )
+            with (
+                mock.patch(
+                    "installer.provisioning.load_private_config_for_session",
+                    return_value=self._private(b"camera-a"),
+                ),
+                mock.patch(
+                    "installer.provisioning.recovery_session_identity",
+                    return_value="c" * 64,
+                ),
+                mock.patch(
+                    "installer.provisioning.load_host_session",
+                    return_value=session,
+                ),
+                mock.patch(
+                    "installer.provisioning._read_private",
+                    return_value=b"ssh-ed25519 fake-private-host-key",
+                ) as read_private,
+                mock.patch(
+                    "installer.provisioning.build_provisioning_data_image",
+                    return_value=ProvisioningDataImage(
+                        b"\x85\x19" + b"a" * (DATA_FLASH_SPAN - 2),
+                        {"state": "committed"},
+                    ),
+                ),
+            ):
+                create_provisioning_sidecar(
+                    private_config_dir=root,
+                    session_dir=session_dir,
+                    camera_identity_sha256="a" * 64,
+                    universal_firmware_sha256="e" * 64,
+                    universal_system_rootfs=b"universal-system",
+                    signing_key=private_key,
+                    unsquashfs=root / "unsquashfs",
+                    mkfs_jffs2=root / "mkfs.jffs2",
+                    output_path=root / "camera.tps",
+                    data_output_path=root / "camera.jffs2",
+                )
+            self.assertEqual(
+                read_private.call_args.args[0],
+                session_dir / "host/dropbear_ed25519_host_key",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

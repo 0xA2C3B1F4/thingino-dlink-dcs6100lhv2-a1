@@ -14,7 +14,13 @@ the build location and manages project images and containers, but it does not
 install or start the host container runtime. The recovery root packager also
 requires LLVM `clang`/`ld.lld` and `mksquashfs`/`unsquashfs` on the host. On
 Apple Silicon, install Homebrew `llvm` and `lld`; the guided build selects the
-Homebrew compiler instead of the incompatible Apple Clang MIPS driver.
+Homebrew compiler instead of the incompatible Apple Clang MIPS driver. Install
+Homebrew `squashfs` and `dropbear` as well; `dropbearkey` creates the
+per-camera SSH host key for UARTless provisioning.
+
+```bash
+brew install llvm lld squashfs dropbear
+```
 
 ```bash
 make check

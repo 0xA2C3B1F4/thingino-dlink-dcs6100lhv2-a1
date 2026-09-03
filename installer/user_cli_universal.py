@@ -30,9 +30,19 @@ def _universal_init_session(
         if discovered is None:
             raise UserInstallerError("ssh-keygen is required for UARTless provisioning")
         ssh_keygen = getattr(facade, "Path")(discovered)
+    dropbearkey = arguments.dropbearkey
+    if dropbearkey is None:
+        discovered = shutil.which("dropbearkey")
+        if discovered is None:
+            raise UserInstallerError(
+                "dropbearkey is required for UARTless provisioning; "
+                "on macOS install Homebrew dropbear"
+            )
+        dropbearkey = getattr(facade, "Path")(discovered)
     session = ensure(
         output_dir=arguments.output_dir,
         ssh_keygen=ssh_keygen,
+        dropbearkey=dropbearkey,
         camera_identity_sha256=recovery.camera_identity_sha256,
     )
     next_command = (
