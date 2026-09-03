@@ -475,7 +475,9 @@ class UserCliTests(unittest.TestCase):
             ) as ensure,
             mock.patch(
                 "installer.user_cli_universal.shutil.which",
-                side_effect=lambda name: f"/usr/bin/{name}",
+                side_effect=lambda name: (
+                    "/usr/bin/ssh-keygen" if name == "ssh-keygen" else "/usr/bin/true"
+                ),
             ),
         ):
             result = user_cli._universal_init_session(parsed)
@@ -487,7 +489,7 @@ class UserCliTests(unittest.TestCase):
             ensure.call_args.kwargs["camera_identity_sha256"], "a" * 64
         )
         self.assertEqual(
-            ensure.call_args.kwargs["dropbearkey"], Path("/usr/bin/dropbearkey")
+            ensure.call_args.kwargs["dropbearkey"], Path("/usr/bin/true")
         )
         self.assertEqual(
             result["next_command"],
@@ -496,6 +498,51 @@ class UserCliTests(unittest.TestCase):
             "--output-dir '/private/camera/config with spaces'",
         )
         self.assertEqual(result["result"]["write_set"], [])
+
+    def test_uartless_session_init_resolves_a_discovered_tool_symlink(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            root = Path(directory_name)
+            target = root / "cellar/dropbearkey"
+            target.parent.mkdir()
+            target.write_text("#!/bin/sh\nexit 0\n", encoding="ascii")
+            target.chmod(0o700)
+            linked = root / "bin/dropbearkey"
+            linked.parent.mkdir()
+            linked.symlink_to(target)
+            parsed = user_cli.build_parser().parse_args(
+                [
+                    "universal",
+                    "init-session",
+                    "--functional-recovery-dir",
+                    str(root / "recovery"),
+                    "--preserved-readback-dir",
+                    str(root / "recovery/preserved"),
+                    "--output-dir",
+                    str(root / "session"),
+                    "--config-output-dir",
+                    str(root / "config"),
+                    "--ssh-keygen",
+                    "/usr/bin/true",
+                ]
+            )
+            with (
+                mock.patch.object(
+                    user_cli,
+                    "validate_functional_recovery_boundary",
+                    return_value=SimpleNamespace(camera_identity_sha256="a" * 64),
+                ),
+                mock.patch.object(
+                    user_cli,
+                    "ensure_uartless_provisioning_session",
+                    return_value=SimpleNamespace(output_dir=root / "session"),
+                ) as ensure,
+                mock.patch(
+                    "installer.user_cli_universal.shutil.which",
+                    return_value=str(linked),
+                ),
+            ):
+                user_cli._universal_init_session(parsed)
+            self.assertEqual(ensure.call_args.kwargs["dropbearkey"], target)
 
     def test_universal_stage_requires_the_full_declared_write_set(self) -> None:
         with tempfile.TemporaryDirectory() as directory_name:

@@ -29,7 +29,12 @@ def _universal_init_session(
         discovered = shutil.which("ssh-keygen")
         if discovered is None:
             raise UserInstallerError("ssh-keygen is required for UARTless provisioning")
-        ssh_keygen = getattr(facade, "Path")(discovered)
+        try:
+            ssh_keygen = getattr(facade, "Path")(discovered).resolve(strict=True)
+        except OSError as exc:
+            raise UserInstallerError(
+                "cannot resolve the discovered ssh-keygen executable"
+            ) from exc
     dropbearkey = arguments.dropbearkey
     if dropbearkey is None:
         discovered = shutil.which("dropbearkey")
@@ -38,7 +43,12 @@ def _universal_init_session(
                 "dropbearkey is required for UARTless provisioning; "
                 "on macOS install Homebrew dropbear"
             )
-        dropbearkey = getattr(facade, "Path")(discovered)
+        try:
+            dropbearkey = getattr(facade, "Path")(discovered).resolve(strict=True)
+        except OSError as exc:
+            raise UserInstallerError(
+                "cannot resolve the discovered dropbearkey executable"
+            ) from exc
     session = ensure(
         output_dir=arguments.output_dir,
         ssh_keygen=ssh_keygen,
