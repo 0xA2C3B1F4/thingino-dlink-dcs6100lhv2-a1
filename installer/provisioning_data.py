@@ -145,7 +145,13 @@ def _patch_runtime(
         target.chmod(0o755)
     for relative in PROVISIONING_ENABLED_INIT:
         target = root / relative
-        if target.is_symlink() or not target.is_file():
+        if target.is_symlink():
+            raise ProvisioningDataError(
+                f"universal provisioned init is invalid: {relative}"
+            )
+        if not target.exists():
+            continue
+        if not target.is_file():
             raise ProvisioningDataError(
                 f"universal provisioned init is invalid: {relative}"
             )
@@ -319,6 +325,11 @@ def build_provisioning_data_image(
         upper.mkdir(parents=True, mode=0o755)
         (overlay / "work").mkdir(mode=0o700)
         for relative in _RUNTIME_PATHS:
+            if (
+                relative in PROVISIONING_ENABLED_INIT
+                and not (extracted / relative).exists()
+            ):
+                continue
             _copy_runtime_path(extracted, upper, relative)
         _copy_runtime_path(extracted, upper, PROVISIONING_RECEIPT)
         _normalize_times(overlay)

@@ -20,7 +20,7 @@ from installer.provisioning_data import (
 
 @unittest.skipUnless(shutil.which("openssl"), "OpenSSL is required")
 class ProvisioningDataTests(unittest.TestCase):
-    def _universal_tree(self, root: Path) -> None:
+    def _universal_tree(self, root: Path, *, raptor: bool = True) -> None:
         (root / "etc/init.d").mkdir(parents=True)
         (root / "etc/dropbear").mkdir(parents=True)
         (root / "root/.ssh").mkdir(parents=True)
@@ -41,9 +41,10 @@ class ProvisioningDataTests(unittest.TestCase):
             path.write_bytes(raw)
             path.chmod(0o644)
             scripts[path.name] = raw
-        rwd = root / "etc/init.d/S96rwd"
-        rwd.write_bytes(b"#!/bin/sh\nexit 0\n")
-        rwd.chmod(0o644)
+        if raptor:
+            rwd = root / "etc/init.d/S96rwd"
+            rwd.write_bytes(b"#!/bin/sh\nexit 0\n")
+            rwd.chmod(0o644)
         archive = root / "usr/share/thingino-provisioning/init"
         archive.mkdir(parents=True)
         for name, raw in scripts.items():
@@ -121,10 +122,16 @@ class ProvisioningDataTests(unittest.TestCase):
                 digest.update(path.read_bytes())
         return digest.digest()
 
-    def _build(self, parent: Path, *, divergent_second: bool = False):
+    def _build(
+        self,
+        parent: Path,
+        *,
+        divergent_second: bool = False,
+        raptor: bool = True,
+    ):
         source = parent / "source"
         source.mkdir()
-        self._universal_tree(source)
+        self._universal_tree(source, raptor=raptor)
         calls: list[bytes] = []
 
         def extract(*, destination: Path, **_values: object) -> None:
@@ -134,9 +141,10 @@ class ProvisioningDataTests(unittest.TestCase):
             overlay = Path(arguments[arguments.index("--root") + 1])
             output = Path(arguments[arguments.index("--output") + 1])
             identity = self._tree_identity(overlay)
-            self.assertTrue(
-                (overlay / "root/etc/init.d/S96rwd").stat().st_mode & 0o111
-            )
+            rwd = overlay / "root/etc/init.d/S96rwd"
+            self.assertEqual(rwd.exists(), raptor)
+            if raptor:
+                self.assertTrue(rwd.stat().st_mode & 0o111)
             calls.append(identity)
             if divergent_second and len(calls) == 2:
                 identity = hashlib.sha256(identity).digest()
@@ -180,6 +188,16 @@ class ProvisioningDataTests(unittest.TestCase):
             self.assertNotIn("ssh-ed25519", repr(image))
             self.assertNotIn("bbbbbbbb", repr(image))
             self.assertEqual(image.receipt["provisioning_id"], "4" * 64)
+
+    def test_source_native_media_does_not_require_raptor_init(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            image, output, calls = self._build(
+                Path(directory_name),
+                raptor=False,
+            )
+            self.assertEqual(len(image.raw), DATA_FLASH_SPAN)
+            self.assertEqual(output.read_bytes(), image.raw)
+            self.assertEqual(calls, [calls[0], calls[0]])
 
     def test_nonreproducible_mkfs_fails_without_published_output(self) -> None:
         with tempfile.TemporaryDirectory() as directory_name:
