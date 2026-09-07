@@ -61,6 +61,45 @@ def commit(path: Path, message: str) -> None:
 
 
 class SourceCheckoutTests(unittest.TestCase):
+    def test_check_runner_canonicalizes_symlinked_temporary_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name).resolve()
+            temporary = root / "temporary"
+            temporary.mkdir()
+            alias = root / "alias"
+            alias.symlink_to(temporary, target_is_directory=True)
+            scripts = root / "scripts"
+            scripts.mkdir()
+            (root / "tests").mkdir()
+            runner = scripts / "check.sh"
+            runner.write_bytes((ROOT / "scripts/check.sh").read_bytes())
+            probe = (
+                "import pathlib, tempfile\n"
+                "with tempfile.TemporaryDirectory() as name:\n"
+                "    path = pathlib.Path(name)\n"
+                "    assert path == path.resolve(), str(path)\n"
+            )
+            (root / "tests/test_temporary.py").write_text(
+                "import unittest\n"
+                "class TemporaryTests(unittest.TestCase):\n"
+                "    def test_canonical_path(self):\n"
+                + "".join("        " + line + "\n" for line in probe.splitlines())
+            )
+            for filename in (
+                "check_public_tree.py", "check_release_gates.py",
+                "source_checkout.py", "check_docs.py",
+                "check_thingino_control_contract.py",
+            ):
+                (scripts / filename).write_text(probe)
+            result = subprocess.run(
+                ["sh", str(runner)], cwd=root,
+                env={**os.environ, "TMPDIR": str(alias)},
+                capture_output=True, text=True, check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertTrue(alias.is_symlink())
+            self.assertEqual(list(temporary.iterdir()), [])
+
     def setUp(self) -> None:
         self.lock = SOURCES.load_lock()
 

@@ -1522,7 +1522,7 @@
       "source": "scripts/build_thingino_control.py"
     },
     "scripts/check.sh": {
-      "sha256": "54536d2bd89b55861c1d8b59300d3e24992fb445ed5bbba9953956579ce936c1",
+      "sha256": "b8e76f7cc8166124bcbf7f9f222449873b79b66a27ee57401be13ad6932177cf",
       "source": "scripts/check.sh"
     },
     "scripts/check_docs.py": {
@@ -1874,7 +1874,7 @@
       "source": "tests/test_sd_package.py"
     },
     "tests/test_source_checkout.py": {
-      "sha256": "2fa9474129045e59364517b014a5b1d0059c3fa628c5c6d972066e98c03c0732",
+      "sha256": "236600dc1fecdfcbaddfb03501ae49c10160ddd432acb4a831a000a44122cc74",
       "source": "tests/test_source_checkout.py"
     },
     "tests/test_source_prepare.py": {
@@ -2231,6 +2231,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "e5ab433ad1b370c74778ec3d3314ea28c83c4ef2",
+  "source_commit": "0fa6ae5041e55cb0bb69e8508b99878dac1edd6b",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }
