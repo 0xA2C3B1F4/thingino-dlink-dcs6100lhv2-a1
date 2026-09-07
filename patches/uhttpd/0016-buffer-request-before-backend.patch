@@ -1,0 +1,303 @@
+diff --git a/control_proxy.c b/control_proxy.c
+index 38651e2..d26086d 100644
+--- a/control_proxy.c
++++ b/control_proxy.c
+@@ -153,7 +153,10 @@ static void control_proxy_timeout(struct uloop_timeout *timeout)
+ 	struct client *cl = container_of(proxy, struct client,
+ 					 dispatch.control_proxy);
+ 
+-	control_proxy_fail(cl, 504, "Gateway Timeout", "backend_timeout");
++	if (proxy->initialized)
++		control_proxy_fail(cl, 504, "Gateway Timeout", "backend_timeout");
++	else
++		control_proxy_fail(cl, 408, "Request Timeout", "request_timeout");
+ }
+ 
+ static void control_proxy_close_backend(struct dispatch_control_proxy *proxy)
+@@ -179,6 +182,10 @@ static void control_proxy_free(struct client *cl)
+ 	proxy->deferred_actions = 0;
+ 	blob_buf_free(&proxy->hdr);
+ 	control_proxy_close_backend(proxy);
++	free(proxy->request_url);
++	proxy->request_url = NULL;
++	free(proxy->request_body);
++	proxy->request_body = NULL;
+ }
+ 
+ static const char *control_proxy_header(struct client *cl, const char *name)
+@@ -606,6 +613,22 @@ static void control_proxy_state(struct ustream *stream)
+ 		control_proxy_fail(cl, 502, "Bad Gateway", "bad_gateway");
+ }
+ 
++static void control_proxy_flush_request_body(struct dispatch_control_proxy *proxy)
++{
++	while (proxy->request_body_sent < proxy->request_body_used &&
++	       ustream_pending_data(&proxy->backend.stream, true) <
++	       CONTROL_PROXY_WRITE_BUFFER) {
++		size_t remaining = proxy->request_body_used - proxy->request_body_sent;
++		int count = remaining > INT_MAX ? INT_MAX : (int) remaining;
++		int accepted = ustream_write(&proxy->backend.stream,
++			proxy->request_body + proxy->request_body_sent, count, true);
++
++		if (accepted <= 0 || (size_t) accepted > remaining)
++			return;
++		proxy->request_body_sent += accepted;
++	}
++}
++
+ static void control_proxy_backend_write(struct ustream *stream, int bytes)
+ {
+ 	struct dispatch_control_proxy *proxy =
+@@ -616,6 +639,11 @@ static void control_proxy_backend_write(struct ustream *stream, int bytes)
+ 	if (!proxy->initialized || proxy->finishing)
+ 		return;
+ 
++	if (proxy->request_body_sent < proxy->request_body_used) {
++		control_proxy_flush_request_body(proxy);
++		if (proxy->request_body_sent < proxy->request_body_used)
++			return;
++	}
+ 	if (ustream_pending_data(stream, true) >= CONTROL_PROXY_WRITE_BUFFER)
+ 		return;
+ 	control_proxy_schedule(cl, CONTROL_DEFER_POST_DATA);
+@@ -636,21 +664,17 @@ static void control_proxy_client_write(struct client *cl)
+ static int control_proxy_data_send(struct client *cl, const char *data, int len)
+ {
+ 	struct dispatch_control_proxy *proxy = &cl->dispatch.control_proxy;
+-	int accepted;
+ 
+-	if (!proxy->initialized || proxy->finishing || len < 0 ||
+-	    (size_t) len > proxy->request_remaining)
++	if (proxy->initialized || proxy->finishing || len < 0 ||
++	    proxy->request_body_used > proxy->request_body_size ||
++	    (size_t) len > proxy->request_remaining ||
++	    (size_t) len > proxy->request_body_size - proxy->request_body_used)
+ 		return 0;
+-	if (ustream_pending_data(&proxy->backend.stream, true) >=
+-	    CONTROL_PROXY_WRITE_BUFFER) {
+-		cl->dispatch.data_blocked = true;
+-		return 0;
+-	}
+-	accepted = ustream_write(&proxy->backend.stream, data, len, true);
+-	if (accepted < 0)
+-		return 0;
+-	proxy->request_remaining -= accepted;
+-	return accepted;
++	if (len)
++		memcpy(proxy->request_body + proxy->request_body_used, data, len);
++	proxy->request_body_used += len;
++	proxy->request_remaining -= len;
++	return len;
+ }
+ 
+ static int control_proxy_connect(int port)
+@@ -973,18 +997,95 @@ static bool control_proxy_url(const char *url)
+ 	       !strcmp(url, "/onvif/image1.cgi");
+ }
+ 
+-static void control_proxy_request(struct client *cl, char *url,
+-				struct path_info *pi)
++static bool control_proxy_start_request(struct client *cl)
+ {
+ 	struct dispatch_control_proxy *proxy = &cl->dispatch.control_proxy;
+ 	const char *authorization, *cookie, *api_key, *accept, *content_type;
+ 	const char *requested_with;
+-	const char *host, *origin;
++	char encoded_target[PATH_MAX * 3];
+ 	char remote[INET6_ADDRSTRLEN];
+ 	const void *remote_address;
++
++	if (!proxy->request_url ||
++	    control_proxy_start_backend(cl, proxy->backend_port))
++		return false;
++	if (proxy->media) {
++		if (!control_proxy_encode_target(proxy->request_url, encoded_target,
++		    sizeof(encoded_target)))
++			return false;
++		ustream_printf(&proxy->backend.stream,
++			"GET /api/v1/internal/media-authorize?target=%s HTTP/1.1\r\n"
++			"Host: %s:%d\r\nConnection: close\r\nContent-Length: 0\r\n",
++			encoded_target, CONTROL_PROXY_HOST, CONTROL_PROXY_PORT);
++	} else {
++		ustream_printf(&proxy->backend.stream,
++			"%s %s HTTP/1.1\r\nHost: %s:%d\r\nConnection: close\r\n"
++			"Content-Length: %zu\r\n",
++			http_methods[cl->request.method], proxy->request_url,
++			CONTROL_PROXY_HOST, proxy->backend_port,
++			proxy->request_body_size);
++	}
++
++	authorization = control_proxy_header(cl, "authorization");
++	cookie = control_proxy_header(cl, "cookie");
++	api_key = control_proxy_header(cl, "x-api-key");
++	accept = control_proxy_header(cl, "accept");
++	content_type = control_proxy_header(cl, "content-type");
++	requested_with = control_proxy_header(cl, "x-requested-with");
++	if (authorization)
++		ustream_printf(&proxy->backend.stream, "Authorization: %s\r\n",
++			authorization);
++	if (cookie)
++		ustream_printf(&proxy->backend.stream, "Cookie: %s\r\n", cookie);
++	if (api_key)
++		ustream_printf(&proxy->backend.stream, "X-API-Key: %s\r\n", api_key);
++	if (!proxy->media && !proxy->onvif_snapshot && accept)
++		ustream_printf(&proxy->backend.stream, "Accept: %s\r\n", accept);
++	if (!proxy->media && !proxy->onvif_snapshot && content_type)
++		ustream_printf(&proxy->backend.stream, "Content-Type: %s\r\n",
++			content_type);
++	if (!proxy->media && requested_with &&
++	    !strcmp(requested_with, "Thingino-WebUI"))
++		ustream_printf(&proxy->backend.stream,
++			"X-Requested-With: Thingino-WebUI\r\n");
++
++	remote_address = cl->peer_addr.family == AF_INET6 ?
++		(const void *) &cl->peer_addr.in6 : (const void *) &cl->peer_addr.in;
++	if (inet_ntop(cl->peer_addr.family, remote_address, remote, sizeof(remote))) {
++		if (proxy->onvif)
++			ustream_printf(&proxy->backend.stream,
++				"X-Thingino-Remote-Addr: %s\r\n", remote);
++		else
++			ustream_printf(&proxy->backend.stream,
++				"X-Thingino-Proxy: 1\r\nX-Thingino-Remote-Addr: %s\r\n",
++				remote);
++	}
++	ustream_printf(&proxy->backend.stream, "\r\n");
++	control_proxy_flush_request_body(proxy);
++	return true;
++}
++
++static void control_proxy_data_done(struct client *cl)
++{
++	struct dispatch_control_proxy *proxy = &cl->dispatch.control_proxy;
++
++	if (proxy->initialized || proxy->finishing)
++		return;
++	if (proxy->request_remaining ||
++	    proxy->request_body_used != proxy->request_body_size) {
++		control_proxy_fail(cl, 400, "Bad Request", "bad_request");
++		return;
++	}
++	if (!control_proxy_start_request(cl))
++		control_proxy_fail(cl, 502, "Bad Gateway", "bad_gateway");
++}
++
++static void control_proxy_request(struct client *cl, char *url,
++				struct path_info *pi)
++{
++	struct dispatch_control_proxy *proxy = &cl->dispatch.control_proxy;
++	const char *host, *origin;
+ 	bool media, onvif, onvif_snapshot;
+-	int backend_port;
+-	char encoded_target[PATH_MAX * 3];
+ 	(void) pi;
+ 
+ 	memset(proxy, 0, sizeof(*proxy));
+@@ -1045,73 +1146,29 @@ static void control_proxy_request(struct client *cl, char *url,
+ 		return;
+ 	}
+ 
+-	backend_port = onvif && !onvif_snapshot ? CONTROL_ONVIF_PORT :
++	proxy->backend_port = onvif && !onvif_snapshot ? CONTROL_ONVIF_PORT :
+ 		CONTROL_PROXY_PORT;
+-	if (control_proxy_start_backend(cl, backend_port)) {
+-		control_proxy_fail(cl, 502, "Bad Gateway", "bad_gateway");
++	proxy->request_remaining = cl->request.content_length;
++	proxy->request_body_size = cl->request.content_length;
++	proxy->request_url = strdup(url);
++	if (!proxy->request_url) {
++		control_proxy_fail(cl, 500, "Internal Server Error", "out_of_memory");
+ 		return;
+ 	}
+-
+-	proxy->request_remaining = cl->request.content_length;
++	if (proxy->request_body_size) {
++		proxy->request_body = malloc(proxy->request_body_size);
++		if (!proxy->request_body) {
++			control_proxy_fail(cl, 500, "Internal Server Error", "out_of_memory");
++			return;
++		}
++	}
+ 	cl->dispatch.data_send = control_proxy_data_send;
++	cl->dispatch.data_done = control_proxy_data_done;
+ 	cl->dispatch.write_cb = control_proxy_client_write;
+ 	proxy->timeout.cb = control_proxy_timeout;
+ 	uloop_timeout_set(&proxy->timeout, CONTROL_PROXY_TIMEOUT_MS);
+ 
+ 	proxy->authorizing = media;
+-	if (media && !control_proxy_encode_target(url, encoded_target,
+-	    sizeof(encoded_target))) {
+-		control_proxy_fail(cl, 400, "Bad Request", "bad_media_request");
+-		return;
+-	}
+-	if (media) {
+-		ustream_printf(&proxy->backend.stream,
+-			"GET /api/v1/internal/media-authorize?target=%s HTTP/1.1\r\n"
+-			"Host: %s:%d\r\nConnection: close\r\nContent-Length: 0\r\n",
+-			encoded_target, CONTROL_PROXY_HOST, CONTROL_PROXY_PORT);
+-	} else {
+-		ustream_printf(&proxy->backend.stream,
+-			"%s %s HTTP/1.1\r\nHost: %s:%d\r\nConnection: close\r\n"
+-			"Content-Length: %d\r\n",
+-			http_methods[cl->request.method], url,
+-			CONTROL_PROXY_HOST, backend_port,
+-			cl->request.content_length);
+-	}
+-
+-	authorization = control_proxy_header(cl, "authorization");
+-	cookie = control_proxy_header(cl, "cookie");
+-	api_key = control_proxy_header(cl, "x-api-key");
+-	accept = control_proxy_header(cl, "accept");
+-	content_type = control_proxy_header(cl, "content-type");
+-	requested_with = control_proxy_header(cl, "x-requested-with");
+-	if (authorization)
+-		ustream_printf(&proxy->backend.stream, "Authorization: %s\r\n",
+-			authorization);
+-	if (cookie)
+-		ustream_printf(&proxy->backend.stream, "Cookie: %s\r\n", cookie);
+-	if (api_key)
+-		ustream_printf(&proxy->backend.stream, "X-API-Key: %s\r\n", api_key);
+-	if (!media && !onvif_snapshot && accept)
+-		ustream_printf(&proxy->backend.stream, "Accept: %s\r\n", accept);
+-	if (!media && !onvif_snapshot && content_type)
+-		ustream_printf(&proxy->backend.stream, "Content-Type: %s\r\n",
+-			content_type);
+-	if (!media && requested_with && !strcmp(requested_with, "Thingino-WebUI"))
+-		ustream_printf(&proxy->backend.stream,
+-			"X-Requested-With: Thingino-WebUI\r\n");
+-
+-	remote_address = cl->peer_addr.family == AF_INET6 ?
+-		(const void *) &cl->peer_addr.in6 : (const void *) &cl->peer_addr.in;
+-	if (inet_ntop(cl->peer_addr.family, remote_address, remote, sizeof(remote))) {
+-		if (onvif && !onvif_snapshot)
+-			ustream_printf(&proxy->backend.stream,
+-				"X-Thingino-Remote-Addr: %s\r\n", remote);
+-		else
+-			ustream_printf(&proxy->backend.stream,
+-				"X-Thingino-Proxy: 1\r\nX-Thingino-Remote-Addr: %s\r\n",
+-				remote);
+-	}
+-	ustream_printf(&proxy->backend.stream, "\r\n");
+ }
+ 
+ struct dispatch_handler control_proxy_dispatch = {
+diff --git a/uhttpd.h b/uhttpd.h
+index 04bd359..8d19f2b 100644
+--- a/uhttpd.h
++++ b/uhttpd.h
+@@ -215,10 +215,16 @@ struct dispatch_control_proxy {
+ 	struct uloop_timeout deferred;
+ 	struct blob_buf hdr;
+ 	unsigned int deferred_actions;
++	char *request_url;
++	char *request_body;
+ 	size_t request_remaining;
++	size_t request_body_size;
++	size_t request_body_used;
++	size_t request_body_sent;
+ 	size_t response_remaining;
+ 	size_t header_bytes;
+ 	int status_code;
++	int backend_port;
+ 	char status_msg[64];
+ 	bool initialized;
+ 	bool status_seen;

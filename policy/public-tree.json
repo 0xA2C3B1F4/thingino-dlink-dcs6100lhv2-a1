@@ -361,6 +361,7 @@
     "patches/uhttpd/0013-never-cache-static-html-shell.patch",
     "patches/uhttpd/0014-allow-prometheus-control-responses.patch",
     "patches/uhttpd/0015-require-authenticated-tls-ingress.patch",
+    "patches/uhttpd/0016-buffer-request-before-backend.patch",
     "policy/public-tree.json",
     "policy/release-gates.json",
     "profiles/dlink-dcs6100lhv2-a1/artifact-limits.json",

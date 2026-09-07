@@ -31,6 +31,7 @@ def validate_final_root_contents(facade: object,
     Stage1BuildError = getattr(facade, 'Stage1BuildError')
     UDHCPC_NO_DEFAULT = getattr(facade, 'UDHCPC_NO_DEFAULT')
     WLAN_DHCP_NO_DEFAULT = getattr(facade, 'WLAN_DHCP_NO_DEFAULT')
+    derive_rtsp_viewer_credential = getattr(facade, 'derive_rtsp_viewer_credential')
     json = getattr(facade, 'json')
     normalize_ed25519_authorized_key = getattr(facade, 'normalize_ed25519_authorized_key')
     re = getattr(facade, 're')
@@ -125,8 +126,8 @@ def validate_final_root_contents(facade: object,
         ):
             raise Stage1BuildError(f"final Prudynt {service} credential is invalid")
     rtsp = prudynt.get("rtsp", {})
-    if rtsp.get("username") != "root":
-        raise Stage1BuildError("final RTSP username is not the management account")
+    if rtsp.get("username") != "viewer":
+        raise Stage1BuildError("final RTSP username is not the viewer account")
     for name in ("stream0", "stream1"):
         stream = prudynt.get(name)
         if not isinstance(stream, dict) or stream.get("enabled") is not True:
@@ -166,8 +167,16 @@ def validate_final_root_contents(facade: object,
         or onvif_password == "thingino"
     ):
         raise Stage1BuildError("final ONVIF credential is not unique")
-    if onvif_password != rtsp.get("password"):
-        raise Stage1BuildError("final RTSP and ONVIF management credentials differ")
+    try:
+        expected_rtsp_password = derive_rtsp_viewer_credential(
+            (onvif_password + "\n").encode("ascii")
+        ).decode("ascii").strip()
+    except (UnicodeError, ValueError) as exc:
+        raise Stage1BuildError("final management credential is not canonical") from exc
+    if rtsp.get("password") != expected_rtsp_password:
+        raise Stage1BuildError(
+            "final RTSP credential does not match the derived viewer credential"
+        )
 
 def validate_final_root(facade: object,
     raw: bytes, *, unsquashfs: Path, temporary_parent: Path

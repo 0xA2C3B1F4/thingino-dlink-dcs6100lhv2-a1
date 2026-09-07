@@ -717,7 +717,7 @@ fn access_and_network_config_mask_stored_passwords() {
     .unwrap();
     fs::write(
         &onvif_config,
-        br#"{"server":{"username":"thingino","password":"__SET_LOCALLY__","port":1999},"profiles":{"stream0":{"url":"rtsp://127.0.0.1/ch0"},"stream1":{"url":"rtsp://127.0.0.1/ch1"}}}"#,
+        br#"{"server":{"username":"root","password":"__SET_LOCALLY__","port":1999},"profiles":{"stream0":{"url":"rtsp://127.0.0.1/ch0"},"stream1":{"url":"rtsp://127.0.0.1/ch1"}}}"#,
     )
     .unwrap();
     fs::write(
@@ -838,6 +838,10 @@ fn access_and_network_config_mask_stored_passwords() {
         );
         assert_eq!(command.get_path("rtsp.port"), Some(&number(8554)));
         assert_eq!(
+            command.get_path("rtsp.password"),
+            Some(&Value::String("__SET_LOCALLY__".to_owned()))
+        );
+        assert_eq!(
             command.get_path("stream0.rtsp_endpoint"),
             Some(&Value::String("main".to_owned()))
         );
@@ -845,21 +849,42 @@ fn access_and_network_config_mask_stored_passwords() {
     });
     let response = backend
         .update_access_config(
-            br#"{"username":"viewer","rtsp_port":8554,"rtsp_ch0":"main","rtsp_ch1":"sub","rtsp_mic":"audio","onvif_port":80,"onvif_enabled":true}"#,
+            br#"{"username":"viewer","password":"__SET_LOCALLY__","rtsp_port":8554,"rtsp_ch0":"main","rtsp_ch1":"sub","rtsp_mic":"audio","onvif_port":80,"onvif_enabled":true}"#,
             Instant::now() + Duration::from_secs(1),
         )
         .unwrap();
     assert!(
         response
             .body
-            .windows(b"\"password_changed\":false".len())
-            .any(|value| value == b"\"password_changed\":false")
+            .windows(b"\"password_changed\":true".len())
+            .any(|value| value == b"\"password_changed\":true")
     );
     server.join().unwrap();
     let onvif = json::parse(&fs::read(&backend.paths.onvif_config).unwrap()).unwrap();
     assert_eq!(
         onvif.get_path("profiles.stream0.url"),
         Some(&Value::String("rtsp://127.0.0.1/main".to_owned()))
+    );
+    assert_eq!(
+        onvif.get_path("server.password"),
+        Some(&Value::String("__SET_LOCALLY__".to_owned()))
+    );
+    backend
+        .update_management_credential(
+            "root",
+            "new-management-secret",
+            Instant::now() + Duration::from_secs(1),
+        )
+        .unwrap();
+    let onvif = json::parse(&fs::read(&backend.paths.onvif_config).unwrap()).unwrap();
+    let prudynt = json::parse(&fs::read(&backend.paths.prudynt_config).unwrap()).unwrap();
+    assert_eq!(
+        onvif.get_path("server.password"),
+        Some(&Value::String("new-management-secret".to_owned()))
+    );
+    assert_eq!(
+        prudynt.get_path("rtsp.password"),
+        Some(&Value::String("__SET_LOCALLY__".to_owned()))
     );
     fs::remove_dir_all(root).unwrap();
 }
@@ -1300,6 +1325,49 @@ fn persistent_mutations_share_the_config_lock() {
     assert!(!serialized_mutation("GET", "/api/v1/config/network"));
     assert!(!serialized_mutation("POST", "/api/v1/actions/control"));
     assert!(!serialized_mutation("POST", "/api/v1/diagnostics"));
+}
+
+#[test]
+fn management_credential_update_shares_the_config_lock() {
+    let root = task_temp("management-config-lock");
+    let onvif_config = root.join("onvif.json");
+    fs::write(
+        &onvif_config,
+        br#"{"server":{"username":"root","password":"__SET_LOCALLY__","port":1999}}"#,
+    )
+    .unwrap();
+    let backend = Arc::new(PrudyntBackend::new(CameraPaths {
+        onvif_config: onvif_config.clone(),
+        ..CameraPaths::default()
+    }));
+    let guard = backend.config_lock.lock().unwrap();
+    let worker_backend = Arc::clone(&backend);
+    let (started_tx, started_rx) = std::sync::mpsc::channel();
+    let (result_tx, result_rx) = std::sync::mpsc::channel();
+    let worker = thread::spawn(move || {
+        started_tx.send(()).unwrap();
+        let result = <PrudyntBackend as Backend>::update_management_credential(
+            worker_backend.as_ref(),
+            "root",
+            "new-management-secret",
+            Instant::now() + Duration::from_secs(1),
+        );
+        result_tx.send(result).unwrap();
+    });
+    started_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+    assert!(result_rx.recv_timeout(Duration::from_millis(100)).is_err());
+    drop(guard);
+    assert!(matches!(
+        result_rx.recv_timeout(Duration::from_secs(1)).unwrap(),
+        Some(Ok(_))
+    ));
+    worker.join().unwrap();
+    let onvif = json::parse(&fs::read(&onvif_config).unwrap()).unwrap();
+    assert_eq!(
+        onvif.get_path("server.password"),
+        Some(&Value::String("new-management-secret".to_owned()))
+    );
+    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]

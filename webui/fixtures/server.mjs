@@ -61,7 +61,7 @@ const state = {
       },
     },
     time: { timezone: "Europe/Helsinki", timezone_options: timezoneOptions, current_unix_time: Math.floor(Date.now() / 1000), dhcp_ignore_timezone: true, ntp_server_0: "pool.ntp.org", ntp_server_1: "", ntp_server_2: "", ntp_server_3: "" },
-    access: { username: "camera", password: null, password_set: true, rtsp_port: 554, rtsp_ch0: "ch0", rtsp_ch1: "ch1", rtsp_mic: "mic", onvif_port: 80, onvif_enabled: true, onvif_ingress: "same-origin" },
+    access: { username: "viewer", password: null, password_set: true, rtsp_port: 554, rtsp_ch0: "ch0", rtsp_ch1: "ch1", rtsp_mic: "mic", onvif_port: 80, onvif_enabled: true, onvif_ingress: "same-origin" },
     webui: { username: "root", theme: "auto", level: "advanced", paranoid: false, track_focus: true, focus_timeout: 15, auth_bypass_ips: "" },
     admin: { name: "Camera administrator", email: "", telegram: "", discord: "" },
     rsyslog: { host: "", port: 514, enabled: false, file: false },

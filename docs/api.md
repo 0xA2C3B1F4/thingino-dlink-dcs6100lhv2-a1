@@ -37,7 +37,9 @@ Browser POST, PUT, and DELETE requests carry
 `X-Requested-With: Thingino-WebUI` or JSON media type. A non-empty JSON body
 always requires `Content-Type: application/json`, including for API-key and
 bearer callers. Successful password replacement requires 10 to 128 bytes and
-invalidates every existing session.
+invalidates every existing session. It updates the WebUI/root and ONVIF
+management credential together. The RTSP `viewer` credential is changed only
+through `/api/v1/config/access`.
 
 The bounded file editor retains `text/plain`, the network probe retains
 `application/x-www-form-urlencoded`, and WHIP retains `application/sdp`.
@@ -73,7 +75,9 @@ uhttpd relays MJPEG, snapshots, recordings, and ONVIF responses after Control
 authorizes the exact request. `/onvif/image.cgi` and `/onvif/image1.cgi` use
 the same session, API-key, or bearer authentication as other snapshot routes;
 there is no unauthenticated ONVIF snapshot bypass. Large media bodies do not
-occupy a Control worker.
+occupy a Control worker. uhttpd receives each bounded Control or ONVIF request
+body in full before opening the corresponding loopback backend connection; one
+four-second deadline covers body admission and backend service.
 
 ## Worker and native-IPC lifecycle
 

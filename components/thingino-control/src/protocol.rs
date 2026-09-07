@@ -127,6 +127,15 @@ pub trait Backend: Send + Sync + 'static {
         None
     }
 
+    fn update_management_credential(
+        &self,
+        _username: &str,
+        _password: &str,
+        _deadline: Instant,
+    ) -> Option<Result<BackendResponse, BackendError>> {
+        None
+    }
+
     fn authorize_media(&self, _target: &str) -> bool {
         false
     }

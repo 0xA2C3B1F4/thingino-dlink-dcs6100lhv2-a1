@@ -14,6 +14,7 @@ from installer.layout import (
     MTD_PHYSICAL_ERASE_SIZE,
     MTD_WRITE_SIZE,
 )
+from installer.private_config import derive_rtsp_viewer_credential
 from installer.stage1 import build
 from installer.stage1.build import (
     Stage1BuildError,
@@ -117,16 +118,20 @@ class Stage1BuildTests(unittest.TestCase):
         blob = len(algorithm).to_bytes(4, "big") + algorithm + len(key).to_bytes(4, "big") + key
         authorized_keys = b"ssh-ed25519 " + base64.b64encode(blob) + b"\n"
         password_key = "pass" + "word"
+        management_password = "a" * 64
+        viewer_password = derive_rtsp_viewer_credential(
+            (management_password + "\n").encode("ascii")
+        ).decode("ascii").strip()
         prudynt = json.dumps(
             {
                 "http": {"auth_required": True, "username": "probe", password_key: "h" * 24},
-                "rtsp": {"auth_required": True, "username": "root", password_key: "r" * 24},
+                "rtsp": {"auth_required": True, "username": "viewer", password_key: viewer_password},
                 "stream0": {"enabled": True, "fps": 15, "buffers": 1},
                 "stream1": {"enabled": True, "fps": 15, "buffers": 1},
             }
         ).encode()
         onvif = json.dumps(
-            {"server": {"username": "root", password_key: "r" * 24}}
+            {"server": {"username": "root", password_key: management_password}}
         ).encode()
         thingino = json.dumps(
             {"daynight": {"controls": {"color": True}}}
@@ -194,12 +199,12 @@ class Stage1BuildTests(unittest.TestCase):
                 build.validate_final_root_contents(
                     **{**valid, "paths": paths | {legacy}}
                 )
-        with self.assertRaisesRegex(Stage1BuildError, "credentials differ"):
+        with self.assertRaisesRegex(Stage1BuildError, "derived viewer credential"):
             build.validate_final_root_contents(
                 **{
                     **valid,
                     "onvif_config": json.dumps(
-                        {"server": {"username": "root", password_key: "o" * 24}}
+                        {"server": {"username": "root", password_key: "b" * 64}}
                     ).encode(),
                 }
             )

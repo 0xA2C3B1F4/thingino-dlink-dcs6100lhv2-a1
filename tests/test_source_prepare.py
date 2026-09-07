@@ -126,6 +126,7 @@ class SourceProfileTests(unittest.TestCase):
                 "0012-keep-mjpeg-encoder-profile-static.patch",
                 "0014-allow-prometheus-control-responses.patch",
                 "0015-require-authenticated-tls-ingress.patch",
+                "0016-buffer-request-before-backend.patch",
             ):
                 patch_text = (
                     ROOT / "patches" / "uhttpd" / patch_name
@@ -155,10 +156,8 @@ class SourceProfileTests(unittest.TestCase):
             hardened_proxy = (checkout / "control_proxy.c").read_text(
                 encoding="utf-8"
             )
-            self.assertIn(
-                "\tconst char *requested_with;\n\tconst char *host, *origin;",
-                hardened_proxy,
-            )
+            self.assertIn("\tconst char *requested_with;", hardened_proxy)
+            self.assertIn("\tconst char *host, *origin;", hardened_proxy)
 
         static_html_numstat = git(
             ROOT,
@@ -214,7 +213,7 @@ class SourceProfileTests(unittest.TestCase):
         self.assertEqual(profile["model"], "DCS-6100LHV2")
         self.assertEqual(profile["hardware_revision"], "A1")
         self.assertEqual(len(profile["thingino_patches"]), 21)
-        self.assertEqual(len(profile["installed_files"]), 187)
+        self.assertEqual(len(profile["installed_files"]), 188)
         installed_sources = {entry["source"] for entry in profile["installed_files"]}
         self.assertTrue({
             "webui/firmware-bundle.json",
@@ -365,6 +364,7 @@ class SourceProfileTests(unittest.TestCase):
                 "package/thingino-uhttpd/0013-never-cache-static-html-shell.patch",
                 "package/thingino-uhttpd/0014-allow-prometheus-control-responses.patch",
                 "package/thingino-uhttpd/0015-require-authenticated-tls-ingress.patch",
+                "package/thingino-uhttpd/0016-buffer-request-before-backend.patch",
             }
             <= installed_destinations
         )
@@ -1331,6 +1331,28 @@ int main() {
         self.assertNotIn('uh_http_header(cl, 426, "Upgrade Required")', hardened_ingress)
         self.assertIn('-\t\t\t\t"X-Thingino-Proxy: 2\\r\\n");', hardened_ingress)
         self.assertNotIn('+\t\t\t\t"X-Thingino-Proxy: 2\\r\\n");', hardened_ingress)
+        buffered_admission = (
+            ROOT / "patches/uhttpd/0016-buffer-request-before-backend.patch"
+        ).read_text(encoding="utf-8")
+        buffered_added = "\n".join(
+            line[1:]
+            for line in buffered_admission.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for required in (
+            "char *request_body;",
+            "proxy->request_body = malloc(proxy->request_body_size);",
+            "cl->dispatch.data_done = control_proxy_data_done;",
+            "proxy->request_body_used != proxy->request_body_size",
+            "control_proxy_start_backend(cl, proxy->backend_port)",
+            'control_proxy_fail(cl, 408, "Request Timeout", "request_timeout")',
+            "free(proxy->request_body);",
+        ):
+            self.assertIn(required, buffered_added)
+        self.assertIn(
+            "-\tif (control_proxy_start_backend(cl, backend_port))",
+            buffered_admission,
+        )
 
     def test_http_proxy_runtime_and_backpressure(self) -> None:
         no_script_runtime = (

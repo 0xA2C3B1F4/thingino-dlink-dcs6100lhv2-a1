@@ -62,7 +62,7 @@ test("every structured domain preserves backend-only and read-only fields", () =
 
 test("write-only secrets are omitted when blank and included only when changed", () => {
   const fields = [secret("password")];
-  const access = { username: "root", password: null, password_set: true } satisfies JsonObject;
+  const access = { username: "viewer", password: null, password_set: true } satisfies JsonObject;
   const unchanged = buildConfigPayload(access, changes([["password", ""]]), fields);
   assert.equal(Object.hasOwn(unchanged, "password"), false);
   assert.equal(unchanged.password_set, true);

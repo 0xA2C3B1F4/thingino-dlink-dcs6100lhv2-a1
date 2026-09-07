@@ -239,99 +239,6 @@ pub(crate) fn handle_api_key_route(
     let Some(auth) = state.web_auth.as_ref() else {
         return false;
     };
-    if request.method == "POST"
-        && request.target == "/api/v1/config/access"
-        && !request.body.is_empty()
-    {
-        let document = match json::parse(&request.body) {
-            Ok(document) => document,
-            Err(_) => return false,
-        };
-        let password = document
-            .get_path("password")
-            .and_then(json::Value::as_str)
-            .or_else(|| {
-                document
-                    .get_path("rtsp.password")
-                    .and_then(json::Value::as_str)
-            })
-            .filter(|value| !value.is_empty());
-        if let Some(password) = password {
-            if !has_json_content_type(request) {
-                let _ = send_error(
-                    stream,
-                    deadline,
-                    415,
-                    "unsupported_media_type",
-                    "Content-Type must be application/json",
-                );
-                return true;
-            }
-            let Ok(_credential_guard) = auth.lock_credential_update() else {
-                let _ = send_error(
-                    stream,
-                    deadline,
-                    503,
-                    "credential_update_failed",
-                    "management credential storage is unavailable",
-                );
-                return true;
-            };
-            let mut password_document = BTreeMap::new();
-            password_document.insert(
-                "password".to_owned(),
-                json::Value::String(password.to_owned()),
-            );
-            let password_body = json::Value::Object(password_document).to_json();
-            let (_, original_shadow) = match auth.change_password(password_body.as_bytes()) {
-                Ok(change) => change,
-                Err(AuthError::InvalidRequest | AuthError::InvalidCredentials) => {
-                    let _ = send_error(
-                        stream,
-                        deadline,
-                        400,
-                        "invalid_request",
-                        "password must contain 10 to 128 bytes",
-                    );
-                    return true;
-                }
-                Err(AuthError::Unavailable) => {
-                    let _ = send_error(
-                        stream,
-                        deadline,
-                        503,
-                        "credential_update_failed",
-                        "management credential storage is unavailable",
-                    );
-                    return true;
-                }
-            };
-            let result =
-                state
-                    .backend
-                    .api_request("POST", "/api/v1/config/access", &request.body, deadline);
-            match result {
-                Some(Ok(response)) => {
-                    send_backend_result(stream, deadline, Ok(response), None);
-                }
-                Some(Err(error)) => {
-                    let _ = auth.restore_password(&original_shadow);
-                    send_backend_result(stream, deadline, Err(error), None);
-                }
-                None => {
-                    let _ = auth.restore_password(&original_shadow);
-                    let _ = send_error(
-                        stream,
-                        deadline,
-                        503,
-                        "credential_update_failed",
-                        "WebUI, ONVIF, and RTSP credentials were not updated together",
-                    );
-                }
-            }
-            return true;
-        }
-    }
     if request.method == "POST" && request.target == "/api/v1/auth/password" {
         if request.body.is_empty() || !has_json_content_type(request) {
             let (status, code, message) = if request.body.is_empty() {
@@ -379,20 +286,10 @@ pub(crate) fn handle_api_key_route(
                 return true;
             }
         };
-        let mut access = BTreeMap::new();
-        access.insert(
-            "username".to_owned(),
-            json::Value::String("root".to_owned()),
-        );
-        access.insert("password".to_owned(), json::Value::String(password));
-        let access_body = json::Value::Object(access).to_json();
         let updated = matches!(
-            state.backend.api_request(
-                "POST",
-                "/api/v1/config/access",
-                access_body.as_bytes(),
-                deadline,
-            ),
+            state
+                .backend
+                .update_management_credential("root", &password, deadline),
             Some(Ok(_))
         );
         if !updated {
@@ -402,7 +299,7 @@ pub(crate) fn handle_api_key_route(
                 deadline,
                 503,
                 "credential_update_failed",
-                "WebUI, ONVIF, and RTSP credentials were not updated together",
+                "WebUI and ONVIF credentials were not updated together",
             );
             return true;
         }

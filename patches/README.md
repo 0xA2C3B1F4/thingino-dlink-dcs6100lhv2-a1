@@ -70,6 +70,10 @@ digest before installing or applying them.
 - uhttpd/0013-never-cache-static-html-shell.patch marks `.html` and `.htm`
   responses as `no-store` before conditional requests, so a firmware update
   cannot leave the static WebUI shell selecting an older asset bundle.
+- uhttpd/0016-buffer-request-before-backend.patch receives each bounded Control
+  or ONVIF request body within the existing four-second deadline before it
+  opens a loopback backend connection. Slow incomplete clients therefore do
+  not occupy Control workers or the serialized ONVIF daemon.
 - onvif/0001-persistent-httpd-no-request-children.patch turns the pinned
   request handler into one bounded loopback daemon and replaces every command
   hook with in-process native or Control-backed behavior.

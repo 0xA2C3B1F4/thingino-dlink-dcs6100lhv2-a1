@@ -137,7 +137,7 @@ def _seal_private_install_config(facade: object, arguments: argparse.Namespace) 
             "files": list(result.files),
             "ok": True,
             "rotation": "none",
-            "schema_version": 2,
+            "schema_version": 3,
         }
     )
 

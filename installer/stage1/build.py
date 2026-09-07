@@ -27,6 +27,7 @@ from installer.final_bundle import (
 from installer.install_policy import universal_physical_write_policy
 from installer.layout import TARGET
 from installer.media_closure import PROVEN_IDENTITIES
+from installer.private_config import derive_rtsp_viewer_credential
 from installer.runtime_policy import (
     DROPBEAR_KEY_ONLY_ARGUMENTS,
     EMPTY_RESOLVER_POLICY,

@@ -34,7 +34,7 @@
       "source": "Makefile"
     },
     "README.md": {
-      "sha256": "1af99f6efaedf0783490651d2016b6e3b1754d17677cc7426e846a3e6d69a443",
+      "sha256": "5a8ffb5f89f54f96e43bc6de8706c4b026bf7ef8b9f4dd4cde2b7866369f67c6",
       "source": "production/README.md"
     },
     "SECURITY.md": {
@@ -238,7 +238,7 @@
       "source": "components/thingino-control/scripts/run_with_mqtt_brokers.py"
     },
     "components/thingino-control/src/camera.rs": {
-      "sha256": "243c265969940feb0322758b1214b6971b183d15920d4788cf9cba2dbb44f4d1",
+      "sha256": "56515df4db6f5131469bf5be999dd629ab0310f721d6cdbfcdd26c5709f8260c",
       "source": "components/thingino-control/src/camera.rs"
     },
     "components/thingino-control/src/camera/actions.rs": {
@@ -250,7 +250,7 @@
       "source": "components/thingino-control/src/camera/api.rs"
     },
     "components/thingino-control/src/camera/config/access.rs": {
-      "sha256": "763e150989c17fd5b77e25f931558fb789e65012730b0ef442be5f02cea0052e",
+      "sha256": "08debc3191629b4383d6e4a7974c2136f7a3054e0dda2bdba59575c49724620e",
       "source": "components/thingino-control/src/camera/config/access.rs"
     },
     "components/thingino-control/src/camera/config/crontab.rs": {
@@ -486,7 +486,7 @@
       "source": "components/thingino-control/src/camera/storage/sd.rs"
     },
     "components/thingino-control/src/camera_tests.rs": {
-      "sha256": "732d0b5135f41b62b04fa0ff744f4438dfa175976cb289d94e6008930c0fb866",
+      "sha256": "0d502899d8c516a7a746979bac379471227bca5bfc334df04fcdb82ccfa7153e",
       "source": "components/thingino-control/src/camera_tests.rs"
     },
     "components/thingino-control/src/decode.rs": {
@@ -498,7 +498,7 @@
       "source": "components/thingino-control/src/json.rs"
     },
     "components/thingino-control/src/lib.rs": {
-      "sha256": "011950c46aaa657b15b98c7c617d06088dcca270ed52a264e42e058ca867a2ad",
+      "sha256": "4f7b27579cadb8137523e6539a23dab21074af504bda17b44b6eafc2fda1e0f2",
       "source": "components/thingino-control/src/lib.rs"
     },
     "components/thingino-control/src/main.rs": {
@@ -506,7 +506,7 @@
       "source": "components/thingino-control/src/main.rs"
     },
     "components/thingino-control/src/protocol.rs": {
-      "sha256": "16ceb4b570a300cccc6b525f865dbae8d0781c0238d38f142ac9df5aaa642a1f",
+      "sha256": "f37f55cac9ade45c3de07cc5c5bec02604905b6917a5be206c02a00b26334234",
       "source": "components/thingino-control/src/protocol.rs"
     },
     "components/thingino-control/src/request.rs": {
@@ -522,7 +522,7 @@
       "source": "components/thingino-control/src/response.rs"
     },
     "components/thingino-control/src/router.rs": {
-      "sha256": "21170d502c871b1931273b4a20b707560544f1635f6e9f138e7be5e69561e906",
+      "sha256": "0547847bb0df62429405a8964834552e354d4d425b38c3553458245dc64af68d",
       "source": "components/thingino-control/src/router.rs"
     },
     "components/thingino-control/src/server.rs": {
@@ -546,7 +546,7 @@
       "source": "components/thingino-control/storage-worker/mod.rs"
     },
     "components/thingino-control/tests/contract.rs": {
-      "sha256": "1d54f0c34fc85c6f172346feccbbe9b677cfdaf541d4b14cd61aa5b50e476fd6",
+      "sha256": "66b60cf0e960ea858361f981dc24c77d0f1afd78c888dc9f7f5714458f6705eb",
       "source": "components/thingino-control/tests/contract.rs"
     },
     "containers/thingino-builder-amd64.Containerfile": {
@@ -558,15 +558,15 @@
       "source": "containers/thingino-builder-arm64.Containerfile"
     },
     "contracts/thingino-control-api-v1.json": {
-      "sha256": "3575a0f3c05fd1499b7705de89029af24c884b3bfd371629fafaaaa12899ba01",
+      "sha256": "411e6e6e4690441a1b13f339ccba5e4136b48e9eb55596e2d9f99d98dad93142",
       "source": "contracts/thingino-control-api-v1.json"
     },
     "docs/api.md": {
-      "sha256": "c61437b7de101d717a3a7a8b96d007fb3311d186fae2521db4bb0ba35bf48e67",
+      "sha256": "b0460111a807d6d1494ac455cca94173437374f11d0a7a6150d3f0defdab0d32",
       "source": "production/docs/api.md"
     },
     "docs/architecture.md": {
-      "sha256": "738ce1bc8e8daa6913621f20924738c2b4b363318d7b78f0a877cf24ceba347f",
+      "sha256": "090924fc92d43c84ea4e695d178eb6a7ac73983c6f8e5a0307547c43434eece1",
       "source": "production/docs/architecture.md"
     },
     "docs/build.md": {
@@ -626,7 +626,7 @@
       "source": "installer/cli.py"
     },
     "installer/cli_commands_build.py": {
-      "sha256": "cdf234cfbfa41b7a312c7870df5d556ff653633c5399f61ad9c359950e557952",
+      "sha256": "84e7765e8748d9c6dd8c783abf24a8dc7a5cf8c1f2e6ed313a13f14a68439b22",
       "source": "installer/cli_commands_build.py"
     },
     "installer/cli_commands_media.py": {
@@ -686,11 +686,11 @@
       "source": "installer/final_bundle.py"
     },
     "installer/final_root.py": {
-      "sha256": "82cdbcf91c27d3f514eec309fccb5c31193795744e173d3792ffe39e67efb625",
+      "sha256": "2a1346d0f4eac2dd472205aee24c61cfe1b381bd1a2dff19dfb9c2e5065b33d1",
       "source": "installer/final_root.py"
     },
     "installer/final_root_media.py": {
-      "sha256": "86dbda56cd754c9cf7b8583b57bb5e94984b6211ce828fdc7cd5cac9d343e8c0",
+      "sha256": "25b9b71f89e54dd85d416c82db53e01c1f6fed0642eed4cce0d636cf9019937d",
       "source": "installer/final_root_media.py"
     },
     "installer/final_root_security.py": {
@@ -818,7 +818,7 @@
       "source": "installer/platform_wifi.py"
     },
     "installer/private_config.py": {
-      "sha256": "7a4bb4305b19764a9a3691db23b293650373a547ae2b14151c5430968d9b8bfa",
+      "sha256": "48e0ccb6e7fbe0650368c90a68f424e06bb662fff1950b3e0012eee15e3f3112",
       "source": "installer/private_config.py"
     },
     "installer/provisioning.py": {
@@ -826,7 +826,7 @@
       "source": "installer/provisioning.py"
     },
     "installer/provisioning_data.py": {
-      "sha256": "adc4d9c2a12ed2222cfebdfe796e67cff8b85668e4b303fe076caec925a962e2",
+      "sha256": "dccd16084438808ea91b6baae4a2ee1a77766c64d22fa8f35c229ec2fb92895b",
       "source": "installer/provisioning_data.py"
     },
     "installer/ram_boot.py": {
@@ -934,11 +934,11 @@
       "source": "installer/stage1/__init__.py"
     },
     "installer/stage1/build.py": {
-      "sha256": "66c258716a7596fc8251aaa7ddcd482b4919a42acbd166a57409cb00739b3fc3",
+      "sha256": "6b2d28b9af9e996b7a83f4d1f0029133003884df43cc459709cb17e601011c28",
       "source": "installer/stage1/build.py"
     },
     "installer/stage1/final_root_validation.py": {
-      "sha256": "040d1dfffa3adb0eae5bb11767be58b1dd46586c11adcfd93de8de7b10539b6e",
+      "sha256": "5294333cd0c0937ba85d9e0f1163a006e7f71d84ccbce4877a3c159db0732e0b",
       "source": "installer/stage1/final_root_validation.py"
     },
     "installer/stage1/init.c": {
@@ -1070,7 +1070,7 @@
       "source": "installer/universal_install.py"
     },
     "installer/user_cli.py": {
-      "sha256": "9357acbd4c77b0ecba4ba455df4f52f6687357098daacff02599d2085c7a6147",
+      "sha256": "53e95fbfa8a7b53078a09ea238289f0f705197f32bbf261eaa5fc39cb4fabc46",
       "source": "installer/user_cli.py"
     },
     "installer/user_cli_build.py": {
@@ -1082,7 +1082,7 @@
       "source": "installer/user_cli_diagnostics.py"
     },
     "installer/user_cli_guided.py": {
-      "sha256": "cb5480a58d2439f3faed7071c293270e217a3946f2e445fe482b5095991d295d",
+      "sha256": "6a7bbd81e347d8664b3902bd402534d574dd1e44b41ec247d1e3a8619ad07b37",
       "source": "installer/user_cli_guided.py"
     },
     "installer/user_cli_parser.py": {
@@ -1110,7 +1110,7 @@
       "source": "installer/workflow_preflight.py"
     },
     "patches/README.md": {
-      "sha256": "42907d0481272bd9e9033bfdadbca813c32db43aa5b1cbd315cbe37887089e9a",
+      "sha256": "9fb8bacc106e67b4d2df2c7065f069f29f14c0474b7f32d22b288d2cb3e24769",
       "source": "patches/README.md"
     },
     "patches/onvif/0001-persistent-httpd-no-request-children.patch": {
@@ -1441,6 +1441,10 @@
       "sha256": "036d819e01bc2fded9d399a041cef4c75b5bb799803b95f710acea470241f1aa",
       "source": "patches/uhttpd/0015-require-authenticated-tls-ingress.patch"
     },
+    "patches/uhttpd/0016-buffer-request-before-backend.patch": {
+      "sha256": "123ed7a716b79b6d403a56b0a3641b44a994e7022af4366b835b66a938ef8b40",
+      "source": "patches/uhttpd/0016-buffer-request-before-backend.patch"
+    },
     "policy/release-gates.json": {
       "sha256": "2989903b430e71dc95f0a3014fbccd9e094955eecb77c39c3301f0498a96401f",
       "source": "policy/release-gates.json"
@@ -1478,7 +1482,7 @@
       "source": "profiles/dlink-dcs6100lhv2-a1/recovery-ap-kernel.fragment"
     },
     "profiles/dlink-dcs6100lhv2-a1/source-profile.json": {
-      "sha256": "ddfe64712320a312149d777647ed2db6822ef45ad4c32088ac44d7713bddd21a",
+      "sha256": "fa292fb21e07c4938d2f8a36dddd57a45ce6f66ea84d203bd75e3a94c566f29a",
       "source": "profiles/dlink-dcs6100lhv2-a1/source-profile.json"
     },
     "profiles/dlink-dcs6100lhv2-a1/stock-restore-kernel.fragment": {
@@ -1710,7 +1714,7 @@
       "source": "tests/test_final_bundle.py"
     },
     "tests/test_final_root.py": {
-      "sha256": "ca756978d161945b554588e56a1a9660509966cf0bb2d46290cf57634c17651f",
+      "sha256": "6cca0707453985242f97f5a97663ccca72a62eceb4bdf14989584e0cb3717873",
       "source": "tests/test_final_root.py"
     },
     "tests/test_full_backup.py": {
@@ -1786,7 +1790,7 @@
       "source": "tests/test_platform_wifi.py"
     },
     "tests/test_private_config.py": {
-      "sha256": "0c21f735063f3baab9abf7978a8bc1fa5c262a8aa4ffe3a05303fed351f92fe1",
+      "sha256": "c8188acafc3ad929d1b7d349f1c2c0599512882a5d094ef03dbc5c8f56cbd200",
       "source": "tests/test_private_config.py"
     },
     "tests/test_profile.py": {
@@ -1878,7 +1882,7 @@
       "source": "tests/test_source_checkout.py"
     },
     "tests/test_source_prepare.py": {
-      "sha256": "509bc9bc0be7e13184f69b8941df5a714d1c8bb9984816b0cce7fbb2c856a12f",
+      "sha256": "0ed2866aba4afdbfd58b06e3e6a27f309ae8d9dba92873097e9133b228c272da",
       "source": "tests/test_source_prepare.py"
     },
     "tests/test_split_kernel_build.py": {
@@ -1886,7 +1890,7 @@
       "source": "tests/test_split_kernel_build.py"
     },
     "tests/test_stage1_build.py": {
-      "sha256": "3f4c65d7e2b9c346d417815bbedd2349ec70aa9a0055ca5b387b55dfcd274d3a",
+      "sha256": "ecf73a72ed8f2a92fe1314650ba25d72bc760cf55b06b32d9c12a3d8f0bc070a",
       "source": "tests/test_stage1_build.py"
     },
     "tests/test_stage2.py": {
@@ -1938,7 +1942,7 @@
       "source": "tests/test_universal_artifacts.py"
     },
     "tests/test_user_cli.py": {
-      "sha256": "a02a8fa0a8966d8d49f2f7bc1fa93d91fec4f5d893c7e5243e1ced7ec7653709",
+      "sha256": "68ede6dae7707aa099354fdc92c57d8da77086c8ed2c08215531622b580508f0",
       "source": "tests/test_user_cli.py"
     },
     "tests/test_user_cli_build.py": {
@@ -1986,11 +1990,11 @@
       "source": "webui/browser-tests/webui.spec.ts"
     },
     "webui/firmware-bundle.json": {
-      "sha256": "0b12e28d7c436374015ec92785303561baa3586e24d16d8b846150e78852344b",
+      "sha256": "72bfd12bb51478fe9310cb100275f2a8387f6b255e6d28ee6a01a09361335dbc",
       "source": "webui/firmware-bundle.json"
     },
     "webui/fixtures/server.mjs": {
-      "sha256": "bd6a3c5edc1f6d039ede3907d99c44d87f64d1ca81e88db1a871ef9c2e69926b",
+      "sha256": "bbcc817726ffe6eded76fd4c517cbd62788bc493fa560b397f87931af3e09cff",
       "source": "webui/fixtures/server.mjs"
     },
     "webui/index.html": {
@@ -2118,7 +2122,7 @@
       "source": "webui/src/pages/config.ts"
     },
     "webui/src/pages/config/access.ts": {
-      "sha256": "5c38f99ecd1e5f97fd0ea94102d1a0825d0e48ebf06a795effc1311ec1420386",
+      "sha256": "1254e5a33ba103fbc30aed7dc9a945fca06d3f7ca456e5570b68edc3ea812800",
       "source": "webui/src/pages/config/access.ts"
     },
     "webui/src/pages/config/common.ts": {
@@ -2194,7 +2198,7 @@
       "source": "webui/tests/media.test.ts"
     },
     "webui/tests/page-payload.test.ts": {
-      "sha256": "052417d5409997a86d7e52fa50095ca7609daf81b37f74d35ffa28311f4c5e14",
+      "sha256": "be6c846effa285772ca7596c651498ec5d00681fb6d5f39e99c41532d6296123",
       "source": "webui/tests/page-payload.test.ts"
     },
     "webui/tests/routes.test.ts": {
@@ -2231,6 +2235,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "0fa6ae5041e55cb0bb69e8508b99878dac1edd6b",
+  "source_commit": "14a5f929cdc51842430cc485af3559b04b355549",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }

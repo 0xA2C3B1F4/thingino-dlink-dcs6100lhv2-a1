@@ -344,6 +344,21 @@ impl Backend for PrudyntBackend {
         api::dispatch(self, method, target, body, deadline)
     }
 
+    fn update_management_credential(
+        &self,
+        username: &str,
+        password: &str,
+        deadline: Instant,
+    ) -> Option<Result<BackendResponse, BackendError>> {
+        let _mutation_guard = match self.config_lock.lock() {
+            Ok(guard) => guard,
+            Err(_) => return Some(Err(BackendError::Unavailable)),
+        };
+        Some(PrudyntBackend::update_management_credential(
+            self, username, password, deadline,
+        ))
+    }
+
     fn authorize_media(&self, target: &str) -> bool {
         if matches!(
             target,
