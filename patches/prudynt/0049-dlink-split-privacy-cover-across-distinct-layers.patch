@@ -1,0 +1,256 @@
+diff --git a/src/PrivacyCoverPlan.hpp b/src/PrivacyCoverPlan.hpp
+new file mode 100644
+index 0000000..601449f
+--- /dev/null
++++ b/src/PrivacyCoverPlan.hpp
+@@ -0,0 +1,23 @@
++#pragma once
++
++struct PrivacyCoverRegion {
++  int top;
++  int bottom;
++  int layer;
++  float scale;
++  int alpha;
++};
++
++// The T31 main encoder needs two opaque horizontal regions on distinct
++// layers 6 and 7. Preserve the proven 100-line split and registration order;
++// merely halving the frame on lower layers still leaks the main image.
++inline bool planPrivacyCoverRegion(int height, int count, int region,
++                                   PrivacyCoverRegion &out) {
++  if ((count != 1 && count != 2) || height < (count == 2 ? 4 : 1) ||
++      region < 0 || region >= count) return false;
++  const int split = count == 2 ? (height > 100 ? 100 : (height / 2) & ~1) : height;
++  out = {region == 0 ? 0 : split,
++         region + 1 == count ? height - 1 : split - 1,
++         count == 2 ? region + 6 : 1, 1.0f, 255};
++  return true;
++}
+diff --git a/src/VideoPrivacyControl.cpp b/src/VideoPrivacyControl.cpp
+index fa9723c..4e803c8 100644
+--- a/src/VideoPrivacyControl.cpp
++++ b/src/VideoPrivacyControl.cpp
+@@ -2,6 +2,7 @@
+ 
+ #include "IMPEncoder.hpp"
+ #include "Logger.hpp"
++#include "PrivacyCoverPlan.hpp"
+ #include "globals.hpp"
+ #include "imp_hal.hpp"
+ 
+@@ -122,21 +123,46 @@ void ensureFifo() {
+   }
+ }
+ 
++#if defined(DCS_DLINK_MEDIA_READY)
++constexpr int kPrivacyCoverCount = 2;
++#else
++constexpr int kPrivacyCoverCount = 1;
++#endif
++
++bool hasPrivacyCover(int ch) {
++  auto &vs = global_video[ch];
++  return vs && (vs->privacy_osd_handles[0] >= 0 ||
++                vs->privacy_osd_handles[1] >= 0);
++}
++
++bool completePrivacyCover(int ch) {
++  auto &vs = global_video[ch];
++  if (!vs) return false;
++  for (int i = 0; i < kPrivacyCoverCount; ++i) {
++    if (vs->privacy_osd_handles[i] < 0) return false;
++  }
++  return true;
++}
++
+ bool destroyPrivacyCover(int ch) {
+   std::lock_guard<std::mutex> hardware_lock(global_osd_hardware_mutex);
+   auto &vs = global_video[ch];
+-  if (!vs || vs->privacy_osd_handle < 0) return true;
++  if (!vs) return true;
+   int encGrp = vs->encChn;
+-  IMPRgnHandle handle =
+-      (IMPRgnHandle)(intptr_t)vs->privacy_osd_handle;
+-  if (IMP_OSD_UnRegisterRgn(handle, encGrp) != 0) {
+-    LOG_ERROR("VideoPrivacyControl: failed to unregister OSD cover on ch"
+-              << ch);
+-    return false;
++  bool complete = true;
++  for (int &stored : vs->privacy_osd_handles) {
++    if (stored < 0) continue;
++    IMPRgnHandle handle = static_cast<IMPRgnHandle>(stored);
++    if (IMP_OSD_UnRegisterRgn(handle, encGrp) != 0) {
++      LOG_ERROR("VideoPrivacyControl: failed to unregister OSD cover on ch"
++                << ch);
++      complete = false;
++      continue;
++    }
++    IMP_OSD_DestroyRgn(handle);
++    stored = -1;
+   }
+-  IMP_OSD_DestroyRgn(handle);
+-  vs->privacy_osd_handle = -1;
+-  return true;
++  return complete;
+ }
+ 
+ bool privacyChannelRequired(int ch) {
+@@ -170,27 +196,31 @@ void flushVideoQueues(const std::shared_ptr<video_stream> &vs) {
+   }
+ }
+ 
+-bool createPrivacyCover(int ch) {
++bool createPrivacyCoverRegion(int ch, int region) {
+   std::lock_guard<std::mutex> hardware_lock(global_osd_hardware_mutex);
+   auto &vs = global_video[ch];
+   if (!vs || !privacyChannelRequired(ch) ||
+       !vs->osd_ready.load(std::memory_order_acquire)) {
+     return false;
+   }
+-  if (vs->privacy_osd_handle >= 0) return true;
++  if (vs->privacy_osd_handles[region] >= 0) return true;
+ 
+   int sw = vs->stream ? vs->stream->width : 1920;
+   int sh = vs->stream ? vs->stream->height : 1080;
+   if (sw <= 0) sw = 1920;
+   if (sh <= 0) sh = 1080;
++  PrivacyCoverRegion plan{};
++  if (!planPrivacyCoverRegion(sh, kPrivacyCoverCount, region, plan)) return false;
+ 
+   int encGrp = vs->encChn;
+   IMPOSDRgnAttr rgnAttr{};
+   rgnAttr.type = OSD_REG_COVER;
+   rgnAttr.rect.p0.x = 0;
+-  rgnAttr.rect.p0.y = 0;
++  // T31's full-height cover intermittently leaks the lower main-stream image.
++  // Use the device-proven two horizontal regions on layers 6 and 7.
++  rgnAttr.rect.p0.y = plan.top;
+   rgnAttr.rect.p1.x = sw - 1;
+-  rgnAttr.rect.p1.y = sh - 1;
++  rgnAttr.rect.p1.y = plan.bottom;
+ #if defined(PLATFORM_T31) || defined(PLATFORM_T40) || defined(PLATFORM_T41) || \
+     defined(PLATFORM_T23) || defined(PLATFORM_T32) || defined(PLATFORM_T33) || \
+     defined(PLATFORM_C100)
+@@ -208,7 +238,6 @@ bool createPrivacyCover(int ch) {
+ 
+   IMPOSDGrpRgnAttr grpAttr{};
+   grpAttr.show = 1;
+-  grpAttr.layer = 1;
+   int ret = IMP_OSD_RegisterRgn(handle, encGrp, &grpAttr);
+   if (ret != 0) {
+     LOG_ERROR("VideoPrivacyControl: IMP_OSD_RegisterRgn failed for ch"
+@@ -216,12 +245,18 @@ bool createPrivacyCover(int ch) {
+     IMP_OSD_DestroyRgn(handle);
+     return false;
+   }
++  grpAttr.scalex = plan.scale;
++  grpAttr.scaley = plan.scale;
++  grpAttr.gAlphaEn = 1;
++  grpAttr.fgAlhpa = plan.alpha;
++  grpAttr.bgAlhpa = 0;
++  grpAttr.layer = plan.layer;
+   ret = IMP_OSD_SetGrpRgnAttr(handle, encGrp, &grpAttr);
+   if (ret != 0) {
+     LOG_ERROR("VideoPrivacyControl: IMP_OSD_SetGrpRgnAttr failed for ch"
+               << ch << " ret=" << ret);
+     if (IMP_OSD_UnRegisterRgn(handle, encGrp) != 0) {
+-      vs->privacy_osd_handle = static_cast<int>(handle);
++      vs->privacy_osd_handles[region] = static_cast<int>(handle);
+       vs->privacy_requested.store(true, std::memory_order_release);
+       (void)write_privacy_state_file();
+       return false;
+@@ -229,12 +264,19 @@ bool createPrivacyCover(int ch) {
+     IMP_OSD_DestroyRgn(handle);
+     return false;
+   }
+-  vs->privacy_osd_handle = static_cast<int>(handle);
++  vs->privacy_osd_handles[region] = static_cast<int>(handle);
+   LOG_INFO("VideoPrivacyControl: OSD cover enabled on ch" << ch << " ("
+            << sw << "x" << sh << ")");
+   return true;
+ }
+ 
++bool createPrivacyCover(int ch) {
++  for (int region = 0; region < kPrivacyCoverCount; ++region) {
++    if (!createPrivacyCoverRegion(ch, region)) return false;
++  }
++  return true;
++}
++
+ bool disablePrivacyLocked() {
+   std::vector<int> removed_channels;
+   for (int ch = 0; ch < NUM_VIDEO_CHANNELS; ++ch) {
+@@ -244,6 +286,7 @@ bool disablePrivacyLocked() {
+       LOG_ERROR("VideoPrivacyControl: failed to disable OSD cover on ch"
+                 << ch);
+       bool restored = true;
++      restored = createPrivacyCover(ch) && restored;
+       for (int removed : removed_channels) {
+         restored = createPrivacyCover(removed) && restored;
+       }
+@@ -282,7 +325,7 @@ bool enablePrivacyLocked() {
+     if (!privacyChannelRequired(ch)) continue;
+     auto &vs = global_video[ch];
+     if (!vs->privacy_requested.load(std::memory_order_acquire) ||
+-        vs->privacy_osd_handle < 0) {
++        !completePrivacyCover(ch)) {
+       already_enabled = false;
+     }
+   }
+@@ -292,7 +335,7 @@ bool enablePrivacyLocked() {
+   // transaction. Privacy remains fail-closed if stale regions cannot be removed.
+   for (int ch = 0; ch < NUM_VIDEO_CHANNELS; ++ch) {
+     auto &vs = global_video[ch];
+-    if (vs && (vs->privacy_osd_handle >= 0 ||
++    if (vs && (hasPrivacyCover(ch) ||
+                vs->privacy_requested.load(std::memory_order_acquire))) {
+       if (!disablePrivacyLocked()) return false;
+       break;
+@@ -302,8 +345,8 @@ bool enablePrivacyLocked() {
+   std::vector<int> prepared_channels;
+   for (int ch = 0; ch < NUM_VIDEO_CHANNELS; ++ch) {
+     if (!privacyChannelRequired(ch)) continue;
+-    if (!createPrivacyCover(ch)) goto rollback;
+     prepared_channels.push_back(ch);
++    if (!createPrivacyCover(ch)) goto rollback;
+   }
+ 
+   for (int ch : prepared_channels) {
+@@ -329,7 +372,7 @@ rollback:
+     }
+   }
+   for (int ch = 0; ch < NUM_VIDEO_CHANNELS; ++ch) {
+-    if (global_video[ch] && global_video[ch]->privacy_osd_handle < 0) {
++    if (global_video[ch] && !hasPrivacyCover(ch)) {
+       global_video[ch]->privacy_requested.store(false,
+                                                  std::memory_order_release);
+     } else if (global_video[ch]) {
+@@ -464,12 +507,12 @@ void VideoPrivacyControl::prepareGroupTeardown(int channel) {
+   if (!video) return;
+   // Preserve privacy_requested as the desired state across encoder restart,
+   // but never retain an IMP region handle after its OSD group is removed.
+-  if (!destroyPrivacyCover(channel) && video->privacy_osd_handle >= 0) {
++  if (!destroyPrivacyCover(channel) && hasPrivacyCover(channel)) {
+     LOG_ERROR("VideoPrivacyControl: failed to retire cover before group teardown");
+     // The group teardown below invalidates every registered region. Never let
+     // its numeric handle survive and masquerade as an applied cover after the
+     // encoder graph is recreated.
+-    video->privacy_osd_handle = -1;
++    for (int &handle : video->privacy_osd_handles) handle = -1;
+   }
+ }
+ 
+diff --git a/src/globals.hpp b/src/globals.hpp
+index 1739acb..348c2e5 100644
+--- a/src/globals.hpp
++++ b/src/globals.hpp
+@@ -263,7 +263,7 @@ struct video_stream {
+   std::atomic<bool> privacy_transition{false};
+   std::atomic<uint64_t> privacy_epoch{0};
+   // Cached black IDR frame for privacy mode (Annex B: start_code + SPS + PPS + IDR)
+-  int privacy_osd_handle{-1};  // OSD cover region handle for privacy
++  int privacy_osd_handles[2]{-1, -1};  // T31 horizontal covers, distinct layers
+ 
+ #ifdef PREBUFFER_ENABLED
+   // Pre-trigger buffer for MP4 recording

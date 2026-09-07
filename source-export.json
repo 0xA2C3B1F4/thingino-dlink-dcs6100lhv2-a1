@@ -1,0 +1,2236 @@
+{
+  "export_policy_sha256": "3540c599f70186af6f6f1924e55333a24e528fe282ef16b3e600058e7ef3bd9b",
+  "files": {
+    ".editorconfig": {
+      "sha256": "77d71c2bd466915cf8363f0929ef8a1f6a25b92a21d01c6ae5c6c7f5c307fd8a",
+      "source": ".editorconfig"
+    },
+    ".gitattributes": {
+      "sha256": "25f2847c188fc803b190e5657870e68d81c385c76237131d8d10695399a2737d",
+      "source": ".gitattributes"
+    },
+    ".githooks/pre-commit": {
+      "sha256": "06cef1d08395c1d64cf2acbc5b9668d237bcac9b4d97f79c211de189b371f471",
+      "source": ".githooks/pre-commit"
+    },
+    ".github/workflows/check.yml": {
+      "sha256": "79eac6ebbc9fd30a58711af59286c2fa19872dc77e8fa12608106353eae12e6b",
+      "source": ".github/workflows/check.yml"
+    },
+    ".gitignore": {
+      "sha256": "09c949fbfc969f9718a30bcdacada80e2d7c93cd61c5a8aa2ff65b6ccc7a0d31",
+      "source": ".gitignore"
+    },
+    "CONTRIBUTING.md": {
+      "sha256": "b117291e2a10b2a4ccf363f2b8ba61e100af4dab68137e182a5bbba8d24900a8",
+      "source": "production/CONTRIBUTING.md"
+    },
+    "LICENSE": {
+      "sha256": "441975d4935e4d47a14b7052cfeb23bd5f5288b3f67332688925809665ffee75",
+      "source": "LICENSE"
+    },
+    "Makefile": {
+      "sha256": "ba36dc9510981adf8f57d9c0a144bcd4928352d10a19c7a9885544620cd948ab",
+      "source": "Makefile"
+    },
+    "README.md": {
+      "sha256": "1af99f6efaedf0783490651d2016b6e3b1754d17677cc7426e846a3e6d69a443",
+      "source": "production/README.md"
+    },
+    "SECURITY.md": {
+      "sha256": "9cd2f9ada4d548be9c3930d2101a376c5d4fd353291ad32935583a4e13003254",
+      "source": "SECURITY.md"
+    },
+    "components/raptor-rwd/README.md": {
+      "sha256": "7660fe709a760e714e6ca83f6dfc72638602e9d94089985d19220bba00ed3cf2",
+      "source": "production/components/raptor-rwd/README.md"
+    },
+    "components/raptor-rwd/S13prudynt-rwd": {
+      "sha256": "bf4f86415d984ed4ea99dce0f5aaffa0573730ae3449c96f73566ab19afbbb70",
+      "source": "components/raptor-rwd/S13prudynt-rwd"
+    },
+    "components/raptor-rwd/S96rwd": {
+      "sha256": "b75261726a2e7159e2483b8a77c7b438a14974da9eb3450eded5a0879386e3fd",
+      "source": "components/raptor-rwd/S96rwd"
+    },
+    "components/raptor-rwd/build_persistent.py": {
+      "sha256": "d16cd1fe002579bb51c05b1968f2ba5ee19b55da5bbf33fe9c2315c8c1c69bc8",
+      "source": "components/raptor-rwd/build_persistent.py"
+    },
+    "components/raptor-rwd/raptor-lock.json": {
+      "sha256": "df3970230b7b57e3b1c58621c1909a5ee38373097a0c117f76ad5bf8af311e73",
+      "source": "components/raptor-rwd/raptor-lock.json"
+    },
+    "components/raptor-rwd/raptor.conf": {
+      "sha256": "38755e0f268e044c71116d3a628b91ac5ac7bb88f3067a01a745de879a7bf15f",
+      "source": "components/raptor-rwd/raptor.conf"
+    },
+    "components/thingino-control/Cargo.lock": {
+      "sha256": "c3b18a46ee1c19d5ecc3f5badb835718d8aed74d981b3014a93f7fce5c20a6cc",
+      "source": "components/thingino-control/Cargo.lock"
+    },
+    "components/thingino-control/Cargo.toml": {
+      "sha256": "6ce67a45267fc53cfaf6a367fef2ad5ba03fbc6ff6e2ec83b992970acd82e4c9",
+      "source": "components/thingino-control/Cargo.toml"
+    },
+    "components/thingino-control/README.md": {
+      "sha256": "10fbc5637d39acd3564284f9629e373d615380d49010c25bf9ea646310815bf0",
+      "source": "production/components/thingino-control/README.md"
+    },
+    "components/thingino-control/fixtures/daynight-auto.json": {
+      "sha256": "8484114d634dfebb229785620283b771fd2dc01a8f0eb7a38e7212c46e09506c",
+      "source": "components/thingino-control/fixtures/daynight-auto.json"
+    },
+    "components/thingino-control/fixtures/daynight-day.json": {
+      "sha256": "b181d48669db7d72ae8452e737b1b40068542f626487a3e85119a3d8b4f79562",
+      "source": "components/thingino-control/fixtures/daynight-day.json"
+    },
+    "components/thingino-control/fixtures/daynight-night.json": {
+      "sha256": "44ee95c338cbe4e061c2475c7165d32c97635ec4a5af19ebf61268b5e4fb809b",
+      "source": "components/thingino-control/fixtures/daynight-night.json"
+    },
+    "components/thingino-control/fixtures/health.json": {
+      "sha256": "2d33dd6390abbfd6d03679b66b27672b65d5fd0341c28ce2f057a4b59579aaf0",
+      "source": "components/thingino-control/fixtures/health.json"
+    },
+    "components/thingino-control/fixtures/motion-state-machine-v1.json": {
+      "sha256": "50102b9ef1dd07fdc997d8b84368b249b6bfb9eb573950d69ca5ff6b03e0cfdc",
+      "source": "components/thingino-control/fixtures/motion-state-machine-v1.json"
+    },
+    "components/thingino-control/fixtures/runtime-media.json": {
+      "sha256": "63eb3b3ab34c67c4481b7c03683ebc22289e654f659779c00b4b643ea496a1a7",
+      "source": "components/thingino-control/fixtures/runtime-media.json"
+    },
+    "components/thingino-control/fuzz/Cargo.lock": {
+      "sha256": "6194633d4233cb133826a4c302736d78f0bd36fc2f61c75bac65bde09099d85b",
+      "source": "components/thingino-control/fuzz/Cargo.lock"
+    },
+    "components/thingino-control/fuzz/Cargo.toml": {
+      "sha256": "38233cb7ece0feca475f6a6691bef7d9feadb08cc8778f9c4f43a26af33f57e4",
+      "source": "components/thingino-control/fuzz/Cargo.toml"
+    },
+    "components/thingino-control/fuzz/README.md": {
+      "sha256": "9fe6bff266fa4ccd62dd83f5bc4ce7d31909b0111164898fac264710e0fcd271",
+      "source": "components/thingino-control/fuzz/README.md"
+    },
+    "components/thingino-control/fuzz/corpus/decoders/base64-noncanonical": {
+      "sha256": "b1800c2a220f2c08cf8e0bc2ed3cca387b05bbab056e8c305da33fb23ebb298a",
+      "source": "components/thingino-control/fuzz/corpus/decoders/base64-noncanonical"
+    },
+    "components/thingino-control/fuzz/corpus/decoders/base64-padded": {
+      "sha256": "b780a8db47caeaef7b9219387703d0afc40e6921ae4754c1b26816ef2a7cfd1b",
+      "source": "components/thingino-control/fuzz/corpus/decoders/base64-padded"
+    },
+    "components/thingino-control/fuzz/corpus/decoders/form-percent": {
+      "sha256": "fb27f63d9159ca640abb62c4669ac6e65124e986bf51e81bf41cece44899b624",
+      "source": "components/thingino-control/fuzz/corpus/decoders/form-percent"
+    },
+    "components/thingino-control/fuzz/corpus/decoders/hex-ssid": {
+      "sha256": "5f7426671118432e17a4bf2c38c66c767cc51945b300cdce65cfc08ac98cae88",
+      "source": "components/thingino-control/fuzz/corpus/decoders/hex-ssid"
+    },
+    "components/thingino-control/fuzz/corpus/decoders/path-percent": {
+      "sha256": "e2ef3a84cce5c9092969762de88057837759094d787f09611c4630b269e741c7",
+      "source": "components/thingino-control/fuzz/corpus/decoders/path-percent"
+    },
+    "components/thingino-control/fuzz/corpus/decoders/wpa-escaped": {
+      "sha256": "847a5b2bb6c0e1637b5761eff938833756d4837a1652a94c7c0450658acecd56",
+      "source": "components/thingino-control/fuzz/corpus/decoders/wpa-escaped"
+    },
+    "components/thingino-control/fuzz/corpus/http_request/content-length": {
+      "sha256": "e8ebdbe1403fec0cff91184bcb5e94457b08226e2e47f57a62d9c7e62295850d",
+      "source": "components/thingino-control/fuzz/corpus/http_request/content-length"
+    },
+    "components/thingino-control/fuzz/corpus/http_request/post-line": {
+      "sha256": "35c213f7996f0878823ba476d7739fe74746aed16f8abf986a2c605ea34052e4",
+      "source": "components/thingino-control/fuzz/corpus/http_request/post-line"
+    },
+    "components/thingino-control/fuzz/corpus/http_request/request-line": {
+      "sha256": "2df3135a52db7d4e920e87b848e05d1af66bd754b12eee7d469525ef54a8ec83",
+      "source": "components/thingino-control/fuzz/corpus/http_request/request-line"
+    },
+    "components/thingino-control/fuzz/corpus/json_parse/duplicate-key": {
+      "sha256": "d2c428abb9e7ed8b38b796d0acb61c50d433615168592e5ee87a34364b4726e5",
+      "source": "components/thingino-control/fuzz/corpus/json_parse/duplicate-key"
+    },
+    "components/thingino-control/fuzz/corpus/json_parse/nested": {
+      "sha256": "dcb9f25614c3dcddab6e4d72b18866e31de8dc21938c95c7dd85d41873884fa5",
+      "source": "components/thingino-control/fuzz/corpus/json_parse/nested"
+    },
+    "components/thingino-control/fuzz/corpus/json_parse/null": {
+      "sha256": "38e0b9de817f645c4bec37c0d4a3e58baecccb040f5718dc069a72c7385a0bed",
+      "source": "components/thingino-control/fuzz/corpus/json_parse/null"
+    },
+    "components/thingino-control/fuzz/corpus/motion_datagram/clear": {
+      "sha256": "e6d6d9fdd335e4179b35c462e8877ac0be3985fb493e3a5aeb751b11694ac463",
+      "source": "components/thingino-control/fuzz/corpus/motion_datagram/clear"
+    },
+    "components/thingino-control/fuzz/corpus/motion_datagram/detected": {
+      "sha256": "a862bdd0b11ed71315e56169ae17b121c2fc156032546881264415bfd4ba1a4c",
+      "source": "components/thingino-control/fuzz/corpus/motion_datagram/detected"
+    },
+    "components/thingino-control/fuzz/corpus/motion_datagram/inconsistent-roi": {
+      "sha256": "81988c1365c45dffd8ce0dcd4f612dd6997589acd0bcebca571338344fce0515",
+      "source": "components/thingino-control/fuzz/corpus/motion_datagram/inconsistent-roi"
+    },
+    "components/thingino-control/fuzz/dictionaries/decoders.dict": {
+      "sha256": "52c2a788ffc34431b67520bff518de46559b929d7e5c2a9c2bdc0cce4afba809",
+      "source": "components/thingino-control/fuzz/dictionaries/decoders.dict"
+    },
+    "components/thingino-control/fuzz/dictionaries/http.dict": {
+      "sha256": "cc459ed8fbeeba1cfc3f903b62671feaed95ed894c6222081c9549a09b916a35",
+      "source": "components/thingino-control/fuzz/dictionaries/http.dict"
+    },
+    "components/thingino-control/fuzz/dictionaries/json.dict": {
+      "sha256": "63a678280c5cf208cfa819a97f7e4a24b1f96277aaface6f8c54dcca03621e13",
+      "source": "components/thingino-control/fuzz/dictionaries/json.dict"
+    },
+    "components/thingino-control/fuzz/dictionaries/motion.dict": {
+      "sha256": "1077d2020f6d56019929c814221bc7640497356bfeb88cb2d02657ccc4a3a4f8",
+      "source": "components/thingino-control/fuzz/dictionaries/motion.dict"
+    },
+    "components/thingino-control/fuzz/fuzz_targets/decoders.rs": {
+      "sha256": "c77e45e126d4ab8ff315002ad6e0e57262ef5cffe82f94451b0d2b966b38774d",
+      "source": "components/thingino-control/fuzz/fuzz_targets/decoders.rs"
+    },
+    "components/thingino-control/fuzz/fuzz_targets/http_request.rs": {
+      "sha256": "a5ab5726c2770d4e3f033f936c2a26208d0edeed80c13850b5f54bd5bba9393e",
+      "source": "components/thingino-control/fuzz/fuzz_targets/http_request.rs"
+    },
+    "components/thingino-control/fuzz/fuzz_targets/json_parse.rs": {
+      "sha256": "8e2ba722ac86ce2b7166355085a0ee87a7ed589c553aa293340218414af01277",
+      "source": "components/thingino-control/fuzz/fuzz_targets/json_parse.rs"
+    },
+    "components/thingino-control/fuzz/fuzz_targets/motion_datagram.rs": {
+      "sha256": "5ef1678e3e103ebf248ccb23662b472002c8fdfa992d1736045b4de47b98e561",
+      "source": "components/thingino-control/fuzz/fuzz_targets/motion_datagram.rs"
+    },
+    "components/thingino-control/fuzz/rust-toolchain.toml": {
+      "sha256": "eb76aba699a7461d9bd0410309cfeda5f8167807f428bfbdc15490850a780a7f",
+      "source": "components/thingino-control/fuzz/rust-toolchain.toml"
+    },
+    "components/thingino-control/integration/S95thingino-control": {
+      "sha256": "fd5174bbd2b60fb4a4859a2d304d89d080a1e9ad64725efdcadf34242bb5b049",
+      "source": "components/thingino-control/integration/S95thingino-control"
+    },
+    "components/thingino-control/integration/thingino-control.json": {
+      "sha256": "b406e224b5df5ac7a876c9d08edc876ebe883cc48eb19811efed4d9ca904ef9e",
+      "source": "components/thingino-control/integration/thingino-control.json"
+    },
+    "components/thingino-control/scripts/camera_acceptance.sh": {
+      "sha256": "4a944e132c947529f42ab49887f50cfc245ad7694f3108bf17dcb926e00349d1",
+      "source": "components/thingino-control/scripts/camera_acceptance.sh"
+    },
+    "components/thingino-control/scripts/device_smoke.sh": {
+      "sha256": "baf10b6fa12b8517b34c0c3034969cfa89247ef21ab439c3772f7741d478222c",
+      "source": "components/thingino-control/scripts/device_smoke.sh"
+    },
+    "components/thingino-control/scripts/host_soak.py": {
+      "sha256": "fe83c5cea9ff2036ebc8a1b9dbcfe360639d9c518cd2065116789cd259ba8a3c",
+      "source": "components/thingino-control/scripts/host_soak.py"
+    },
+    "components/thingino-control/scripts/host_uhttpd_proxy.py": {
+      "sha256": "23cb11370c0778c548fa8f2a9fba8217fbf522d7d1ed6985ea945c4ce0a309c6",
+      "source": "components/thingino-control/scripts/host_uhttpd_proxy.py"
+    },
+    "components/thingino-control/scripts/run_with_mqtt_brokers.py": {
+      "sha256": "f12468a4a197f75bce59cf3f1dad119cc7c4885a1ce7b67e5a8608afb748e9fb",
+      "source": "components/thingino-control/scripts/run_with_mqtt_brokers.py"
+    },
+    "components/thingino-control/src/camera.rs": {
+      "sha256": "243c265969940feb0322758b1214b6971b183d15920d4788cf9cba2dbb44f4d1",
+      "source": "components/thingino-control/src/camera.rs"
+    },
+    "components/thingino-control/src/camera/actions.rs": {
+      "sha256": "bcfe3c71161bb8bdf64ca9621cfe649b4e683fdb767cff16f052f6ad714da351",
+      "source": "components/thingino-control/src/camera/actions.rs"
+    },
+    "components/thingino-control/src/camera/api.rs": {
+      "sha256": "ae882b8109f895465d9d09f8937d000cc26e5dcbc3c870c329513b3c33a6d19c",
+      "source": "components/thingino-control/src/camera/api.rs"
+    },
+    "components/thingino-control/src/camera/config/access.rs": {
+      "sha256": "763e150989c17fd5b77e25f931558fb789e65012730b0ef442be5f02cea0052e",
+      "source": "components/thingino-control/src/camera/config/access.rs"
+    },
+    "components/thingino-control/src/camera/config/crontab.rs": {
+      "sha256": "7acc837912e19b0b6c430f5f0ed6eb1757a4c112f27368dd8f0725f9b6480f90",
+      "source": "components/thingino-control/src/camera/config/crontab.rs"
+    },
+    "components/thingino-control/src/camera/config/daynight.rs": {
+      "sha256": "ed7773b308c07729ad9051e9f19f6e536ae47a5930071fd328dd23a5d45101ec",
+      "source": "components/thingino-control/src/camera/config/daynight.rs"
+    },
+    "components/thingino-control/src/camera/config/daynight_tests.rs": {
+      "sha256": "d30b63daf0ed8ed12b5969cf74492371bd76d0b7025c94aebdceac306501f4a1",
+      "source": "components/thingino-control/src/camera/config/daynight_tests.rs"
+    },
+    "components/thingino-control/src/camera/config/domains.rs": {
+      "sha256": "2617e7348c1f103a1ec5d4de14f943dbd006333a46a3b1814af7dc1caa4f8294",
+      "source": "components/thingino-control/src/camera/config/domains.rs"
+    },
+    "components/thingino-control/src/camera/config/domains_tests.rs": {
+      "sha256": "4ad8493f9bc12e48a7117cb3bd78119407bd84190e0a7de9e32a65e0676afd81",
+      "source": "components/thingino-control/src/camera/config/domains_tests.rs"
+    },
+    "components/thingino-control/src/camera/config/gpio.rs": {
+      "sha256": "99ded02003fe814167c4ac44c307515c61d319613ddb38c3c911551aa7ac9203",
+      "source": "components/thingino-control/src/camera/config/gpio.rs"
+    },
+    "components/thingino-control/src/camera/config/imaging.rs": {
+      "sha256": "588688c28ed8033ca1562254e3927ffc85c3fa2164f9108d3701da8abfa3f520",
+      "source": "components/thingino-control/src/camera/config/imaging.rs"
+    },
+    "components/thingino-control/src/camera/config/mod.rs": {
+      "sha256": "8ea535131695158c3bfd21a5f703340af7e9eec33172d2c0ac21e40da94322dd",
+      "source": "components/thingino-control/src/camera/config/mod.rs"
+    },
+    "components/thingino-control/src/camera/config/network.rs": {
+      "sha256": "9ca196da9a20175ae091473c0aa93d66ab8ac99ef9f3e1269d17367b9272ba16",
+      "source": "components/thingino-control/src/camera/config/network.rs"
+    },
+    "components/thingino-control/src/camera/config/recorder.rs": {
+      "sha256": "5d0309576cdd71977bc05aa1c374ff0a55098fb62cb5cd7f188e4567ab6979d2",
+      "source": "components/thingino-control/src/camera/config/recorder.rs"
+    },
+    "components/thingino-control/src/camera/config/schema.rs": {
+      "sha256": "3996c9db28635c7b6e042e97f29ae33fc61c896c8fafc1f26b60cd00867b3da0",
+      "source": "components/thingino-control/src/camera/config/schema.rs"
+    },
+    "components/thingino-control/src/camera/config/send.rs": {
+      "sha256": "2029bcb66ee520248c1892d3233fda1300eedac68df4fe8337fd38886c7d4547",
+      "source": "components/thingino-control/src/camera/config/send.rs"
+    },
+    "components/thingino-control/src/camera/config/time.rs": {
+      "sha256": "f1394d0724692fe9ee0fd89d3804a036865461c4fee2d5b4b563925608e8330a",
+      "source": "components/thingino-control/src/camera/config/time.rs"
+    },
+    "components/thingino-control/src/camera/diagnostics.rs": {
+      "sha256": "e04b3e7c55840e580c435ab7b55e05e2838919c3f831d3201dc43b8d65c7494d",
+      "source": "components/thingino-control/src/camera/diagnostics.rs"
+    },
+    "components/thingino-control/src/camera/files.rs": {
+      "sha256": "3b837d361d25fb39658e420d787964c15234ba030b92c6fdbcf8cd38fc55963a",
+      "source": "components/thingino-control/src/camera/files.rs"
+    },
+    "components/thingino-control/src/camera/ha/commands.rs": {
+      "sha256": "08c331c2aa428757039022ce5a7be216eddf2de931a198c69afc11b7e549180f",
+      "source": "components/thingino-control/src/camera/ha/commands.rs"
+    },
+    "components/thingino-control/src/camera/ha/config.rs": {
+      "sha256": "4fc9bc5c0eb849f95e1b1fcb0ceb36ce08c934a7d1f7be53290d8f744c761ffc",
+      "source": "components/thingino-control/src/camera/ha/config.rs"
+    },
+    "components/thingino-control/src/camera/ha/discovery.rs": {
+      "sha256": "b28914ad4b9d034aaa9dc7562c98f486ba523665d94a476e693f257aada3b95c",
+      "source": "components/thingino-control/src/camera/ha/discovery.rs"
+    },
+    "components/thingino-control/src/camera/ha/mod.rs": {
+      "sha256": "07215785595304d0785ff2f47ca65ebb7965c24d97c3c83c3ba94596ac492a9f",
+      "source": "components/thingino-control/src/camera/ha/mod.rs"
+    },
+    "components/thingino-control/src/camera/ha/motion.rs": {
+      "sha256": "a4c52d1e5cced7f473640c606bdf49578113324969d46401ef1f8136bf7d55dc",
+      "source": "components/thingino-control/src/camera/ha/motion.rs"
+    },
+    "components/thingino-control/src/camera/ha/mqtt.rs": {
+      "sha256": "2c4b37f7f447a38a6f9f987c935869a0722b2cea8989e295cfe11cb29716b0a4",
+      "source": "components/thingino-control/src/camera/ha/mqtt.rs"
+    },
+    "components/thingino-control/src/camera/ha/mqtt_tests.rs": {
+      "sha256": "6d582acc76576731d75c51dde46d7d77c929f960a21903bd709bc91312b8cb77",
+      "source": "components/thingino-control/src/camera/ha/mqtt_tests.rs"
+    },
+    "components/thingino-control/src/camera/ha/service.rs": {
+      "sha256": "5c469d20a19ad15210d8650d774d7073da7f769aebfc3611c042dc97622f6d60",
+      "source": "components/thingino-control/src/camera/ha/service.rs"
+    },
+    "components/thingino-control/src/camera/ha/service/lifecycle.rs": {
+      "sha256": "e4a78110a0d1f88caca43c573492508630a8da9432c13466f5b03b206bf26851",
+      "source": "components/thingino-control/src/camera/ha/service/lifecycle.rs"
+    },
+    "components/thingino-control/src/camera/ha/service/publication.rs": {
+      "sha256": "440cfb2e8cb63a74da020d3c1c5b55c173198ffaa115364769e7fce61daebba5",
+      "source": "components/thingino-control/src/camera/ha/service/publication.rs"
+    },
+    "components/thingino-control/src/camera/ha/service/session.rs": {
+      "sha256": "308ef16a417ae8c5bd87093606bf079799fdf716a2a1cac07e4f8368f1e09796",
+      "source": "components/thingino-control/src/camera/ha/service/session.rs"
+    },
+    "components/thingino-control/src/camera/ha/service_tests.rs": {
+      "sha256": "43b256d47ea17de4b9ba8f3bd1331dd1af70aba792466da1889c97df08b8819a",
+      "source": "components/thingino-control/src/camera/ha/service_tests.rs"
+    },
+    "components/thingino-control/src/camera/ha/snapshot.rs": {
+      "sha256": "851cdf99c34a177ab1e80ad90edebace6fad5f12883b5653843deaf69fcc94c2",
+      "source": "components/thingino-control/src/camera/ha/snapshot.rs"
+    },
+    "components/thingino-control/src/camera/ha/state.rs": {
+      "sha256": "1ff39bed10e4aa759bbbc2aa5fd0b3b1402ccb162802c7531d650b9b7937f72f",
+      "source": "components/thingino-control/src/camera/ha/state.rs"
+    },
+    "components/thingino-control/src/camera/maintenance.rs": {
+      "sha256": "cca4e20a207ab8566cfa2102f12579cf31622bcc1a7b05388c872fb32bdcf227",
+      "source": "components/thingino-control/src/camera/maintenance.rs"
+    },
+    "components/thingino-control/src/camera/motion.rs": {
+      "sha256": "f5f49e1e880bd97766c256c9effb115d4ebc3ff77c8f8d785765607ae4c48903",
+      "source": "components/thingino-control/src/camera/motion.rs"
+    },
+    "components/thingino-control/src/camera/motion/clips.rs": {
+      "sha256": "16910ee0b3540e3880c3217379917752c80acec9d6c936c8abc3078c4cb43400",
+      "source": "components/thingino-control/src/camera/motion/clips.rs"
+    },
+    "components/thingino-control/src/camera/motion/dispatch.rs": {
+      "sha256": "1d15cc98deee9bcb52e57f147aa0f775a00a5bd4c24b356908e9ed75daf9a331",
+      "source": "components/thingino-control/src/camera/motion/dispatch.rs"
+    },
+    "components/thingino-control/src/camera/motion/lifecycle.rs": {
+      "sha256": "993e3303bdd43e080d8d288ca6a9c6021ae32888622db48773c9321c93c5a95c",
+      "source": "components/thingino-control/src/camera/motion/lifecycle.rs"
+    },
+    "components/thingino-control/src/camera/motion_datagram.rs": {
+      "sha256": "8718c99a40572e8c35c9d614f0a88bedfd502539dded09cfe801f7c0500d46b4",
+      "source": "components/thingino-control/src/camera/motion_datagram.rs"
+    },
+    "components/thingino-control/src/camera/motion_events.rs": {
+      "sha256": "0af0396e9120860cc49d0e493379fc16e2857e092c9559cd4d4a36304ea0e312",
+      "source": "components/thingino-control/src/camera/motion_events.rs"
+    },
+    "components/thingino-control/src/camera/motion_queue.rs": {
+      "sha256": "71a773b51e3d370fa0159a47624e03b5ae62de63e9ef79cf44d30614aefb3791",
+      "source": "components/thingino-control/src/camera/motion_queue.rs"
+    },
+    "components/thingino-control/src/camera/motion_state.rs": {
+      "sha256": "af308f1c5a58b9067cbb3e79b87d9d0dc4375a988194a15c679163ed87677358",
+      "source": "components/thingino-control/src/camera/motion_state.rs"
+    },
+    "components/thingino-control/src/camera/motion_tests.rs": {
+      "sha256": "6dc743936ef5e37c0d38fe03e5851ce744a91741191183d19904e752f34bc423",
+      "source": "components/thingino-control/src/camera/motion_tests.rs"
+    },
+    "components/thingino-control/src/camera/network.rs": {
+      "sha256": "0aba7c81f7808c1dd9c498a96f39adee3c21c6aa71438d2ad008912852636691",
+      "source": "components/thingino-control/src/camera/network.rs"
+    },
+    "components/thingino-control/src/camera/platform.rs": {
+      "sha256": "6ace66825f2adaa0bbd2ea4ed998bd540a3cd6049b4bde895270df59be00293d",
+      "source": "components/thingino-control/src/camera/platform.rs"
+    },
+    "components/thingino-control/src/camera/platform/abi.rs": {
+      "sha256": "d07004a55d514d825dcc91f22f3f8ed171b7f5bf2c96a3c7ce79958345615edd",
+      "source": "components/thingino-control/src/camera/platform/abi.rs"
+    },
+    "components/thingino-control/src/camera/platform/file_io.rs": {
+      "sha256": "dd2ae2a1fde204ec97e875d3a7789b197cfc954f8fd0664b67113fb307f04627",
+      "source": "components/thingino-control/src/camera/platform/file_io.rs"
+    },
+    "components/thingino-control/src/camera/platform/logs.rs": {
+      "sha256": "637e2d71a982bbf94f3c917e0bd679cb730e2a3ea2bfbb235cfd211b96574e59",
+      "source": "components/thingino-control/src/camera/platform/logs.rs"
+    },
+    "components/thingino-control/src/camera/platform/mips_abi_probe.c": {
+      "sha256": "e852f59cfa3b5a70c6cafbc7340bc779c79960d58cf0f1014758a06282c7779e",
+      "source": "components/thingino-control/src/camera/platform/mips_abi_probe.c"
+    },
+    "components/thingino-control/src/camera/platform/socket_io.rs": {
+      "sha256": "6da7e05f0511eb14c1f14f933c69e347fd9b6ca1e6c835f97eceb98c32e36045",
+      "source": "components/thingino-control/src/camera/platform/socket_io.rs"
+    },
+    "components/thingino-control/src/camera/platform/sysv.rs": {
+      "sha256": "d32c2e1832ffd182a9a719fa158f00454c101bc940f730cac97616508681fbee",
+      "source": "components/thingino-control/src/camera/platform/sysv.rs"
+    },
+    "components/thingino-control/src/camera/platform_tests.rs": {
+      "sha256": "d49289dac9845e543f05ef45c75241e78daa06a332bd1dd3f4f484b486321a1a",
+      "source": "components/thingino-control/src/camera/platform_tests.rs"
+    },
+    "components/thingino-control/src/camera/prudynt.rs": {
+      "sha256": "b45a604596fdd903636b46b5aafd094d4d3bb5dbbca4d1a0ae02c7059f135b8e",
+      "source": "components/thingino-control/src/camera/prudynt.rs"
+    },
+    "components/thingino-control/src/camera/prudynt_tests.rs": {
+      "sha256": "9414cb190b02fe83a28cf3a045d8453ecc65a7b5178a2365aaca1ea83ff21b84",
+      "source": "components/thingino-control/src/camera/prudynt_tests.rs"
+    },
+    "components/thingino-control/src/camera/runtime.rs": {
+      "sha256": "b77ae54ca368e725eaf4970325f9447a63f520c9598703bf635ffb865f333e3c",
+      "source": "components/thingino-control/src/camera/runtime.rs"
+    },
+    "components/thingino-control/src/camera/storage.rs": {
+      "sha256": "147c7d9e354c28776ce5cb13f181027472839aaffe510abfb7b0e808678cce01",
+      "source": "components/thingino-control/src/camera/storage.rs"
+    },
+    "components/thingino-control/src/camera/storage/filesystem.rs": {
+      "sha256": "40a19801eecc45ded40f5321661650f766363aa81e808094d05c3cd6b1cc5dc6",
+      "source": "components/thingino-control/src/camera/storage/filesystem.rs"
+    },
+    "components/thingino-control/src/camera/storage/format.rs": {
+      "sha256": "1e54172e52479cc63554843ff36bff28f63b64baf4fbaabb0bbd72ea1340c668",
+      "source": "components/thingino-control/src/camera/storage/format.rs"
+    },
+    "components/thingino-control/src/camera/storage/paths.rs": {
+      "sha256": "6b54d6a8edb46b3f0f2addca4c440c17d0c6095390c1db4a2f333ef451f5d4b5",
+      "source": "components/thingino-control/src/camera/storage/paths.rs"
+    },
+    "components/thingino-control/src/camera/storage/recording.rs": {
+      "sha256": "671b92ebabcefd8755ba4ff0232058dc079b5a9bf93342d471296c8927c39118",
+      "source": "components/thingino-control/src/camera/storage/recording.rs"
+    },
+    "components/thingino-control/src/camera/storage/retention.rs": {
+      "sha256": "b6c612063f5d972607cb99971e53893cb4bfa1059ed71254bc51f5805c22639f",
+      "source": "components/thingino-control/src/camera/storage/retention.rs"
+    },
+    "components/thingino-control/src/camera/storage/sd.rs": {
+      "sha256": "4bd8058f9f68b9572404de2b72fa82f1c3e4ea17ad7a29c727444ac284d28451",
+      "source": "components/thingino-control/src/camera/storage/sd.rs"
+    },
+    "components/thingino-control/src/camera_tests.rs": {
+      "sha256": "732d0b5135f41b62b04fa0ff744f4438dfa175976cb289d94e6008930c0fb866",
+      "source": "components/thingino-control/src/camera_tests.rs"
+    },
+    "components/thingino-control/src/decode.rs": {
+      "sha256": "ca3ed4ac626273549df65b0a873b10347944a2551182de222b5c003b34db9442",
+      "source": "components/thingino-control/src/decode.rs"
+    },
+    "components/thingino-control/src/json.rs": {
+      "sha256": "4e3a3f678f557357b8a0a54725655f9472e0397b02d903f24ba7758a4ae0b3e7",
+      "source": "components/thingino-control/src/json.rs"
+    },
+    "components/thingino-control/src/lib.rs": {
+      "sha256": "011950c46aaa657b15b98c7c617d06088dcca270ed52a264e42e058ca867a2ad",
+      "source": "components/thingino-control/src/lib.rs"
+    },
+    "components/thingino-control/src/main.rs": {
+      "sha256": "d0d1cf7c3037abcbc0a4902a3da5d8292ed0cf9c00c6f96a33c213cb5c723fda",
+      "source": "components/thingino-control/src/main.rs"
+    },
+    "components/thingino-control/src/protocol.rs": {
+      "sha256": "16ceb4b570a300cccc6b525f865dbae8d0781c0238d38f142ac9df5aaa642a1f",
+      "source": "components/thingino-control/src/protocol.rs"
+    },
+    "components/thingino-control/src/request.rs": {
+      "sha256": "8ddd10dc303b5580b253579450e5b5133a2ca6abcc62098e7899657618f8bb5c",
+      "source": "components/thingino-control/src/request.rs"
+    },
+    "components/thingino-control/src/request_parse.rs": {
+      "sha256": "d5763b620170664ac2623a7dffc9ae0bc8658659556214a65081f967dd834033",
+      "source": "components/thingino-control/src/request_parse.rs"
+    },
+    "components/thingino-control/src/response.rs": {
+      "sha256": "58c9bd9b20f1fb7503bed4903570217e1c82d72cb1aeda03803c93314334d8d5",
+      "source": "components/thingino-control/src/response.rs"
+    },
+    "components/thingino-control/src/router.rs": {
+      "sha256": "21170d502c871b1931273b4a20b707560544f1635f6e9f138e7be5e69561e906",
+      "source": "components/thingino-control/src/router.rs"
+    },
+    "components/thingino-control/src/server.rs": {
+      "sha256": "c31fa786e4428fb3536082749ca7efa6a504ef650749d78ead49c1a21afacbd7",
+      "source": "components/thingino-control/src/server.rs"
+    },
+    "components/thingino-control/src/web_auth.rs": {
+      "sha256": "4cd745190bdff9169dd857a55095a6ff3f435f040dbdf78104bd8a930632c352",
+      "source": "components/thingino-control/src/web_auth.rs"
+    },
+    "components/thingino-control/src/web_auth_tests.rs": {
+      "sha256": "e986536793e264a41e445882bdba21560fc140e4e7f46f10dff68ee7eb7defc3",
+      "source": "components/thingino-control/src/web_auth_tests.rs"
+    },
+    "components/thingino-control/src/whip.rs": {
+      "sha256": "a40a290b368a1e3a198feee695bc393b4ca491b1d9fa454cb9ee509536e08fd4",
+      "source": "components/thingino-control/src/whip.rs"
+    },
+    "components/thingino-control/storage-worker/mod.rs": {
+      "sha256": "602ccc98703b80b71a67c1c98cb8f080f150cfb652bda9cfbc73779190f74278",
+      "source": "components/thingino-control/storage-worker/mod.rs"
+    },
+    "components/thingino-control/tests/contract.rs": {
+      "sha256": "1d54f0c34fc85c6f172346feccbbe9b677cfdaf541d4b14cd61aa5b50e476fd6",
+      "source": "components/thingino-control/tests/contract.rs"
+    },
+    "containers/thingino-builder-amd64.Containerfile": {
+      "sha256": "cd06120baab37b58a18261855793341ca62a9a2242c36d4a180624134022b21b",
+      "source": "containers/thingino-builder-amd64.Containerfile"
+    },
+    "containers/thingino-builder-arm64.Containerfile": {
+      "sha256": "23e07df23779ff1b5e2cd14dbc4e2c8d1d7a5b75156c8debded9a627f33924f7",
+      "source": "containers/thingino-builder-arm64.Containerfile"
+    },
+    "contracts/thingino-control-api-v1.json": {
+      "sha256": "3575a0f3c05fd1499b7705de89029af24c884b3bfd371629fafaaaa12899ba01",
+      "source": "contracts/thingino-control-api-v1.json"
+    },
+    "docs/api.md": {
+      "sha256": "c61437b7de101d717a3a7a8b96d007fb3311d186fae2521db4bb0ba35bf48e67",
+      "source": "production/docs/api.md"
+    },
+    "docs/architecture.md": {
+      "sha256": "738ce1bc8e8daa6913621f20924738c2b4b363318d7b78f0a877cf24ceba347f",
+      "source": "production/docs/architecture.md"
+    },
+    "docs/build.md": {
+      "sha256": "6a2e11afcc238be5b688277b19765319cb8cbb3e395596187c07fdc246b442e2",
+      "source": "production/docs/build.md"
+    },
+    "docs/features.md": {
+      "sha256": "79509041a9669bff34416713fceffb05b7398789946873039807c431d40731ce",
+      "source": "production/docs/features.md"
+    },
+    "docs/hardware.md": {
+      "sha256": "4c0206fc81e41b2d5e10527a779033615ac33fa15746e092b8e6020d65409b5b",
+      "source": "production/docs/hardware.md"
+    },
+    "docs/index.md": {
+      "sha256": "0540332eb2849f892b9fd18620e352c6de8114bebe0895d9231b5adfb00253c8",
+      "source": "production/docs/index.md"
+    },
+    "docs/installation.md": {
+      "sha256": "82e9b7eb09e175b1635ffe9c4783aa354380945b73981b97a4ced4a8158360e6",
+      "source": "production/docs/installation.md"
+    },
+    "docs/recovery.md": {
+      "sha256": "26e36f60ff3a3610eb1d4460026b5948608fbd6f7d28aa579c1ce4da5a12298e",
+      "source": "production/docs/recovery.md"
+    },
+    "docs/status.md": {
+      "sha256": "060fa81614e544c5edc0ca69d48d21a6d3995e7adff3aa32f83767f75d766b8c",
+      "source": "production/docs/status.md"
+    },
+    "docs/testing.md": {
+      "sha256": "822a38a107d05838d3471700fc25c612d0c1044f5d22cd4a5212ef61af943f47",
+      "source": "production/docs/testing.md"
+    },
+    "installer/__init__.py": {
+      "sha256": "71daccce0a06dfbf59358df2483dacae672971727ed5017805cbc50254261407",
+      "source": "installer/__init__.py"
+    },
+    "installer/__main__.py": {
+      "sha256": "0f7d54f3fbb1f79a85eb8110f11793db99da6f3c61ee979de5abe9a1b5f3fdb3",
+      "source": "installer/__main__.py"
+    },
+    "installer/artifacts.py": {
+      "sha256": "dd30165a804d679c730ed19b12a7fa134472bc4305034be558a2fcac3137b945",
+      "source": "installer/artifacts.py"
+    },
+    "installer/camera_authorization.py": {
+      "sha256": "bfef36ca802df32995b05357fe2ad57770491451abb5b1cc37dbbc1f90b980f5",
+      "source": "installer/camera_authorization.py"
+    },
+    "installer/candidate_log.py": {
+      "sha256": "61fd4aaa49c7ef49d4da8f421d3d74700cbf9efd77f47d680b4aabcb6051508e",
+      "source": "installer/candidate_log.py"
+    },
+    "installer/cli.py": {
+      "sha256": "e4b9de0af191b34a7ebf5af9e3145169f97913c487146cd27c7eaaddcddcd835",
+      "source": "installer/cli.py"
+    },
+    "installer/cli_commands_build.py": {
+      "sha256": "cdf234cfbfa41b7a312c7870df5d556ff653633c5399f61ad9c359950e557952",
+      "source": "installer/cli_commands_build.py"
+    },
+    "installer/cli_commands_media.py": {
+      "sha256": "3d4a68ce6bf62a7934b34a3ee9139b3dd2bcda8abb9e59e7f48b5c5b63e7932c",
+      "source": "installer/cli_commands_media.py"
+    },
+    "installer/cli_commands_recovery.py": {
+      "sha256": "db3b1061141c0205fc82e561fc4f1c9b0ce31f17e743c0da88535170d5fda491",
+      "source": "installer/cli_commands_recovery.py"
+    },
+    "installer/cli_commands_stock_recovery.py": {
+      "sha256": "09dc24a109ffce5e30c357155649063f3af50a78a612f3a5abdd5928a3ecadde",
+      "source": "installer/cli_commands_stock_recovery.py"
+    },
+    "installer/cli_parser.py": {
+      "sha256": "adb5f9b13a51838192f49496167e68e9e654cf5a0e289124b3b824abfc759184",
+      "source": "installer/cli_parser.py"
+    },
+    "installer/cli_parser_stock_recovery.py": {
+      "sha256": "2224947bd323e78c5c05c8479312ec26234faa59b9c4edcc2a0c915346ee804c",
+      "source": "installer/cli_parser_stock_recovery.py"
+    },
+    "installer/collector/__init__.py": {
+      "sha256": "2a14d079f1945db9add243e2ae1178558717b5c166f69ff1ee0b019988b5cdb6",
+      "source": "installer/collector/__init__.py"
+    },
+    "installer/collector/build.py": {
+      "sha256": "34c6c02be45ffb92632ef3da6a4fc32fbf395bde34a81d9fe21ac0650f993e92",
+      "source": "installer/collector/build.py"
+    },
+    "installer/collector/init.c": {
+      "sha256": "1c004a677e6815784d3e65958bef6f04558491ce769d405162e7fc9e98d3dd7a",
+      "source": "installer/collector/init.c"
+    },
+    "installer/collector/kernel.py": {
+      "sha256": "a89bc90d2195d34d534ca328a3a5182efcdd607f674eb753f3d57d342a4f5165",
+      "source": "installer/collector/kernel.py"
+    },
+    "installer/collector/output.py": {
+      "sha256": "9c858ac80d8388ed739ace6f32b44ab71b866d1f689f0c091ef1a7982a3f5c1f",
+      "source": "installer/collector/output.py"
+    },
+    "installer/development_install.py": {
+      "sha256": "cc4818e20bd2697d6116dc2490750785ce02fb3748e670762982dd3ec538990d",
+      "source": "installer/development_install.py"
+    },
+    "installer/download_cache.py": {
+      "sha256": "0690c00cb80a01aa74bd25780c1b675b327a164227bc3c89c8ef877865fe3897",
+      "source": "installer/download_cache.py"
+    },
+    "installer/fake_mtd.py": {
+      "sha256": "416ad96314e22ca420943efcfbdf423590aa7d009b3c518545568e35a6b0ddb9",
+      "source": "installer/fake_mtd.py"
+    },
+    "installer/final_bundle.py": {
+      "sha256": "101110e25387b968c352d2ba3aa552abb32147136ae5003a09819e9a148b441d",
+      "source": "installer/final_bundle.py"
+    },
+    "installer/final_root.py": {
+      "sha256": "82cdbcf91c27d3f514eec309fccb5c31193795744e173d3792ffe39e67efb625",
+      "source": "installer/final_root.py"
+    },
+    "installer/final_root_media.py": {
+      "sha256": "86dbda56cd754c9cf7b8583b57bb5e94984b6211ce828fdc7cd5cac9d343e8c0",
+      "source": "installer/final_root_media.py"
+    },
+    "installer/final_root_security.py": {
+      "sha256": "2b013652124f878a1bac6c6f8360faacb2de5e6ad0d9fdafa029f264735d894c",
+      "source": "installer/final_root_security.py"
+    },
+    "installer/freestanding_sha256.h": {
+      "sha256": "8ac04a70da02545ca98b23c6aa014a5d76348234d3d9a62a1e29e6c47c02be55",
+      "source": "installer/freestanding_sha256.h"
+    },
+    "installer/full_backup.py": {
+      "sha256": "cd83a66496d352e13f30ea7cb4d6dfb61a4fa3a5dc37312e9c3ae59e06573f63",
+      "source": "installer/full_backup.py"
+    },
+    "installer/install_policy.py": {
+      "sha256": "f9e7162129b786486955e146c37a84415131ae933136747eebd3419dd1b36790",
+      "source": "installer/install_policy.py"
+    },
+    "installer/layout.py": {
+      "sha256": "4eb93a4611427b2c99dc31af8f6069b8c39b6fd80d7bfabf075e8c99fb06cca7",
+      "source": "installer/layout.py"
+    },
+    "installer/live_ram.py": {
+      "sha256": "b8bb149f0c5bc51a880bd8f7de0703f5a6258e4ff6cf3a06c65bef5e0b906dc2",
+      "source": "installer/live_ram.py"
+    },
+    "installer/local_build.py": {
+      "sha256": "e53e37ea6b197cb8807dcc804c394baa9b1c91f34e5549e009d1c14ab7086c72",
+      "source": "installer/local_build.py"
+    },
+    "installer/local_build_acquire.py": {
+      "sha256": "79598427253e132aada3645b46a64b7b91b8a34d246d0cf0ea889d79e2804012",
+      "source": "installer/local_build_acquire.py"
+    },
+    "installer/local_build_archive.py": {
+      "sha256": "26c2ef226dfd1c423888d26c66c2691987e89e102f59ddabbabdf5e64efd8e0b",
+      "source": "installer/local_build_archive.py"
+    },
+    "installer/local_build_bootstrap.py": {
+      "sha256": "25a4fe59a013b3dc7c0f1f5cf4767f1c70bfdf48074e52022ce6547fe4c23d11",
+      "source": "installer/local_build_bootstrap.py"
+    },
+    "installer/local_build_inputs.py": {
+      "sha256": "644700a02c67d46d15f0e503a31826494e44c1d1aab60849d3a7e33dfea46263",
+      "source": "installer/local_build_inputs.py"
+    },
+    "installer/local_build_models.py": {
+      "sha256": "f26b380c9512981f1e7c1bade82c92eed7d33be7f0f1d12519d9b4c45689bf82",
+      "source": "installer/local_build_models.py"
+    },
+    "installer/local_build_package.py": {
+      "sha256": "bbcb5b38d353ece70840b9726f1f5a6f399a045430a86384e22ff56053234e54",
+      "source": "installer/local_build_package.py"
+    },
+    "installer/local_build_run.py": {
+      "sha256": "7759db4d476a2985307f532de7a7eb360ca0d45adb97229c85ab1016d6c5cf4e",
+      "source": "installer/local_build_run.py"
+    },
+    "installer/local_build_support.py": {
+      "sha256": "276912f5d646bc40a0331ac33ec51acf5a76242be91bdeca1a834f90ffbe67fe",
+      "source": "installer/local_build_support.py"
+    },
+    "installer/local_build_toolchain.py": {
+      "sha256": "70fe6b1363977af6344986241d81a30179ac7f8facf560a98a062d9cb161774e",
+      "source": "installer/local_build_toolchain.py"
+    },
+    "installer/macos_wifi.py": {
+      "sha256": "6dbc3318dcb0c76ddd9b8a1d562f325712a3c7abe5aafd5aac15f6509699639a",
+      "source": "installer/macos_wifi.py"
+    },
+    "installer/media.py": {
+      "sha256": "29a0d69ccf19d5bfc8f2a87576b2069763d9061af0b3ac2af5479a6f86a27deb",
+      "source": "installer/media.py"
+    },
+    "installer/media_capture.py": {
+      "sha256": "8f60cfa6c13e739f9b6361a07870e9783d6ec5790be581b07ca76be1149f5a9d",
+      "source": "installer/media_capture.py"
+    },
+    "installer/media_closure.py": {
+      "sha256": "665b08828f3d159b39dcc5ba91a9168384f6809aa753db76f409147a5e8e1311",
+      "source": "installer/media_closure.py"
+    },
+    "installer/media_contracts.py": {
+      "sha256": "b01d9eb78957359b6d2d44d0b89745cfa6f1f526ff983cd24eda29b09746ce12",
+      "source": "installer/media_contracts.py"
+    },
+    "installer/media_install_set.py": {
+      "sha256": "467ada6e1042ee763171207f9b47781dbeb395e00c041b476e9e766abdaa5514",
+      "source": "installer/media_install_set.py"
+    },
+    "installer/media_io.py": {
+      "sha256": "b0588a34388e62599a743981aae497fd2026dc5540028dc4a6321fe12001d86f",
+      "source": "installer/media_io.py"
+    },
+    "installer/media_packages.py": {
+      "sha256": "954026f01061d4e3e7570ee31fe87b80bcd931ded0a815422e3571d1e563a838",
+      "source": "installer/media_packages.py"
+    },
+    "installer/media_preflight.py": {
+      "sha256": "507e91bbc101fc035979e8222bdf2ce97a6789a19a7b7ac0d6288ccde5fbf88d",
+      "source": "installer/media_preflight.py"
+    },
+    "installer/media_replacement.py": {
+      "sha256": "d7459784b5ed2dce835355441658b5b663e33c042c87dd40acfcf1ccfa3da503",
+      "source": "installer/media_replacement.py"
+    },
+    "installer/media_transactions.py": {
+      "sha256": "1e12d5a639d7dede334b33f4c041d0509dfb962036435a5be6e9f41afab4b35b",
+      "source": "installer/media_transactions.py"
+    },
+    "installer/mtd3_image.py": {
+      "sha256": "8946be82d9a6ea5b5c4e63d1e9f5a267a7e33d44b27465b6a6d0ae8800f83a6b",
+      "source": "installer/mtd3_image.py"
+    },
+    "installer/mtd3_split.py": {
+      "sha256": "1e45c7008f37a61df2b3000c9342dc4a0e537f69d4ee98cb8420d06c502a9eea",
+      "source": "installer/mtd3_split.py"
+    },
+    "installer/official_input.py": {
+      "sha256": "cb451fb21c2761a0a582fcab5577e59e73e5c194cc049cdd8f9cce2dc0316ffc",
+      "source": "installer/official_input.py"
+    },
+    "installer/platform_wifi.py": {
+      "sha256": "9295efe955420bcbb04bceda5a22d093739e3253966ec4cab634d3882e58339e",
+      "source": "installer/platform_wifi.py"
+    },
+    "installer/private_config.py": {
+      "sha256": "7a4bb4305b19764a9a3691db23b293650373a547ae2b14151c5430968d9b8bfa",
+      "source": "installer/private_config.py"
+    },
+    "installer/provisioning.py": {
+      "sha256": "89f69ef6a01318d75c3002007de9036b03e9cc158ffc5ce8b491df5af7d7fb5b",
+      "source": "installer/provisioning.py"
+    },
+    "installer/provisioning_data.py": {
+      "sha256": "adc4d9c2a12ed2222cfebdfe796e67cff8b85668e4b303fe076caec925a962e2",
+      "source": "installer/provisioning_data.py"
+    },
+    "installer/ram_boot.py": {
+      "sha256": "fcda1f6a3d81717e49f3f5a4f3ffe7e80d0d868dbd0c2cd3c07c5b7de15c66f6",
+      "source": "installer/ram_boot.py"
+    },
+    "installer/recovery.py": {
+      "sha256": "19edbdf53a45b91a8940f4b4fe93c4bcbe53680b50b75b2ba24d735dd0517de9",
+      "source": "installer/recovery.py"
+    },
+    "installer/recovery_ap/__init__.py": {
+      "sha256": "50f83be50a0e80ce6ab62c8038e89d81b6b1edafa8cbcb770d83bc2ed598cbcc",
+      "source": "installer/recovery_ap/__init__.py"
+    },
+    "installer/recovery_ap/build.py": {
+      "sha256": "d25d1cde54239bece65bcbae92204f018763ccc7585ea9265a672c5f45d0ea22",
+      "source": "installer/recovery_ap/build.py"
+    },
+    "installer/recovery_ap/entropy_seed.c": {
+      "sha256": "f3a149be83c7ec086d800da6f7be5745fc4e9c8f00106d9ea85f69b6d1760884",
+      "source": "installer/recovery_ap/entropy_seed.c"
+    },
+    "installer/recovery_ap/host.py": {
+      "sha256": "d067301bc5d29f1cbbe5954b809225859fecadb4ccd80ec3ef00c05bc3a25c4b",
+      "source": "installer/recovery_ap/host.py"
+    },
+    "installer/recovery_ap/ingenic_t31_dtrng.c": {
+      "sha256": "e6e044a0c00bb2384fe5759353797675b50a48413de3d07d1bd70123c922f6a9",
+      "source": "installer/recovery_ap/ingenic_t31_dtrng.c"
+    },
+    "installer/recovery_ap/init.sh": {
+      "sha256": "cd22016c3f166122d2dea60a049db5b2fbdedff57a594f8f8447773d0975357d",
+      "source": "installer/recovery_ap/init.sh"
+    },
+    "installer/recovery_ap/kernel.py": {
+      "sha256": "3d29d2af868829b32b25ab59ea608c89789c011c3f504f3378b57e0421842cb3",
+      "source": "installer/recovery_ap/kernel.py"
+    },
+    "installer/recovery_ap/nor_state.py": {
+      "sha256": "62f8a53ccb6f62e2691a518c8073915750d5b824d26f2ea4def0e4b109fcd5fa",
+      "source": "installer/recovery_ap/nor_state.py"
+    },
+    "installer/recovery_ap/recovery.service": {
+      "sha256": "b66321aed826d802df6a89619ec36ea54fc6062f30858a3dd08144644e4e245d",
+      "source": "installer/recovery_ap/recovery.service"
+    },
+    "installer/recovery_ap/recoveryctl.sh": {
+      "sha256": "55d3635975de7af3f71a4fab58f38529c65bdae9344e7e169e9f69a2b9c22a99",
+      "source": "installer/recovery_ap/recoveryctl.sh"
+    },
+    "installer/recovery_ap/session.py": {
+      "sha256": "a5ed00661052f9ab537a37ec15446e142bd755c4c6a947dccd7e88defd521e81",
+      "source": "installer/recovery_ap/session.py"
+    },
+    "installer/recovery_ap/thingino_enter.c": {
+      "sha256": "4350bbb5a326531273168334cbed78bbbb2710eafd57e66e30614afcf204a694",
+      "source": "installer/recovery_ap/thingino_enter.c"
+    },
+    "installer/recovery_ap/transport.py": {
+      "sha256": "be070236ccc84a1d30fbaa96decacefb8a22e2414806f51964202966cf534a12",
+      "source": "installer/recovery_ap/transport.py"
+    },
+    "installer/recovery_gate.py": {
+      "sha256": "6671d8b7b14ec1fd97339de9e256013557b04645e8ab9b9cccac781b7cf0a343",
+      "source": "installer/recovery_gate.py"
+    },
+    "installer/recovery_package_binding.py": {
+      "sha256": "43fd7829e3dfea4fb16de21cb0c316adeb17063765189a962ed46ff3cc163a4f",
+      "source": "installer/recovery_package_binding.py"
+    },
+    "installer/rtsp_protocol.py": {
+      "sha256": "1127bd6887997a59eb2018389f540c8ad61e937891e5c0a8e60ebc8dffebcea2",
+      "source": "installer/rtsp_protocol.py"
+    },
+    "installer/rtsp_verify.py": {
+      "sha256": "a42790ba14c9c2f0b698dc63603b0767f743dc9e3fb11cd7f44e24ccefc6436e",
+      "source": "installer/rtsp_verify.py"
+    },
+    "installer/runtime_candidate.py": {
+      "sha256": "7140e1b5316f8482475647d815cbff8ca1114cc3b9221b2374a21b9dd365fbc7",
+      "source": "installer/runtime_candidate.py"
+    },
+    "installer/runtime_diagnostics.py": {
+      "sha256": "7eb4286624ea807bfe7bb0f22df21be5fd984f0d5adcbc4d282d8f7045b06ab9",
+      "source": "installer/runtime_diagnostics.py"
+    },
+    "installer/runtime_gate.py": {
+      "sha256": "39bece75296f31412129d39109e7b683c3df421524647a03deed5ff22ec593c7",
+      "source": "installer/runtime_gate.py"
+    },
+    "installer/runtime_policy.py": {
+      "sha256": "ab1708d5f90b2a24d70ab4952063ed2a338af88f298f7756ba9829b2026f1c7b",
+      "source": "installer/runtime_policy.py"
+    },
+    "installer/sd_package.py": {
+      "sha256": "0b8488491e531c72df3c3d746adfe0aa3d5b39c4ee8452d2cbbdfdc3e7ae0100",
+      "source": "installer/sd_package.py"
+    },
+    "installer/stage1/README.md": {
+      "sha256": "13fd0de9eeeedf2fe5fef5ce24d1789792cb0c8132d102135b8368ade05062c4",
+      "source": "installer/stage1/README.md"
+    },
+    "installer/stage1/__init__.py": {
+      "sha256": "31c3ce988bf5a7e9db1949dea4d95be570a388a4e09cf2f61cc774a2bc9532af",
+      "source": "installer/stage1/__init__.py"
+    },
+    "installer/stage1/build.py": {
+      "sha256": "66c258716a7596fc8251aaa7ddcd482b4919a42acbd166a57409cb00739b3fc3",
+      "source": "installer/stage1/build.py"
+    },
+    "installer/stage1/final_root_validation.py": {
+      "sha256": "040d1dfffa3adb0eae5bb11767be58b1dd46586c11adcfd93de8de7b10539b6e",
+      "source": "installer/stage1/final_root_validation.py"
+    },
+    "installer/stage1/init.c": {
+      "sha256": "ff21bf6494c056428165be53841ed7da44d15e9848678483faf5d1f2d42a0ccc",
+      "source": "installer/stage1/init.c"
+    },
+    "installer/stage1/linker.ld": {
+      "sha256": "232dd6230fef0d392fa640388fab0e9de4ca1cd8f8793a77b4c0ecd8d0e6a1e7",
+      "source": "installer/stage1/linker.ld"
+    },
+    "installer/stage1/squashfs_listing.py": {
+      "sha256": "251ca7eafffaec5c1cd96bd60a064e0882fc067e49e753b521ebb62413c8b92c",
+      "source": "installer/stage1/squashfs_listing.py"
+    },
+    "installer/stage1/stage1-contract.json": {
+      "sha256": "5fd7cda150c42d395c13a39b0155f4ef15b5bda9966692f1ee1ab2647068efe6",
+      "source": "installer/stage1/stage1-contract.json"
+    },
+    "installer/stage2.py": {
+      "sha256": "ddb2623272bbf0186c8187ab015c5a6077a48bd1598352aac3ce49d1bf53c9bf",
+      "source": "installer/stage2.py"
+    },
+    "installer/state_machine.py": {
+      "sha256": "7ad3dea631a9ba18cf4c8fea4e0cfce24c0f8338cf52ee6660c324b49bf1a5dd",
+      "source": "installer/state_machine.py"
+    },
+    "installer/stock_restore/__init__.py": {
+      "sha256": "20a49669af9dbcc2ac46c6866cdba11acd8530f818dee8fe9e8f69cf429b2cec",
+      "source": "installer/stock_restore/__init__.py"
+    },
+    "installer/stock_restore/activation.py": {
+      "sha256": "b68effa285e4a79f36b3363c75d65ac589c9faa62daafc65ed7f2d903b6a263e",
+      "source": "installer/stock_restore/activation.py"
+    },
+    "installer/stock_restore/authorization.inc": {
+      "sha256": "79ed6dff47cc36481d343664a981e8c85f9ef0b4725fd3df7054cc8e0dc910cf",
+      "source": "installer/stock_restore/authorization.inc"
+    },
+    "installer/stock_restore/build.py": {
+      "sha256": "70355d3a9de0b4bbeb2eab0a42fde53e75ef05a2ef6c63aa7e433d562ae197c6",
+      "source": "installer/stock_restore/build.py"
+    },
+    "installer/stock_restore/contract.py": {
+      "sha256": "0a4b51db886d407093a95e4deafba9a5346f43428db1d90201055412d0b985ef",
+      "source": "installer/stock_restore/contract.py"
+    },
+    "installer/stock_restore/file_io.py": {
+      "sha256": "30d5dbd298c830b13dba24df3af6841ab60d474a9c34bc5ba3df5434cbeb88d9",
+      "source": "installer/stock_restore/file_io.py"
+    },
+    "installer/stock_restore/flash.inc": {
+      "sha256": "4804166eb7b9b6886b126974c5b7a6ee289eac09547fa0e55e815dd1113e1718",
+      "source": "installer/stock_restore/flash.inc"
+    },
+    "installer/stock_restore/init.c": {
+      "sha256": "512c6d832388b10ce31a57aa53d67e72d62175e4a1ec0afe59d36e700d1e2aba",
+      "source": "installer/stock_restore/init.c"
+    },
+    "installer/stock_restore/kernel.py": {
+      "sha256": "6ad56b573331ab21ed82245527376ad792f0f53d77c879213b746aecfb1a0678",
+      "source": "installer/stock_restore/kernel.py"
+    },
+    "installer/stock_restore/media_policy.py": {
+      "sha256": "d4d21e514ecb334bfa583a99a815c72a12df15d7c1140939b34c19f2078824a5",
+      "source": "installer/stock_restore/media_policy.py"
+    },
+    "installer/stock_restore/passivation.py": {
+      "sha256": "7397f0cfcba8be28649d694555d20060798bcd47c852cfae19ff30ae5c600666",
+      "source": "installer/stock_restore/passivation.py"
+    },
+    "installer/stock_restore/runtime.inc": {
+      "sha256": "8eec89c9f7520f7e6b7b246752c5a110a3f04c44f67d2e32b851136316d3f0bb",
+      "source": "installer/stock_restore/runtime.inc"
+    },
+    "installer/stock_restore/set.py": {
+      "sha256": "d59b4672f3a72314bec0a79d57ab2c929dffbe22bdf492a60b9a6418b0f85b2c",
+      "source": "installer/stock_restore/set.py"
+    },
+    "installer/stock_restore/staging.py": {
+      "sha256": "22de6f522d3691f5d3c485be9227258fdeec84846ddc808ec3a8211df93f5843",
+      "source": "installer/stock_restore/staging.py"
+    },
+    "installer/stock_restore/verify.inc": {
+      "sha256": "95e3eec2d32c1d4b8ccfefbff6bf37152529095b016742c51629d967b1a7b7fc",
+      "source": "installer/stock_restore/verify.inc"
+    },
+    "installer/templates/S04loopback": {
+      "sha256": "21a39e41e81497eda04b164b1fb735c9445a4f420595b1b443aeed3bfdbfc94a",
+      "source": "installer/templates/S04loopback"
+    },
+    "installer/templates/S05dlink-media-preconditions": {
+      "sha256": "4d4d56155e959d6ccb056137827b955bee5884a12b63ad466c0d45da9c5983d9",
+      "source": "installer/templates/S05dlink-media-preconditions"
+    },
+    "installer/templates/S12prudynt": {
+      "sha256": "0a578c38d7d993c09c25bd0b14b69593748b183f884c39c3d87f3d2c3e67d137",
+      "source": "installer/templates/S12prudynt"
+    },
+    "installer/templates/S13dlink-media-ready": {
+      "sha256": "29c84994e8a62f764c96f8418dc8b5cf1b6a43b1ef0193b62f70604f565264fc",
+      "source": "installer/templates/S13dlink-media-ready"
+    },
+    "installer/templates/S55installer-health": {
+      "sha256": "02a9c5b12e6369eb8b74f3557fdb64306c627ce152a8074cca326e45340fde92",
+      "source": "installer/templates/S55installer-health"
+    },
+    "installer/templates/dlink-media-verify": {
+      "sha256": "0f0bbcc23dfb13162c2a7d06e941fa86ff0da083438767fa73389a619af481a3",
+      "source": "installer/templates/dlink-media-verify"
+    },
+    "installer/templates/dlink-runtime-snapshot": {
+      "sha256": "e7ff47ef0c7dbe79b7be38c82317fb82745e23cdc0fc4904beb25767259728f2",
+      "source": "installer/templates/dlink-runtime-snapshot"
+    },
+    "installer/templates/runtime-candidate.sh": {
+      "sha256": "b3fac4805b281fe8affac73a1eb100f4001e9b7b1fc5cb344737d901c9304458",
+      "source": "installer/templates/runtime-candidate.sh"
+    },
+    "installer/templates/thingino-health": {
+      "sha256": "1fdd26c5fed441a3c9d669897f0da41727528e57e22c4f598014c34a56926629",
+      "source": "installer/templates/thingino-health"
+    },
+    "installer/uartless_gate.py": {
+      "sha256": "604837230a8bc4a477abebe80e78cb3313d26440837645db7d16acdd02e9395f",
+      "source": "installer/uartless_gate.py"
+    },
+    "installer/universal_install.py": {
+      "sha256": "5b7d60973b3e0bb3549ccad91c36ca9759fb0bdd1f807a347c9b4a60992204fb",
+      "source": "installer/universal_install.py"
+    },
+    "installer/user_cli.py": {
+      "sha256": "9357acbd4c77b0ecba4ba455df4f52f6687357098daacff02599d2085c7a6147",
+      "source": "installer/user_cli.py"
+    },
+    "installer/user_cli_build.py": {
+      "sha256": "e2d164527b57fa4bd0d51df328b3e8e2f8f671edd6a730e9f23f97af5c761d74",
+      "source": "installer/user_cli_build.py"
+    },
+    "installer/user_cli_diagnostics.py": {
+      "sha256": "8df0b7d0fd696de9f090a3c6571771a223b06cc36f24c50fc5c6cfabea0a9a3a",
+      "source": "installer/user_cli_diagnostics.py"
+    },
+    "installer/user_cli_guided.py": {
+      "sha256": "cb5480a58d2439f3faed7071c293270e217a3946f2e445fe482b5095991d295d",
+      "source": "installer/user_cli_guided.py"
+    },
+    "installer/user_cli_parser.py": {
+      "sha256": "e7a8be779d9898f1104a20b907d747c658952b9c389ed6eee90eeb041fb86e49",
+      "source": "installer/user_cli_parser.py"
+    },
+    "installer/user_cli_parser_stock_recovery.py": {
+      "sha256": "960de8d1c00de261202feb24a519d720318c74365674ac578b33017a7aeff4f3",
+      "source": "installer/user_cli_parser_stock_recovery.py"
+    },
+    "installer/user_cli_stock_recovery.py": {
+      "sha256": "ea1a5f3b0e722ce40d0c8c5b763cdf7c726318ea592e6b04cf7737201c6b52c9",
+      "source": "installer/user_cli_stock_recovery.py"
+    },
+    "installer/user_cli_universal.py": {
+      "sha256": "8ff9501af19a0725218603379b824a1aabf51fc496fff6c05f38bed8cfc723c9",
+      "source": "installer/user_cli_universal.py"
+    },
+    "installer/vendor_bundle.py": {
+      "sha256": "d50c5be38e2fb379a90353014b23549b2d35300bd526561a7b778430e8fdc09a",
+      "source": "installer/vendor_bundle.py"
+    },
+    "installer/workflow_preflight.py": {
+      "sha256": "f77795d5bcef8b9afe14af28ffa6de63a40a0ce98907d9641d05fed9f9886ccb",
+      "source": "installer/workflow_preflight.py"
+    },
+    "patches/README.md": {
+      "sha256": "42907d0481272bd9e9033bfdadbca813c32db43aa5b1cbd315cbe37887089e9a",
+      "source": "patches/README.md"
+    },
+    "patches/onvif/0001-persistent-httpd-no-request-children.patch": {
+      "sha256": "5b7644af7e0f6ba512e109464921f24ae6c52363aead3dc5e55a2e6f99ea1000",
+      "source": "patches/onvif/0001-persistent-httpd-no-request-children.patch"
+    },
+    "patches/prudynt/0001-enforce-rtsp-basic-auth.patch": {
+      "sha256": "35a4b2e2341fa9ec5dcf52bfb985de6d356fbd0cbc3a5000f9db4475ae554aee",
+      "source": "patches/prudynt/0001-enforce-rtsp-basic-auth.patch"
+    },
+    "patches/prudynt/0002-dlink-media-baseline.patch": {
+      "sha256": "12cdbec5c7c77a9d174c131ee7dce266a5813cb97cb34b31606149e5e2d1601a",
+      "source": "patches/prudynt/0002-dlink-media-baseline.patch"
+    },
+    "patches/prudynt/0003-rtsp-share-immutable-video-payloads.patch": {
+      "sha256": "8f8072040aff1dc39f329bb1010ff761a861685f14c0af6f5d37ea935fbbac16",
+      "source": "patches/prudynt/0003-rtsp-share-immutable-video-payloads.patch"
+    },
+    "patches/prudynt/0004-rtsp-bound-slow-client-video-queues.patch": {
+      "sha256": "3fd55a0bc90ec1b2afc6629990891ff668cfff7da46751b3431aeaa217d2b431",
+      "source": "patches/prudynt/0004-rtsp-bound-slow-client-video-queues.patch"
+    },
+    "patches/prudynt/0005-jpeg-preserve-zero-idle-frame-rate.patch": {
+      "sha256": "e6723143c4bac9eb276f001cf7972f075b0ca681e24ffc7acda3e2de52b6b933",
+      "source": "patches/prudynt/0005-jpeg-preserve-zero-idle-frame-rate.patch"
+    },
+    "patches/prudynt/0006-test-cover-queue-element-and-client-isolation-limits.patch": {
+      "sha256": "62fede6ee5c902a6009a86f047fdee82ea6e99097076fb71c0df59fd0cb54c87",
+      "source": "patches/prudynt/0006-test-cover-queue-element-and-client-isolation-limits.patch"
+    },
+    "patches/prudynt/0007-jpeg-synchronize-video-demand-lifecycle.patch": {
+      "sha256": "f9d8f6618b0ab0f44049c68e7ecabd05dd1c898fdaf512413255855e3c879cad",
+      "source": "patches/prudynt/0007-jpeg-synchronize-video-demand-lifecycle.patch"
+    },
+    "patches/prudynt/0008-jpeg-expire-source-demand-after-disconnect.patch": {
+      "sha256": "2fe80fb61ead7a71698c462444e49a50b1a87af9d40717040275ca120e86b06b",
+      "source": "patches/prudynt/0008-jpeg-expire-source-demand-after-disconnect.patch"
+    },
+    "patches/prudynt/0009-jpeg-apply-expiry-to-the-video-standby-gate.patch": {
+      "sha256": "227300c711e3a6e97b24c9b12caf463642792aa927a346c770add90771c447e5",
+      "source": "patches/prudynt/0009-jpeg-apply-expiry-to-the-video-standby-gate.patch"
+    },
+    "patches/prudynt/0010-media-bound-JPEG-demand-and-receive-lifecycle.patch": {
+      "sha256": "27926b3ea85496aa77a92a4f03fc5e81e79f71d7effd733079a16db8816d69a8",
+      "source": "patches/prudynt/0010-media-bound-JPEG-demand-and-receive-lifecycle.patch"
+    },
+    "patches/prudynt/0011-http-keep-shared-JPEG-static-and-loopback-only.patch": {
+      "sha256": "a5194814d05b870be96c49da513d7c55e939157da9cc67ca92167fddaec9c177",
+      "source": "patches/prudynt/0011-http-keep-shared-JPEG-static-and-loopback-only.patch"
+    },
+    "patches/prudynt/0012-media-replace-unsafe-dlink-video-restarts.patch": {
+      "sha256": "0720af7ed9717988dec09376f1d36fad30f1b17e6bd3a252820c3453093b0b8c",
+      "source": "patches/prudynt/0012-media-replace-unsafe-dlink-video-restarts.patch"
+    },
+    "patches/prudynt/0013-http-bound-mjpeg-client-threads.patch": {
+      "sha256": "5fe70843096bb6a5ed68cc183dd514162121bf35f169cd04ee0d8c90c3aaec2e",
+      "source": "patches/prudynt/0013-http-bound-mjpeg-client-threads.patch"
+    },
+    "patches/prudynt/0014-media-keep-dlink-live-controls-in-process.patch": {
+      "sha256": "a3668b647864cafc6d97205fc305670343b0329a4feecda5875fda77f1e1cd30",
+      "source": "patches/prudynt/0014-media-keep-dlink-live-controls-in-process.patch"
+    },
+    "patches/prudynt/0015-reload-camera-timezone.patch": {
+      "sha256": "b6056eae82881d737dd6abaa7c71a7590852348f64160851bdd763287b74f603",
+      "source": "patches/prudynt/0015-reload-camera-timezone.patch"
+    },
+    "patches/prudynt/0016-scale-burnin-osd-per-stream.patch": {
+      "sha256": "2e7bfa345f5a8f4b187181d57b45c84905548bb6f01463798aa91983ba1b2d7e",
+      "source": "patches/prudynt/0016-scale-burnin-osd-per-stream.patch"
+    },
+    "patches/prudynt/0017-motion-add-nonblocking-Control-observation-output.patch": {
+      "sha256": "5e174ea3ee1e87768e1cadc7c4e300bd715ab1899fcc2185145f24eb16d61537",
+      "source": "patches/prudynt/0017-motion-add-nonblocking-Control-observation-output.patch"
+    },
+    "patches/prudynt/0018-motion-remove-legacy-shell-event-path.patch": {
+      "sha256": "4a979a45a637200f14d4c5ca9739a4a7e2252feb3bb7a2df544c4ab3a8824213",
+      "source": "patches/prudynt/0018-motion-remove-legacy-shell-event-path.patch"
+    },
+    "patches/prudynt/0019-motion-clear-stale-state-on-process-start.patch": {
+      "sha256": "814c7beeb6b76e69da2679d6ac71a5fafbba3ea1412fb1fe06573e83144c6000",
+      "source": "patches/prudynt/0019-motion-clear-stale-state-on-process-start.patch"
+    },
+    "patches/prudynt/0020-config-reload-after-complete-write.patch": {
+      "sha256": "04a5cfdceeb16eadb1b4aefcf433e4c9b5b17be70019f3e140b48f701066f2f2",
+      "source": "patches/prudynt/0020-config-reload-after-complete-write.patch"
+    },
+    "patches/prudynt/0021-media-stabilize-IPC-clients-and-expose-queue-metrics.patch": {
+      "sha256": "9f342cc6e52eb3c10a5f8ad5daef09b5681b836555f6f9da879b3c335535655d",
+      "source": "patches/prudynt/0021-media-stabilize-IPC-clients-and-expose-queue-metrics.patch"
+    },
+    "patches/prudynt/0022-recorder-require-keyframe-safe-durable-segments.patch": {
+      "sha256": "70753b4c5fd4d36715eed8c87fa3e9d92114b87e9e7f397802baceb9c715b01a",
+      "source": "patches/prudynt/0022-recorder-require-keyframe-safe-durable-segments.patch"
+    },
+    "patches/prudynt/0023-ipc-add-bounded-versioned-JSON-framing.patch": {
+      "sha256": "b667884c856ea9ce8fd47fc583e09bd7e37ddaf708f9bcf9ace3b526fb455b6f",
+      "source": "patches/prudynt/0023-ipc-add-bounded-versioned-JSON-framing.patch"
+    },
+    "patches/prudynt/0024-jpeg-recover-failed-starts-and-isolate-snapshot-files.patch": {
+      "sha256": "0ccc2693872b3da27ecea0ad72e135de842842b679ea8eb38d79b9b2c5b095bc",
+      "source": "patches/prudynt/0024-jpeg-recover-failed-starts-and-isolate-snapshot-files.patch"
+    },
+    "patches/prudynt/0025-rtsp-bound-socket-and-audio-queues-by-bytes-and-elements.patch": {
+      "sha256": "8de04548866681b9a030c96bb67b08b134c05c82d31e32da4d5c436da722401a",
+      "source": "patches/prudynt/0025-rtsp-bound-socket-and-audio-queues-by-bytes-and-elements.patch"
+    },
+    "patches/prudynt/0026-motion-clear-active-marker-before-thread-exit.patch": {
+      "sha256": "d377cdda3d536582d2ea5294dd6559eae75276ecdbf5c8a32a2b3dae50bd0a56",
+      "source": "patches/prudynt/0026-motion-clear-active-marker-before-thread-exit.patch"
+    },
+    "patches/prudynt/0027-jpeg-expose-per-channel-lifecycle-metrics.patch": {
+      "sha256": "c05b643b54580da89dc83bf6df927b8d659df6537f77410238d8650f1f819d3d",
+      "source": "patches/prudynt/0027-jpeg-expose-per-channel-lifecycle-metrics.patch"
+    },
+    "patches/prudynt/0028-privacy-ack-and-recorder-segment-timestamps.patch": {
+      "sha256": "46937b1e990350008b987fb670fd118e3071d5ce491723e1223ecf81dcc57551",
+      "source": "patches/prudynt/0028-privacy-ack-and-recorder-segment-timestamps.patch"
+    },
+    "patches/prudynt/0029-privacy-and-recorder-failure-transactions.patch": {
+      "sha256": "f233e02fd346b597d2254c7bf5cc5fa2ac6a6cad981734c3bc226b854252bf32",
+      "source": "patches/prudynt/0029-privacy-and-recorder-failure-transactions.patch"
+    },
+    "patches/prudynt/0030-osd-centralize-group-lifecycle.patch": {
+      "sha256": "b61b1037d2c9fc7c762a9ebd2a7ee2d238f2ae01e26172420552f39a3e0f7216",
+      "source": "patches/prudynt/0030-osd-centralize-group-lifecycle.patch"
+    },
+    "patches/prudynt/0031-video-ready-startup-barrier.patch": {
+      "sha256": "321e34af4c852159e27dfe6e61967d1fa2da27dabdbdede127924681e3893659",
+      "source": "patches/prudynt/0031-video-ready-startup-barrier.patch"
+    },
+    "patches/prudynt/0032-recorder-reject-volatile-and-root-mounts.patch": {
+      "sha256": "4f954025af5e5bf11585bfc07b8c367990858d41e6cb77487dee5dcf163c663a",
+      "source": "patches/prudynt/0032-recorder-reject-volatile-and-root-mounts.patch"
+    },
+    "patches/prudynt/0033-recorder-close-segments-before-process-exit.patch": {
+      "sha256": "f75f4866f22d5b3619d31aad4f79fd17eccb8f1a0325b80cc88980e52a2ecdae",
+      "source": "patches/prudynt/0033-recorder-close-segments-before-process-exit.patch"
+    },
+    "patches/prudynt/0034-dlink-disable-unsupported-defog.patch": {
+      "sha256": "87e4383f700beb5757b19852e78d83393f6c4d52ef757c09af720cffeb9de144",
+      "source": "patches/prudynt/0034-dlink-disable-unsupported-defog.patch"
+    },
+    "patches/prudynt/0035-release-error-handling-and-imp-init-rollback.patch": {
+      "sha256": "55e19c9e2c04259083d0ae980475547747f8f256aea38837bf87a808c1b8b799",
+      "source": "patches/prudynt/0035-release-error-handling-and-imp-init-rollback.patch"
+    },
+    "patches/prudynt/0036-explicit-release-debug-logging.patch": {
+      "sha256": "94748b678bd0f6deb882124d05461822094a2b69cfc025d913ea8a375ec94240",
+      "source": "patches/prudynt/0036-explicit-release-debug-logging.patch"
+    },
+    "patches/prudynt/0037-recorder-direct-framed-ipc.patch": {
+      "sha256": "42e50d7b34945acaa0aa038bca62d065dfaa8028e6f078a783b635e0a53c0cdc",
+      "source": "patches/prudynt/0037-recorder-direct-framed-ipc.patch"
+    },
+    "patches/prudynt/0038-lifecycle-preserve-retry-safe-teardown-state.patch": {
+      "sha256": "b824e53e42280937c5cdba547f9a281c3e668222eaedae402af58e186c590ad5",
+      "source": "patches/prudynt/0038-lifecycle-preserve-retry-safe-teardown-state.patch"
+    },
+    "patches/prudynt/0039-recorder-include-framed-control-socket-declaration.patch": {
+      "sha256": "aa2ff8eca4ee5e9b15174f4d785e602c59a506e4b22aa75bf4bf7a8230046e79",
+      "source": "patches/prudynt/0039-recorder-include-framed-control-socket-declaration.patch"
+    },
+    "patches/prudynt/0040-logging-use-the-declared-critical-level.patch": {
+      "sha256": "3256b2a0367df31d113a0c66da5aae9d3e543eb9b7c4b93e2a7795221fa1649b",
+      "source": "patches/prudynt/0040-logging-use-the-declared-critical-level.patch"
+    },
+    "patches/prudynt/0041-media-retire-ready-marker-across-process-restart.patch": {
+      "sha256": "82e43e7db3ba6cf60f85259577ef04dd134aa94c053e9b3d9fa02713926e4eaa",
+      "source": "patches/prudynt/0041-media-retire-ready-marker-across-process-restart.patch"
+    },
+    "patches/prudynt/0042-motion-snapshot-config-before-ivs-restart.patch": {
+      "sha256": "12a5454b356cc21985e54b075fd7536173ba5fae350d1879c17168471399aba1",
+      "source": "patches/prudynt/0042-motion-snapshot-config-before-ivs-restart.patch"
+    },
+    "patches/prudynt/0043-worker-startup-and-join-ownership.patch": {
+      "sha256": "6ead3d6a258af589e0617c952e748472255ee67cd03f369285777e8751ed0b42",
+      "source": "patches/prudynt/0043-worker-startup-and-join-ownership.patch"
+    },
+    "patches/prudynt/0044-bound-repeated-worker-error-logs.patch": {
+      "sha256": "ad5b800120faf5b409cf38cae00245ae2e37e69583735502f1a5c3d85ba639a3",
+      "source": "patches/prudynt/0044-bound-repeated-worker-error-logs.patch"
+    },
+    "patches/prudynt/0045-refuse-motion-init-with-stale-ivs-state.patch": {
+      "sha256": "68de772136e7b49124e0efaf5c120e95163f9ab03222144e0c5214bd7c6964bf",
+      "source": "patches/prudynt/0045-refuse-motion-init-with-stale-ivs-state.patch"
+    },
+    "patches/prudynt/0046-jpeg-publish-and-send-complete-frames.patch": {
+      "sha256": "2321190c2b673189c452bdb5ab151b0ddcacbfd4d49d7297b6db2ac9270ca3c7",
+      "source": "patches/prudynt/0046-jpeg-publish-and-send-complete-frames.patch"
+    },
+    "patches/prudynt/0047-media-publish-stream0-to-raptor-ring.patch": {
+      "sha256": "af6fa43a4c50787422d0be1a3eb0e56e2075703eadcf203ac0c6357fc80b58da",
+      "source": "patches/prudynt/0047-media-publish-stream0-to-raptor-ring.patch"
+    },
+    "patches/prudynt/0048-dlink-preserve-encoder-fps-across-daynight.patch": {
+      "sha256": "0626dfa9ffcb97ec9d9f52deb6172004351d31c922ee23bbd0a7a49c71c1e36e",
+      "source": "patches/prudynt/0048-dlink-preserve-encoder-fps-across-daynight.patch"
+    },
+    "patches/prudynt/0049-dlink-split-privacy-cover-across-distinct-layers.patch": {
+      "sha256": "864cc090a74405cb1c02ff80104d352f729dc9c09374eb9a0057f1974072f56d",
+      "source": "patches/prudynt/0049-dlink-split-privacy-cover-across-distinct-layers.patch"
+    },
+    "patches/raptor/0001-rwd-video-only-whip-cleanup.patch": {
+      "sha256": "503292123714310bd692ef9f1e7b00a283efaf3651193d20c0d6bdcb45de9c4b",
+      "source": "patches/raptor/0001-rwd-video-only-whip-cleanup.patch"
+    },
+    "patches/raptor/0002-rwd-ingenic-runtime-and-ring-reader.patch": {
+      "sha256": "4c2a5928c16362d5f289108b43ccceee37da9720bd2d0d1ec5a51d6711a253e0",
+      "source": "patches/raptor/0002-rwd-ingenic-runtime-and-ring-reader.patch"
+    },
+    "patches/thingino/0001-dlink-first-release-baseline.patch": {
+      "sha256": "1d89af2e94181ba6a193d977dcbc756eccca45d10258102b8753c049cd0c927e",
+      "source": "patches/thingino/0001-dlink-first-release-baseline.patch"
+    },
+    "patches/thingino/0002-dlink-glibc-imp114.patch": {
+      "sha256": "1620ef8d0d1c5300ee78cc61f84f6fc02af53ac993ec39d051f737c05e93f5df",
+      "source": "patches/thingino/0002-dlink-glibc-imp114.patch"
+    },
+    "patches/thingino/0003-register-realtek-recovery-hostapd.patch": {
+      "sha256": "502993a2c30ba2341d0f1503838a7dc97d01fd47c7ce2d04e7408e770f485138",
+      "source": "patches/thingino/0003-register-realtek-recovery-hostapd.patch"
+    },
+    "patches/thingino/0005-add-thingino-control.patch": {
+      "sha256": "940065a409f52d158607896f44e955c9281a91a1d427d902450e3ee7dca0840a",
+      "source": "patches/thingino/0005-add-thingino-control.patch"
+    },
+    "patches/thingino/0009-remove-extension-cgi-and-mqtt-dispatch.patch": {
+      "sha256": "6b32adfb7783fd26344a4d2a81b02bbe45fdf7361fdbf1d18463eef79e7c15fb",
+      "source": "patches/thingino/0009-remove-extension-cgi-and-mqtt-dispatch.patch"
+    },
+    "patches/thingino/0010-persistent-onvif-and-disable-cgi-ingress.patch": {
+      "sha256": "d6d55c86d27b5048642b3284dc67cfea98d3594f475f1fd421fa1424ead3e692",
+      "source": "patches/thingino/0010-persistent-onvif-and-disable-cgi-ingress.patch"
+    },
+    "patches/thingino/0011-install-static-dlink-webui.patch": {
+      "sha256": "a6be7786205bc3d32e960a57d9681e6b8f064e48b04e7a0bd87cc3e97859a9d3",
+      "source": "patches/thingino/0011-install-static-dlink-webui.patch"
+    },
+    "patches/thingino/0012-minimize-uhttpd-dependencies.patch": {
+      "sha256": "281184d31494d5237ae4855af177806779135704e3a2aadd4e8af315a788c926",
+      "source": "patches/thingino/0012-minimize-uhttpd-dependencies.patch"
+    },
+    "patches/thingino/0013-sanitize-kernel-release-capture.patch": {
+      "sha256": "1b227db02c25666980dda1e06dc58d9912bbd9c10d64457abe6dc73fdc769458",
+      "source": "patches/thingino/0013-sanitize-kernel-release-capture.patch"
+    },
+    "patches/thingino/0014-stop-uhttpd-by-verified-pid.patch": {
+      "sha256": "cb69a5f90f865a50080a9535fc88db41435c3decb7e82894ff46ea1469a69ff2",
+      "source": "patches/thingino/0014-stop-uhttpd-by-verified-pid.patch"
+    },
+    "patches/thingino/0015-route-daynight-actuation-through-control.patch": {
+      "sha256": "362cba27cf2f0e81025a92a5fc6cedc6931ae40f0e56340d93b2d5444bd56042",
+      "source": "patches/thingino/0015-route-daynight-actuation-through-control.patch"
+    },
+    "patches/thingino/0016-release-recovery-transfer-before-media.patch": {
+      "sha256": "f1fc3560c4904d863bedd32c38e5f7735c7f97b462bfcf007d1a3ec51b869da4",
+      "source": "patches/thingino/0016-release-recovery-transfer-before-media.patch"
+    },
+    "patches/thingino/0017-pass-camera-timezone-to-prudynt.patch": {
+      "sha256": "d32f39f437825cb1fd11e43fdb9edeb839d698e305f39a0913d664dd5ab1e146",
+      "source": "patches/thingino/0017-pass-camera-timezone-to-prudynt.patch"
+    },
+    "patches/thingino/0018-create-linux-patch-directories.patch": {
+      "sha256": "82f752eaa761d5d6b645f178f939c1a33e5e05918666d558905e02bcdfca5c1c",
+      "source": "patches/thingino/0018-create-linux-patch-directories.patch"
+    },
+    "patches/thingino/0019-reproducible-aac-link-order.patch": {
+      "sha256": "0086c8edde871936c7ac417a8e5160131fa50cbd8430c2ef0de895c2d93dfd65",
+      "source": "patches/thingino/0019-reproducible-aac-link-order.patch"
+    },
+    "patches/thingino/0020-overlay-refuse-implicit-data-format.patch": {
+      "sha256": "916bb8475359d60fcf36a484baaab69afa22da9bdba82f6f3fdeea58b33e6810",
+      "source": "patches/thingino/0020-overlay-refuse-implicit-data-format.patch"
+    },
+    "patches/thingino/0021-harden-dlink-sd-automount.patch": {
+      "sha256": "a109cfb91d81f3fe539c27170109c2bd8502137ed0bc20b493c8dc40574fa9d5",
+      "source": "patches/thingino/0021-harden-dlink-sd-automount.patch"
+    },
+    "patches/thingino/0022-accept-verified-stage1-mtd-handoff.patch": {
+      "sha256": "b7970424562eafb90b0d90f80fb742d3d3ed66fe168085dc9a777639543aa96a",
+      "source": "patches/thingino/0022-accept-verified-stage1-mtd-handoff.patch"
+    },
+    "patches/thingino/0023-pin-exfat-nofuse-source-archive.patch": {
+      "sha256": "fe53b784e329bbe848a810bd3fde0d155c86b1298ccfd93221546ae21ae67bb3",
+      "source": "patches/thingino/0023-pin-exfat-nofuse-source-archive.patch"
+    },
+    "patches/thingino/0024-retry-prudynt-until-media-ready.patch": {
+      "sha256": "52ad045d26638447e081c6e22569d795a8370151dc111654e5528ccf7ca84b16",
+      "source": "patches/thingino/0024-retry-prudynt-until-media-ready.patch"
+    },
+    "patches/thingino/0025-normalize-neo-library-comments.patch": {
+      "sha256": "81a6b951344bc2da981c6da8fbfb4292479f8b44388c00923b968a5a3aabfbaf",
+      "source": "patches/thingino/0025-normalize-neo-library-comments.patch"
+    },
+    "patches/uhttpd/0007-proxy-thingino-control.patch": {
+      "sha256": "010a31277f9b7faf5bc379fe820db53d8093983e9e4cfbeb57ce0bb8234ab1a5",
+      "source": "patches/uhttpd/0007-proxy-thingino-control.patch"
+    },
+    "patches/uhttpd/0008-disable-cgi-and-proxy-onvif.patch": {
+      "sha256": "562c75f5448ee8d79e785a09af44f820a563de41e6637a6e05196dcf6cd483b3",
+      "source": "patches/uhttpd/0008-disable-cgi-and-proxy-onvif.patch"
+    },
+    "patches/uhttpd/0009-remove-request-script-runtime.patch": {
+      "sha256": "28480e60a76c77c177cd4b510eaf7c8c5ede854c43fa6cf6bf2c1ef8b88eefa1",
+      "source": "patches/uhttpd/0009-remove-request-script-runtime.patch"
+    },
+    "patches/uhttpd/0010-defer-control-proxy-pump.patch": {
+      "sha256": "1db0d52e5b7621216f8149d4090b74ba40a9f450a8ad1e33c352e78f031b93f6",
+      "source": "patches/uhttpd/0010-defer-control-proxy-pump.patch"
+    },
+    "patches/uhttpd/0011-account-tls-socket-backpressure.patch": {
+      "sha256": "df2f6e16c027a53406a93d4b6834c474706abca6eec9248caaeacc0a8d617df7",
+      "source": "patches/uhttpd/0011-account-tls-socket-backpressure.patch"
+    },
+    "patches/uhttpd/0012-keep-mjpeg-encoder-profile-static.patch": {
+      "sha256": "a62bda3adb4847271d1b39aee8212c4004411fd035f1badb34608c35d38d274a",
+      "source": "patches/uhttpd/0012-keep-mjpeg-encoder-profile-static.patch"
+    },
+    "patches/uhttpd/0013-never-cache-static-html-shell.patch": {
+      "sha256": "d92fba9d96b980473b85f3d475887a9474c2ae37c33c964c6893e050b6373b3b",
+      "source": "patches/uhttpd/0013-never-cache-static-html-shell.patch"
+    },
+    "patches/uhttpd/0014-allow-prometheus-control-responses.patch": {
+      "sha256": "467f641461a03364b036a0bf413b864ee8181c9f1c77433da06f26af91d9b860",
+      "source": "patches/uhttpd/0014-allow-prometheus-control-responses.patch"
+    },
+    "patches/uhttpd/0015-require-authenticated-tls-ingress.patch": {
+      "sha256": "036d819e01bc2fded9d399a041cef4c75b5bb799803b95f710acea470241f1aa",
+      "source": "patches/uhttpd/0015-require-authenticated-tls-ingress.patch"
+    },
+    "policy/release-gates.json": {
+      "sha256": "2989903b430e71dc95f0a3014fbccd9e094955eecb77c39c3301f0498a96401f",
+      "source": "policy/release-gates.json"
+    },
+    "profiles/dlink-dcs6100lhv2-a1/artifact-limits.json": {
+      "sha256": "4b1a168fb9ced48cae93501ea33316bc5aaae8a07cf28255a1d8d984cdf9fbdd",
+      "source": "profiles/dlink-dcs6100lhv2-a1/artifact-limits.json"
+    },
+    "profiles/dlink-dcs6100lhv2-a1/collector-kernel.fragment": {
+      "sha256": "dcc1935efe641f193b0506164a84952facd591ca050430e6765dc3ecc92e507e",
+      "source": "profiles/dlink-dcs6100lhv2-a1/collector-kernel.fragment"
+    },
+    "profiles/dlink-dcs6100lhv2-a1/defconfig": {
+      "sha256": "8879586233f340c278ebb58a9ec31f1f7e11353dacc8991782570fc0b19aa25c",
+      "source": "profiles/dlink-dcs6100lhv2-a1/defconfig"
+    },
+    "profiles/dlink-dcs6100lhv2-a1/download-cache.json": {
+      "sha256": "7c9dd4e3db282850ba468f8a90787aa0b0c7b105fdc758fd29c0ad71dcf5a27a",
+      "source": "profiles/dlink-dcs6100lhv2-a1/download-cache.json"
+    },
+    "profiles/dlink-dcs6100lhv2-a1/kernel.fragment": {
+      "sha256": "72988587a8df06de6a39ee903fe931d01ac81d3bfe3dcc4006de4bc4a5349aa5",
+      "source": "profiles/dlink-dcs6100lhv2-a1/kernel.fragment"
+    },
+    "profiles/dlink-dcs6100lhv2-a1/official-inputs.json": {
+      "sha256": "eff67cbbefa80868626965edb35a6defe0c51c123053db3b7305745b1189328f",
+      "source": "profiles/dlink-dcs6100lhv2-a1/official-inputs.json"
+    },
+    "profiles/dlink-dcs6100lhv2-a1/prudynt.json.template": {
+      "sha256": "5b666e0e910e27d1cdc1ea85606b777d6ede7a43f6548993a8e2fc0c9f0a914c",
+      "source": "profiles/dlink-dcs6100lhv2-a1/prudynt.json.template"
+    },
+    "profiles/dlink-dcs6100lhv2-a1/recovery-ap-kernel.fragment": {
+      "sha256": "3cb630216bd4c91ee9234225e20f8dda8510ec14b6c0e6154a0cf633f3d26660",
+      "source": "profiles/dlink-dcs6100lhv2-a1/recovery-ap-kernel.fragment"
+    },
+    "profiles/dlink-dcs6100lhv2-a1/source-profile.json": {
+      "sha256": "ddfe64712320a312149d777647ed2db6822ef45ad4c32088ac44d7713bddd21a",
+      "source": "profiles/dlink-dcs6100lhv2-a1/source-profile.json"
+    },
+    "profiles/dlink-dcs6100lhv2-a1/stock-restore-kernel.fragment": {
+      "sha256": "eea2bb59fc2279ac46c802454d01a24086c0baed179d7156f299eba55d544691",
+      "source": "profiles/dlink-dcs6100lhv2-a1/stock-restore-kernel.fragment"
+    },
+    "profiles/dlink-dcs6100lhv2-a1/thingino.json": {
+      "sha256": "2d94c0cd190c532ea2474fdd44a3217b02c18a4f1830153ecc17f1b27c5f7933",
+      "source": "profiles/dlink-dcs6100lhv2-a1/thingino.json"
+    },
+    "profiles/dlink-dcs6100lhv2-a1/thingino.json.template": {
+      "sha256": "9356b0d47c890b88fd253a14b74e0da0546741dc7ba58bb082dd2837a7ee054c",
+      "source": "profiles/dlink-dcs6100lhv2-a1/thingino.json.template"
+    },
+    "profiles/dlink-dcs6100lhv2-a1/toolchain-download-cache.json": {
+      "sha256": "43d82fee1e7a0722da084f3540669bab0aa3b90a1e51b67fb0f41bc66a434da2",
+      "source": "profiles/dlink-dcs6100lhv2-a1/toolchain-download-cache.json"
+    },
+    "profiles/dlink-dcs6100lhv2-a1/uartless-release-gate.json": {
+      "sha256": "10faf6e7ec7995f7fd4e33ac4c0d78a46f6ac0459a4a22511071501a70371307",
+      "source": "profiles/dlink-dcs6100lhv2-a1/uartless-release-gate.json"
+    },
+    "profiles/dlink-dcs6100lhv2-a1/vendor-closure.json": {
+      "sha256": "de8d1ebb272fb985c5aebd4480af2d7fe3a6de3e88c9c144e7bd4287fd9287ed",
+      "source": "profiles/dlink-dcs6100lhv2-a1/vendor-closure.json"
+    },
+    "pyproject.toml": {
+      "sha256": "8a4b8aa3dc41462d2e8b9a296bdf75b6cda5440a4e6d1185d9e11f22d81eb419",
+      "source": "pyproject.toml"
+    },
+    "scripts/__init__.py": {
+      "sha256": "325fd3bc0efcd13f68434d4cc36decf8e3cd6d7aa5f0a335d9e0ee6b3ad0a52c",
+      "source": "scripts/__init__.py"
+    },
+    "scripts/build_recovery_ap_entropy.sh": {
+      "sha256": "0a268e7858cc63bb35dfbb73d28fb1fd8dc873c9d10b4af815e4abdf1a8e9030",
+      "source": "scripts/build_recovery_ap_entropy.sh"
+    },
+    "scripts/build_thingino_control.py": {
+      "sha256": "54a074dbcfab63610e92a7fbd713a4922fd8ff4d3345e2f0942fac63104f8ffe",
+      "source": "scripts/build_thingino_control.py"
+    },
+    "scripts/check.sh": {
+      "sha256": "54536d2bd89b55861c1d8b59300d3e24992fb445ed5bbba9953956579ce936c1",
+      "source": "scripts/check.sh"
+    },
+    "scripts/check_docs.py": {
+      "sha256": "31c5a2d16b0810373ef5b21c3150798ee0116b9c12f4bad6ac8b2b2cd453e4df",
+      "source": "scripts/check_docs.py"
+    },
+    "scripts/check_public_tree.py": {
+      "sha256": "b772032abca28c184190bb065b96404f60bfb91e0c6501ced9fd9119e8e14898",
+      "source": "scripts/check_public_tree.py"
+    },
+    "scripts/check_release_gates.py": {
+      "sha256": "90be25db50e08e4b9b81024dce4a8b86b5dba1d5297bf0ba5a45d565a0515e64",
+      "source": "scripts/check_release_gates.py"
+    },
+    "scripts/check_thingino_control.sh": {
+      "sha256": "cb47a1589f5d3469998bd41b030fc79d74b09124920e35331251420774a2f3a1",
+      "source": "scripts/check_thingino_control.sh"
+    },
+    "scripts/check_thingino_control_contract.py": {
+      "sha256": "6e242abc3794b35806161bdcd71d5db468d05a98fd6440572f8519cc2cfa109a",
+      "source": "scripts/check_thingino_control_contract.py"
+    },
+    "scripts/container_build_collector_kernel.sh": {
+      "sha256": "21a5558b0888b1408957cb211f1154d04d0afb020b96738af2556be271e2a0d7",
+      "source": "scripts/container_build_collector_kernel.sh"
+    },
+    "scripts/container_build_recovery_ap.sh": {
+      "sha256": "7bcc5ff138ac7518b5e4b69f30adca32ae64890f1f6525a166259b591d81c29f",
+      "source": "scripts/container_build_recovery_ap.sh"
+    },
+    "scripts/container_build_split_kernels.sh": {
+      "sha256": "8e36e8e31a8f5cffec25e7d20bc6d8c5bcbc0b446595dc6a543008cd2980596d",
+      "source": "scripts/container_build_split_kernels.sh"
+    },
+    "scripts/container_build_stock_restore_kernel.sh": {
+      "sha256": "f1acea4ce9865112f127996f7bf356dbcd2b8ca56d9b7ae66e6d62b592001a5e",
+      "source": "scripts/container_build_stock_restore_kernel.sh"
+    },
+    "scripts/container_build_thingino.sh": {
+      "sha256": "7732dfc2f846607643a15d3b0982bb37a24e847a61894c66ff2bca85a0057faa",
+      "source": "scripts/container_build_thingino.sh"
+    },
+    "scripts/container_build_thingino_toolchain.sh": {
+      "sha256": "bb0e6b3536de5eb27018cb8add6673cfd280a15e6f06b0aaca2142241e1fe49d",
+      "source": "scripts/container_build_thingino_toolchain.sh"
+    },
+    "scripts/container_fetch_thingino_downloads.sh": {
+      "sha256": "31f03c4edb10a14c8be96ca29e777851fdcc06c2ce121956f4815326ffea714e",
+      "source": "scripts/container_fetch_thingino_downloads.sh"
+    },
+    "scripts/container_fetch_thingino_toolchain_downloads.sh": {
+      "sha256": "c1c05a30f23b957e2df0a84a17bd0ccde2c060e9dfbe12ec43ba15aa5d8bea86",
+      "source": "scripts/container_fetch_thingino_toolchain_downloads.sh"
+    },
+    "scripts/platform/__init__.py": {
+      "sha256": "3c29ef6a52f8a60234297f356870b475013937c197246910cbbe2e103f48ff7f",
+      "source": "scripts/platform/__init__.py"
+    },
+    "scripts/platform/linux_media_preflight.py": {
+      "sha256": "4a3387a9f1979bcec27bf6b781c4fbf4294f7852c19df77bc9f92719eda47bfd",
+      "source": "scripts/platform/linux_media_preflight.py"
+    },
+    "scripts/platform/macos_media_preflight.py": {
+      "sha256": "b5be0def66bbdecb5c34bebe698362f7895de4ce33d31f4492dde585300eb5b5",
+      "source": "scripts/platform/macos_media_preflight.py"
+    },
+    "scripts/platform/macos_recovery_wifi.swift": {
+      "sha256": "4e42307e853a838eb25f600778a9cde2bff9e824cf12e3c0b8d2abec3c0a09a0",
+      "source": "scripts/platform/macos_recovery_wifi.swift"
+    },
+    "scripts/platform/macos_station_wifi.swift": {
+      "sha256": "730fefe36ac15d5249fe73c35632d980b3c6b158906a608759baa7d775cab421",
+      "source": "scripts/platform/macos_station_wifi.swift"
+    },
+    "scripts/platform/media_preflight.py": {
+      "sha256": "e79a14c9b7ca26c31ce1198b6b320332b55f829c1c732fb353d4590b1758d9e3",
+      "source": "scripts/platform/media_preflight.py"
+    },
+    "scripts/platform/media_preflight_common.py": {
+      "sha256": "1dc8815e5b33c1897e68c44a1b46dc4374729a4eba3400e7e6b9ba6b84ac9cfe",
+      "source": "scripts/platform/media_preflight_common.py"
+    },
+    "scripts/platform/windows_media_preflight.py": {
+      "sha256": "e67d9dcd0c45a6ce320ab721f4476f11bfc892eb7211737d216375a2a2572f13",
+      "source": "scripts/platform/windows_media_preflight.py"
+    },
+    "scripts/raptor_rwd_runtime.py": {
+      "sha256": "043fef52709dff93f50dd97773b016d04e4d79b79cca26b1362797561e72aaa1",
+      "source": "scripts/raptor_rwd_runtime.py"
+    },
+    "scripts/run_container_mkfs_jffs2.sh": {
+      "sha256": "fae68ee16c4ddd9e508099b46f6edbdda365ed51f6841b0a5518d49283fd7dc1",
+      "source": "scripts/run_container_mkfs_jffs2.sh"
+    },
+    "scripts/run_macos_collector_kernel_build.sh": {
+      "sha256": "0f178b97b4fe7af373ba3f5c2d19af9faf9391bce07558a1e228fe285f7bfbbb",
+      "source": "scripts/run_macos_collector_kernel_build.sh"
+    },
+    "scripts/run_macos_split_kernel_build.sh": {
+      "sha256": "dc1ef7b83133250c6f1bc1b516eda7d84205d87f7b8bfa47a2d7d930fc902b17",
+      "source": "scripts/run_macos_split_kernel_build.sh"
+    },
+    "scripts/run_macos_stock_restore_kernel_build.sh": {
+      "sha256": "ce8484990705d0004aa615b89845b39ae5d27c0790047758584eef8104febb9f",
+      "source": "scripts/run_macos_stock_restore_kernel_build.sh"
+    },
+    "scripts/run_macos_thingino_build.sh": {
+      "sha256": "f9a2df88c37abbc8f9ba6fd89455625cd41898ffd1101bec61d41b26130229d1",
+      "source": "scripts/run_macos_thingino_build.sh"
+    },
+    "scripts/run_macos_thingino_download_fetch.sh": {
+      "sha256": "0e3c5ac7b5b3ef29479c60e14e80c6832e3d3e2cdb1a6a960a3b4c58973f27ab",
+      "source": "scripts/run_macos_thingino_download_fetch.sh"
+    },
+    "scripts/run_macos_thingino_toolchain_build.sh": {
+      "sha256": "200003248082b084c045b80c7b7f8f31aec950ebdc86aa8bc796fed272d1b74a",
+      "source": "scripts/run_macos_thingino_toolchain_build.sh"
+    },
+    "scripts/run_macos_thingino_toolchain_download_fetch.sh": {
+      "sha256": "52a67dca6092215a176bcc2b4366e09e1705191c2c2576e282b1a4ee159fc159",
+      "source": "scripts/run_macos_thingino_toolchain_download_fetch.sh"
+    },
+    "scripts/source_checkout.py": {
+      "sha256": "4806b619f8b0fb015c24e4d73a65268f1f651104ee505117d1a782482d6ae204",
+      "source": "scripts/source_checkout.py"
+    },
+    "scripts/source_prepare.py": {
+      "sha256": "9f6878a79357036569da08e2dd0f19d6954cde8a07ed19b4d234344df195c11b",
+      "source": "scripts/source_prepare.py"
+    },
+    "sources.lock.json": {
+      "sha256": "9eb3f6abb41ae725d04068e7717e54cb0f32dc7f9d9ce13bab68a7cae43bea15",
+      "source": "sources.lock.json"
+    },
+    "tests/fixtures/stock_restore_syscalls.c": {
+      "sha256": "97128cdec1ee3ddc3c0e6d088a81645394cba2b4c85f55a81fac8d8a698fcb97",
+      "source": "tests/fixtures/stock_restore_syscalls.c"
+    },
+    "tests/test_artifacts.py": {
+      "sha256": "4d256c3e5b2b0948d7ca0750d396c8bf62597740d2e2c7fcfac8b60ce9678368",
+      "source": "tests/test_artifacts.py"
+    },
+    "tests/test_build_thingino_control.py": {
+      "sha256": "532ab4015352ce67ac8e3bb40e36fe0beb06eb40adf87ad3d783894902b8606e",
+      "source": "tests/test_build_thingino_control.py"
+    },
+    "tests/test_candidate_log.py": {
+      "sha256": "565fa20c9ec0d350f68788703ea3104e5351966bfa716b7cff4ccb87f1e4f4f1",
+      "source": "tests/test_candidate_log.py"
+    },
+    "tests/test_cli.py": {
+      "sha256": "b37379aa95b6a0dc898252f26c4ecb82b0eefb913bd3b326f3583c83dd8ad204",
+      "source": "tests/test_cli.py"
+    },
+    "tests/test_collector_build.py": {
+      "sha256": "ae958588cd5c2d7f57be166ab54be8969dec1f628d22a3164e5feffa333a7c96",
+      "source": "tests/test_collector_build.py"
+    },
+    "tests/test_collector_kernel.py": {
+      "sha256": "4e05d3a64f530819d2d7f7f0459587a2309dbb9b8a51f4958d6926f11ee32ec6",
+      "source": "tests/test_collector_kernel.py"
+    },
+    "tests/test_collector_output.py": {
+      "sha256": "cd18289fe3a5a710bb992bbc277bb51f3201cfac24205d2518c9268978580a5f",
+      "source": "tests/test_collector_output.py"
+    },
+    "tests/test_development_install.py": {
+      "sha256": "d030e4b03a826913927cb0dcc85f4a4210769b9fbe4fe748635a0f48535d1ba7",
+      "source": "tests/test_development_install.py"
+    },
+    "tests/test_docs.py": {
+      "sha256": "44f8088af653af3261f15b00e7e96023e3f826762080a9437f1580cde7490e20",
+      "source": "tests/test_docs.py"
+    },
+    "tests/test_download_cache.py": {
+      "sha256": "09e35bd5fb74183af01b66e63146e81c08c7498b8af94000f1f017a894ec1aae",
+      "source": "tests/test_download_cache.py"
+    },
+    "tests/test_fake_mtd.py": {
+      "sha256": "cda9bbbf7cd65c39f52727e1fa6fcf0f59b2a40d2b9efe576654c99c34553de4",
+      "source": "tests/test_fake_mtd.py"
+    },
+    "tests/test_final_bundle.py": {
+      "sha256": "0cd199736eb376cfe69eab4b1888cecd88d1f0295da0a87f6b9e830b2be15f09",
+      "source": "tests/test_final_bundle.py"
+    },
+    "tests/test_final_root.py": {
+      "sha256": "ca756978d161945b554588e56a1a9660509966cf0bb2d46290cf57634c17651f",
+      "source": "tests/test_final_root.py"
+    },
+    "tests/test_full_backup.py": {
+      "sha256": "7c8e050057242181368dfb9dda04d159297adf6372cfc597151b113e04c06e65",
+      "source": "tests/test_full_backup.py"
+    },
+    "tests/test_installer_contracts.py": {
+      "sha256": "b00c53e86212130e39d28c7ca6f1b52438689cace8ae99c21d6c8921b000c7e7",
+      "source": "tests/test_installer_contracts.py"
+    },
+    "tests/test_linux_media_preflight.py": {
+      "sha256": "e9fd4552dad97fca14938c87fee51c600b20f905cac7a80cdc849643588e457e",
+      "source": "tests/test_linux_media_preflight.py"
+    },
+    "tests/test_live_ram.py": {
+      "sha256": "674684eb17c21b19c4ec143290916cb7c14bf144e9b3b10de7a60abd68c50356",
+      "source": "tests/test_live_ram.py"
+    },
+    "tests/test_local_build.py": {
+      "sha256": "0e9478c0753131f6c88c846f5b7cb6bad20743e618f2a8f5cb9cf7c53b3d1220",
+      "source": "tests/test_local_build.py"
+    },
+    "tests/test_local_build_acquire.py": {
+      "sha256": "c4c37aa4e51a1f011d558ea8267885a5134b727ca2a67f5631110a852a24d2f1",
+      "source": "tests/test_local_build_acquire.py"
+    },
+    "tests/test_local_build_bootstrap.py": {
+      "sha256": "63c35717a1908ea7581b6cb75bb72a7e370adceba3cfe7adbc944244f5b62df7",
+      "source": "tests/test_local_build_bootstrap.py"
+    },
+    "tests/test_local_build_run.py": {
+      "sha256": "4b7befa8d1eaafba424fef400423ce11d65a9833f68a1d41e6dd61fcb435da1a",
+      "source": "tests/test_local_build_run.py"
+    },
+    "tests/test_macos_media_preflight.py": {
+      "sha256": "b89aaeccf49badd79d216acdaa62ee92a323d962440466a8af95f27d8e2043cc",
+      "source": "tests/test_macos_media_preflight.py"
+    },
+    "tests/test_macos_wifi.py": {
+      "sha256": "8a2e3cc29adc80f07c41ea3f93a9278d25273c05edb8be390c052a7901072387",
+      "source": "tests/test_macos_wifi.py"
+    },
+    "tests/test_media.py": {
+      "sha256": "b17c6f9a08635746589e8d4e5f81042a40bc8ec188606cd327646c7ef5665dc0",
+      "source": "tests/test_media.py"
+    },
+    "tests/test_media_closure.py": {
+      "sha256": "6e6940a4d17437dad35b0d5cdcf9c3e78d0a253877e890538ef32e6bdd6d1690",
+      "source": "tests/test_media_closure.py"
+    },
+    "tests/test_media_dependencies.py": {
+      "sha256": "ae43cf52054b8e951deb720f89ae5f3804efb42b7445a5792127dcced2cc1f2a",
+      "source": "tests/test_media_dependencies.py"
+    },
+    "tests/test_media_preflight_dispatch.py": {
+      "sha256": "af144c1199f2eef9ec0530856784bbd19fe6bc12b75802c7affe56dad81552ea",
+      "source": "tests/test_media_preflight_dispatch.py"
+    },
+    "tests/test_media_transaction_order.py": {
+      "sha256": "f24cd015e1ce5f235ee213ca2179d7c76be0d0190cc867e50365dabadeb20655",
+      "source": "tests/test_media_transaction_order.py"
+    },
+    "tests/test_mtd3_image.py": {
+      "sha256": "42c3f8cc55f0ee394d55c1aadfda77a036aa0114ee689051157dcb28881c013d",
+      "source": "tests/test_mtd3_image.py"
+    },
+    "tests/test_official_input.py": {
+      "sha256": "56de48745483173c1e501ba6dcab99f8f3bd0045960605bd98ce2c9f17eabd70",
+      "source": "tests/test_official_input.py"
+    },
+    "tests/test_platform_wifi.py": {
+      "sha256": "91229a9120a69f7dbe89f8736436f16e416447daa756cbb8d04ee78c2488ec77",
+      "source": "tests/test_platform_wifi.py"
+    },
+    "tests/test_private_config.py": {
+      "sha256": "0c21f735063f3baab9abf7978a8bc1fa5c262a8aa4ffe3a05303fed351f92fe1",
+      "source": "tests/test_private_config.py"
+    },
+    "tests/test_profile.py": {
+      "sha256": "ad3c6c4333c7239e5afe4af223db56486bfcf3deb457511d27b6c938dee02d37",
+      "source": "tests/test_profile.py"
+    },
+    "tests/test_project.py": {
+      "sha256": "354075394c9718d32187431ebe1a624a9e6862bd3b151d9ebe1234e44101b66a",
+      "source": "tests/test_project.py"
+    },
+    "tests/test_provisioning_data.py": {
+      "sha256": "31ab319339de3112280109177e5590e18858fd57bbdeef17de9e43ae1b2aaaf4",
+      "source": "tests/test_provisioning_data.py"
+    },
+    "tests/test_prudynt_timezone.py": {
+      "sha256": "c4f5177b9a8f0b047f8a1a2889fde87c1ca8ad58cafae5073e84bee61ec91bf0",
+      "source": "tests/test_prudynt_timezone.py"
+    },
+    "tests/test_public_tree.py": {
+      "sha256": "fe86168dbb9791be9d7b9cbb9653e20b40c0dba05b93200e0dc151bae64e4aa0",
+      "source": "tests/test_public_tree.py"
+    },
+    "tests/test_ram_boot.py": {
+      "sha256": "1c9bcdd9574dfbfec16f1c1ee58ca0546daded3f59b8cc2c545023688dde2d36",
+      "source": "tests/test_ram_boot.py"
+    },
+    "tests/test_raptor_rwd_component.py": {
+      "sha256": "db3d4ebcdef2cefae856667ca584f81b8eff028b65a88ed55c0ac2700392a7c8",
+      "source": "tests/test_raptor_rwd_component.py"
+    },
+    "tests/test_raptor_rwd_persistent.py": {
+      "sha256": "b44b91ec3f3e25b9017427583050bd001d72a24304e97e3932850648dcc162e0",
+      "source": "tests/test_raptor_rwd_persistent.py"
+    },
+    "tests/test_raptor_rwd_runtime.py": {
+      "sha256": "31714a07f0eebb4f08c6b356f8f405fc2eff28f5f50c71ae53b924a3f97bb611",
+      "source": "tests/test_raptor_rwd_runtime.py"
+    },
+    "tests/test_recovery.py": {
+      "sha256": "29d850c795529a433d94c09769f6e52e79f4a7d1f28142fc2ce263040a864a00",
+      "source": "tests/test_recovery.py"
+    },
+    "tests/test_recovery_ap_host.py": {
+      "sha256": "a982684d8c6f382860cc3e266e3afc284e65a4673c251b112256cd9993716985",
+      "source": "tests/test_recovery_ap_host.py"
+    },
+    "tests/test_recovery_ap_kernel.py": {
+      "sha256": "edf22898ba9788559b89c347ad7e394998ae0ba5d6e338880708e42ccc802cdc",
+      "source": "tests/test_recovery_ap_kernel.py"
+    },
+    "tests/test_recovery_ap_root.py": {
+      "sha256": "d4f26ab78a5ad1f4e35874e8ddc11d47c8e0328b1a5f23ab9b13700823159e6c",
+      "source": "tests/test_recovery_ap_root.py"
+    },
+    "tests/test_recovery_ap_session.py": {
+      "sha256": "ccc5d63490af77edc82f57680543bcac473cc32e37c42cde8c96b11424bef5cb",
+      "source": "tests/test_recovery_ap_session.py"
+    },
+    "tests/test_recovery_gate.py": {
+      "sha256": "5efb437efaa61274e4af1791ca68d06164a2747280d2307d7d1d013a8aad8cbd",
+      "source": "tests/test_recovery_gate.py"
+    },
+    "tests/test_release_gates.py": {
+      "sha256": "58b7961f8db5281d90dbab0820be6c3fad3114a289c2161a611bebbdd4448f1d",
+      "source": "tests/test_release_gates.py"
+    },
+    "tests/test_rtsp_verify.py": {
+      "sha256": "8b720de5e6ffe3ee0a78045bcd2ef8db78d63fe18bb8407957820b05828be0fb",
+      "source": "tests/test_rtsp_verify.py"
+    },
+    "tests/test_runtime_candidate.py": {
+      "sha256": "8129e709adbb756a8ebdac593a18a873e5dbe7148eccddfa8d5f8193b019746c",
+      "source": "tests/test_runtime_candidate.py"
+    },
+    "tests/test_runtime_diagnostics.py": {
+      "sha256": "be9a46141efde550d19f513be4b3d10deea585f4cd6b908dd34fce6487572d14",
+      "source": "tests/test_runtime_diagnostics.py"
+    },
+    "tests/test_runtime_gate.py": {
+      "sha256": "b7d2f61a7564290a8efce39b249788f4db65b730d6c3b558f80788fae216e0fe",
+      "source": "tests/test_runtime_gate.py"
+    },
+    "tests/test_sd_package.py": {
+      "sha256": "2d3d06f6048071424c8b6e24c412ee6b7a38be79f092cd703c0e7db2d01c8cd9",
+      "source": "tests/test_sd_package.py"
+    },
+    "tests/test_source_checkout.py": {
+      "sha256": "2fa9474129045e59364517b014a5b1d0059c3fa628c5c6d972066e98c03c0732",
+      "source": "tests/test_source_checkout.py"
+    },
+    "tests/test_source_prepare.py": {
+      "sha256": "509bc9bc0be7e13184f69b8941df5a714d1c8bb9984816b0cce7fbb2c856a12f",
+      "source": "tests/test_source_prepare.py"
+    },
+    "tests/test_split_kernel_build.py": {
+      "sha256": "4df844873f45b8f5a6ffb64606867e9162a88b3bfd9aacbb2e0a3b4c505e7333",
+      "source": "tests/test_split_kernel_build.py"
+    },
+    "tests/test_stage1_build.py": {
+      "sha256": "3f4c65d7e2b9c346d417815bbedd2349ec70aa9a0055ca5b387b55dfcd274d3a",
+      "source": "tests/test_stage1_build.py"
+    },
+    "tests/test_stage2.py": {
+      "sha256": "9da277735ea7a7d944ab6b042458238c37d8205d84f7ef9dfe6c93e005aff184",
+      "source": "tests/test_stage2.py"
+    },
+    "tests/test_state_machine.py": {
+      "sha256": "1746d2113fe8a5ad887ccfee07409a3da206ac4e3134f3323f68377780b01fbe",
+      "source": "tests/test_state_machine.py"
+    },
+    "tests/test_stock_recovery.py": {
+      "sha256": "d6c58b73ac287e2cb6fd982894c6350b527e6dfd4e0c81b4d45e8ea96c2c6cd9",
+      "source": "tests/test_stock_recovery.py"
+    },
+    "tests/test_stock_restore_c.py": {
+      "sha256": "7eea218bfd1ded116aa74dbdf050e9e6204a51c18992ee7fa162e0570ac0b5f4",
+      "source": "tests/test_stock_restore_c.py"
+    },
+    "tests/test_stock_restore_kernel.py": {
+      "sha256": "0283f3b0812e8eda396b541afbed670190bcf38a670228955dd042ae4fc15003",
+      "source": "tests/test_stock_restore_kernel.py"
+    },
+    "tests/test_stock_restore_root.py": {
+      "sha256": "6a21496f2ee75c70d655dd923180ef5e1b3699e7e8bb55e569e4098daf7b1b42",
+      "source": "tests/test_stock_restore_root.py"
+    },
+    "tests/test_stock_restore_source.py": {
+      "sha256": "a455dada62f7c0dce54eb7f58c8644a57d6631c3238741635bd6b33a741c6d71",
+      "source": "tests/test_stock_restore_source.py"
+    },
+    "tests/test_stock_restore_transactions.py": {
+      "sha256": "4de9c194f5c3c0486ece0579f2559d0d84e732b77e6b9852a6efd0c3472cbf87",
+      "source": "tests/test_stock_restore_transactions.py"
+    },
+    "tests/test_thingino_control_device_script.py": {
+      "sha256": "b94ad450f6bdd4ec937acdf089b45c0095d80acd84f6b6abc834db45b442c1cc",
+      "source": "tests/test_thingino_control_device_script.py"
+    },
+    "tests/test_thingino_control_init.py": {
+      "sha256": "b9a403ef545de96d8886a4e710d40c0de805fcebfda3cfbbb20d4a03438a92e2",
+      "source": "tests/test_thingino_control_init.py"
+    },
+    "tests/test_uartless_gate.py": {
+      "sha256": "45d7dab559a12eb139faf0bfdcc608c472a3ebe1f37d173220674f5efb335e3b",
+      "source": "tests/test_uartless_gate.py"
+    },
+    "tests/test_universal_artifacts.py": {
+      "sha256": "cf2b092f3aef396c6d6e7c5c68bf5c82d7a4729326b706830c487d5fb815ae62",
+      "source": "tests/test_universal_artifacts.py"
+    },
+    "tests/test_user_cli.py": {
+      "sha256": "a02a8fa0a8966d8d49f2f7bc1fa93d91fec4f5d893c7e5243e1ced7ec7653709",
+      "source": "tests/test_user_cli.py"
+    },
+    "tests/test_user_cli_build.py": {
+      "sha256": "809667f62099a0a645ce88e6987596a86c8ab840904ef574ccf60a633fa2a10d",
+      "source": "tests/test_user_cli_build.py"
+    },
+    "tests/test_vendor_bundle.py": {
+      "sha256": "7370fb7c2a629f08d4be0d557cfe68483deb6a70fd8ec7147b4f3b809225cde9",
+      "source": "tests/test_vendor_bundle.py"
+    },
+    "tests/test_windows_media_preflight.py": {
+      "sha256": "48f159893ec80527e1fc3c19ed6297219f5c462d85f6a640c32102938c517d5f",
+      "source": "tests/test_windows_media_preflight.py"
+    },
+    "tests/test_workflow_preflight.py": {
+      "sha256": "3ff3e044cec6427afd7be9cf4b7d0d5b4289a89630f88917a53b0b3500e98c14",
+      "source": "tests/test_workflow_preflight.py"
+    },
+    "third_party/LICENSE_REVIEW.md": {
+      "sha256": "3a9c22e3e9b2fef2aa7577e391d7d75144f77b99e50c61fab7dd233d5a5517f2",
+      "source": "third_party/LICENSE_REVIEW.md"
+    },
+    "third_party/NOTICE.md": {
+      "sha256": "a4e561edea26c4f2ab80b40835e32cf6e90281b8cd6fddd7b8b42f96a82c11b9",
+      "source": "third_party/NOTICE.md"
+    },
+    "third_party/licenses/RTL8188FU-GPL-2.0-only.txt": {
+      "sha256": "4f2416509c30c4f0c4de101cc30c571e3be33fdb5c42cabc0d2915e8ed5ea51e",
+      "source": "third_party/licenses/RTL8188FU-GPL-2.0-only.txt"
+    },
+    "third_party/licenses/RTL8188FU-hostap-BSD-3-Clause.txt": {
+      "sha256": "2c2b3640a8256edb409356a7e3f3dfe762a489bd2cd9586aa1647b0f1128caf8",
+      "source": "third_party/licenses/RTL8188FU-hostap-BSD-3-Clause.txt"
+    },
+    "third_party/licenses/Rust-1.95.0-Apache-2.0.txt": {
+      "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+      "source": "third_party/licenses/Rust-1.95.0-Apache-2.0.txt"
+    },
+    "third_party/licenses/Rust-1.95.0-MIT.txt": {
+      "sha256": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+      "source": "third_party/licenses/Rust-1.95.0-MIT.txt"
+    },
+    "webui/browser-tests/webui.spec.ts": {
+      "sha256": "b6507f6c9ae5380a6e8f2b3a1a2724b3a3a06df3b71c12fe0b9fe10beea54726",
+      "source": "webui/browser-tests/webui.spec.ts"
+    },
+    "webui/firmware-bundle.json": {
+      "sha256": "0b12e28d7c436374015ec92785303561baa3586e24d16d8b846150e78852344b",
+      "source": "webui/firmware-bundle.json"
+    },
+    "webui/fixtures/server.mjs": {
+      "sha256": "bd6a3c5edc1f6d039ede3907d99c44d87f64d1ca81e88db1a871ef9c2e69926b",
+      "source": "webui/fixtures/server.mjs"
+    },
+    "webui/index.html": {
+      "sha256": "136b88f7cf8ba949e64ae37c1f96cde1e2e53b37987a485bc89c3bc02311069e",
+      "source": "webui/index.html"
+    },
+    "webui/package-lock.json": {
+      "sha256": "f9155e75c25a36b9b55cad9d7c27ddd49493380aee32204aaa8d60e1407479b1",
+      "source": "webui/package-lock.json"
+    },
+    "webui/package.json": {
+      "sha256": "6350308aed03edbcb863364212377ab177a0f90f3a4b02fcec176fc4c5145c67",
+      "source": "webui/package.json"
+    },
+    "webui/playwright.config.ts": {
+      "sha256": "82c47ce5dd320a5cded5b2938a4acef7c1e04ddad4776ef8da965834f76ef0e4",
+      "source": "webui/playwright.config.ts"
+    },
+    "webui/public/icons/LICENSE.txt": {
+      "sha256": "308028e93fcf84972523cdf6e616f73168546b4953895f516d01287f16fe7bee",
+      "source": "webui/public/icons/LICENSE.txt"
+    },
+    "webui/public/icons/grid.svg": {
+      "sha256": "3af69eafc4dec2329532a891ee4cd1da2890e94c14f8c3e2e465f441c3640cbe",
+      "source": "webui/public/icons/grid.svg"
+    },
+    "webui/public/icons/help-circle.svg": {
+      "sha256": "01119f71e8e22bba9e208ee205ac2e3c64b9dc422c3d94d2cb49e309d912afa8",
+      "source": "webui/public/icons/help-circle.svg"
+    },
+    "webui/public/icons/info.svg": {
+      "sha256": "f8414990facbea55b38da12dde132078131abdb70add4ce76b5d1c23e3a84322",
+      "source": "webui/public/icons/info.svg"
+    },
+    "webui/public/icons/radio.svg": {
+      "sha256": "f16cc07d0e208c901e2ba644d84c7584a29cd898c921538a669d15bb434c42af",
+      "source": "webui/public/icons/radio.svg"
+    },
+    "webui/public/icons/settings.svg": {
+      "sha256": "2f584e1a2cd6b941ce50a99b8c74d54aa966bcffd9bee62339dabffd44665e82",
+      "source": "webui/public/icons/settings.svg"
+    },
+    "webui/public/icons/tool.svg": {
+      "sha256": "35a8ecf042e983811b8cdf58b1b217076d7287fa194ec2e20b60277e914500a0",
+      "source": "webui/public/icons/tool.svg"
+    },
+    "webui/public/icons/video.svg": {
+      "sha256": "ea4ca261395d957393ff4dfe8f1fba4fee524ec78e06ff87687cc4115ae4246e",
+      "source": "webui/public/icons/video.svg"
+    },
+    "webui/public/manifest.webmanifest": {
+      "sha256": "38bda3647c9bb6976180108beedeceb0dfde4068a3f157a18ae8527e8d553ce5",
+      "source": "webui/public/manifest.webmanifest"
+    },
+    "webui/scripts/build.mjs": {
+      "sha256": "8af79c017d346aed3bd554860e3273d69dda7c54f631c69fe8874db77c2383bd",
+      "source": "webui/scripts/build.mjs"
+    },
+    "webui/scripts/bundle-size.mjs": {
+      "sha256": "f969e938d647853d007208c46923fe59fdec2941487ac8b7ebc65bd41220cacf",
+      "source": "webui/scripts/bundle-size.mjs"
+    },
+    "webui/scripts/check-bundle.mjs": {
+      "sha256": "776fe4102ccd31e54a2237d666aaca58c1f482763aa8f3dda59016aff2cd9d19",
+      "source": "webui/scripts/check-bundle.mjs"
+    },
+    "webui/scripts/firmware-bundle.mjs": {
+      "sha256": "d4d73e57072cf54c42043d668e933248df54cdebb95f59810db9c0fb863dcd55",
+      "source": "webui/scripts/firmware-bundle.mjs"
+    },
+    "webui/src/api/client.ts": {
+      "sha256": "ee64c78a08714ad18ce4f6c0ee53e1a1d074da8c059d385cafec00d5d96a2249",
+      "source": "webui/src/api/client.ts"
+    },
+    "webui/src/api/contracts.ts": {
+      "sha256": "195f8115841c78517be4b99ecf81fd542d0b0b1b85a5dae54ce846286f931d9e",
+      "source": "webui/src/api/contracts.ts"
+    },
+    "webui/src/api/control.ts": {
+      "sha256": "f883b8559e5255e3ea2ccfe5a1fdddfc74b7cc8b251d9ea938ad6ddf8fec8419",
+      "source": "webui/src/api/control.ts"
+    },
+    "webui/src/api/decode.ts": {
+      "sha256": "cdbb7cc85266313268efb71678cf07c94e42651cbdf2021053c2c027f0b05f7a",
+      "source": "webui/src/api/decode.ts"
+    },
+    "webui/src/api/media.ts": {
+      "sha256": "6a965ec5da48b1f534abb44eb7b993f4ca95970c667d35d204d9fd38f86cebb0",
+      "source": "webui/src/api/media.ts"
+    },
+    "webui/src/api/routes.ts": {
+      "sha256": "2b15f51ea0fad8057891e6beef9bbb8dcebcde8afac08db5f7bfbca95fb71a41",
+      "source": "webui/src/api/routes.ts"
+    },
+    "webui/src/app/dom.ts": {
+      "sha256": "06f573d3a6b4d33f43a7ce1fa46b110bfa8842bc6e933cb7c2c31ebcabb1ca53",
+      "source": "webui/src/app/dom.ts"
+    },
+    "webui/src/app/forms.ts": {
+      "sha256": "61c1fa7bdc4ffe4995138575b6126759bb4b1447b964ca50d1d712251079eb7f",
+      "source": "webui/src/app/forms.ts"
+    },
+    "webui/src/app/fullscreen-preview.ts": {
+      "sha256": "1d1e8e105c2392a5ff9bd9363ed1f4f453574b5927db072537b69b93436b3970",
+      "source": "webui/src/app/fullscreen-preview.ts"
+    },
+    "webui/src/app/navigation.ts": {
+      "sha256": "43001ab7fedacc49bfb59d830eb84a63cd402398e4cb7e18f2f987d377534382",
+      "source": "webui/src/app/navigation.ts"
+    },
+    "webui/src/app/shell.ts": {
+      "sha256": "b68b15edad269a44f62823359209f8d23d669bdb611504853fc4b85f53b64f13",
+      "source": "webui/src/app/shell.ts"
+    },
+    "webui/src/app/streamer-preview.ts": {
+      "sha256": "db33cb734a00e3b23793b70c82a1ab088f4c44c23970cba359f2bb771dc86d92",
+      "source": "webui/src/app/streamer-preview.ts"
+    },
+    "webui/src/main.ts": {
+      "sha256": "c17a9cc894ab30dc640c5d1bb7e04c2c4450e572f44e6f2cfc664164c5fca43c",
+      "source": "webui/src/main.ts"
+    },
+    "webui/src/pages/config.ts": {
+      "sha256": "02afc47dc72e0f26adfdece716d9535dc818f337a8563ede4a377ae54011865c",
+      "source": "webui/src/pages/config.ts"
+    },
+    "webui/src/pages/config/access.ts": {
+      "sha256": "5c38f99ecd1e5f97fd0ea94102d1a0825d0e48ebf06a795effc1311ec1420386",
+      "source": "webui/src/pages/config/access.ts"
+    },
+    "webui/src/pages/config/common.ts": {
+      "sha256": "e586043b475297ce4837b65194f8dca86dd3335fa12f6102bbb971d552b5c853",
+      "source": "webui/src/pages/config/common.ts"
+    },
+    "webui/src/pages/config/hardware.ts": {
+      "sha256": "cb3808ede0680f08296361d7712bdd79bd7cc8cae4f953b85d7a18dcde709c2d",
+      "source": "webui/src/pages/config/hardware.ts"
+    },
+    "webui/src/pages/config/media.ts": {
+      "sha256": "fc1376cb2cf7a2718bf21a277160f6b5916addee663ed3d5d8604513f1cbfda4",
+      "source": "webui/src/pages/config/media.ts"
+    },
+    "webui/src/pages/config/motion-privacy.ts": {
+      "sha256": "a3b92da70b454d430a3bde0d45db733a3610af7f12e7a1016c18e9b2efc98d57",
+      "source": "webui/src/pages/config/motion-privacy.ts"
+    },
+    "webui/src/pages/config/network-time.ts": {
+      "sha256": "431b5cdc145e660037e7a9ec91f2ad65e453d18e144bf6f114fb4f7c8f261151",
+      "source": "webui/src/pages/config/network-time.ts"
+    },
+    "webui/src/pages/config/osd.ts": {
+      "sha256": "6efdef7a44f3027821676b5674a3e5d1cc6bf8e0dd2732de72c547e548fd5e9a",
+      "source": "webui/src/pages/config/osd.ts"
+    },
+    "webui/src/pages/config/services.ts": {
+      "sha256": "d1fde7b84629a31a96c35252b4e90d37685369343658980d8b9f75ab219a0b56",
+      "source": "webui/src/pages/config/services.ts"
+    },
+    "webui/src/pages/login.ts": {
+      "sha256": "9de06837c3d57e67df5a03a303262d31478899b480a71d9b6c035edf35390cec",
+      "source": "webui/src/pages/login.ts"
+    },
+    "webui/src/pages/preview.ts": {
+      "sha256": "541fff30dd54d7ec0366ec67cd0b5b84c44db4072d9ad4acbdde5f7e5e6f07d6",
+      "source": "webui/src/pages/preview.ts"
+    },
+    "webui/src/pages/tools.ts": {
+      "sha256": "ac41308e6c77dd9792c2e4622a4b14f6a40bc6f8cc5989bd90337bfd40a96717",
+      "source": "webui/src/pages/tools.ts"
+    },
+    "webui/src/styles.css": {
+      "sha256": "c7c99fcb174bee887f646d50d59b2ec1b9d19f650dc76522ee6ce50517607470",
+      "source": "webui/src/styles.css"
+    },
+    "webui/tests/api-client.test.ts": {
+      "sha256": "2d8df1f19fe23ea78622bc5592af35acebabd26ed2e01f15dddca2da6481921f",
+      "source": "webui/tests/api-client.test.ts"
+    },
+    "webui/tests/contracts.test.ts": {
+      "sha256": "95644ec164f90604e5fcd26d2f5c4d592edc5015ac2aaee0227420d80142f270",
+      "source": "webui/tests/contracts.test.ts"
+    },
+    "webui/tests/decoders.test.ts": {
+      "sha256": "7363e66d9102032132acfe76f5e58427a1309facd8c18e50ef6e01eef76bfbce",
+      "source": "webui/tests/decoders.test.ts"
+    },
+    "webui/tests/firmware-bundle.test.mjs": {
+      "sha256": "b3881f3e5c5c233a5db6098eea6d401d8d596e555c11f3b5ce45142a4c9b3335",
+      "source": "webui/tests/firmware-bundle.test.mjs"
+    },
+    "webui/tests/fixture-contract.test.ts": {
+      "sha256": "e0bed98b20e41338437a4aad9951857495b2ad101a007b40a89365fcfe285ac6",
+      "source": "webui/tests/fixture-contract.test.ts"
+    },
+    "webui/tests/fixture-fetch.test.ts": {
+      "sha256": "d56172f87f5a92ce153100eef8671e9cce3037501800f359c8d763e38a3a67c8",
+      "source": "webui/tests/fixture-fetch.test.ts"
+    },
+    "webui/tests/media.test.ts": {
+      "sha256": "9c03709b0435f2ccb0e4e0a4f7dae3525205f22c2c1140a475f84f70c60d6328",
+      "source": "webui/tests/media.test.ts"
+    },
+    "webui/tests/page-payload.test.ts": {
+      "sha256": "052417d5409997a86d7e52fa50095ca7609daf81b37f74d35ffa28311f4c5e14",
+      "source": "webui/tests/page-payload.test.ts"
+    },
+    "webui/tests/routes.test.ts": {
+      "sha256": "b6c911bf19bf38141e686da403a58bdb99970d9956647d5dc6b3d692c83a711c",
+      "source": "webui/tests/routes.test.ts"
+    },
+    "webui/tests/streamer-preview.test.ts": {
+      "sha256": "b8d65717bcb5e782ac6b9eea96a118de0b490369653ea22bc6dcfb8588029297",
+      "source": "webui/tests/streamer-preview.test.ts"
+    },
+    "webui/tests/support/config-source.ts": {
+      "sha256": "4c3f4ffb2e22c7499f82ea2e64aa084a5797794e572225f0faf211ba274d5be9",
+      "source": "webui/tests/support/config-source.ts"
+    },
+    "webui/tests/support/contracts.ts": {
+      "sha256": "65648c482e550aad2af218f09e59efc9db50ee0097499cc4ae4fbbafe7b6d6a8",
+      "source": "webui/tests/support/contracts.ts"
+    },
+    "webui/tests/support/fixture-fetch.ts": {
+      "sha256": "225515a6bfb7b46bdeedfe5f90a36eadeb5cfe122b7e61e56a4883b224c102fe",
+      "source": "webui/tests/support/fixture-fetch.ts"
+    },
+    "webui/tests/support/fixtures.ts": {
+      "sha256": "d17c2657f67a04e0b7b7e874b043a782059181f08eeb3f979cd1155bf48319aa",
+      "source": "webui/tests/support/fixtures.ts"
+    },
+    "webui/tests/tools.test.ts": {
+      "sha256": "053c6e6c39148c56cccf05e9b863d377b35489516f5fb20e65b7a55e825ad6e3",
+      "source": "webui/tests/tools.test.ts"
+    },
+    "webui/tsconfig.json": {
+      "sha256": "d6a0a2065f76d64d605b76a3ce689c2ada4792b93fb6a8d86daa83b85d0f8fdb",
+      "source": "webui/tsconfig.json"
+    }
+  },
+  "schema_version": 1,
+  "source_commit": "e5ab433ad1b370c74778ec3d3314ea28c83c4ef2",
+  "source_repository": "thingino-dlink-dcs6100lhv2"
+}

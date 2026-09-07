@@ -1,0 +1,65 @@
+diff --git a/src/main.cpp b/src/main.cpp
+index dd970b7..0b9c6a1 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -89,7 +89,18 @@ constexpr const char *kPrudyntRunDir = "/run/prudynt";
+ constexpr const char *kPrudyntLockPath = "/run/prudynt/prudynt.lock";
+ constexpr const char *kPrudyntMotionStatePath = "/run/prudynt/motion.active";
++#if defined(DCS_DLINK_MEDIA_READY)
++constexpr const char *kDLinkMediaReadyPath =
++    "/run/prudynt-dlink-media.ready";
+ int instance_lock_fd = -1;
+ 
++void clear_stale_dlink_media_ready() {
++  if (::unlink(kDLinkMediaReadyPath) != 0 && errno != ENOENT) {
++    LOG_WARN("Unable to remove stale D-Link media-ready marker "
++             << kDLinkMediaReadyPath << ": " << strerror(errno));
++  }
++}
++#endif
++
+ void clear_stale_motion_state() {
+   if (::unlink(kPrudyntMotionStatePath) != 0 && errno != ENOENT) {
+     LOG_WARN("Unable to remove stale Motion state "
+@@ -887,6 +898,10 @@ int main(int argc, const char *argv[]) {
+   // unchanged and no Motion destructor runs, so never inherit the previous
+   // producer's monitoring marker into the new process lifetime.
+   clear_stale_motion_state();
++#if defined(DCS_DLINK_MEDIA_READY)
++  // Only the video worker may publish readiness for this process lifetime.
++  clear_stale_dlink_media_ready();
++#endif
+ 
+   cfg = std::make_shared<CFG>();
+   Logger::setLevel(cfg->general.loglevel);
+@@ -1126,6 +1141,11 @@ int main(int argc, const char *argv[]) {
+     DLinkMediaProcessAction process_action = dlinkMediaProcessAction(
+         shutting_down, global_restart_video, global_restart_audio);
+     if (process_action != DLinkMediaProcessAction::Continue) {
++      // Do this before the exec deferral so Control cannot combine a new or
++      // still-open control socket with readiness from the previous media
++      // lifetime. The next video worker republishes only after StartRecvPic.
++      clear_stale_dlink_media_ready();
++
+       // Finish the current MP4 and retire its active marker while encoder
+       // workers still exist. The D-Link path exits or execs immediately after
+       // this and deliberately avoids the unsafe vendor SDK teardown.
+diff --git a/tests/run_host_tests.sh b/tests/run_host_tests.sh
+index 173ae7c..5e1df32 100755
+--- a/tests/run_host_tests.sh
++++ b/tests/run_host_tests.sh
+@@ -27,9 +27,12 @@ grep -q 'if (!write_channel_state_file(channel, path, duration_seconds))' \
+   "$repo_dir/src/MP4ControlSocket.cpp"
+ grep -q 'MP4ControlSocket::stopAll();' "$repo_dir/src/main.cpp"
+ grep -q '::rename(temporary_path.c_str(), state_path.c_str())' \
+   "$repo_dir/src/MP4ControlSocket.cpp"
++test "$(grep -c 'clear_stale_dlink_media_ready();' "$repo_dir/src/main.cpp")" -eq 2
++grep -q 'unlink(kDLinkMediaReadyPath)' "$repo_dir/src/main.cpp"
++grep -q 'StartRecvPic' "$repo_dir/src/VideoWorker.cpp"
+ grep -q 'IMP system initialization failed; refusing to start media workers' \
+   "$repo_dir/src/main.cpp"
+ grep -q 'MP4ControlSocket::startLoop(channel, duration_seconds)' \
+   "$repo_dir/src/JsonAPI.cpp"
+ ! grep -q 'open("/run/prudynt/mp4ctl"' "$repo_dir/src/JsonAPI.cpp"
+-- 
+2.50.1

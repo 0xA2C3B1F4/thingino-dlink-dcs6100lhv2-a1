@@ -1,0 +1,4 @@
+name DCS6100 Recovery
+type _ssh._tcp
+port 22
+txt role=recovery

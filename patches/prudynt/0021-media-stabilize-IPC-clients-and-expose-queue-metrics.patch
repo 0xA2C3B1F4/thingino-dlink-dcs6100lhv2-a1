@@ -1,0 +1,476 @@
+diff --git a/src/ClientCounterLease.hpp b/src/ClientCounterLease.hpp
+new file mode 100644
+index 0000000..175c152
+--- /dev/null
++++ b/src/ClientCounterLease.hpp
+@@ -0,0 +1,41 @@
++#pragma once
++
++#include <atomic>
++
++class ClientCounterLease {
++public:
++  static ClientCounterLease acquire(std::atomic<unsigned> &counter,
++                                    unsigned limit) {
++    unsigned active = counter.load(std::memory_order_relaxed);
++    while (active < limit) {
++      if (counter.compare_exchange_weak(active, active + 1,
++                                        std::memory_order_acquire,
++                                        std::memory_order_relaxed)) {
++        return ClientCounterLease(counter, true);
++      }
++    }
++    return ClientCounterLease(counter, false);
++  }
++
++  ClientCounterLease(ClientCounterLease &&other) noexcept
++      : counter_(other.counter_), acquired_(other.acquired_) {
++    other.acquired_ = false;
++  }
++
++  ~ClientCounterLease() {
++    if (acquired_) {
++      counter_.fetch_sub(1, std::memory_order_release);
++    }
++  }
++
++  ClientCounterLease(const ClientCounterLease &) = delete;
++  ClientCounterLease &operator=(const ClientCounterLease &) = delete;
++  explicit operator bool() const { return acquired_; }
++
++private:
++  ClientCounterLease(std::atomic<unsigned> &counter, bool acquired)
++      : counter_(counter), acquired_(acquired) {}
++
++  std::atomic<unsigned> &counter_;
++  bool acquired_{false};
++};
+diff --git a/src/HTTPMJPEG.cpp b/src/HTTPMJPEG.cpp
+index 7c0ec46..679a3fc 100644
+--- a/src/HTTPMJPEG.cpp
++++ b/src/HTTPMJPEG.cpp
+@@ -5,6 +5,7 @@
+ #include "JPEGWorker.hpp"
+ #include "JsonAPI.hpp"
+ #include "Logger.hpp"
++#include "MediaRuntimeMetrics.hpp"
+ #include "MJPEGRequestPolicy.hpp"
+ #include "SocketPeer.hpp"
+ #include "globals.hpp"
+@@ -330,9 +331,15 @@ void *HTTPMJPEG::client_thread_entry(void *raw_context) {
+       static_cast<ClientThreadContext *>(raw_context));
+   HTTPMJPEG *owner = context->owner;
+   const int fd = context->fd;
++  mediaRuntimeMetrics().http_client_threads.fetch_add(
++      1, std::memory_order_relaxed);
+   struct AdmissionRelease {
+     HTTPClientAdmission &admission;
+-    ~AdmissionRelease() { admission.release(); }
++    ~AdmissionRelease() {
++      mediaRuntimeMetrics().http_client_threads.fetch_sub(
++          1, std::memory_order_relaxed);
++      admission.release();
++    }
+   } release{owner->client_threads_};
+ 
+   try {
+diff --git a/src/IPCServer.cpp b/src/IPCServer.cpp
+index f48f9b5..b8b10c3 100644
+--- a/src/IPCServer.cpp
++++ b/src/IPCServer.cpp
+@@ -1,7 +1,11 @@
+ #include "IPCServer.hpp"
++#include "ClientCounterLease.hpp"
+ #include "JPEGWorker.hpp"
+ #include "JsonAPI.hpp" // JSON processing via jct
+ #include "Logger.hpp"
++#include "MJPEGRequestPolicy.hpp"
++#include "MediaRuntimeMetrics.hpp"
++#include "SocketPeer.hpp"
+ #include "globals.hpp"
+ #include "version.hpp"
+ #include <json_config.h>
+@@ -552,15 +556,20 @@ int IPCServer::handle_client(int fd) {
+     if (v != -999999)
+       q = v;
+ 
+-    // optional: quality override (like HTTP path)
+-    if (ch >= 0 && ch < NUM_VIDEO_CHANNELS && global_jpeg[ch]) {
+-      if (!JPEGWorker::ensure_running(ch)) {
+-        const char *err = "ERR jpeg_unavailable\n";
+-        write(fd, err, strlen(err));
+-        return 0;
+-      }
+-      if (q >= 1 && q <= 100)
+-        global_jpeg[ch]->quality_override = q;
++    if (ch < 0 || ch >= NUM_JPEG_CHANNELS || !global_jpeg[ch]) {
++      const char *err = "ERR bad_ch\n";
++      write(fd, err, strlen(err));
++      return 0;
++    }
++    if (mjpegSharedEncoderMutationRequested(q, -1, -1)) {
++      const char *err = "ERR shared_profile_immutable\n";
++      write(fd, err, strlen(err));
++      return 0;
++    }
++    if (!JPEGWorker::ensure_running(ch)) {
++      const char *err = "ERR jpeg_unavailable\n";
++      write(fd, err, strlen(err));
++      return 0;
+     }
+     // Signal demand to speed up capture and wake JPEG worker if idle
+     if (ch >= 0 && ch < NUM_VIDEO_CHANNELS && global_jpeg[ch]) {
+@@ -569,18 +578,13 @@ int IPCServer::handle_client(int fd) {
+ 
+     // Try to get a fresh snapshot, waiting briefly if not yet available
+     std::vector<unsigned char> img;
+-    const int max_wait_ms = 250;
++    const int max_wait_ms = 1000;
+     int waited = 0;
+     while (!(get_snapshot_ch_local(ch, img) && !img.empty()) &&
+            waited < max_wait_ms) {
+       usleep(10 * 1000);
+       waited += 10;
+     }
+-    // Fallback: if requested channel isn't available, try ch0 to avoid
+-    // client hangs
+-    if (img.empty() && ch != 0) {
+-      get_snapshot_ch_local(0, img);
+-    }
+     if (!img.empty()) {
+       // Protocol: "OK <len>\n<bytes>"
+       char hdr[64];
+@@ -656,30 +660,19 @@ int IPCServer::handle_client(int fd) {
+       return 0;
+     }
+ 
+-    // Limit concurrent MJPEG connections – close silently so the
+-    // CGI pipeline (prudyntctl → uhttpd → browser) tears down cleanly
+-    int current = active_mjpeg_clients_.fetch_add(1);
+-    if (current >= kMaxMjpegClients) {
+-      active_mjpeg_clients_.fetch_sub(1);
++    auto &runtime_metrics = mediaRuntimeMetrics();
++    auto client_lease = ClientCounterLease::acquire(
++        runtime_metrics.ipc_mjpeg_clients, kMaxMjpegClients);
++    if (!client_lease) {
++      runtime_metrics.mjpeg_rejections_total.fetch_add(
++          1, std::memory_order_relaxed);
+       return 0;
+     }
+ 
+-    // Quantize w/h to multiples of 16 and cap to source size
+-    if (w > 0 && h > 0) {
+-      auto src_w = (global_jpeg[ch]->streamChn == 0) ? cfg->stream0.width
+-                                                     : cfg->stream1.width;
+-      auto src_h = (global_jpeg[ch]->streamChn == 0) ? cfg->stream0.height
+-                                                     : cfg->stream1.height;
+-      if (w > src_w)
+-        w = src_w;
+-      if (h > src_h)
+-        h = src_h;
+-      w = (w / 16) * 16;
+-      if (w < 16)
+-        w = 16;
+-      h = (h / 16) * 16;
+-      if (h < 16)
+-        h = 16;
++    if (mjpegSharedEncoderMutationRequested(q, w, h)) {
++      const char *err = "ERR shared_profile_immutable\n";
++      write(fd, err, strlen(err));
++      return 0;
+     }
+     if (fps > 0) {
+       int max_fps = (cfg->sensor.fps > 0) ? cfg->sensor.fps : 30;
+@@ -688,60 +681,23 @@ int IPCServer::handle_client(int fd) {
+       if (fps < 1)
+         fps = 1;
+     }
+-    if (q >= 1 && q <= 100)
+-      global_jpeg[ch]->quality_override = q;
+-
+     auto *stream_cfg = global_jpeg[ch]->stream;
+     int orig_fps = stream_cfg->fps;
+-
+-    bool size_change =
+-        (w > 0 && h > 0 && (w != stream_cfg->width || h != stream_cfg->height));
+-    bool fps_change = (fps > 0 && fps != stream_cfg->fps);
+-
+-    // Request reconfiguration and wake worker if something actually changes
+-    if (size_change) {
+-      global_jpeg[ch]->req_width = w;
+-      global_jpeg[ch]->req_height = h;
+-    }
+-    if (fps_change) {
+-      global_jpeg[ch]->req_fps = fps;
+-    }
+-
+-    // Only trigger encoder reconfig on SIZE changes.  FPS changes are handled
+-    // by the JPEG worker without deinit/init (it just adjusts polling rate).
+-    // Reconfiguring the JPEG encoder (deinit/init) steals ISP frames from the
+-    // H.264 encoder and causes decode errors on the RTSP stream.
+-    // We still set reconfig=true for fps changes so the worker picks up the
+-    // new fps value, but the worker only reinit on size changes.
+-    if (size_change) {
+-      global_jpeg[ch]->reconfig = true;
+-      global_jpeg[ch]->request();
+-
+-      // Wait briefly for reconfig to apply
+-      int wait_ms = 500;
+-      while (global_jpeg[ch]->reconfig.load() && wait_ms > 0) {
+-        usleep(10 * 1000);
+-        wait_ms -= 10;
+-      }
+-    } else if (fps_change) {
+-      // Set reconfig flag so worker picks up the fps change, but don't wait
+-      // for reinit since there's no size change
+-      global_jpeg[ch]->reconfig = true;
+-      global_jpeg[ch]->request();
+-    } else {
+-      global_jpeg[ch]->request();
+-    }
++    global_jpeg[ch]->request();
+ 
+     // Start streaming loop: multipart MJPEG parts
+     std::vector<unsigned char> img;
+     std::string hdr;
+-    while (1) {
++    while (running_.load(std::memory_order_acquire) && !socketPeerClosed(fd)) {
+       img.clear();
+       if (!get_snapshot_ch_local(ch, img) || img.empty()) {
+         // keep the JPEG worker in "active" mode while client is connected
+         global_jpeg[ch]->request();
+         // if no data yet, yield a bit
+-        usleep(10 * 1000);
++        for (int wait_ms = 0; wait_ms < 100 && !socketPeerClosed(fd);
++             wait_ms += 10) {
++          usleep(10 * 1000);
++        }
+         continue;
+       }
+       char ph[128];
+@@ -761,7 +717,6 @@ int IPCServer::handle_client(int fd) {
+       // Pace output
+       int usec = 1000000 / (fps > 0 ? fps : orig_fps);
+ 
+-      active_mjpeg_clients_.fetch_sub(1);
+       usleep(usec);
+     }
+ 
+@@ -1007,6 +962,34 @@ int IPCServer::handle_client(int fd) {
+              (int)global_rtsp_clients.load());
+     write(fd, line, strlen(line));
+ 
++    auto &runtime_metrics = mediaRuntimeMetrics();
++    snprintf(line, sizeof(line), "prudynt_rtsp_queue_bytes %llu\n",
++             static_cast<unsigned long long>(
++                 runtime_metrics.rtsp_queue_bytes.load()));
++    write(fd, line, strlen(line));
++    snprintf(line, sizeof(line), "prudynt_rtsp_queue_high_water_bytes %llu\n",
++             static_cast<unsigned long long>(
++                 runtime_metrics.rtsp_queue_high_water_bytes.load()));
++    write(fd, line, strlen(line));
++    snprintf(line, sizeof(line), "prudynt_rtsp_queue_drops_total %llu\n",
++             static_cast<unsigned long long>(
++                 runtime_metrics.rtsp_queue_drops_total.load()));
++    write(fd, line, strlen(line));
++    snprintf(line, sizeof(line), "prudynt_rtsp_recoveries_total %llu\n",
++             static_cast<unsigned long long>(
++                 runtime_metrics.rtsp_recoveries_total.load()));
++    write(fd, line, strlen(line));
++    snprintf(line, sizeof(line), "prudynt_ipc_mjpeg_clients %u\n",
++             runtime_metrics.ipc_mjpeg_clients.load());
++    write(fd, line, strlen(line));
++    snprintf(line, sizeof(line), "prudynt_http_client_threads %u\n",
++             runtime_metrics.http_client_threads.load());
++    write(fd, line, strlen(line));
++    snprintf(line, sizeof(line), "prudynt_mjpeg_rejections_total %llu\n",
++             static_cast<unsigned long long>(
++                 runtime_metrics.mjpeg_rejections_total.load()));
++    write(fd, line, strlen(line));
++
+     // Build info as a const gauge with labels
+     write(fd, "# HELP prudynt_build_info Build and commit info.\n",
+           strlen("# HELP prudynt_build_info Build and commit info.\n"));
+diff --git a/src/IPCServer.hpp b/src/IPCServer.hpp
+index d539b04..609f059 100644
+--- a/src/IPCServer.hpp
++++ b/src/IPCServer.hpp
+@@ -34,8 +34,7 @@ private:
+ 
+   // Limit concurrent MJPEG connections to avoid exhausting threads and
+   // file descriptors on memory-constrained devices
+-  std::atomic<int> active_mjpeg_clients_{0};
+-  static constexpr int kMaxMjpegClients = 8;
++  static constexpr unsigned kMaxMjpegClients = 8;
+ };
+ 
+ #endif // IPC_SERVER_HPP
+diff --git a/src/MediaRuntimeMetrics.hpp b/src/MediaRuntimeMetrics.hpp
+new file mode 100644
+index 0000000..07fc745
+--- /dev/null
++++ b/src/MediaRuntimeMetrics.hpp
+@@ -0,0 +1,40 @@
++#pragma once
++
++#include <atomic>
++#include <cstddef>
++#include <cstdint>
++
++class MediaRuntimeMetrics {
++public:
++  void observeRtspQueueBytes(std::size_t bytes) {
++    rtsp_queue_bytes.store(bytes, std::memory_order_relaxed);
++    std::uint64_t high =
++        rtsp_queue_high_water_bytes.load(std::memory_order_relaxed);
++    while (high < bytes &&
++           !rtsp_queue_high_water_bytes.compare_exchange_weak(
++               high, bytes, std::memory_order_relaxed,
++               std::memory_order_relaxed)) {
++    }
++  }
++
++  void recordRtspQueueDrop() {
++    rtsp_queue_drops_total.fetch_add(1, std::memory_order_relaxed);
++  }
++
++  void recordRtspRecovery() {
++    rtsp_recoveries_total.fetch_add(1, std::memory_order_relaxed);
++  }
++
++  std::atomic<std::uint64_t> rtsp_queue_bytes{0};
++  std::atomic<std::uint64_t> rtsp_queue_high_water_bytes{0};
++  std::atomic<std::uint64_t> rtsp_queue_drops_total{0};
++  std::atomic<std::uint64_t> rtsp_recoveries_total{0};
++  std::atomic<unsigned> ipc_mjpeg_clients{0};
++  std::atomic<unsigned> http_client_threads{0};
++  std::atomic<std::uint64_t> mjpeg_rejections_total{0};
++};
++
++inline MediaRuntimeMetrics &mediaRuntimeMetrics() {
++  static MediaRuntimeMetrics metrics;
++  return metrics;
++}
+diff --git a/src/VideoWorker.cpp b/src/VideoWorker.cpp
+index 6443e52..4108912 100644
+--- a/src/VideoWorker.cpp
++++ b/src/VideoWorker.cpp
+@@ -11,6 +11,7 @@
+ #include "IMPEncoder.hpp"
+ #include "IMPFramesource.hpp"
+ #include "Logger.hpp"
++#include "MediaRuntimeMetrics.hpp"
+ #include "PreTriggerBuffer.hpp"
+ #include "SEIWriter.hpp"
+ #include "EncoderReceivePolicy.hpp"
+@@ -1107,6 +1108,8 @@ bool VideoWorker::run() {
+                     tap_nalu.is_random_access = nal_is_idr || nal_is_hevc_idr;
+                     if (queue->write(std::move(tap_nalu)))
+                       delivered = true;
++                    else
++                      mediaRuntimeMetrics().recordRtspQueueDrop();
+                     if (tap.notify) {
+                       tap.notify();
+                     }
+diff --git a/src/simple-rtsp/RtspServer.cpp b/src/simple-rtsp/RtspServer.cpp
+index 18e53b1..bb9c335 100644
+--- a/src/simple-rtsp/RtspServer.cpp
++++ b/src/simple-rtsp/RtspServer.cpp
+@@ -4,6 +4,7 @@
+ #endif
+ 
+ #include "RtspServer.hpp"
++#include "../MediaRuntimeMetrics.hpp"
+ #include "RtpPacketizer.hpp"
+ #include "SdpGenerator.hpp"
+ #include "Logger.hpp"
+@@ -465,9 +466,12 @@ void RtspServer::eventLoop() {
+                         s->spsChanged = false;
+                         s->waitingForKeyframe = false;
+                     }
++                    bool was_recovering = s->videoRecovery.waiting();
+                     if (!s->videoRecovery.accept(nal.is_random_access,
+                                                  nal.is_frame_start))
+                         continue;
++                    if (was_recovering)
++                        mediaRuntimeMetrics().recordRtspRecovery();
+                     if (!this->sendVideoNal(*s, nal)) {
+                         backpressure = true;
+                         break;
+@@ -612,7 +616,14 @@ void RtspServer::eventLoop() {
+             }
+         }
+ 
+-        // ── Session timeouts ────────────────────────────────────────────
++        std::size_t queue_bytes = 0;
++        for (const auto &s : sessions_) {
++            if (!s || s->fd < 0) continue;
++            queue_bytes += s->sendQueueBytes;
++            if (s->videoTap) queue_bytes += s->videoTap->bytes();
++            if (s->audioTap) queue_bytes += s->audioTap->bytes();
++        }
++        mediaRuntimeMetrics().observeRtspQueueBytes(queue_bytes);
+ 
+         // ── Session timeouts ────────────────────────────────────────────
+         checkSessionTimeouts();
+diff --git a/tests/test_media_queue.cpp b/tests/test_media_queue.cpp
+index d3d1860..c39b4b6 100644
+--- a/tests/test_media_queue.cpp
++++ b/tests/test_media_queue.cpp
+@@ -1,6 +1,7 @@
+ // Build and run with tests/run_host_tests.sh.
+ 
+ #include "FrameRecoveryGate.hpp"
++#include "ClientCounterLease.hpp"
+ #include "EncoderReceivePolicy.hpp"
+ #include "DLinkMediaProcessPolicy.hpp"
+ #include "DLinkLiveControlPolicy.hpp"
+@@ -10,6 +11,7 @@
+ #include "JpegIdlePolicy.hpp"
+ #include "StreamRuntimePolicy.hpp"
+ #include "MJPEGRequestPolicy.hpp"
++#include "MediaRuntimeMetrics.hpp"
+ #include "MsgChannel.hpp"
+ #include "SharedPayload.hpp"
+ #include "SocketPeer.hpp"
+@@ -57,6 +59,31 @@ static void test_jpeg_idle_policy() {
+   assert(jpegIdleFpsPolicy(5, 0) == 5);
+ }
+ 
++static void test_client_counter_lease_releases_once() {
++  std::atomic<unsigned> clients{0};
++  {
++    auto first = ClientCounterLease::acquire(clients, 1);
++    assert(first);
++    assert(clients.load() == 1);
++    auto rejected = ClientCounterLease::acquire(clients, 1);
++    assert(!rejected);
++    assert(clients.load() == 1);
++  }
++  assert(clients.load() == 0);
++}
++
++static void test_media_metrics_track_queue_high_water() {
++  MediaRuntimeMetrics metrics;
++  metrics.observeRtspQueueBytes(128);
++  metrics.observeRtspQueueBytes(64);
++  metrics.recordRtspQueueDrop();
++  metrics.recordRtspRecovery();
++  assert(metrics.rtsp_queue_bytes.load() == 64);
++  assert(metrics.rtsp_queue_high_water_bytes.load() == 128);
++  assert(metrics.rtsp_queue_drops_total.load() == 1);
++  assert(metrics.rtsp_recoveries_total.load() == 1);
++}
++
+ static void test_jpeg_demand_deadline_and_idle_policy() {
+   assert(!jpegRequestDeadlineActive(1000, 1000));
+   assert(jpegRequestDeadlineActive(1000, 1001));
+@@ -385,6 +412,8 @@ static void test_slow_client_does_not_block_fast_client() {
+ int main() {
+   test_shared_payload_fanout();
+   test_jpeg_idle_policy();
++  test_client_counter_lease_releases_once();
++  test_media_metrics_track_queue_high_water();
+   test_jpeg_demand_deadline_and_idle_policy();
+   test_mjpeg_request_policy();
+   test_http_bind_policy();

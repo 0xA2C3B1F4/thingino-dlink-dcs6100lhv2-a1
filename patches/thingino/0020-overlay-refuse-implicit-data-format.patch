@@ -1,0 +1,61 @@
+diff --git a/overlay/init b/overlay/init
+--- a/overlay/init
++++ b/overlay/init
+@@ -10,15 +10,6 @@ on_exit() {
+ 	exec /sbin/init "$@"
+ }
+ 
+-format_overlay() {
+-	dmesg | grep -q "jffs2.*: Magic bitmask.*not found" || return 0
+-	echo -e "\e[38;5;208mInit: Invalid JFFS2 blocks detected. Formatting required.\e[0m" >&2
+-	umount /overlay
+-	flash_eraseall -j /dev/$(awk -F: '/"data"/{print $1}' /proc/mtd)
+-	mount_jffs2 data /overlay
+-	mount_overlay || return 1
+-}
+-
+ mount_jffs2() {
+ 	local name mtd blk target
+ 
+@@ -33,12 +24,8 @@ mount_jffs2() {
+ 
+ 	blk=$(awk -F: "/$name/{print \$1}" /proc/mtd | sed 's/mtd/mtdblock/')
+ 
+-	mount -t jffs2 -o noatime /dev/$blk $target 2>/dev/null || {
+-		echo "Init: [WARNING] $name empty or corrupt. Formatting..."
+-		flash_eraseall -j /dev/$mtd
+-		mount -t jffs2 -o noatime /dev/$blk $target ||
+-			die "Failed to mount /dev/$blk as $target!"
+-	}
++	mount -t jffs2 -o noatime /dev/$blk $target 2>/dev/null ||
++		die "Failed to mount persistent /dev/$blk as $target; explicit recovery required!"
+ }
+ 
+ mount_ubifs() {
+@@ -53,6 +40,18 @@ mount_ubifs() {
+ 		die "Failed to mount ubi0:$volname as $target!"
+ }
+ 
++reset_overlay_if_requested() {
++	[ -f /overlay/.thingino-factory-reset ] || return 0
++	echo "Init: applying explicit persistent overlay reset"
++	find /overlay -mindepth 1 -maxdepth 1 \
++		! -name .thingino-factory-reset -exec rm -rf '{}' ';' ||
++		die "Failed to reset persistent overlay!"
++	sync
++	rm -f /overlay/.thingino-factory-reset ||
++		die "Failed to commit persistent overlay reset!"
++	sync
++}
++
+ prepare_overlay_dirs() {
+ 	overlay_rootdir="/overlay/root"
+ 	overlay_workdir="/overlay/work"
+@@ -98,6 +97,7 @@ else
+ 	mount_jffs2 data /overlay
+ fi
+ 
++reset_overlay_if_requested
+ mount_overlay || die "Failed to mount overlay!"
+ 
+ # Pivot root to overlay

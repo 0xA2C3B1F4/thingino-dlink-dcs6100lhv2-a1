@@ -1,0 +1,175 @@
+diff --git a/package/ingenic-lib/ingenic-lib.mk b/package/ingenic-lib/ingenic-lib.mk
+--- a/package/ingenic-lib/ingenic-lib.mk
++++ b/package/ingenic-lib/ingenic-lib.mk
+@@ -7,6 +7,16 @@
+ INGENIC_LIB_LICENSE = GPL-2.0
+ INGENIC_LIB_LICENSE_FILES = COPYING
+ 
++ifeq ($(CAMERA),dlink_dcs6100lhv2_a1_t31n_os02g10_rtl8188fu)
++# Use only the host-validated private bundle collected from this camera's mtd3.
++# The public ingenic-lib archive is not fetched or packaged for this profile.
++INGENIC_LIB_SITE_METHOD = local
++INGENIC_LIB_SITE = $(DCS6100_VENDOR_BUNDLE_DIR)
++INGENIC_LIB_LICENSE = Proprietary-camera-local
++INGENIC_LIB_LICENSE_FILES =
++INGENIC_LIB_REDISTRIBUTE = NO
++endif
++
+ # Determine libc name based on variables
+ ifeq ($(BR2_TOOLCHAIN_USES_GLIBC),y)
+ 	SDK_LIBC_NAME := glibc
+@@ -13,6 +23,31 @@
+ else
+ 	SDK_LIBC_NAME := uclibc
+ endif
+ 
++ifeq ($(CAMERA),dlink_dcs6100lhv2_a1_t31n_os02g10_rtl8188fu)
++define DCS6100_VALIDATE_CAMERA_VENDOR_SITE
++	test "$$(find $(@D)/files -mindepth 1 -maxdepth 1 | wc -l)" -eq 3
++	test "$$(wc -c < $(@D)/files/libimp.so)" -eq 1146852
++	test "$$(wc -c < $(@D)/files/libalog.so)" -eq 36044
++	test "$$(wc -c < $(@D)/files/libsysutils.so)" -eq 30020
++	printf '%s  %s\n' \
++		14b18d23964f18b63cef3a32ca7a6dc7ae8ee6ebb001c646ffa0ace72c2273fe $(@D)/files/libimp.so \
++		40fd7eb9237772f705a92e9792325f07f0fe022479923f8dc67653cc11450ea1 $(@D)/files/libalog.so \
++		befca6166d2e25b749cc9fff4798332f42a2d997b00d4aee713358d803353b79 $(@D)/files/libsysutils.so \
++		| sha256sum -c -
++	test -f "$(DCS6100_AUDIOPROCESS_LINK_FILE)"
++	test ! -L "$(DCS6100_AUDIOPROCESS_LINK_FILE)"
++	audio_size="$$(wc -c < "$(DCS6100_AUDIOPROCESS_LINK_FILE)")"; \
++	audio_sha="$$(sha256sum "$(DCS6100_AUDIOPROCESS_LINK_FILE)")"; \
++	audio_sha="$${audio_sha%% *}"; \
++	case "$$audio_size:$$audio_sha" in \
++		75168:f892759f47e0296ea175bf4247f661a11381037bafec7800326298d73d0a7273) ;; \
++		697757:0f03bee6156b3a570c4af8cc199a53b1302fb4450570a53222107ff498a3ae72) ;; \
++		*) exit 1 ;; \
++	esac
++endef
++INGENIC_LIB_PRE_CONFIGURE_HOOKS += DCS6100_VALIDATE_CAMERA_VENDOR_SITE
++endif
++
+ # Determine GCC version based on variables
+ ifneq ($(filter t10 t20 t21 t30,$(SOC_FAMILY)),)
+@@ -56,6 +91,12 @@
+ 	SDK_VERSION := 1.2.6
+ endif
+ 
++ifeq ($(CAMERA),dlink_dcs6100lhv2_a1_t31n_os02g10_rtl8188fu)
++SDK_VERSION := 1.1.4
++SDK_LIBC_VERSION := 4.7.2
++SDK_LIB_DIR = $(@D)/files
++LIBALOG_FILE = $(@D)/files/libalog.so
++else
+ SDK_LIB_DIR = $(@D)/$(SOC_FAMILY_CAPS)/lib/$(SDK_VERSION)/$(SDK_LIBC_NAME)/$(SDK_LIBC_VERSION)
+ 
+ ifneq ($(filter t40 t41 a1,$(SOC_FAMILY)),)
+@@ -67,6 +108,7 @@
+ 		LIBALOG_FILE = $(SDK_LIB_DIR)/libalog.so
+ 	endif
+ endif
++endif
+ 
+ ACCEL_DIR = $(@D)/acceleration-modules
+ 
+@@ -81,8 +123,12 @@
+ 			$(STAGING_DIR)/usr/lib/libsysutils.so \
+ 	)
+ 	$(if $(BR2_PACKAGE_INGENIC_LIB_AUDIOPROCESS),\
++		$(if $(filter dlink_dcs6100lhv2_a1_t31n_os02g10_rtl8188fu,$(CAMERA)),\
++			$(INSTALL) -D -m 0644 $(DCS6100_AUDIOPROCESS_LINK_FILE) \
++				$(STAGING_DIR)/usr/lib/libaudioProcess.so,\
+ 		$(INSTALL) -D -m 0644 $(SDK_LIB_DIR)/libaudioProcess.so \
+ 			$(STAGING_DIR)/usr/lib/libaudioProcess.so \
++		) \
+ 	)
+ 	$(if $(BR2_PACKAGE_INGENIC_LIB_JZDL),\
+ 		$(INSTALL) -D -m 0644 \
+@@ -117,8 +163,10 @@
+ 		) \
+ 	)
+ 	$(if $(BR2_PACKAGE_INGENIC_LIB_AUDIOPROCESS),\
++		$(if $(filter-out dlink_dcs6100lhv2_a1_t31n_os02g10_rtl8188fu,$(CAMERA)),\
+ 		$(INSTALL) -D -m 0644 $(SDK_LIB_DIR)/libaudioProcess.so \
+ 			$(TARGET_DIR)/usr/lib/libaudioProcess.so \
++		) \
+ 	)
+ 	$(if $(BR2_PACKAGE_INGENIC_LIB_JZDL),\
+ 		$(INSTALL) -D -m 0644 \
+diff --git a/package/ingenic-sdk/ingenic-sdk.mk b/package/ingenic-sdk/ingenic-sdk.mk
+--- a/package/ingenic-sdk/ingenic-sdk.mk
++++ b/package/ingenic-sdk/ingenic-sdk.mk
+@@ -23,6 +23,10 @@ INGENIC_SDK_MODULE_MAKE_OPTS = \
+ 	$(MULTI_SENSOR_1_ENABLED) \
+ 	$(MULTI_SENSOR_2_ENABLED)
+ 
++ifeq ($(CAMERA),dlink_dcs6100lhv2_a1_t31n_os02g10_rtl8188fu)
++INGENIC_SDK_MODULE_MAKE_OPTS += ISP_FW_VER=1.1.4
++endif
++
+ ifeq ($(KERNEL_VERSION),3.10.14)
+ INGENIC_SDK_EXTRA_CFLAGS = -DCONFIG_KERNEL_3_10
+ else
+diff --git a/package/prudynt-t/Config.in b/package/prudynt-t/Config.in
+--- a/package/prudynt-t/Config.in
++++ b/package/prudynt-t/Config.in
+@@ -4,14 +4,16 @@
+ 	depends on BR2_PACKAGE_THINGINO_STREAMER_PRUDYNT
+ 	select BR2_PACKAGE_INGENIC_LIB
+ 	select BR2_PACKAGE_INGENIC_LIB_LIBIMP
++	select BR2_PACKAGE_INGENIC_LIB_LIBALOG if BR2_PACKAGE_PRUDYNT_T_DCS6100_CAMERA_LOCAL_VENDOR
++	select BR2_PACKAGE_INGENIC_LIB_LIBSYSUTILS if BR2_PACKAGE_PRUDYNT_T_DCS6100_CAMERA_LOCAL_VENDOR
+ 	select BR2_PACKAGE_INGENIC_MUSL if BR2_TOOLCHAIN_USES_MUSL
+ 	select BR2_PACKAGE_INGENIC_UCLIBC if BR2_TOOLCHAIN_USES_UCLIBC
+ 	select BR2_PACKAGE_THINGINO_DAYNIGHTD
+ 	select BR2_PACKAGE_THINGINO_JCT
+ 	select BR2_PACKAGE_THINGINO_ONVIF
+-	select BR2_PACKAGE_INGENIC_SYSTEM_LIBS_NEO
+-	select BR2_PACKAGE_INGENIC_SYSTEM_LIBS_NEO_LIBALOG
+-	select BR2_PACKAGE_INGENIC_SYSTEM_LIBS_NEO_LIBSYSUTILS
++	select BR2_PACKAGE_INGENIC_SYSTEM_LIBS_NEO if !BR2_PACKAGE_PRUDYNT_T_DCS6100_CAMERA_LOCAL_VENDOR
++	select BR2_PACKAGE_INGENIC_SYSTEM_LIBS_NEO_LIBALOG if !BR2_PACKAGE_PRUDYNT_T_DCS6100_CAMERA_LOCAL_VENDOR
++	select BR2_PACKAGE_INGENIC_SYSTEM_LIBS_NEO_LIBSYSUTILS if !BR2_PACKAGE_PRUDYNT_T_DCS6100_CAMERA_LOCAL_VENDOR
+-	select BR2_PACKAGE_LIBAUDIOPROCESS_NEO
++	select BR2_PACKAGE_LIBAUDIOPROCESS_NEO if !BR2_PACKAGE_PRUDYNT_T_DCS6100_CAMERA_LOCAL_VENDOR
+ 	select BR2_THINGINO_LIBSTDCPP
+ 	help
+@@ -20,6 +22,12 @@
+ 
+ 	  https://github.com/gtxaspec/prudynt-t
+ 
++config BR2_PACKAGE_PRUDYNT_T_DCS6100_CAMERA_LOCAL_VENDOR
++	bool "DCS-6100LHV2 camera-local vendor libraries"
++	default n
++	help
++	  Use only the validated same-camera mtd3 vendor-library closure.
++
+ if BR2_PACKAGE_PRUDYNT_T
+ 
+ choice
+diff --git a/package/prudynt-t/prudynt-t.mk b/package/prudynt-t/prudynt-t.mk
+--- a/package/prudynt-t/prudynt-t.mk
++++ b/package/prudynt-t/prudynt-t.mk
+@@ -99,6 +99,13 @@
+ 	-DDCS_DLINK_OS02G10_IQ \
+ 	-DDCS_DLINK_MEDIA_READY \
+ 	-DDCS_DLINK_SKIP_ISP_BYPASS
++endif
++
++PRUDYNT_IMP_SDK_VERSION := $(SDK_VERSION)
++PRUDYNT_IMP_LANG :=
++ifeq ($(CAMERA),dlink_dcs6100lhv2_a1_t31n_os02g10_rtl8188fu)
++PRUDYNT_IMP_SDK_VERSION := 1.1.4
++PRUDYNT_IMP_LANG := LIBIMP_LANG=zh
+ endif
+ 
+ ifeq ($(KERNEL_VERSION),4.4.94)
+@@ -193,7 +200,8 @@
+ 		CROSS_COMPILE=$(TARGET_CROSS) \
+ 		CFLAGS="$(PRUDYNT_CFLAGS)" \
+ 		LDFLAGS="$(PRUDYNT_LDFLAGS)" \
+-		SDK_VERSION="$(SDK_VERSION)" \
++		SDK_VERSION="$(PRUDYNT_IMP_SDK_VERSION)" \
++		$(PRUDYNT_IMP_LANG) \
+ 		$(if $(filter y,$(BR2_PACKAGE_PRUDYNT_T_DEBUG)),DEBUG=1 DEBUG_STRIP=0,DEBUG_STRIP=1) \
+ 		$(if $(BR2_PACKAGE_PRUDYNT_T_FFMPEG),USE_FFMPEG=1) \
+ 		$(if $(BR2_PACKAGE_PRUDYNT_T_WEBRTC),WEBRTC_ENABLED=1,) \

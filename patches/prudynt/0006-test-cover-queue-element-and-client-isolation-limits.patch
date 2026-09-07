@@ -1,0 +1,129 @@
+diff --git a/tests/test_media_queue.cpp b/tests/test_media_queue.cpp
+index fa0a9a1..578b507 100644
+--- a/tests/test_media_queue.cpp
++++ b/tests/test_media_queue.cpp
+@@ -1,6 +1,7 @@
+ // Build and run with tests/run_host_tests.sh.
+ 
+ #include "FrameRecoveryGate.hpp"
++#include "JpegIdlePolicy.hpp"
+ #include "MsgChannel.hpp"
+ #include "SharedPayload.hpp"
+ 
+@@ -39,6 +40,12 @@ static void test_shared_payload_fanout() {
+   assert(tap_b[123] == 0x5a);
+ }
+ 
++static void test_jpeg_idle_policy() {
++  assert(jpegIdleFpsPolicy(0, 0) == 0);
++  assert(jpegIdleFpsPolicy(0, 1) == 1);
++  assert(jpegIdleFpsPolicy(5, 0) == 5);
++}
++
+ static void test_exact_byte_boundary() {
+   MsgChannel<TestNal> queue(800, 128);
+   assert(queue.write(nal(1, 64, true, false)));
+@@ -53,6 +60,22 @@ static void test_exact_byte_boundary() {
+   assert(queue.bytes() == 128);
+ }
+ 
++static void test_exact_element_boundary() {
++  MsgChannel<TestNal> queue(800);
++  for (uint32_t frame = 1; frame <= 800; ++frame)
++    assert(queue.write(nal(frame, 1, true, true)));
++
++  assert(queue.size() == 800);
++  assert(queue.evictionCount() == 0);
++  assert(!queue.write(nal(801, 1, true, true)));
++  assert(queue.size() == 800);
++  assert(queue.evictionCount() == 1);
++
++  TestNal oldest;
++  assert(queue.read(&oldest));
++  assert(oldest.frame_id == 2);
++}
++
+ static void test_whole_frame_eviction() {
+   MsgChannel<TestNal> queue(800, 180);
+   for (uint32_t frame = 1; frame <= 8; ++frame) {
+@@ -120,6 +143,36 @@ static void test_idr_recovery_after_eviction() {
+   assert(!recovery.waiting());
+ }
+ 
++static void test_recovery_requires_idr_frame_start() {
++  FrameRecoveryGate recovery;
++  recovery.reset(0);
++  assert(recovery.observe(1));
++  assert(!recovery.accept(true, false));
++  assert(recovery.waiting());
++  assert(recovery.accept(true, true));
++  assert(!recovery.waiting());
++}
++
++static void test_read_reports_current_eviction_epoch() {
++  MsgChannel<TestNal> queue(2);
++  assert(queue.write(nal(1, 1, true, true)));
++  assert(queue.write(nal(2, 1, true, true)));
++  assert(!queue.write(nal(3, 1, true, true)));
++
++  uint64_t read_evictions = 0;
++  TestNal item;
++  assert(queue.read(&item, &read_evictions));
++  assert(read_evictions == queue.evictionCount());
++  assert(item.frame_id == 2);
++}
++
++static void test_write_wait_honors_byte_limit() {
++  MsgChannel<TestNal> queue(800, 64);
++  assert(!queue.write_wait(nal(1, 65, true, true)));
++  assert(queue.write_wait(nal(2, 64, true, true)));
++  assert(queue.bytes() == 64);
++}
++
+ static void test_disconnect_releases_only_its_queue() {
+   SharedPayload payload(std::vector<uint8_t>(32 * 1024, 0x33));
+   auto client_a = std::make_unique<MsgChannel<TestNal>>(800, 64 * 1024);
+@@ -163,14 +216,43 @@ static void test_parallel_slow_clients_stay_bounded() {
+   }
+ }
+ 
++static void test_slow_client_does_not_block_fast_client() {
++  MsgChannel<TestNal> slow(800, RTSP_VIDEO_TAP_MAX_BYTES);
++  MsgChannel<TestNal> fast(800, RTSP_VIDEO_TAP_MAX_BYTES);
++
++  for (uint32_t frame = 1; frame <= 40; ++frame) {
++    SharedPayload payload(std::vector<uint8_t>(32 * 1024,
++                                               static_cast<uint8_t>(frame)));
++    TestNal item{payload, true, true, frame % 10 == 0, frame};
++    slow.write(item);
++    assert(fast.write(item));
++
++    TestNal delivered;
++    assert(fast.read(&delivered));
++    assert(delivered.frame_id == frame);
++    assert(delivered.data.storageIdentity() == payload.storageIdentity());
++  }
++
++  assert(fast.size() == 0);
++  assert(fast.evictionCount() == 0);
++  assert(slow.bytes() <= RTSP_VIDEO_TAP_MAX_BYTES);
++  assert(slow.evictionCount() > 0);
++}
++
+ int main() {
+   test_shared_payload_fanout();
++  test_jpeg_idle_policy();
+   test_exact_byte_boundary();
++  test_exact_element_boundary();
+   test_whole_frame_eviction();
+   test_oversized_incomplete_frame_is_discarded();
+   test_idr_recovery_after_eviction();
++  test_recovery_requires_idr_frame_start();
++  test_read_reports_current_eviction_epoch();
++  test_write_wait_honors_byte_limit();
+   test_disconnect_releases_only_its_queue();
+   test_parallel_slow_clients_stay_bounded();
++  test_slow_client_does_not_block_fast_client();
+   std::cout << "media queue host tests passed\n";
+   return 0;
+ }

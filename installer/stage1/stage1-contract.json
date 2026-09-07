@@ -1,0 +1,89 @@
+{
+  "schema_version": 2,
+  "target": {
+    "model": "DCS-6100LHV2",
+    "hardware_revision": "A1",
+    "soc": "T31N",
+    "sensor": "OS02G10",
+    "sd_host": "MMC0 PB 4-bit"
+  },
+  "mode": "fixed-offline-two-stage",
+  "mtd3_split": {
+    "abi": "dcs6100lhv2-a1-mtd3-split-v1",
+    "physical_parent_mtd": 3,
+    "physical_offset": 6815744,
+    "physical_bytes": 8126464,
+    "system": {
+      "logical_mtd": 3,
+      "offset": 6815744,
+      "bytes": 6619136,
+      "filesystem": "squashfs",
+      "read_only_after_activation": true
+    },
+    "data": {
+      "logical_mtd": 4,
+      "offset": 13434880,
+      "bytes": 1507328,
+      "filesystem": "jffs2",
+      "overlay_mount": "/overlay"
+    }
+  },
+  "data_actions": {
+    "initialize": "export and verify original physical mtd3, then erase data and install system",
+    "preserve": "hash complete data region, install system, then require identical data readback",
+    "factory-reset": "explicitly erase only data while installing the bound system and kernel",
+    "corrupt_data": "never autoformat; require an explicit factory-reset or recovery install set"
+  },
+  "interfaces": {
+    "network": false,
+    "web_ui": false,
+    "raw_shell": false,
+    "ssh": false,
+    "telnet": false,
+    "arbitrary_command": false,
+    "arbitrary_mtd_offset": false
+  },
+  "input": {
+    "filename": "THINGINO2.BIN",
+    "binding": "exact compiled size and SHA-256",
+    "filesystem": "FAT on /dev/mmcblk0p1"
+  },
+  "backup": {
+    "filename": "STOCKM3.BIN",
+    "bytes": 8126464,
+    "readback_required_before_final_write": true,
+    "existing_file_policy": "reuse only after exact current-NOR comparison and exact length",
+    "privacy": "same-device private; never publish",
+    "required_for_data_action": "initialize"
+  },
+  "interrupted_install_checkpoint": {
+    "filename": "STOCKM3.OK",
+    "bytes": 80,
+    "magic": "DCS6RC01",
+    "bindings": [
+      "stock backup size and SHA-256",
+      "exact stage-2 size and SHA-256"
+    ],
+    "policy": "permits only re-running the same bounded final install after NOR diverges from the verified backup",
+    "authentication": "consistency and corruption gate; not authentication against malicious removable media",
+    "stock_restore": false,
+    "evidence": "host-modeled and host-built only"
+  },
+  "visible_status": {
+    "evidence": "host-built and host-tested only",
+    "green_gpio": 52,
+    "red_gpio": 54,
+    "active_low": true,
+    "validation_and_backup": "green",
+    "final_flash_writes": "green+red",
+    "terminal_failure": "red",
+    "verified_before_reboot": "green"
+  },
+  "bootstrap_physical_write_mtd": [1, 2],
+  "final_physical_write_mtd": [1, 3],
+  "always_preserve_physical_mtd": [0, 4, 5],
+  "mtd_erase_bytes": 32768,
+  "mtd_write_bytes": 256,
+  "activation_block_bytes": 65536,
+  "activation_written_last": true
+}

@@ -1,0 +1,597 @@
+diff --git a/src/AudioOutputWorker.cpp b/src/AudioOutputWorker.cpp
+index ecdfb48..8e53042 100644
+--- a/src/AudioOutputWorker.cpp
++++ b/src/AudioOutputWorker.cpp
+@@ -11,8 +11,18 @@
+ 
+ void *AudioOutputWorker::thread_entry(void *arg) {
+   StartHelper *sh = static_cast<StartHelper *>(arg);
+-  AudioOutputWorker worker;
+-  worker.run(sh);
++  try {
++    AudioOutputWorker worker;
++    worker.run(sh);
++  } catch (const std::exception &e) {
++    LOG_ERROR("AudioOutputWorker thread caught exception: " << e.what());
++    if (sh)
++      sh->report(false);
++  } catch (...) {
++    LOG_ERROR("AudioOutputWorker thread caught unknown exception");
++    if (sh)
++      sh->report(false);
++  }
+   return nullptr;
+ }
+ 
+@@ -217,7 +227,7 @@ void AudioOutputWorker::run(StartHelper *sh) {
+   if (!global_audio_output) {
+     LOG_ERROR("Audio output stream not initialized");
+     if (sh)
+-      sh->has_started.release();
++      sh->report(false);
+     return;
+   }
+ 
+@@ -232,7 +242,7 @@ void AudioOutputWorker::run(StartHelper *sh) {
+     global_audio_output->imp_audio_output.reset();
+     global_audio_output->running = false;
+     if (sh)
+-      sh->has_started.release();
++      sh->report(false);
+     return;
+   }
+ 
+@@ -247,7 +257,7 @@ void AudioOutputWorker::run(StartHelper *sh) {
+ 
+   // Signal main that AO initialization is complete.
+   if (sh)
+-    sh->has_started.release();
++    sh->report(true);
+ 
+   while (global_audio_output->running) {
+     AudioPlaybackJob job = global_audio_output->jobQueue->wait_read();
+diff --git a/src/AudioWorker.cpp b/src/AudioWorker.cpp
+index 117ec2b..dec7a1a 100644
+--- a/src/AudioWorker.cpp
++++ b/src/AudioWorker.cpp
+@@ -521,12 +521,27 @@ void *AudioWorker::thread_entry(void *arg) {
+             << global_audio[encChn]->aiChn << " and encoder "
+             << global_audio[encChn]->aeChn);
+ 
+-  global_audio[encChn]->imp_audio = IMPAudio::createNew(
+-      global_audio[encChn]->devId, global_audio[encChn]->aiChn,
+-      global_audio[encChn]->aeChn);
++  try {
++    global_audio[encChn]->imp_audio = IMPAudio::createNew(
++        global_audio[encChn]->devId, global_audio[encChn]->aiChn,
++        global_audio[encChn]->aeChn);
++  } catch (const std::exception &e) {
++    LOG_ERROR("AudioWorker initialization caught exception: " << e.what());
++    sh->report(false);
++    return nullptr;
++  } catch (...) {
++    LOG_ERROR("AudioWorker initialization caught unknown exception");
++    sh->report(false);
++    return nullptr;
++  }
++  if (!global_audio[encChn]->imp_audio) {
++    LOG_ERROR("AudioWorker failed to initialize IMP audio");
++    sh->report(false);
++    return nullptr;
++  }
+ 
+   // inform main that initialization is complete
+-  sh->has_started.release();
++  sh->report(true);
+ 
+   /* 'active' indicates, the thread is activly polling and grabbing images
+    * 'running' describes the runlevel of the thread, if this value is set to
+diff --git a/src/BackchannelWorker.cpp b/src/BackchannelWorker.cpp
+index 0e5ed19..5516de4 100644
+--- a/src/BackchannelWorker.cpp
++++ b/src/BackchannelWorker.cpp
+@@ -270,13 +270,20 @@ void *BackchannelWorker::thread_entry(void *arg) {
+     LOG_INFO("Starting BackchannelWorker thread.");
+ 
+     global_backchannel->imp_backchannel = IMPBackchannel::createNew();
++    if (!global_backchannel->imp_backchannel) {
++      LOG_ERROR("BackchannelWorker failed to initialize IMP backchannel");
++      if (arg) {
++        static_cast<StartHelper *>(arg)->report(false);
++      }
++      return nullptr;
++    }
+ 
+     // Signal that IMP hardware init (ADEC channels) is complete.
+     // The IMP SDK shares internal state between ADEC and encoder
+     // subsystems; concurrent init causes memory corruption -> SIGILL.
+     if (arg) {
+       auto *sh = static_cast<StartHelper *>(arg);
+-      sh->has_started.release();
++      sh->report(true);
+     }
+ 
+     BackchannelWorker processor;
+@@ -297,8 +304,14 @@ void *BackchannelWorker::thread_entry(void *arg) {
+     LOG_INFO("Exiting BackchannelWorker thread.");
+   } catch (const std::exception &e) {
+     LOG_ERROR("BackchannelWorker thread caught exception: " << e.what());
++    if (arg) {
++      static_cast<StartHelper *>(arg)->report(false);
++    }
+   } catch (...) {
+     LOG_ERROR("BackchannelWorker thread caught unknown exception");
++    if (arg) {
++      static_cast<StartHelper *>(arg)->report(false);
++    }
+   }
+   return nullptr;
+ }
+diff --git a/src/JPEGWorker.cpp b/src/JPEGWorker.cpp
+index 8dbfe26..fc6e7a7 100644
+--- a/src/JPEGWorker.cpp
++++ b/src/JPEGWorker.cpp
+@@ -528,7 +528,7 @@ void *JPEGWorker::thread_entry(void *arg) {
+   if (!global_jpeg[jpgChn]->imp_encoder) {
+     runtime_metrics.recordJpegReceiveStart(jpgChn, false);
+     LOG_ERROR("Failed to create JPEG encoder for channel " << jpgChn);
+-    sh->has_started.release();
++    sh->report(false);
+     return nullptr;
+   }
+ 
+@@ -540,7 +540,7 @@ void *JPEGWorker::thread_entry(void *arg) {
+     global_jpeg[jpgChn]->imp_encoder->deinit(false);
+     delete global_jpeg[jpgChn]->imp_encoder;
+     global_jpeg[jpgChn]->imp_encoder = nullptr;
+-    sh->has_started.release();
++    sh->report(false);
+     return nullptr;
+   }
+ 
+@@ -548,8 +548,7 @@ void *JPEGWorker::thread_entry(void *arg) {
+   global_jpeg[jpgChn]->active = true;
+   runtime_metrics.setJpegActive(jpgChn, true);
+   global_jpeg[jpgChn]->running = true;
+-  sh->success.store(true, std::memory_order_release);
+-  sh->has_started.release();
++  sh->report(true);
+   JPEGWorker worker(jpgChn, impEncChn);
+   bool encoder_receiving = worker.run();
+ 
+diff --git a/src/VideoWorker.cpp b/src/VideoWorker.cpp
+index 71e7a7f..960aee1 100644
+--- a/src/VideoWorker.cpp
++++ b/src/VideoWorker.cpp
+@@ -1400,7 +1400,7 @@ void *VideoWorker::thread_entry(void *arg) {
+                             encChn, global_video[encChn]->name);
+   if (!global_video[encChn]->imp_encoder) {
+     LOG_ERROR("Failed to create encoder for stream " << encChn);
+-    sh->has_started.release();
++    sh->report(false);
+     if (global_video[encChn]->imp_framesource) {
+       delete global_video[encChn]->imp_framesource;
+       global_video[encChn]->imp_framesource = nullptr;
+@@ -1415,7 +1415,7 @@ void *VideoWorker::thread_entry(void *arg) {
+     global_video[encChn]->imp_encoder = nullptr;
+     delete global_video[encChn]->imp_framesource;
+     global_video[encChn]->imp_framesource = nullptr;
+-    sh->has_started.release();
++    sh->report(false);
+     return 0;
+   }
+   global_video[encChn]->run_for_jpeg.store(false,
+@@ -1449,7 +1449,7 @@ void *VideoWorker::thread_entry(void *arg) {
+     global_video[encChn]->imp_encoder = nullptr;
+     delete global_video[encChn]->imp_framesource;
+     global_video[encChn]->imp_framesource = nullptr;
+-    sh->has_started.release();
++    sh->report(false);
+     return 0;
+   }
+ 
+@@ -1473,7 +1473,7 @@ void *VideoWorker::thread_entry(void *arg) {
+       global_video[encChn]->imp_encoder = nullptr;
+       delete global_video[encChn]->imp_framesource;
+       global_video[encChn]->imp_framesource = nullptr;
+-      sh->has_started.release();
++      sh->report(false);
+       return 0;
+     }
+     close(ready_fd);
+@@ -1481,8 +1481,7 @@ void *VideoWorker::thread_entry(void *arg) {
+   }
+ #endif
+ 
+-  sh->success.store(true, std::memory_order_release);
+-  sh->has_started.release();
++  sh->report(true);
+ 
+   // Flush immediately after starting the encoder so the ring buffer contains
+   // only a fresh IDR with consistent timestamps.  Without this, the IMP
+diff --git a/src/WorkerUtils.hpp b/src/WorkerUtils.hpp
+index 80d4055..0febb96 100644
+--- a/src/WorkerUtils.hpp
++++ b/src/WorkerUtils.hpp
+@@ -9,6 +9,16 @@ struct StartHelper {
+   int encChn;
+   binary_semaphore_compat has_started{0};
+   std::atomic<bool> success{false};
++  std::atomic<bool> reported{false};
++
++  void report(bool started_successfully) {
++    success.store(started_successfully, std::memory_order_release);
++    bool expected = false;
++    if (reported.compare_exchange_strong(expected, true,
++                                         std::memory_order_acq_rel)) {
++      has_started.release();
++    }
++  }
+ };
+ 
+ namespace WorkerUtils {
+diff --git a/src/main.cpp b/src/main.cpp
+index fa32702..171966c 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -698,12 +698,13 @@ bool timesync_wait() {
+   return true;
+ }
+ 
+-bool start_video(int encChn) {
++bool start_video(int encChn, bool &thread_joinable) {
+   StartHelper sh{encChn};
+   int ret = pthread_create(&global_video[encChn]->thread, nullptr,
+                            VideoWorker::thread_entry, static_cast<void *>(&sh));
+   LOG_DEBUG_OR_ERROR(ret, "create video[" << encChn << "] thread");
+   if (ret != 0) return false;
++  thread_joinable = true;
+ 
+   // Wait until StartRecvPic and the D-Link media-ready publication have
+   // completed, not merely until the frame source has been enabled.
+@@ -711,6 +712,7 @@ bool start_video(int encChn) {
+   bool ready = sh.success.load(std::memory_order_acquire);
+   if (!ready) {
+     pthread_join(global_video[encChn]->thread, nullptr);
++    thread_joinable = false;
+   }
+   return ready;
+ }
+@@ -839,6 +841,18 @@ int main(int argc, const char *argv[]) {
+   pthread_t signal_thread;
+   /* daynight_thread removed — photosensing delegated to daynightd */
+   bool signal_thread_started = false;
++  bool config_watcher_thread_joinable = false;
++#if defined(WEBSOCKET_ENABLED)
++  bool websocket_thread_joinable = false;
++#endif
++  bool osd_thread_joinable = false;
++  bool rtsp_thread_joinable = false;
++  bool motion_thread_joinable = false;
++  bool backchannel_thread_joinable = false;
++  bool audio_output_thread_joinable = false;
++  bool audio_thread_joinable = false;
++  bool video_thread_joinable[NUM_VIDEO_CHANNELS] = {false};
++  bool jpeg_thread_joinable[NUM_JPEG_CHANNELS] = {false};
+ 
+   bool http_mjpeg_started = false;
+ 
+@@ -966,10 +980,18 @@ int main(int argc, const char *argv[]) {
+   global_backchannel = std::make_shared<backchannel_stream>();
+   global_audio_output = std::make_shared<audio_output_stream>();
+ 
+-  pthread_create(&cw_thread, nullptr, ConfigWatcher::thread_entry, nullptr);
++  int config_watcher_ret =
++      pthread_create(&cw_thread, nullptr, ConfigWatcher::thread_entry, nullptr);
++  LOG_DEBUG_OR_ERROR(config_watcher_ret, "create config watcher thread");
++  config_watcher_thread_joinable = config_watcher_ret == 0;
++  if (!config_watcher_thread_joinable) {
++    global_shutdown_requested.store(true, std::memory_order_relaxed);
++  }
+ 
+ #if defined(WEBSOCKET_ENABLED)
+-  pthread_create(&ws_thread, nullptr, WS::run, &ws);
++  int websocket_ret = pthread_create(&ws_thread, nullptr, WS::run, &ws);
++  LOG_DEBUG_OR_ERROR(websocket_ret, "create websocket thread");
++  websocket_thread_joinable = websocket_ret == 0;
+ #endif
+ 
+   if (cfg->http.enabled && (cfg->http.mjpeg_enabled || cfg->http.api_enabled)) {
+@@ -995,17 +1017,28 @@ int main(int argc, const char *argv[]) {
+     audio_input_required = dlinkAudioWorkerRequired(audio_input_required);
+     audio_output_required = dlinkAudioWorkerRequired(audio_output_required);
+ #endif
+-    if (audio_input_required && (global_restart_audio || startup)) {
++    if (!global_shutdown_requested.load(std::memory_order_relaxed) &&
++        audio_input_required && (global_restart_audio || startup)) {
+       StartHelper sh{0};
+       int ret =
+           pthread_create(&global_audio[0]->thread, nullptr,
+                          AudioWorker::thread_entry, static_cast<void *>(&sh));
+       LOG_DEBUG_OR_ERROR(ret, "create audio thread");
+-      // wait for initialization done
+-      sh.has_started.acquire();
++      if (ret == 0) {
++        audio_thread_joinable = true;
++        sh.has_started.acquire();
++        if (!sh.success.load(std::memory_order_acquire)) {
++          pthread_join(global_audio[0]->thread, nullptr);
++          audio_thread_joinable = false;
++          global_shutdown_requested.store(true, std::memory_order_relaxed);
++        }
++      } else {
++        global_shutdown_requested.store(true, std::memory_order_relaxed);
++      }
+     }
+ 
+-    if (audio_output_required && (global_restart_audio || startup)) {
++    if (!global_shutdown_requested.load(std::memory_order_relaxed) &&
++        audio_output_required && (global_restart_audio || startup)) {
+       StartHelper ao_sh{0};
+       int ret = pthread_create(&audio_output_thread, nullptr,
+                                AudioOutputWorker::thread_entry,
+@@ -1014,13 +1047,26 @@ int main(int argc, const char *argv[]) {
+       // Wait for AO hardware init to complete before starting video.
+       // The IMP SDK shares internal state between AO and encoder
+       // subsystems; concurrent init causes memory corruption.
+-      ao_sh.has_started.acquire();
++      if (ret == 0) {
++        audio_output_thread_joinable = true;
++        ao_sh.has_started.acquire();
++        if (!ao_sh.success.load(std::memory_order_acquire)) {
++          pthread_join(audio_output_thread, nullptr);
++          audio_output_thread_joinable = false;
++          global_shutdown_requested.store(true, std::memory_order_relaxed);
++        }
++      } else {
++        global_shutdown_requested.store(true, std::memory_order_relaxed);
++      }
+ #if defined(DCS_DLINK_MEDIA_READY)
+-      AudioOutputWorker::applyMute(!cfg->audio.output_enabled);
++      if (audio_output_thread_joinable) {
++        AudioOutputWorker::applyMute(!cfg->audio.output_enabled);
++      }
+ #endif
+     }
+ 
+-    if (audio_output_required && (global_restart_audio || startup)) {
++    if (!global_shutdown_requested.load(std::memory_order_relaxed) &&
++        audio_output_required && (global_restart_audio || startup)) {
+       StartHelper bc_sh{0};
+       int ret = pthread_create(&backchannel_thread, nullptr,
+                                BackchannelWorker::thread_entry,
+@@ -1029,17 +1075,28 @@ int main(int argc, const char *argv[]) {
+       // Wait for ADEC hardware init to complete before starting video.
+       // The IMP SDK shares internal state between ADEC and encoder
+       // subsystems; concurrent init causes memory corruption -> SIGILL.
+-      bc_sh.has_started.acquire();
++      if (ret == 0) {
++        backchannel_thread_joinable = true;
++        bc_sh.has_started.acquire();
++        if (!bc_sh.success.load(std::memory_order_acquire)) {
++          pthread_join(backchannel_thread, nullptr);
++          backchannel_thread_joinable = false;
++          global_shutdown_requested.store(true, std::memory_order_relaxed);
++        }
++      } else {
++        global_shutdown_requested.store(true, std::memory_order_relaxed);
++      }
+     }
+ 
+-    if (global_restart_video || startup) {
++    if (!global_shutdown_requested.load(std::memory_order_relaxed) &&
++        (global_restart_video || startup)) {
+       bool video_ready = true;
+       if (cfg->stream0.enabled) {
+-        video_ready = start_video(0);
++        video_ready = start_video(0, video_thread_joinable[0]);
+       }
+ 
+       if (video_ready && cfg->stream1.enabled) {
+-        video_ready = start_video(1);
++        video_ready = start_video(1, video_thread_joinable[1]);
+       }
+ 
+       if (!video_ready) {
+@@ -1068,9 +1125,11 @@ int main(int argc, const char *argv[]) {
+                            JPEGWorker::thread_entry, static_cast<void *>(&sh));
+         LOG_DEBUG_OR_ERROR(ret, "create jpeg thread");
+         if (ret == 0) {
++          jpeg_thread_joinable[0] = true;
+           sh.has_started.acquire();
+           if (!sh.success.load(std::memory_order_acquire)) {
+             pthread_join(global_jpeg[0]->thread, nullptr);
++            jpeg_thread_joinable[0] = false;
+           }
+         }
+       }
+@@ -1083,9 +1142,11 @@ int main(int argc, const char *argv[]) {
+                            JPEGWorker::thread_entry, static_cast<void *>(&sh));
+         LOG_DEBUG_OR_ERROR(ret, "create jpeg thread 2");
+         if (ret == 0) {
++          jpeg_thread_joinable[1] = true;
+           sh.has_started.acquire();
+           if (!sh.success.load(std::memory_order_acquire)) {
+             pthread_join(global_jpeg[1]->thread, nullptr);
++            jpeg_thread_joinable[1] = false;
+           }
+         }
+       }
+@@ -1094,6 +1155,7 @@ int main(int argc, const char *argv[]) {
+           (cfg->osd.sei.enabled || cfg->osd.burnin.enabled)) {
+         int ret = pthread_create(&osd_thread, nullptr, OSD::thread_entry, NULL);
+         LOG_DEBUG_OR_ERROR(ret, "create osd thread");
++        osd_thread_joinable = ret == 0;
+       }
+ 
+       /* daynight photosensing thread removed — use daynightd daemon */
+@@ -1103,6 +1165,7 @@ int main(int argc, const char *argv[]) {
+         cfg->motion.enabled && (global_restart_motion || startup)) {
+       int ret = pthread_create(&motion_thread, nullptr, Motion::run, &motion);
+       LOG_DEBUG_OR_ERROR(ret, "create motion thread");
++      motion_thread_joinable = ret == 0;
+     }
+ 
+     // start rtsp server
+@@ -1110,6 +1173,7 @@ int main(int argc, const char *argv[]) {
+         global_rtsp_thread_signal != 0 && (global_restart_rtsp || startup)) {
+       int ret = pthread_create(&rtsp_thread, nullptr, RTSP::run, &rtsp);
+       LOG_DEBUG_OR_ERROR(ret, "create rtsp thread");
++      rtsp_thread_joinable = ret == 0;
+     }
+ 
+     LOG_DEBUG("main thread is going to sleep");
+@@ -1166,84 +1230,95 @@ int main(int argc, const char *argv[]) {
+ 
+     if (global_restart_rtsp) {
+       // stop rtsp thread
+-      if (global_rtsp_thread_signal == 0) {
++      if (rtsp_thread_joinable) {
+         global_rtsp_thread_signal = 1;
+         int ret = pthread_join(rtsp_thread, NULL);
+         LOG_DEBUG_OR_ERROR(ret, "join rtsp thread");
++        rtsp_thread_joinable = false;
+       }
+     }
+ 
+     // stop audio
+-    if (global_audio[0]->imp_audio && global_restart_audio) {
++    if (audio_thread_joinable && global_restart_audio) {
+       global_audio[0]->running = false;
+       global_audio[0]->should_grab_frames.notify_one();
+       int ret = pthread_join(global_audio[0]->thread, NULL);
+       LOG_DEBUG_OR_ERROR(ret, "join audio thread");
++      audio_thread_joinable = false;
+     }
+ 
+-    if (global_audio_output && global_audio_output->running &&
+-        global_restart_audio) {
+-      AudioOutputWorker::signalShutdown();
++    if (audio_output_thread_joinable && global_restart_audio) {
++      if (global_audio_output && global_audio_output->running) {
++        AudioOutputWorker::signalShutdown();
++      }
+       int ret = pthread_join(audio_output_thread, NULL);
+       LOG_DEBUG_OR_ERROR(ret, "join audio output thread");
++      audio_output_thread_joinable = false;
+     }
+ 
+     // stop backchannel
+-    if (global_backchannel->imp_backchannel && global_restart_audio) {
++    if (backchannel_thread_joinable && global_restart_audio) {
+       global_backchannel->running = false;
+       BackchannelWorker::signalShutdown();
+       global_backchannel->should_grab_frames.notify_one();
+       int ret = pthread_join(backchannel_thread, NULL);
+       LOG_DEBUG_OR_ERROR(ret, "join backchannel thread");
++      backchannel_thread_joinable = false;
+     }
+ 
+     if (global_restart_video || global_restart_motion) {
+       // Motion has its own bounded restart path on D-Link. It must not force
+       // the video/ISP process replacement used by structural stream changes.
+-      if (global_motion_thread_signal) {
++      if (motion_thread_joinable) {
+         global_motion_thread_signal = false;
+         int ret = pthread_join(motion_thread, NULL);
+         LOG_DEBUG_OR_ERROR(ret, "join motion thread");
++        motion_thread_joinable = false;
+       }
+     }
+ 
+     if (global_restart_video) {
+       // stop osd thread
+-      if (global_osd_thread_signal) {
++      if (osd_thread_joinable) {
+         global_osd_thread_signal = false;
+         int ret = pthread_join(osd_thread, NULL);
+         LOG_DEBUG_OR_ERROR(ret, "join osd thread");
++        osd_thread_joinable = false;
+       }
+ 
+       // stop jpeg
+-      if (global_jpeg[0]->imp_encoder) {
++      if (jpeg_thread_joinable[0]) {
+         global_jpeg[0]->running = false;
+         global_jpeg[0]->should_grab_frames.notify_one();
+         int ret = pthread_join(global_jpeg[0]->thread, NULL);
+         LOG_DEBUG_OR_ERROR(ret, "join jpeg thread");
++        jpeg_thread_joinable[0] = false;
+       }
+ 
+-      if (global_jpeg[1]->imp_encoder) {
++      if (jpeg_thread_joinable[1]) {
+         global_jpeg[1]->running = false;
+         global_jpeg[1]->should_grab_frames.notify_one();
+         int ret = pthread_join(global_jpeg[1]->thread, NULL);
+         LOG_DEBUG_OR_ERROR(ret, "join jpeg thread 2");
++        jpeg_thread_joinable[1] = false;
+       }
+ 
+       // stop stream1
+-      if (global_video[1]->imp_encoder) {
++      if (video_thread_joinable[1]) {
+         global_video[1]->running = false;
+         global_video[1]->should_grab_frames.notify_one();
+         int ret = pthread_join(global_video[1]->thread, NULL);
+         LOG_DEBUG_OR_ERROR(ret, "join stream1 thread");
++        video_thread_joinable[1] = false;
+       }
+ 
+       // stop stream0
+-      if (global_video[0]->imp_encoder) {
++      if (video_thread_joinable[0]) {
+         global_video[0]->running = false;
+         global_video[0]->should_grab_frames.notify_one();
+         int ret = pthread_join(global_video[0]->thread, NULL);
+         LOG_DEBUG_OR_ERROR(ret, "join stream0 thread");
++        video_thread_joinable[0] = false;
+       }
+     }
+ 
+@@ -1259,15 +1334,19 @@ int main(int argc, const char *argv[]) {
+   /* daynight thread join removed — photosensing delegated to daynightd */
+ 
+ #if defined(WEBSOCKET_ENABLED)
+-  if (cfg->websocket.enabled) {
++  if (websocket_thread_joinable) {
+     ws.stop();
+     int ret = pthread_join(ws_thread, nullptr);
+     LOG_DEBUG_OR_ERROR(ret, "join websocket thread");
++    websocket_thread_joinable = false;
+   }
+ #endif
+ 
+-  int ret = pthread_join(cw_thread, nullptr);
+-  LOG_DEBUG_OR_ERROR(ret, "join config watcher thread");
++  if (config_watcher_thread_joinable) {
++    int ret = pthread_join(cw_thread, nullptr);
++    LOG_DEBUG_OR_ERROR(ret, "join config watcher thread");
++    config_watcher_thread_joinable = false;
++  }
+ 
+   if (http_mjpeg_started) {
+     http_mjpeg.stop();
+diff --git a/tests/run_host_tests.sh b/tests/run_host_tests.sh
+index cf6d0f5..602b47d 100755
+--- a/tests/run_host_tests.sh
++++ b/tests/run_host_tests.sh
+@@ -20,9 +20,16 @@ grep -q 'IMP_OSD_Stop(encGrp)' "$repo_dir/src/IMPEncoder.cpp"
+ 
+ start_recv_line=$(grep -n 'ret = IMP_Encoder_StartRecvPic(encChn);' \
+   "$repo_dir/src/VideoWorker.cpp" | tail -1 | cut -d: -f1)
+-ready_release_line=$(grep -n 'sh->success.store(true' \
++ready_release_line=$(grep -n 'sh->report(true)' \
+   "$repo_dir/src/VideoWorker.cpp" | cut -d: -f1)
+ test "$ready_release_line" -gt "$start_recv_line"
++grep -q 'reported.compare_exchange_strong' "$repo_dir/src/WorkerUtils.hpp"
++grep -q 'audio_thread_joinable = ret == 0' "$repo_dir/src/main.cpp" || \
++  grep -q 'audio_thread_joinable = true' "$repo_dir/src/main.cpp"
++grep -q 'motion_thread_joinable = ret == 0' "$repo_dir/src/main.cpp"
++grep -q 'rtsp_thread_joinable = ret == 0' "$repo_dir/src/main.cpp"
++grep -q 'if (motion_thread_joinable)' "$repo_dir/src/main.cpp"
++grep -q 'if (rtsp_thread_joinable)' "$repo_dir/src/main.cpp"
+ grep -q 'if (video_ready && !privacy_control_started)' "$repo_dir/src/main.cpp"
+ grep -q 'if (!write_channel_state_file(channel, path, duration_seconds))' \
+   "$repo_dir/src/MP4ControlSocket.cpp"
+

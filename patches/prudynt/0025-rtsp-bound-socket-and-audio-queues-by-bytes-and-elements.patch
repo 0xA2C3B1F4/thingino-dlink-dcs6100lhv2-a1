@@ -1,0 +1,132 @@
+diff --git a/src/SocketQueuePolicy.hpp b/src/SocketQueuePolicy.hpp
+new file mode 100644
+index 0000000..320491a
+--- /dev/null
++++ b/src/SocketQueuePolicy.hpp
+@@ -0,0 +1,15 @@
++#pragma once
++
++#include <cstddef>
++
++constexpr std::size_t kRtspSocketQueueMaxElements = 1024;
++constexpr std::size_t kRtspSocketQueueMaxBytes = 1024 * 1024;
++constexpr std::size_t kRtspAudioTapMaxBytes = 256 * 1024;
++
++inline bool rtspSocketQueueCanAppend(std::size_t elements,
++                                     std::size_t bytes,
++                                     std::size_t append_bytes) {
++  return elements < kRtspSocketQueueMaxElements &&
++         append_bytes <= kRtspSocketQueueMaxBytes &&
++         bytes <= kRtspSocketQueueMaxBytes - append_bytes;
++}
+diff --git a/src/simple-rtsp/RtspServer.cpp b/src/simple-rtsp/RtspServer.cpp
+index bb9c335..e8fc62a 100644
+--- a/src/simple-rtsp/RtspServer.cpp
++++ b/src/simple-rtsp/RtspServer.cpp
+@@ -5,6 +5,7 @@
+ 
+ #include "RtspServer.hpp"
+ #include "../MediaRuntimeMetrics.hpp"
++#include "../SocketQueuePolicy.hpp"
+ #include "RtpPacketizer.hpp"
+ #include "SdpGenerator.hpp"
+ #include "Logger.hpp"
+@@ -1656,7 +1657,8 @@ void RtspServer::handlePlay(int idx, int cseq, const char *uri,
+ 
+     // ── Set up audio tap ────────────────────────────────────────────────
+     if (s->hasAudio && !s->audioTap && global_audio[0]) {
+-        s->audioTap = std::make_shared<MsgChannel<AudioFrame>>(MSG_CHANNEL_SIZE * 3);
++        s->audioTap = std::make_shared<MsgChannel<AudioFrame>>(
++            MSG_CHANNEL_SIZE * 3, kRtspAudioTapMaxBytes);
+         s->audioTapId = register_audio_tap(
+             0, s->audioTap,
+             []() {})
+@@ -2224,7 +2226,9 @@ bool RtspServer::sendVideoNal(Session &s, const H264NALUnit &nal) {
+             buf[2] = static_cast<uint8_t>((len >> 8) & 0xFF);
+             buf[3] = static_cast<uint8_t>(len & 0xFF);
+             memcpy(buf + 4, pkt, len);
+-            if (sen->sendQueueBytes + total > 1024 * 1024) { // 1MB cap
++            if (!rtspSocketQueueCanAppend(sen->sendQueue.size(),
++                                          sen->sendQueueBytes, total)) {
++                mediaRuntimeMetrics().recordRtspQueueDrop();
+                 closeClient(sen->sessionsIndex);
+                 return false;
+             }
+@@ -2250,8 +2254,10 @@ bool RtspServer::sendVideoNal(Session &s, const H264NALUnit &nal) {
+         // drain loop flushes it, preserving interleaved ordering.
+         size_t sent = (n > 0) ? static_cast<size_t>(n) : 0;
+         size_t remain = total - sent;
+-        if (sen->sendQueueBytes + remain > 1024 * 1024) { // 1MB cap
++        if (!rtspSocketQueueCanAppend(sen->sendQueue.size(),
++                                      sen->sendQueueBytes, remain)) {
+             // Queue full — client too slow, disconnect it
++            mediaRuntimeMetrics().recordRtspQueueDrop();
+             closeClient(sen->sessionsIndex);
+             return false;
+         }
+@@ -2516,7 +2522,9 @@ bool RtspServer::sendAudioFrame(Session &s, const AudioFrame &af) {
+             buf[2] = static_cast<uint8_t>((len >> 8) & 0xFF);
+             buf[3] = static_cast<uint8_t>(len & 0xFF);
+             memcpy(buf + 4, pkt, len);
+-            if (sen->sendQueueBytes + total > 1024 * 1024) {
++            if (!rtspSocketQueueCanAppend(sen->sendQueue.size(),
++                                          sen->sendQueueBytes, total)) {
++                mediaRuntimeMetrics().recordRtspQueueDrop();
+                 closeClient(sen->sessionsIndex);
+                 return false;
+             }
+@@ -2537,7 +2545,9 @@ bool RtspServer::sendAudioFrame(Session &s, const AudioFrame &af) {
+         // Partial or EAGAIN: enqueue for retry
+         size_t sent = (s > 0) ? static_cast<size_t>(s) : 0;
+         size_t remain = total - sent;
+-        if (sen->sendQueueBytes + remain > 1024 * 1024) {
++        if (!rtspSocketQueueCanAppend(sen->sendQueue.size(),
++                                      sen->sendQueueBytes, remain)) {
++            mediaRuntimeMetrics().recordRtspQueueDrop();
+             closeClient(sen->sessionsIndex);
+             return false;
+         }
+diff --git a/tests/test_media_queue.cpp b/tests/test_media_queue.cpp
+index 039b0d0..7b39b83 100644
+--- a/tests/test_media_queue.cpp
++++ b/tests/test_media_queue.cpp
+@@ -17,6 +17,7 @@
+ #include "MsgChannel.hpp"
+ #include "SharedPayload.hpp"
+ #include "SocketPeer.hpp"
++#include "SocketQueuePolicy.hpp"
+ 
+ #include <cassert>
+ #include <cstdint>
+@@ -109,6 +110,23 @@ static void test_versioned_json_frame_is_exact_and_bounded() {
+          FramedJsonStatus::Invalid);
+ }
+ 
++static void test_rtsp_socket_queue_has_element_and_byte_limits() {
++  assert(rtspSocketQueueCanAppend(0, 0, 1500));
++  assert(!rtspSocketQueueCanAppend(kRtspSocketQueueMaxElements, 0, 1));
++  assert(!rtspSocketQueueCanAppend(0, kRtspSocketQueueMaxBytes, 1));
++  assert(!rtspSocketQueueCanAppend(0, 0, kRtspSocketQueueMaxBytes + 1));
++  struct Payload {
++    std::vector<unsigned char> data;
++  };
++  MsgChannel<Payload> audio(3, 8);
++  Payload frame;
++  frame.data.assign(6, 0);
++  assert(audio.write(frame));
++  frame.data.assign(6, 0);
++  assert(!audio.write(frame));
++  assert(audio.bytes() <= 8);
++}
++
+ static void test_jpeg_demand_deadline_and_idle_policy() {
+   assert(!jpegRequestDeadlineActive(1000, 1000));
+   assert(jpegRequestDeadlineActive(1000, 1001));
+@@ -441,6 +459,7 @@ int main() {
+   test_media_metrics_track_queue_high_water();
+   test_recorder_start_requires_keyframe();
+   test_versioned_json_frame_is_exact_and_bounded();
++  test_rtsp_socket_queue_has_element_and_byte_limits();
+   test_jpeg_demand_deadline_and_idle_policy();
+   test_mjpeg_request_policy();
+   test_http_bind_policy();

@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "thingino-dlink-dcs6100lhv2"
+version = "0.1.0"
+description = "Host tools for the D-Link DCS-6100LHV2 A1 Thingino port"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+dependencies = ["pyserial==3.5"]
+
+[project.scripts]
+dcs6100-thingino = "installer.cli:main"
+thingino-dlink = "installer.user_cli:main"
+
+[tool.setuptools.packages.find]
+include = ["installer*", "scripts*"]
+
+[tool.setuptools.package-data]
+installer = [
+    "recovery_ap/*.service",
+    "recovery_ap/*.sh",
+    "stage1/*.c",
+    "stage1/*.json",
+    "stage1/*.ld",
+    "stage1/*.md",
+    "templates/*",
+]
+scripts = ["platform/*.swift"]

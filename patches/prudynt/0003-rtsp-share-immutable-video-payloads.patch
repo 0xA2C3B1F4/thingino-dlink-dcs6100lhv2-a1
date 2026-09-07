@@ -1,0 +1,278 @@
+diff --git a/src/SharedPayload.hpp b/src/SharedPayload.hpp
+new file mode 100644
+index 0000000..03a536c
+--- /dev/null
++++ b/src/SharedPayload.hpp
+@@ -0,0 +1,55 @@
++#pragma once
++
++#include <cstddef>
++#include <cstdint>
++#include <memory>
++#include <utility>
++#include <vector>
++
++// Immutable byte storage shared by every consumer of one encoded NAL unit.
++// Constructing from a vector moves or copies the bytes once. Copying this
++// wrapper only increments the shared ownership count.
++class SharedPayload {
++public:
++  using Storage = std::vector<uint8_t>;
++  using const_iterator = Storage::const_iterator;
++
++  SharedPayload() = default;
++  SharedPayload(const Storage &bytes)
++      : storage_(std::make_shared<const Storage>(bytes)) {}
++  SharedPayload(Storage &&bytes)
++      : storage_(std::make_shared<const Storage>(std::move(bytes))) {}
++
++  SharedPayload &operator=(const Storage &bytes) {
++    storage_ = std::make_shared<const Storage>(bytes);
++    return *this;
++  }
++
++  SharedPayload &operator=(Storage &&bytes) {
++    storage_ = std::make_shared<const Storage>(std::move(bytes));
++    return *this;
++  }
++
++  const uint8_t *data() const { return storage_ ? storage_->data() : nullptr; }
++  size_t size() const { return storage_ ? storage_->size() : 0; }
++  bool empty() const { return size() == 0; }
++
++  const uint8_t &operator[](size_t index) const { return (*storage_)[index]; }
++  const_iterator begin() const {
++    return storage_ ? storage_->begin() : emptyStorage().begin();
++  }
++  const_iterator end() const {
++    return storage_ ? storage_->end() : emptyStorage().end();
++  }
++
++  const void *storageIdentity() const { return storage_.get(); }
++  long useCount() const { return storage_.use_count(); }
++
++private:
++  static const Storage &emptyStorage() {
++    static const Storage empty;
++    return empty;
++  }
++
++  std::shared_ptr<const Storage> storage_;
++};
+diff --git a/src/VideoWorker.cpp b/src/VideoWorker.cpp
+index ab6a57c..4562205 100644
+--- a/src/VideoWorker.cpp
++++ b/src/VideoWorker.cpp
+@@ -279,7 +279,6 @@ void VideoWorker::run() {
+   };
+ #endif
+ 
+-  NaluPool naluPool(32);
+ 
+   auto reset_mp4_state = [&]() {
+     reset_mp4_sample();
+@@ -929,9 +928,18 @@ void VideoWorker::run() {
+                     sei_unit.is_frame_start = false;
+                     sei_unit.is_frame_end = false;
+                     sei_unit.is_keyframe = true;
++                    sei_unit.is_random_access = false;
+                     sei_unit.packet_index = 0;
+                     sei_unit.packet_count = 1;
+-                    global_video[encChn]->msgChannel->write(sei_unit);
++
++                    {
++                      std::unique_lock<std::mutex> callback_lock{
++                          global_video[encChn]->onDataCallbackLock};
++                      if (global_video[encChn]->onDataCallback) {
++                        global_video[encChn]->msgChannel->write(sei_unit);
++                        global_video[encChn]->onDataCallback();
++                      }
++                    }
+ 
+                     // Fan SEI NAL out to video taps so RTSP clients
+                     // receive OSD metadata alongside the IDR frame.
+@@ -952,6 +960,7 @@ void VideoWorker::run() {
+                           tap_sei.is_frame_start = false;
+                           tap_sei.is_frame_end = false;
+                           tap_sei.is_keyframe = true;
++                          tap_sei.is_random_access = false;
+                           tap_sei.packet_index = 0;
+                           tap_sei.packet_count = 1;
+                           queue->write(std::move(tap_sei));
+@@ -964,9 +973,10 @@ void VideoWorker::run() {
+             }
+ 
+             if (global_video[encChn]->idr == true) {
+-              // Borrow pooled buffer, fill once, copy to channel + taps
++              // Build one immutable payload and share it with every consumer.
+               size_t payload_len_hint = static_cast<size_t>(end - start);
+-              auto nalu_buf = naluPool.borrow(payload_len_hint);
++              std::vector<uint8_t> nalu_buf;
++              nalu_buf.reserve(payload_len_hint);
+               nalu_buf.insert(nalu_buf.end(), start + 4, end);
+ 
+               // Normalize nal_ref_idc to 3 for SPS/PPS in the in-band
+@@ -988,33 +998,28 @@ void VideoWorker::run() {
+               gettimeofday(&nal_time, nullptr);
+ 
+               bool delivered = false;
++              SharedPayload shared_payload(std::move(nalu_buf));
+ 
+               try {
+-                H264NALUnit nalu;
+-                nalu.data = nalu_buf; // copy: channel stores its own copy
+-                nalu.imp_ts = rtsp_ts_us;
+-                nalu.time = nal_time;
+-                nalu.frame_id = current_frame_id;
+-                nalu.packet_index = i;
+-                nalu.packet_count = stream.packCount;
+-                nalu.is_frame_start = frame_start;
+-                nalu.is_frame_end = pack_is_frame_end;
+-                nalu.is_keyframe = (nal_is_idr || nal_is_hevc_idr ||
+-                                    nal_is_vps || nal_is_sps || nal_is_pps);
+-                delivered = global_video[encChn]->msgChannel->write(std::move(nalu));
+-                if (delivered) {
+-                  std::unique_lock<std::mutex> lock_stream{
+-                      global_video[encChn]->onDataCallbackLock};
+-                  if (global_video[encChn]->onDataCallback)
+-                    global_video[encChn]->onDataCallback();
+-                } else {
+-                  LOG_DDEBUG("video channel:"
+-                             << encChn
+-                             << " msgChannel full, dropped oldest NAL");
+-                  std::unique_lock<std::mutex> lock_stream{
+-                      global_video[encChn]->onDataCallbackLock};
+-                  if (global_video[encChn]->onDataCallback)
+-                    global_video[encChn]->onDataCallback();
++                std::unique_lock<std::mutex> callback_lock{
++                    global_video[encChn]->onDataCallbackLock};
++                if (global_video[encChn]->onDataCallback) {
++                  H264NALUnit nalu;
++                  nalu.data = shared_payload;
++                  nalu.imp_ts = rtsp_ts_us;
++                  nalu.time = nal_time;
++                  nalu.frame_id = current_frame_id;
++                  nalu.packet_index = i;
++                  nalu.packet_count = stream.packCount;
++                  nalu.is_frame_start = frame_start;
++                  nalu.is_frame_end = pack_is_frame_end;
++                  nalu.is_keyframe =
++                      (nal_is_idr || nal_is_hevc_idr || nal_is_vps ||
++                       nal_is_sps || nal_is_pps);
++                  nalu.is_random_access = nal_is_idr || nal_is_hevc_idr;
++                  delivered = global_video[encChn]->msgChannel->write(
++                      std::move(nalu));
++                  global_video[encChn]->onDataCallback();
+                 }
+               } catch (const std::exception &e) {
+                 LOG_ERROR("video channel:"
+@@ -1034,9 +1039,9 @@ void VideoWorker::run() {
+               if (!taps_copy.empty()) {
+                 for (auto &tap : taps_copy) {
+                   if (auto queue = tap.queue.lock()) {
+-                    // Reuse same pooled buffer — copy for each tap consumer
++                    // Every tap receives the same immutable encoded bytes.
+                     H264NALUnit tap_nalu;
+-                    tap_nalu.data = nalu_buf;
++                    tap_nalu.data = shared_payload;
+                     tap_nalu.imp_ts = rtsp_ts_us;
+                     tap_nalu.time = nal_time;
+                     tap_nalu.frame_id = current_frame_id;
+@@ -1047,7 +1052,9 @@ void VideoWorker::run() {
+                     tap_nalu.is_keyframe = (nal_is_idr || nal_is_hevc_idr ||
+                                             nal_is_vps || nal_is_sps ||
+                                             nal_is_pps);
+-                    queue->write(std::move(tap_nalu));
++                    tap_nalu.is_random_access = nal_is_idr || nal_is_hevc_idr;
++                    if (queue->write(std::move(tap_nalu)))
++                      delivered = true;
+                     if (tap.notify) {
+                       tap.notify();
+                     }
+@@ -1055,9 +1062,6 @@ void VideoWorker::run() {
+                 }
+               }
+ 
+-              // Return pooled buffer after all consumers have copied it
+-              naluPool.returnBuf(std::move(nalu_buf));
+-
+               if (!delivered) {
+                 static uint32_t clog_count[NUM_VIDEO_CHANNELS] = {};
+                 static uint64_t clog_last_log_ms[NUM_VIDEO_CHANNELS] = {};
+diff --git a/src/WS.cpp b/src/WS.cpp
+index d218765..f850468 100644
+--- a/src/WS.cpp
++++ b/src/WS.cpp
+@@ -1706,32 +1706,23 @@ static void send_mp4_init(lws_sorted_usec_list_t *sul) {
+   struct user_ctx *u_ctx = wrapper->owner;
+   LOG_DDEBUG("process mp4 init schedule. id:" << u_ctx->id);
+ 
+-  // Try to obtain SPS/PPS from global video channel (non-blocking reads)
++  // Read the codec configuration cache. The general video queue is reserved
++  // for an explicitly registered primary callback and simple-RTSP uses taps.
+   std::vector<uint8_t> sps;
+   std::vector<uint8_t> pps;
+   bool have_sps = false;
+   bool have_pps = false;
+ 
+-  // Drain available messages until we find SPS/PPS or none left
+-  while (true) {
+-    H264NALUnit unit;
+-    if (!global_video[0]->msgChannel->read(&unit)) {
+-      break; // no more messages currently
+-    }
+-    if (unit.data.empty())
+-      continue;
+-    uint8_t nalType = (unit.data[0] & 0x1F);
+-    if (nalType == 7) { // SPS
+-      sps = unit.data;
++  if (global_video[0]) {
++    std::lock_guard<std::mutex> lock(global_video[0]->codec_config_mutex);
++    if (global_video[0]->have_sps) {
++      sps = global_video[0]->latest_sps;
+       have_sps = true;
+-      LOG_DEBUG("Found SPS for MP4 init");
+-    } else if (nalType == 8) { // PPS
+-      pps = unit.data;
++    }
++    if (global_video[0]->have_pps) {
++      pps = global_video[0]->latest_pps;
+       have_pps = true;
+-      LOG_DEBUG("Found PPS for MP4 init");
+     }
+-    if (have_sps && have_pps)
+-      break;
+   }
+ 
+   if (!have_sps || !have_pps) {
+diff --git a/src/globals.hpp b/src/globals.hpp
+index 0ef29a0..69f0d2c 100644
+--- a/src/globals.hpp
++++ b/src/globals.hpp
+@@ -11,6 +11,7 @@
+ #ifdef PREBUFFER_ENABLED
+ #include "PreTriggerBuffer.hpp"
+ #endif
++#include "SharedPayload.hpp"
+ 
+ #include <algorithm>
+ #include <array>
+@@ -70,7 +71,7 @@ struct AudioFrame {
+ };
+ 
+ struct H264NALUnit {
+-  std::vector<uint8_t> data;
++  SharedPayload data;
+ 
+   // Frame boundary tracking (detect incomplete frames)
+   bool is_frame_start = false; // First NAL unit of frame
+@@ -85,6 +86,9 @@ struct H264NALUnit {
+   // True for IDR frames and parameter sets (SPS/PPS/VPS) — safe to drop the
+   // rest under congestion
+   bool is_keyframe = false;
++  // True only for an IDR/random-access picture. SPS/PPS/VPS/SEI do not open a
++  // congestion-recovery gate by themselves.
++  bool is_random_access = false;
+ };
+ 
+ struct BackchannelFrame {

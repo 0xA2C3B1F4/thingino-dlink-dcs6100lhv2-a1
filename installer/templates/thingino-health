@@ -1,0 +1,17 @@
+#!/bin/sh
+set -eu
+
+ROUNDTRIP=/run/thingino-health.roundtrip
+trap 'rm -f "$ROUNDTRIP"' EXIT HUP INT TERM
+umask 077
+
+[ -f /run/thingino-health ]
+[ -f /etc/dcs6100-personal-image.json ]
+[ -s /run/mdnsd.pid ] && kill -0 "$(cat /run/mdnsd.pid)" 2>/dev/null
+ip -4 addr show dev wlan0 scope global | grep -q 'inet '
+hostname_value=$(cat /etc/hostname)
+case "$hostname_value" in dcs6100-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;; *) exit 1 ;; esac
+dd of="$ROUNDTRIP" bs=4097 count=1 2>/dev/null
+[ "$(wc -c <"$ROUNDTRIP")" -eq 4096 ]
+printf 'healthy %s.local\n' "$hostname_value"
+cat "$ROUNDTRIP"

@@ -1,0 +1,215 @@
+diff --git a/src/Config.cpp b/src/Config.cpp
+index 963e0de..d3ff5a1 100644
+--- a/src/Config.cpp
++++ b/src/Config.cpp
+@@ -1,6 +1,7 @@
+ #include "Config.hpp"
+ #include "JpegIdlePolicy.hpp"
+ #include "Logger.hpp"
++#include "StreamRuntimePolicy.hpp"
+ #include "imp_hal.hpp"
+ #include <algorithm>
+ #include <cmath>
+@@ -35,6 +36,8 @@ void log_dimension_adjustment(const char *context, const char *field,
+ void apply_stream_sensor_defaults(CFG &config) {
+   const int sensor_w = config.sensor.width;
+   const int sensor_h = config.sensor.height;
++  const int sensor_max_fps = config.sensor.fps;
++  const int sensor_min_fps = config.sensor.min_fps;
+   if (sensor_w <= 0 || sensor_h <= 0) {
+     return;
+   }
+@@ -56,6 +59,12 @@ void apply_stream_sensor_defaults(CFG &config) {
+   auto adjust_stream = [&](const char *stream_name, _stream &stream) {
+     adjust_dim(stream_name, "width", sensor_w, stream.width);
+     adjust_dim(stream_name, "height", sensor_h, stream.height);
++    if (sensor_max_fps > 0) {
++      int original = stream.fps;
++      stream.fps = normalizeVideoFps(stream.fps, sensor_min_fps,
++                                     sensor_max_fps);
++      log_dimension_adjustment(stream_name, "fps", original, stream.fps);
++    }
+   };
+ 
+   adjust_stream("stream0", config.stream0);
+diff --git a/src/DLinkMediaProcessPolicy.hpp b/src/DLinkMediaProcessPolicy.hpp
+new file mode 100644
+index 0000000..73d47ac
+--- /dev/null
++++ b/src/DLinkMediaProcessPolicy.hpp
+@@ -0,0 +1,18 @@
++#ifndef DLINK_MEDIA_PROCESS_POLICY_HPP
++#define DLINK_MEDIA_PROCESS_POLICY_HPP
++
++enum class DLinkMediaProcessAction { Continue, Replace, Exit };
++
++inline constexpr DLinkMediaProcessAction
++dlinkMediaProcessAction(bool shutting_down, bool restart_video,
++                        bool restart_audio) {
++  if (shutting_down) {
++    return DLinkMediaProcessAction::Exit;
++  }
++  if (restart_video || restart_audio) {
++    return DLinkMediaProcessAction::Replace;
++  }
++  return DLinkMediaProcessAction::Continue;
++}
++
++#endif // DLINK_MEDIA_PROCESS_POLICY_HPP
+diff --git a/src/StreamRuntimePolicy.hpp b/src/StreamRuntimePolicy.hpp
+new file mode 100644
+index 0000000..515fb73
+--- /dev/null
++++ b/src/StreamRuntimePolicy.hpp
+@@ -0,0 +1,22 @@
++#ifndef STREAM_RUNTIME_POLICY_HPP
++#define STREAM_RUNTIME_POLICY_HPP
++
++#include <algorithm>
++
++inline int normalizeVideoFps(int configured_fps, int sensor_min_fps,
++                             int sensor_max_fps) {
++  if (sensor_max_fps <= 0) {
++    return configured_fps;
++  }
++
++  int normalized = configured_fps;
++  if (normalized <= 0 || normalized > sensor_max_fps) {
++    normalized = sensor_max_fps;
++  }
++  if (sensor_min_fps > 0 && normalized < sensor_min_fps) {
++    normalized = std::min(sensor_min_fps, sensor_max_fps);
++  }
++  return normalized;
++}
++
++#endif // STREAM_RUNTIME_POLICY_HPP
+diff --git a/src/main.cpp b/src/main.cpp
+index 83beb8b..0e5199a 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -4,6 +4,7 @@
+ #include "BackchannelWorker.hpp"
+ #include "Config.hpp"
+ #include "ConfigWatcher.hpp"
++#include "DLinkMediaProcessPolicy.hpp"
+ /* DayNightWorker removed — photosensing delegated to daynightd */
+ #include "IMPBackchannel.hpp"
+ #include "IMPSystem.hpp"
+@@ -152,6 +153,38 @@ void release_instance_lock() {
+   }
+ }
+ 
++#if defined(DCS_DLINK_MEDIA_READY)
++[[noreturn]] void replace_dlink_media_process(int argc, const char *argv[]) {
++  std::vector<char *> exec_argv;
++  exec_argv.reserve(static_cast<size_t>(argc) + 1);
++  for (int i = 0; i < argc; ++i) {
++    exec_argv.push_back(const_cast<char *>(argv[i]));
++  }
++  exec_argv.push_back(nullptr);
++
++  // JsonAPI publishes restart flags before its local response is flushed.
++  // Control reads that small response on loopback, so a bounded deferral keeps
++  // the successful request intact before exec replaces all worker threads.
++  std::this_thread::sleep_for(std::chrono::milliseconds(250));
++
++  long open_max = sysconf(_SC_OPEN_MAX);
++  if (open_max < 0 || open_max > 65536) {
++    open_max = 1024;
++  }
++  for (int fd = STDERR_FILENO + 1; fd < open_max; ++fd) {
++    int flags = fcntl(fd, F_GETFD);
++    if (flags >= 0) {
++      (void)fcntl(fd, F_SETFD, flags | FD_CLOEXEC);
++    }
++  }
++
++  LOG_INFO("D-Link media restart: replacing process without SDK teardown");
++  execv("/proc/self/exe", exec_argv.data());
++  LOG_ERROR("D-Link media restart: execv failed: " << strerror(errno));
++  _exit(127);
++}
++#endif
++
+ struct InstanceLockGuard {
+   bool held = false;
+   bool acquire() {
+@@ -980,6 +1013,19 @@ int main(int argc, const char *argv[]) {
+     }
+     lck.unlock();
+ 
++#if defined(DCS_DLINK_MEDIA_READY)
++    switch (dlinkMediaProcessAction(shutting_down, global_restart_video,
++                                    global_restart_audio)) {
++    case DLinkMediaProcessAction::Exit:
++      LOG_INFO("D-Link shutdown: exiting without unsafe SDK teardown");
++      _exit(0);
++    case DLinkMediaProcessAction::Replace:
++      replace_dlink_media_process(argc, argv);
++    case DLinkMediaProcessAction::Continue:
++      break;
++    }
++#endif
++
+     global_restart = true;
+ 
+     if (global_restart_rtsp) {
+diff --git a/tests/test_media_queue.cpp b/tests/test_media_queue.cpp
+index 778189a..7bd6fa3 100644
+--- a/tests/test_media_queue.cpp
++++ b/tests/test_media_queue.cpp
+@@ -2,9 +2,11 @@
+ 
+ #include "FrameRecoveryGate.hpp"
+ #include "EncoderReceivePolicy.hpp"
++#include "DLinkMediaProcessPolicy.hpp"
+ #include "HTTPBindPolicy.hpp"
+ #include "JpegDemandPolicy.hpp"
+ #include "JpegIdlePolicy.hpp"
++#include "StreamRuntimePolicy.hpp"
+ #include "MJPEGRequestPolicy.hpp"
+ #include "MsgChannel.hpp"
+ #include "SharedPayload.hpp"
+@@ -118,6 +120,30 @@ static void test_video_receive_demand_and_transition_policy() {
+ 
+ }
+ 
++static void test_stream_runtime_fps_policy() {
++  assert(normalizeVideoFps(0, 5, 25) == 25);
++  assert(normalizeVideoFps(30, 5, 25) == 25);
++  assert(normalizeVideoFps(3, 5, 25) == 5);
++  assert(normalizeVideoFps(15, 5, 25) == 15);
++  assert(normalizeVideoFps(0, 0, 0) == 0);
++  assert(normalizeVideoFps(1, 30, 25) == 25);
++}
++
++static void test_dlink_media_process_policy() {
++  assert(dlinkMediaProcessAction(false, false, false) ==
++         DLinkMediaProcessAction::Continue);
++  assert(dlinkMediaProcessAction(false, true, false) ==
++         DLinkMediaProcessAction::Replace);
++  assert(dlinkMediaProcessAction(false, false, true) ==
++         DLinkMediaProcessAction::Replace);
++  assert(dlinkMediaProcessAction(false, true, true) ==
++         DLinkMediaProcessAction::Replace);
++  assert(dlinkMediaProcessAction(true, false, false) ==
++         DLinkMediaProcessAction::Exit);
++  assert(dlinkMediaProcessAction(true, true, true) ==
++         DLinkMediaProcessAction::Exit);
++}
++
+ static void test_socket_peer_disconnect_detection() {
+   int sockets[2] = {-1, -1};
+   assert(socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) == 0);
+@@ -336,6 +362,8 @@ int main() {
+   test_mjpeg_request_policy();
+   test_http_bind_policy();
+   test_video_receive_demand_and_transition_policy();
++  test_stream_runtime_fps_policy();
++  test_dlink_media_process_policy();
+   test_socket_peer_disconnect_detection();
+   test_exact_byte_boundary();
+   test_exact_element_boundary();
+-- 
+2.54.0

@@ -1,0 +1,271 @@
+diff --git a/res/prudynt.json b/res/prudynt.json
+index 96bbd8e..9968308 100644
+--- a/res/prudynt.json
++++ b/res/prudynt.json
+@@ -25,6 +25,7 @@
+     "loglevel": "INFO"
+   },
+   "http": {
++    "loopback_only": false,
+     "api_enabled": true,
+     "auth_required": true,
+     "enabled": true,
+diff --git a/src/Config.cpp b/src/Config.cpp
+index 92d8fdd..963e0de 100644
+--- a/src/Config.cpp
++++ b/src/Config.cpp
+@@ -304,6 +304,7 @@ std::vector<ConfigItem<bool>> CFG::getBoolItems() {
+       {"http.enabled", http.enabled, true, validateBool},
+       {"http.api_enabled", http.api_enabled, true, validateBool},
+       {"http.mjpeg_enabled", http.mjpeg_enabled, true, validateBool},
++      {"http.loopback_only", http.loopback_only, false, validateBool},
+       {"http.auth_required", http.auth_required, true, validateBool},
+       {"image.isp_bypass", image.isp_bypass, true, validateBool},
+       {"image.vflip", image.vflip, false, validateBool},
+diff --git a/src/Config.hpp b/src/Config.hpp
+index 860bd72..8cbac78 100644
+--- a/src/Config.hpp
++++ b/src/Config.hpp
+@@ -145,6 +145,7 @@ struct _http {
+   bool enabled;
+   bool mjpeg_enabled;
+   bool api_enabled;
++  bool loopback_only;
+   int port;
+   bool auth_required;
+   const char *username;
+diff --git a/src/HTTPMJPEG.cpp b/src/HTTPMJPEG.cpp
+index e5cbf9e..523385c 100644
+--- a/src/HTTPMJPEG.cpp
++++ b/src/HTTPMJPEG.cpp
+@@ -1,9 +1,12 @@
+ #include "HTTPMJPEG.hpp"
+ 
+ #include "Config.hpp"
++#include "HTTPBindPolicy.hpp"
+ #include "JPEGWorker.hpp"
+ #include "JsonAPI.hpp"
+ #include "Logger.hpp"
++#include "MJPEGRequestPolicy.hpp"
++#include "SocketPeer.hpp"
+ #include "globals.hpp"
+ 
+ #include <json_config.h>
+@@ -106,7 +109,7 @@ std::string base64_decode(const std::string &encoded) {
+ bool write_full(int fd, const void *data, size_t len) {
+   const char *p = static_cast<const char *>(data);
+   while (len > 0) {
+-    ssize_t n = ::write(fd, p, len);
++    ssize_t n = ::send(fd, p, len, MSG_NOSIGNAL);
+     if (n < 0) {
+       if (errno == EINTR)
+         continue;
+@@ -127,7 +130,7 @@ bool write_chunked_paced(int fd, const unsigned char *data, size_t len,
+   size_t sent = 0;
+   while (sent < len) {
+     size_t to_send = std::min(chunk_sz, len - sent);
+-    ssize_t n = ::send(fd, data + sent, to_send, 0);
++    ssize_t n = ::send(fd, data + sent, to_send, MSG_NOSIGNAL);
+     if (n < 0) {
+       if (errno == EINTR)
+         continue;
+@@ -197,13 +200,15 @@ HTTPMJPEG::~HTTPMJPEG() {
+ }
+ 
+ void HTTPMJPEG::start(int port, bool enable_mjpeg, bool enable_api,
+-                      bool auth_required, const char *username,
++                      bool loopback_only, bool auth_required,
++                      const char *username,
+                       const char *password) {
+   bool expected = false;
+   if (!running_.compare_exchange_strong(expected, true))
+     return; // already running
+   mjpeg_enabled_ = enable_mjpeg;
+   api_enabled_ = enable_api;
++  loopback_only_ = loopback_only;
+   auth_required_ = auth_required;
+   username_ = username;
+   password_ = password;
+@@ -236,7 +241,7 @@ void HTTPMJPEG::server_loop(int port) {
+ 
+   sockaddr_in addr{};
+   addr.sin_family = AF_INET;
+-  addr.sin_addr.s_addr = htonl(INADDR_ANY);
++  addr.sin_addr.s_addr = htonl(httpBindHostAddress(loopback_only_));
+   addr.sin_port = htons(static_cast<uint16_t>(port));
+   if (::bind(fd, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) < 0) {
+     LOG_ERROR("HTTPMJPEG: bind(" << port << ") failed: " << strerror(errno));
+@@ -252,8 +257,9 @@ void HTTPMJPEG::server_loop(int port) {
+     running_.store(false);
+     return;
+   }
+-  LOG_INFO("HTTPMJPEG: listening on port "
+-           << port << " (/mjpg?ch=0.." << (NUM_JPEG_CHANNELS - 1)
++  LOG_INFO("HTTPMJPEG: listening on "
++           << (loopback_only_ ? "127.0.0.1:" : "0.0.0.0:") << port
++           << " (/mjpg?ch=0.." << (NUM_JPEG_CHANNELS - 1)
+            << "&f=&q=&w=&h=)" << (api_enabled_ ? " and /api/v1/config" : ""));
+ 
+   while (running_.load()) {
+@@ -403,10 +409,9 @@ void HTTPMJPEG::handle_client(int cfd) {
+     return;
+   }
+ 
+-  // Serve one JPEG from the in-memory encoder buffer.  The public ingress
+-  // authenticates this route through Thingino Control before opening this
+-  // loopback request, so media bytes do not occupy a Control worker or require
+-  // a temporary file.
++  // Serve one JPEG from the in-memory encoder buffer. The public ingress
++  // authenticates this route before opening the loopback request, so media
++  // bytes do not occupy a Control worker or require a temporary file.
+   if (mjpeg_enabled_ && path == "/snapshot") {
+     sockaddr_in peer{};
+     socklen_t peer_len = sizeof(peer);
+@@ -661,6 +666,12 @@ void HTTPMJPEG::handle_client(int cfd) {
+     ::close(cfd);
+     return;
+   }
++  if (mjpegSharedEncoderMutationRequested(q, w, h)) {
++    send_response(400, "text/plain",
++                  "per-request JPEG quality and size are unsupported\n");
++    ::close(cfd);
++    return;
++  }
+   if (!JPEGWorker::ensure_running(ch)) {
+     const char *resp =
+         "HTTP/1.0 503 Service Unavailable\r\nContent-Type: "
+@@ -671,39 +682,8 @@ void HTTPMJPEG::handle_client(int cfd) {
+   }
+ 
+   auto *stream_cfg = global_jpeg[ch]->stream;
+-
+-  // Quantize w/h to multiples of 16 and cap to source size
+-  if (w > 0 && h > 0) {
+-    auto src_w = (global_jpeg[ch]->streamChn == 0) ? cfg->stream0.width
+-                                                   : cfg->stream1.width;
+-    auto src_h = (global_jpeg[ch]->streamChn == 0) ? cfg->stream0.height
+-                                                   : cfg->stream1.height;
+-    if (w > src_w)
+-      w = src_w;
+-    if (h > src_h)
+-      h = src_h;
+-    w = (w + 15) & ~15;
+-    h = (h + 15) & ~15;
+-  }
+-
+-  // Apply quality override and request reconfig
+-  if (q >= 1 && q <= 100)
+-    global_jpeg[ch]->quality_override = q;
+-
+   int orig_fps = stream_cfg->fps;
+ 
+-  bool size_change =
+-      (w > 0 && h > 0 && (w != stream_cfg->width || h != stream_cfg->height));
+-  bool fps_change = (fps > 0 && fps != stream_cfg->fps);
+-
+-  if (size_change) {
+-    global_jpeg[ch]->req_width = w;
+-    global_jpeg[ch]->req_height = h;
+-  }
+-  if (fps_change) {
+-    global_jpeg[ch]->req_fps = fps;
+-  }
+-
+   // Optional tuning: chunk size, sndbuf, tos
+   p = get_param(qs, "cs");
+   if (!p.empty()) {
+@@ -722,20 +702,10 @@ void HTTPMJPEG::handle_client(int cfd) {
+       tos_override = -1;
+   }
+ 
+-  bool needs_reconfig = size_change || fps_change;
+-  if (needs_reconfig) {
+-    global_jpeg[ch]->reconfig = true;
+-    global_jpeg[ch]->request();
+-
+-    // Wait briefly for reconfig to apply
+-    int wait_ms = 500;
+-    while (global_jpeg[ch]->reconfig.load() && wait_ms > 0) {
+-      usleep(10 * 1000);
+-      wait_ms -= 10;
+-    }
+-  } else {
+-    global_jpeg[ch]->request();
+-  }
++  // HTTP clients pace their own connection. Encoder dimensions, quality, and
++  // source cadence are device configuration and must never be mutated by a
++  // request, because the JPEG encoder is shared by every client.
++  global_jpeg[ch]->request();
+ 
+   // Apply optional socket overrides from query
+   if (tos_override >= 0) {
+@@ -782,6 +752,9 @@ void HTTPMJPEG::handle_client(int cfd) {
+   }
+ 
+   while (true) {
++    if (socketPeerClosed(cfd))
++      break;
++
+     // Schedule the next deadline one tick ahead; avoid catch-up bursts
+     t_next += tick;
+     auto now = steady_clock::now();
+@@ -791,7 +764,12 @@ void HTTPMJPEG::handle_client(int cfd) {
+     // Try to wait for a fresh frame; if none arrives by the deadline, reuse
+     // last
+     bool have_new = false;
++    bool peer_closed = false;
+     for (int i = 0; i < 200; ++i) { // up to ~1s
++      if ((i % 10) == 0 && socketPeerClosed(cfd)) {
++        peer_closed = true;
++        break;
++      }
+       uint32_t seq = global_jpeg[ch]->frame_seq.load();
+       if (seq != last_seq) {
+         last_seq = seq;
+@@ -804,6 +782,8 @@ void HTTPMJPEG::handle_client(int cfd) {
+         break;
+       std::this_thread::sleep_for(milliseconds(5));
+     }
++    if (peer_closed)
++      break;
+ 
+     img.clear();
+     if (is_privacy_active_for_jpeg(ch)) {
+diff --git a/src/HTTPMJPEG.hpp b/src/HTTPMJPEG.hpp
+index 4c7dc7a..1c220f6 100644
+--- a/src/HTTPMJPEG.hpp
++++ b/src/HTTPMJPEG.hpp
+@@ -10,7 +10,8 @@ public:
+   ~HTTPMJPEG();
+ 
+   void start(int port = 8081, bool enable_mjpeg = true, bool enable_api = false,
+-             bool auth_required = true, const char *username = "thingino",
++             bool loopback_only = false, bool auth_required = true,
++             const char *username = "thingino",
+              const char *password = "thingino"); // no-op if already running
+   void stop();                                   // best-effort stop
+ 
+@@ -23,6 +24,7 @@ private:
+   int listen_fd_{-1};
+   bool mjpeg_enabled_{true};
+   bool api_enabled_{false};
++  bool loopback_only_{false};
+   bool auth_required_{true};
+   const char *username_{"thingino"};
+   const char *password_{"thingino"};
+diff --git a/src/main.cpp b/src/main.cpp
+index 819b6eb..83beb8b 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -860,7 +860,8 @@ int main(int argc, const char *argv[]) {
+ 
+   if (cfg->http.enabled && (cfg->http.mjpeg_enabled || cfg->http.api_enabled)) {
+     http_mjpeg.start(cfg->http.port, cfg->http.mjpeg_enabled,
+-                     cfg->http.api_enabled, cfg->http.auth_required,
++                     cfg->http.api_enabled, cfg->http.loopback_only,
++                     cfg->http.auth_required,
+                      cfg->http.username, cfg->http.password);
+     http_mjpeg_started = true;
+   }
+-- 
+2.54.0

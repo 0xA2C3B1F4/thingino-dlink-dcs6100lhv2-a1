@@ -1,0 +1,10 @@
+{
+  "control": {
+    "backend": "prudynt",
+    "enabled": true,
+    "listen": "127.0.0.1",
+    "notes": "Local Thingino WebUI and API control plane.",
+    "port": 1998,
+    "token": ""
+  }
+}

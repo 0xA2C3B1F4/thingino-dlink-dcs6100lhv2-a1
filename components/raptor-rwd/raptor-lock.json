@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "purpose": "Pinned source identities for the D-Link Prudynt plus Raptor rwd component",
+  "build_closure": [
+    "compy",
+    "mbedtls",
+    "raptor",
+    "raptor-common",
+    "raptor-ipc"
+  ],
+  "excluded_sources": {
+    "raptor-hal": "The video-only rwd component does not link Raptor HAL or libimp."
+  },
+  "sources": {
+    "compy": "59e4a37aa1150d6f1a92aa94e404065e23585e6c",
+    "mbedtls": "0bebf8b8c7f07abe3571ded48a11aa907a1ffb20",
+    "raptor": "6bc7f44be0c3f94a56b4296bc035386b320d2b5a",
+    "raptor-common": "75d83e8bd2c6d2a2c8ef2b8a7040d74b84236d04",
+    "raptor-hal": "956346bc8af40312a5fabaab2d21389c80a26399",
+    "raptor-ipc": "56378de9d9003a672660a53617a1f36c6aa75bc4"
+  },
+  "source_urls": {
+    "compy": "https://github.com/gtxaspec/compy.git",
+    "mbedtls": "https://github.com/Mbed-TLS/mbedtls.git",
+    "raptor": "https://github.com/gtxaspec/raptor.git",
+    "raptor-common": "https://github.com/gtxaspec/raptor-common.git",
+    "raptor-hal": "https://github.com/gtxaspec/raptor-hal.git",
+    "raptor-ipc": "https://github.com/gtxaspec/raptor-ipc.git"
+  },
+  "license_sha256": {
+    "compy": "da50d92a25d6e849b82699c31a2d7bcb0427b7eff44ba607e597ab22301f9412",
+    "mbedtls": "9b405ef4c89342f5eae1dd828882f931747f71001cfba7d114801039b52ad09b",
+    "raptor": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+    "raptor-common": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+    "raptor-hal": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+    "raptor-ipc": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+  }
+}

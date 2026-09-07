@@ -1,0 +1,12 @@
+diff --git a/src/JsonAPI.cpp b/src/JsonAPI.cpp
+index ff25e25..87309a8 100644
+--- a/src/JsonAPI.cpp
++++ b/src/JsonAPI.cpp
+@@ -3,6 +3,7 @@
+ #include "AudioOutputWorker.hpp"
+ #include "Config.hpp"
+ #include "DLinkLiveControlPolicy.hpp"
++#include "MP4ControlSocket.hpp"
+ #include "MP4Recorder.hpp"
+ #include "globals.hpp"
+ #include "imp_hal.hpp"

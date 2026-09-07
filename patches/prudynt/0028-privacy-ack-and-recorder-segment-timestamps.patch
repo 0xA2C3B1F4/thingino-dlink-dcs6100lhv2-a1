@@ -1,0 +1,765 @@
+diff --git a/src/AudioWorker.cpp b/src/AudioWorker.cpp
+index ac2a90f..5e510d0 100644
+--- a/src/AudioWorker.cpp
++++ b/src/AudioWorker.cpp
+@@ -182,6 +182,7 @@ private:
+ 
+ AudioWorker::AudioWorker(int chn)
+     : encChn(chn), mp4_audio_samples(NUM_VIDEO_CHANNELS, 0),
++      mp4_audio_generations(NUM_VIDEO_CHANNELS, 0),
+       mp4_audio_sample_rate(0), tap(std::make_unique<AudioTap>()) {
+   LOG_DEBUG("AudioWorker created for channel " << encChn);
+ }
+@@ -278,9 +279,17 @@ void AudioWorker::process_audio_frame(IMPAudioFrame &frame) {
+     bool recorder_active = recorder.isActive();
+     if (!recorder_active) {
+       mp4_audio_samples[ch] = 0;
++      mp4_audio_generations[ch] = 0;
+       continue;
+     }
+ 
++    uint64_t recorder_generation = recorder.generation();
++    if (recorder_generation == 0) continue;
++    if (mp4_audio_generations[ch] != recorder_generation) {
++      mp4_audio_samples[ch] = 0;
++      mp4_audio_generations[ch] = recorder_generation;
++    }
++
+     any_recorder_active = true;
+ 
+     if (mp4_audio_sample_rate <= 0) {
+@@ -298,8 +307,9 @@ void AudioWorker::process_audio_frame(IMPAudioFrame &frame) {
+     }
+ 
+     if (frame_len > 0) {
+-      recorder.writeAudio(start, frame_len, pts_ms);
+-      mp4_audio_samples[ch] += frame_samples;
++      if (recorder.writeAudio(recorder_generation, start, frame_len, pts_ms)) {
++        mp4_audio_samples[ch] += frame_samples;
++      }
+     }
+   }
+ 
+diff --git a/src/AudioWorker.hpp b/src/AudioWorker.hpp
+index 60d15c3..0bd99e3 100644
+--- a/src/AudioWorker.hpp
++++ b/src/AudioWorker.hpp
+@@ -3,6 +3,7 @@
+ 
+ #include "IMPAudio.hpp"
+ 
++#include <cstdint>
+ #include <memory>
+ #include <vector>
+ 
+@@ -23,6 +24,7 @@ private:
+ 
+   int encChn;
+   std::vector<int64_t> mp4_audio_samples;
++  std::vector<uint64_t> mp4_audio_generations;
+   int mp4_audio_sample_rate = 0;
+   std::unique_ptr<AudioTap> tap;
+   std::vector<uint8_t> directEncBuf;
+diff --git a/src/JsonAPI.cpp b/src/JsonAPI.cpp
+index 24835e3..efe2f8b 100644
+--- a/src/JsonAPI.cpp
++++ b/src/JsonAPI.cpp
+@@ -1,4 +1,5 @@
+ #include "JsonAPI.hpp"
++#include "VideoPrivacyControl.hpp"
+ #include "AudioOutputWorker.hpp"
+ #include "Config.hpp"
+ #include "DLinkLiveControlPolicy.hpp"
+@@ -847,7 +848,7 @@ void handle_motion(JsonValue *obj, std::string &out, bool &sep) {
+   out += "}";
+ }
+ 
+-void handle_privacy(JsonValue *obj, std::string &out, bool &sep) {
++bool handle_privacy(JsonValue *obj, std::string &out, bool &sep) {
+   add_key(out, sep, "privacy", "{");
+   bool s2 = false;
+   bool wrote = false;
+@@ -856,18 +857,14 @@ void handle_privacy(JsonValue *obj, std::string &out, bool &sep) {
+   if (JsonValue *v = obj_get(obj, "enabled")) {
+     if (v->type == JSON_BOOL) {
+       bool enabled = v->value.boolean != 0;
+-      // Apply privacy to all channels via FIFO
+-      const char *fifo_path = "/run/prudynt/video_ctrl";
+-      int fd = open(fifo_path, O_WRONLY | O_NONBLOCK);
+-      if (fd >= 0) {
+-        const char *cmd = enabled ? "PRIVACY channel=all value=1\n"
+-                                  : "PRIVACY channel=all value=0\n";
+-        write(fd, cmd, strlen(cmd));
+-        close(fd);
+-      }
++      bool applied = VideoPrivacyControl::setPrivacy(enabled);
+       add_key(out, s2, "enabled");
+-      add_bool(out, enabled);
++      add_bool(out, applied ? enabled : !enabled);
+       wrote = true;
++      if (!applied) {
++        out += "}";
++        return false;
++      }
+     } else if (v->type == JSON_NULL) {
+       // Just query the state
+       bool any_privacy = false;
+@@ -886,9 +883,10 @@ void handle_privacy(JsonValue *obj, std::string &out, bool &sep) {
+ 
+   if (!wrote) {
+     out.erase(out.size() - 1);
+-    return;
++    return true;
+   }
+   out += "}";
++  return true;
+ }
+ 
+ void handle_daynight(JsonValue *obj, std::string &out, bool &sep) {
+@@ -1568,6 +1566,7 @@ bool process_json(const std::string &in, std::string &out) {
+   bool prev_restart_video = global_restart_video;
+   bool prev_restart_audio = global_restart_audio;
+   bool prev_restart_motion = global_restart_motion;
++  bool request_ok = true;
+ 
+   // Iterate top-level keys
+   for (JsonKeyValue *kv = root->value.object_head; kv; kv = kv->next) {
+@@ -1597,7 +1596,7 @@ bool process_json(const std::string &in, std::string &out) {
+     } else if (!strcmp(k, "motion") && v && v->type == JSON_OBJECT) {
+       handle_motion(v, out, sep);
+     } else if (!strcmp(k, "privacy") && v && v->type == JSON_OBJECT) {
+-      handle_privacy(v, out, sep);
++      request_ok = handle_privacy(v, out, sep) && request_ok;
+     } else if (!strcmp(k, "info") && v && v->type == JSON_OBJECT) {
+       handle_info(v, out, sep);
+     } else if (!strcmp(k, "daynight") && v && v->type == JSON_OBJECT) {
+@@ -1620,7 +1619,7 @@ bool process_json(const std::string &in, std::string &out) {
+     global_cv_worker_restart.notify_one();
+   }
+ 
+-  return true;
++  return request_ok;
+ }
+ 
+ } // namespace JsonAPI
+diff --git a/src/MP4ControlSocket.cpp b/src/MP4ControlSocket.cpp
+index 3f9bebb..3643e49 100644
+--- a/src/MP4ControlSocket.cpp
++++ b/src/MP4ControlSocket.cpp
+@@ -731,6 +731,7 @@ bool start_recording(const std::string &path, int target_channel) {
+ 
+   bool ok = recorder.start(path.c_str(), init);
+   if (ok) {
++    const uint64_t recorder_generation = recorder.generation();
+     global_mp4_active_recorders.fetch_add(1, std::memory_order_relaxed);
+     LOG_INFO("MP4ControlSocket: recorder started with avcC payload size="
+              << init.avcC.size() << " on channel " << target_channel);
+@@ -755,8 +756,8 @@ bool start_recording(const std::string &path, int target_channel) {
+         int64_t pts_ms = relative_ts / 1000;
+ 
+         // Write prebuffer frame to MP4
+-        recorder.writeVideo(frame.data.data(), frame.data.size(), pts_ms,
+-                            frame.is_keyframe);
++        recorder.writeVideo(recorder_generation, frame.data.data(),
++                            frame.data.size(), pts_ms, frame.is_keyframe);
+       }
+ 
+       // Allow live frames to be written now
+diff --git a/src/MP4Recorder.cpp b/src/MP4Recorder.cpp
+index a9291aa..6209b98 100644
+--- a/src/MP4Recorder.cpp
++++ b/src/MP4Recorder.cpp
+@@ -71,7 +71,8 @@ bool MP4Recorder::start(const std::string &path,
+     return false;
+   }
+ 
+-  active_ = true;
++  generation_.fetch_add(1, std::memory_order_acq_rel);
++  active_.store(true, std::memory_order_release);
+   return true;
+ }
+ 
+@@ -80,29 +81,38 @@ void MP4Recorder::stop() {
+   closeUnlocked();
+ }
+ 
+-void MP4Recorder::writeVideo(const uint8_t *data, size_t size, int64_t pts_ms,
+-                             bool isKey) {
++bool MP4Recorder::writeVideo(uint64_t generation, const uint8_t *data,
++                             size_t size, int64_t pts_ms, bool isKey) {
+   std::lock_guard<std::mutex> lock(mutex_);
+-  if (!active_ || !muxer_ || fd_ < 0)
+-    return;
++  if (!active_.load(std::memory_order_acquire) ||
++      generation != generation_.load(std::memory_order_acquire) || !muxer_ ||
++      fd_ < 0)
++    return false;
+ 
+   std::vector<uint8_t> frag = muxer_->muxVideo(data, size, pts_ms, isKey);
+   if (!frag.empty() && !writeFully(fd_, frag.data(), frag.size())) {
+     LOG_ERROR("failed to write MP4 video fragment; stopping recorder");
+     closeUnlocked();
++    return false;
+   }
++  return true;
+ }
+ 
+-void MP4Recorder::writeAudio(const uint8_t *data, size_t size, int64_t pts_ms) {
++bool MP4Recorder::writeAudio(uint64_t generation, const uint8_t *data,
++                             size_t size, int64_t pts_ms) {
+   std::lock_guard<std::mutex> lock(mutex_);
+-  if (!active_ || !muxer_ || fd_ < 0)
+-    return;
++  if (!active_.load(std::memory_order_acquire) ||
++      generation != generation_.load(std::memory_order_acquire) || !muxer_ ||
++      fd_ < 0)
++    return false;
+ 
+   std::vector<uint8_t> frag = muxer_->muxAudio(data, size, pts_ms);
+   if (!frag.empty() && !writeFully(fd_, frag.data(), frag.size())) {
+     LOG_ERROR("failed to write MP4 audio fragment; stopping recorder");
+     closeUnlocked();
++    return false;
+   }
++  return true;
+ }
+ 
+ void MP4Recorder::closeUnlocked() {
+@@ -117,5 +127,5 @@ void MP4Recorder::closeUnlocked() {
+     ::close(fd_);
+     fd_ = -1;
+   }
+-  active_ = false;
++  active_.store(false, std::memory_order_release);
+ }
+diff --git a/src/MP4Recorder.hpp b/src/MP4Recorder.hpp
+index 48e5517..d154c1d 100644
+--- a/src/MP4Recorder.hpp
++++ b/src/MP4Recorder.hpp
+@@ -1,5 +1,7 @@
+ #pragma once
+ 
++#include <atomic>
++#include <cstdint>
+ #include <memory>
+ #include <mutex>
+ #include <string>
+@@ -15,11 +17,16 @@ public:
+   bool start(const std::string &path, const MP4Muxer::InitParams &params);
+   void stop();
+ 
+-  void writeVideo(const uint8_t *data, size_t size, int64_t pts_ms, bool isKey);
+-  void writeAudio(const uint8_t *data, size_t size, int64_t pts_ms);
++  bool writeVideo(uint64_t generation, const uint8_t *data, size_t size,
++                  int64_t pts_ms, bool isKey);
++  bool writeAudio(uint64_t generation, const uint8_t *data, size_t size,
++                  int64_t pts_ms);
+ 
+   bool isActive() const {
+-    return active_;
++    return active_.load(std::memory_order_acquire);
++  }
++  uint64_t generation() const {
++    return generation_.load(std::memory_order_acquire);
+   }
+ 
+ private:
+@@ -28,5 +35,6 @@ private:
+   mutable std::mutex mutex_;
+   std::unique_ptr<MP4Muxer> muxer_;
+   int fd_ = -1;
+-  bool active_ = false;
++  std::atomic<bool> active_{false};
++  std::atomic<uint64_t> generation_{0};
+ };
+diff --git a/src/VideoPrivacyControl.cpp b/src/VideoPrivacyControl.cpp
+index ec84fbd..0ef3650 100644
+--- a/src/VideoPrivacyControl.cpp
++++ b/src/VideoPrivacyControl.cpp
+@@ -26,18 +26,36 @@ namespace {
+ constexpr const char *kFifoDir = "/run/prudynt";
+ constexpr const char *kFifoPath = "/run/prudynt/video_ctrl";
+ constexpr const char *kPrivacyStatePath = "/run/prudynt/privacy.active";
++std::mutex privacy_mutex;
+ 
+-void write_privacy_state_file() {
++bool write_privacy_state_file() {
+   int fd = ::open(kPrivacyStatePath, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+   if (fd < 0) {
+     LOG_WARN("VideoPrivacyControl: failed to create state file "
+              << kPrivacyStatePath);
+-    return;
++    return false;
+   }
+   const char *payload = "privacy=true\n";
+-  ssize_t ignored = ::write(fd, payload, strlen(payload));
+-  (void)ignored;
+-  ::close(fd);
++  size_t remaining = strlen(payload);
++  const char *cursor = payload;
++  while (remaining > 0) {
++    ssize_t written = ::write(fd, cursor, remaining);
++    if (written < 0 && errno == EINTR) continue;
++    if (written <= 0) {
++      LOG_WARN("VideoPrivacyControl: failed to write state file "
++               << kPrivacyStatePath);
++      ::close(fd);
++      ::unlink(kPrivacyStatePath);
++      return false;
++    }
++    cursor += written;
++    remaining -= static_cast<size_t>(written);
++  }
++  if (::close(fd) != 0) {
++    ::unlink(kPrivacyStatePath);
++    return false;
++  }
++  return true;
+ }
+ 
+ void remove_privacy_state_file() {
+@@ -104,29 +122,92 @@ void ensureFifo() {
+   }
+ }
+ 
+-void applyPrivacyToAllChannels(bool enabled) {
++bool destroyPrivacyCover(int ch) {
++  auto &vs = global_video[ch];
++  if (!vs || vs->privacy_osd_handle < 0) return true;
++  int encGrp = vs->encChn;
++  IMPRgnHandle handle =
++      (IMPRgnHandle)(intptr_t)vs->privacy_osd_handle;
++  if (IMP_OSD_ShowRgn(handle, encGrp, 0) != 0) {
++    LOG_WARN("VideoPrivacyControl: failed to hide OSD cover on ch" << ch);
++  }
++  if (IMP_OSD_UnRegisterRgn(handle, encGrp) != 0) {
++    LOG_WARN("VideoPrivacyControl: failed to unregister OSD cover on ch"
++             << ch);
++  }
++  if (IMP_OSD_DestroyRgn(handle) != 0) return false;
++  vs->privacy_osd_handle = -1;
++  return true;
++}
++
++void flushVideoQueues(const std::shared_ptr<video_stream> &vs) {
++  H264NALUnit dummy;
++  if (vs->msgChannel) {
++    while (vs->msgChannel->read(&dummy)) {}
++  }
++  std::lock_guard<std::mutex> lock(vs->tap_mutex);
++  for (auto &tap : vs->video_taps) {
++    if (auto queue = tap.queue.lock()) {
++      while (queue->read(&dummy)) {}
++    }
++  }
++}
++
++bool disablePrivacyLocked() {
++  bool ok = true;
+   for (int ch = 0; ch < NUM_VIDEO_CHANNELS; ++ch) {
+     if (!global_video[ch]) continue;
+     auto &vs = global_video[ch];
+-
+-    if (enabled) {
+-      // ── Enable: create hardware OSD cover ─────────────────────────
++    if (!destroyPrivacyCover(ch)) {
++      ok = false;
+       vs->privacy_requested.store(true, std::memory_order_release);
++      LOG_ERROR("VideoPrivacyControl: failed to disable OSD cover on ch"
++                << ch);
++      continue;
++    }
++    vs->privacy_requested.store(false, std::memory_order_release);
++    if (vs->running) IMP_Encoder_RequestIDR(ch);
++    LOG_INFO("VideoPrivacyControl: OSD cover disabled on ch" << ch);
++  }
++  if (ok) {
++    remove_privacy_state_file();
++    LOG_INFO("VideoPrivacyControl: privacy disabled on all channels");
++  } else {
++    (void)write_privacy_state_file();
++  }
++  return ok;
++}
+ 
+-      // Flush any buffered frames
+-      H264NALUnit dummy;
+-      if (vs->msgChannel) {
+-        while (vs->msgChannel->read(&dummy)) {}
+-      }
+-      {
+-        std::lock_guard<std::mutex> lock(vs->tap_mutex);
+-        for (auto &tap : vs->video_taps) {
+-          if (auto queue = tap.queue.lock()) {
+-            while (queue->read(&dummy)) {}
+-          }
+-        }
+-      }
++bool enablePrivacyLocked() {
++  bool any_channel = false;
++  bool already_enabled = true;
++  for (int ch = 0; ch < NUM_VIDEO_CHANNELS; ++ch) {
++    auto &vs = global_video[ch];
++    if (!vs) continue;
++    any_channel = true;
++    if (!vs->privacy_requested.load(std::memory_order_acquire) ||
++        vs->privacy_osd_handle < 0) {
++      already_enabled = false;
++    }
++  }
++  if (!any_channel) return false;
++  if (already_enabled) return write_privacy_state_file();
++
++  // Retire any partial previous application before preparing a new all-channel
++  // transaction. Privacy remains fail-closed if stale regions cannot be removed.
++  for (int ch = 0; ch < NUM_VIDEO_CHANNELS; ++ch) {
++    auto &vs = global_video[ch];
++    if (vs && (vs->privacy_osd_handle >= 0 ||
++               vs->privacy_requested.load(std::memory_order_acquire))) {
++      if (!disablePrivacyLocked()) return false;
++      break;
++    }
++  }
+ 
++  std::vector<int> prepared_channels;
++  for (int ch = 0; ch < NUM_VIDEO_CHANNELS; ++ch) {
++    if (!global_video[ch]) continue;
++    auto &vs = global_video[ch];
+       // Get stream dimensions
+       int sw = vs->stream ? vs->stream->width : 1920;
+       int sh = vs->stream ? vs->stream->height : 1080;
+@@ -155,7 +236,7 @@ void applyPrivacyToAllChannels(bool enabled) {
+       if (handle == INVHANDLE) {
+         LOG_ERROR("VideoPrivacyControl: IMP_OSD_CreateRgn failed for ch"
+                   << ch);
+-        continue;
++        goto rollback;
+       }
+ 
+       IMPOSDGrpRgnAttr grpAttr{};
+@@ -165,7 +246,7 @@ void applyPrivacyToAllChannels(bool enabled) {
+         LOG_ERROR("VideoPrivacyControl: IMP_OSD_RegisterRgn failed for ch"
+                   << ch << " ret=" << ret);
+         IMP_OSD_DestroyRgn(handle);
+-        continue;
++        goto rollback;
+       }
+ 
+       // Pin the cover's layer explicitly via SetGrpRgnAttr — RegisterRgn does
+@@ -175,7 +256,14 @@ void applyPrivacyToAllChannels(bool enabled) {
+       // video (it is opaque and full-frame, so no scene leaks). Only the
+       // relative order matters — these are the only two drawn regions.
+       grpAttr.layer = 1;
+-      IMP_OSD_SetGrpRgnAttr(handle, encGrp, &grpAttr);
++      ret = IMP_OSD_SetGrpRgnAttr(handle, encGrp, &grpAttr);
++      if (ret != 0) {
++        LOG_ERROR("VideoPrivacyControl: IMP_OSD_SetGrpRgnAttr failed for ch"
++                  << ch << " ret=" << ret);
++        IMP_OSD_UnRegisterRgn(handle, encGrp);
++        IMP_OSD_DestroyRgn(handle);
++        goto rollback;
++      }
+ 
+       ret = IMP_OSD_Start(encGrp);
+       if (ret != 0) {
+@@ -184,40 +272,38 @@ void applyPrivacyToAllChannels(bool enabled) {
+       }
+ 
+       vs->privacy_osd_handle = static_cast<int>(handle);
+-      // Request IDR so the cover appears in the next keyframe
+-      if (vs->running)
+-        IMP_Encoder_RequestIDR(ch);
++      prepared_channels.push_back(ch);
+ 
+       LOG_INFO("VideoPrivacyControl: OSD cover enabled on ch" << ch
+                << " (" << sw << "x" << sh << ")");
+-    } else {
+-      // ── Disable: destroy OSD cover ────────────────────────────────
+-      vs->privacy_requested.store(false, std::memory_order_release);
+-
+-      if (vs->privacy_osd_handle >= 0) {
+-        int encGrp = vs->encChn;
+-        IMP_OSD_ShowRgn((IMPRgnHandle)(intptr_t)vs->privacy_osd_handle,
+-                        encGrp, 0);
+-        IMP_OSD_UnRegisterRgn((IMPRgnHandle)(intptr_t)vs->privacy_osd_handle,
+-                              encGrp);
+-        IMP_OSD_DestroyRgn((IMPRgnHandle)(intptr_t)vs->privacy_osd_handle);
+-        vs->privacy_osd_handle = -1;
+-      }
++  }
+ 
+-      if (vs->running)
+-        IMP_Encoder_RequestIDR(ch);
++  for (int ch : prepared_channels) {
++    auto &vs = global_video[ch];
++    vs->privacy_requested.store(true, std::memory_order_release);
++    flushVideoQueues(vs);
++    if (vs->running) IMP_Encoder_RequestIDR(ch);
++  }
++  if (!write_privacy_state_file()) goto rollback;
++  LOG_INFO("VideoPrivacyControl: privacy enabled on all channels");
++  return true;
+ 
+-      LOG_INFO("VideoPrivacyControl: OSD cover disabled on ch" << ch);
++rollback:
++  for (auto it = prepared_channels.rbegin(); it != prepared_channels.rend();
++       ++it) {
++    auto &vs = global_video[*it];
++    (void)destroyPrivacyCover(*it);
++    vs->privacy_requested.store(false, std::memory_order_release);
++  }
++  for (int ch = 0; ch < NUM_VIDEO_CHANNELS; ++ch) {
++    if (global_video[ch]) {
++      global_video[ch]->privacy_requested.store(false,
++                                                 std::memory_order_release);
+     }
+   }
+-
+-  if (enabled) {
+-    write_privacy_state_file();
+-    LOG_INFO("VideoPrivacyControl: privacy enabled on all channels");
+-  } else {
+     remove_privacy_state_file();
+-    LOG_INFO("VideoPrivacyControl: privacy disabled on all channels");
+-  }
++  LOG_ERROR("VideoPrivacyControl: privacy enable rolled back");
++  return false;
+ }
+ 
+ void handleCommand(const std::string &line) {
+@@ -273,7 +359,9 @@ void handleCommand(const std::string &line) {
+   }
+ 
+   // Always apply privacy to all channels simultaneously for security
+-  applyPrivacyToAllChannels(value);
++  if (!VideoPrivacyControl::setPrivacy(value)) {
++    LOG_ERROR("VideoPrivacyControl: PRIVACY apply failed");
++  }
+ }
+ 
+ void fifoLoop() {
+@@ -310,6 +398,11 @@ void fifoLoop() {
+ 
+ } // namespace
+ 
++bool VideoPrivacyControl::setPrivacy(bool enabled) {
++  std::lock_guard<std::mutex> lock(privacy_mutex);
++  return enabled ? enablePrivacyLocked() : disablePrivacyLocked();
++}
++
+ void VideoPrivacyControl::run() {
+   fifoLoop();
+ }
+diff --git a/src/VideoPrivacyControl.hpp b/src/VideoPrivacyControl.hpp
+index 100fe30..1b93e38 100644
+--- a/src/VideoPrivacyControl.hpp
++++ b/src/VideoPrivacyControl.hpp
+@@ -2,6 +2,7 @@
+ 
+ namespace VideoPrivacyControl {
+ 
++bool setPrivacy(bool enabled);
+ void run();
+ 
+ }
+diff --git a/src/VideoWorker.cpp b/src/VideoWorker.cpp
+index 0f303ac..4bceb05 100644
+--- a/src/VideoWorker.cpp
++++ b/src/VideoWorker.cpp
+@@ -14,6 +14,7 @@
+ #include "MediaRuntimeMetrics.hpp"
+ #include "PreTriggerBuffer.hpp"
+ #include "RecorderStartPolicy.hpp"
++#include "RecorderTimelinePolicy.hpp"
+ #include "SEIWriter.hpp"
+ #include "EncoderReceivePolicy.hpp"
+ #include "WorkerUtils.hpp"
+@@ -278,6 +279,7 @@ bool VideoWorker::run() {
+   int64_t mp4_sample_ts_base_us = -1;
+   bool mp4_waiting_frame_end = false;
+   bool mp4_inserted_codec_config = false;
++  RecorderGenerationTracker mp4_generation;
+ 
+ #ifdef PREBUFFER_ENABLED
+   // Prebuffer frame accumulation (similar to mp4_sample)
+@@ -344,9 +346,8 @@ bool VideoWorker::run() {
+     mp4_sample_ts_base_us = -1;
+   };
+ 
++  bool was_recorder_active = false;
+   auto flush_mp4_sample = [&](bool recorder_active) {
+-    static bool was_recorder_active = false;
+-
+     if (!recorder_active) {
+       if (was_recorder_active) {
+ #ifdef PREBUFFER_ENABLED
+@@ -409,7 +410,8 @@ bool VideoWorker::run() {
+           relative_ts_us = 0;
+         int64_t pts_ms = relative_ts_us / 1000 + prebuffer_offset;
+ 
+-        channel_recorder.writeVideo(pf.data.data(), pf.data.size(), pts_ms,
++        channel_recorder.writeVideo(mp4_generation.generation(),
++                                    pf.data.data(), pf.data.size(), pts_ms,
+                                     pf.is_keyframe);
+       }
+ 
+@@ -477,7 +479,8 @@ bool VideoWorker::run() {
+       video_state->mp4_required_idr_ts_us.store(mp4_sample_ts_us,
+                                                 std::memory_order_relaxed);
+     }
+-    channel_recorder.writeVideo(mp4_sample.data(), mp4_sample.size(), pts_ms,
++    channel_recorder.writeVideo(mp4_generation.generation(), mp4_sample.data(),
++                                mp4_sample.size(), pts_ms,
+                                 mp4_sample_is_key);
+     reset_mp4_sample();
+   };
+@@ -603,6 +606,13 @@ bool VideoWorker::run() {
+           bool pack_is_frame_end =
+               stream.pack[i].frameEnd || (i + 1 == stream.packCount);
+           bool recorder_active = channel_recorder.isActive();
++          uint64_t recorder_generation = channel_recorder.generation();
++          if (mp4_generation.observe(recorder_active, recorder_generation)) {
++#ifdef PREBUFFER_ENABLED
++            pending_frames_during_flush.clear();
++#endif
++            reset_mp4_state();
++          }
+           bool recorder_accepts_samples = recorder_active;
+           if ((!recorder_active || !recorder_accepts_samples) &&
+               mp4_sample_ts_us != -1) {
+@@ -669,24 +679,9 @@ bool VideoWorker::run() {
+               frame_ts_us = ts_last_frame_us + nominal_frame_step_us;
+             }
+ 
+-            // Guard against IMP encoder timestamp domain transitions
+-            // (relative→rebased) which cause large forward jumps.
+-            if (ts_last_frame_us > 0 && frame_ts_us > ts_last_frame_us) {
+-              int64_t fwd_step = frame_ts_us - ts_last_frame_us;
+-              if (fwd_step > 2 * nominal_frame_step_us) {
+-                frame_ts_us = ts_last_frame_us + nominal_frame_step_us;
+-                ts_last_nonzero_us = frame_ts_us;
+-              }
+-            }
+-
+-            if (ts_last_frame_us > 0 && frame_ts_us <= ts_last_frame_us) {
+-              frame_ts_us = ts_last_frame_us + nominal_frame_step_us;
+-            }
+-            if (frame_ts_us <= 0) {
+-              frame_ts_us = (ts_last_frame_us > 0)
+-                                ? (ts_last_frame_us + nominal_frame_step_us)
+-                                : nominal_frame_step_us;
+-            }
++            frame_ts_us = normalizeRecorderFrameTimestamp(
++                frame_ts_us, ts_last_frame_us, nominal_frame_step_us);
++            ts_last_nonzero_us = frame_ts_us;
+ 
+             ts_current_frame_us = frame_ts_us;
+             ts_have_current_frame = true;
+diff --git a/tests/test_media_queue.cpp b/tests/test_media_queue.cpp
+index 5ecc4a9..e832dbe 100644
+--- a/tests/test_media_queue.cpp
++++ b/tests/test_media_queue.cpp
+@@ -14,6 +14,7 @@
+ #include "MJPEGRequestPolicy.hpp"
+ #include "MediaRuntimeMetrics.hpp"
+ #include "RecorderStartPolicy.hpp"
++#include "RecorderTimelinePolicy.hpp"
+ #include "MsgChannel.hpp"
+ #include "SharedPayload.hpp"
+ #include "SocketPeer.hpp"
+@@ -130,6 +131,38 @@ static void test_recorder_start_requires_keyframe() {
+   assert(firstKeyframeIndex(keyframe_after_delta) == 1);
+ }
+ 
++static void test_recorder_generation_resets_without_inactive_gap() {
++  RecorderGenerationTracker tracker;
++  assert(tracker.observe(true, 1));
++  assert(tracker.generation() == 1);
++  assert(!tracker.observe(true, 1));
++  // Loop rotation can stop and start entirely between two worker samples.
++  // The generation edge must still reset segment-local video/audio clocks.
++  assert(tracker.observe(true, 2));
++  assert(tracker.generation() == 2);
++  assert(!tracker.observe(false, 2));
++  assert(tracker.generation() == 0);
++  assert(tracker.observe(true, 3));
++}
++
++static void test_recorder_timestamp_preserves_low_fps_and_rebases_jumps() {
++  constexpr int64_t nominal_step_us = 1000000LL / 15;
++  constexpr int64_t actual_step_us = 1000000LL / 7;
++  int64_t timestamp_us = 1000000;
++  const int64_t segment_base_us = timestamp_us;
++  for (int frame = 1; frame < 420; ++frame) {
++    int64_t candidate = timestamp_us + actual_step_us;
++    timestamp_us = normalizeRecorderFrameTimestamp(
++        candidate, timestamp_us, nominal_step_us);
++  }
++  int64_t duration_ms = (timestamp_us - segment_base_us) / 1000;
++  assert(duration_ms > 59000 && duration_ms < 61000);
++
++  int64_t rebased = normalizeRecorderFrameTimestamp(
++      timestamp_us + 84000000LL, timestamp_us, nominal_step_us);
++  assert(rebased == timestamp_us + nominal_step_us);
++}
++
+ static void test_versioned_json_frame_is_exact_and_bounded() {
+   const std::string request = "PRUDYNT/1 JSON 7\n{\"x\":1}";
+   const auto valid = decodeFramedJson(request, 64);
+@@ -492,6 +525,8 @@ int main() {
+   test_media_metrics_track_queue_high_water();
+   test_media_metrics_track_jpeg_lifecycle_per_channel();
+   test_recorder_start_requires_keyframe();
++  test_recorder_generation_resets_without_inactive_gap();
++  test_recorder_timestamp_preserves_low_fps_and_rebases_jumps();
+   test_versioned_json_frame_is_exact_and_bounded();
+   test_rtsp_socket_queue_has_element_and_byte_limits();
+   test_jpeg_demand_deadline_and_idle_policy();
+diff --git a/prudynt-current/src/RecorderTimelinePolicy.hpp b/src/RecorderTimelinePolicy.hpp
+new file mode 100644
+index 0000000..50bd3e7
+--- /dev/null
++++ b/src/RecorderTimelinePolicy.hpp
+@@ -0,0 +1,41 @@
++#pragma once
++
++#include <algorithm>
++#include <cstdint>
++
++class RecorderGenerationTracker {
++public:
++  bool observe(bool active, uint64_t generation) {
++    if (!active || generation == 0) {
++      seen_generation_ = 0;
++      return false;
++    }
++    if (generation == seen_generation_) return false;
++    seen_generation_ = generation;
++    return true;
++  }
++
++  uint64_t generation() const { return seen_generation_; }
++
++private:
++  uint64_t seen_generation_{0};
++};
++
++inline int64_t normalizeRecorderFrameTimestamp(int64_t candidate_us,
++                                               int64_t previous_us,
++                                               int64_t nominal_step_us) {
++  nominal_step_us = std::max<int64_t>(nominal_step_us, 1000);
++  if (previous_us <= 0) {
++    return candidate_us > 0 ? candidate_us : nominal_step_us;
++  }
++  if (candidate_us <= previous_us) return previous_us + nominal_step_us;
++
++  // Preserve real low-FPS and load gaps. Collapse only a clear encoder clock
++  // domain jump so it cannot stretch one MP4 segment by minutes or hours.
++  const int64_t discontinuity_us =
++      std::max<int64_t>(5000000LL, nominal_step_us * 100);
++  if (candidate_us - previous_us > discontinuity_us) {
++    return previous_us + nominal_step_us;
++  }
++  return candidate_us;
++}
+

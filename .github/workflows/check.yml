@@ -1,0 +1,88 @@
+name: check
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  webui:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Install pinned Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: webui/package-lock.json
+      - name: Install WebUI dependencies
+        working-directory: webui
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Run WebUI gate
+        run: make webui
+      - name: Install pinned Chromium
+        working-directory: webui
+        run: npx playwright install --with-deps chromium
+      - name: Run browser fixtures
+        working-directory: webui
+        run: npm run test:browser
+
+  rust-control:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.95.0 --profile minimal --component rustfmt,clippy && rustup default 1.95.0
+      - name: Install Control test dependencies
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends --yes mosquitto mosquitto-clients
+      - name: Run Control gate
+        run: make control
+        env:
+          TMPDIR: ${{ runner.temp }}
+
+  host-tests:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - name: Check out source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Run canonical gate
+        run: make check
+        env:
+          TMPDIR: ${{ runner.temp }}
+
+  host-platforms:
+    name: Host contract (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+    steps:
+      - name: Check out source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.11"
+      - name: Test removable-media staging contracts
+        run: >-
+          python -m unittest -v
+          tests.test_linux_media_preflight
+          tests.test_windows_media_preflight
+          tests.test_media_preflight_dispatch
+          tests.test_media.MediaTests.test_install_set_activates_stage2_before_bootstrap
+        env:
+          PYTHONPATH: tests

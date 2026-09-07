@@ -1,0 +1,100 @@
+diff --git a/src/JPEGWorker.cpp b/src/JPEGWorker.cpp
+index 5773205..82ae651 100644
+--- a/src/JPEGWorker.cpp
++++ b/src/JPEGWorker.cpp
+@@ -131,7 +131,8 @@ void JPEGWorker::run() {
+           // required video channel was not running, we need to start it and set
+           // run_for_jpeg as a reason.
+           std::unique_lock<std::mutex> lock_stream{mutex_main};
+-          global_video[global_jpeg[jpgChn]->streamChn]->run_for_jpeg = true;
++          global_video[global_jpeg[jpgChn]->streamChn]->run_for_jpeg.store(
++              true, std::memory_order_release);
+           global_video[global_jpeg[jpgChn]->streamChn]
+               ->should_grab_frames.notify_one();
+           lock_stream.unlock();
+@@ -302,7 +303,8 @@ void JPEGWorker::run() {
+ 
+       std::unique_lock<std::mutex> lock_stream{mutex_main};
+       global_jpeg[jpgChn]->active = false;
+-      global_video[global_jpeg[jpgChn]->streamChn]->run_for_jpeg = false;
++      global_video[global_jpeg[jpgChn]->streamChn]->run_for_jpeg.store(
++          false, std::memory_order_release);
+       while (!global_jpeg[jpgChn]->request_or_overrun() &&
+              !global_restart_video)
+         global_jpeg[jpgChn]->should_grab_frames.wait(lock_stream);
+diff --git a/src/VideoWorker.cpp b/src/VideoWorker.cpp
+index 4562205..b4df109 100644
+--- a/src/VideoWorker.cpp
++++ b/src/VideoWorker.cpp
+@@ -448,7 +448,9 @@ void VideoWorker::run() {
+         break;
+       }
+     }
+-    run_for_jpeg = (jpeg_wants_frames && global_video[encChn]->run_for_jpeg);
++    run_for_jpeg =
++        jpeg_wants_frames && global_video[encChn]->run_for_jpeg.load(
++                                  std::memory_order_acquire);
+     bool bootstrap_requested = global_video[encChn]->bootstrap_requested.load(
+         std::memory_order_relaxed);
+     bool video_clients_active =
+@@ -1208,14 +1210,18 @@ void VideoWorker::run() {
+                    << ") timeout !");
+       }
+     } else if (global_video[encChn]->onDataCallback == nullptr &&
+-               !global_restart_video && !global_video[encChn]->run_for_jpeg &&
++               !global_restart_video &&
++               !global_video[encChn]->run_for_jpeg.load(
++                   std::memory_order_acquire) &&
+                !bootstrap_requested && !global_force_video_active &&
+                !prebuffer_active) {
+       LOG_DDEBUG("VIDEO LOCK"
+                  << " channel:" << encChn << " hasCallbackIsNull:"
+                  << (global_video[encChn]->onDataCallback == nullptr)
+                  << " restartVideo:" << global_restart_video
+-                 << " runForJpeg:" << global_video[encChn]->run_for_jpeg
++                 << " runForJpeg:"
++                 << global_video[encChn]->run_for_jpeg.load(
++                        std::memory_order_relaxed)
+                  << " bootstrapRequested:" << bootstrap_requested);
+ 
+       global_video[encChn]->stream->stats.bps = 0;
+@@ -1241,7 +1247,9 @@ void VideoWorker::run() {
+           global_video[encChn]->hasDataCallback.load(std::memory_order_relaxed);
+       while (global_video[encChn]->onDataCallback == nullptr &&
+              !video_clients &&
+-             !global_restart_video && !global_video[encChn]->run_for_jpeg &&
++             !global_restart_video &&
++             !global_video[encChn]->run_for_jpeg.load(
++                 std::memory_order_acquire) &&
+              !bootstrap_requested_inner && !global_force_video_active &&
+              !prebuffer_active_inner) {
+         global_video[encChn]->should_grab_frames.wait(lock_stream);
+@@ -1296,7 +1304,8 @@ void *VideoWorker::thread_entry(void *arg) {
+     sh->has_started.release();
+     return 0;
+   }
+-  global_video[encChn]->run_for_jpeg = false;
++  global_video[encChn]->run_for_jpeg.store(false,
++                                           std::memory_order_relaxed);
+ 
+   // inform main that initialization is complete
+   sh->has_started.release();
+diff --git a/src/globals.hpp b/src/globals.hpp
+index 69f0d2c..b7ebc0e 100644
+--- a/src/globals.hpp
++++ b/src/globals.hpp
+@@ -222,7 +222,10 @@ struct video_stream {
+   IMPFramesource *imp_framesource;
+   std::shared_ptr<MsgChannel<H264NALUnit>> msgChannel;
+   std::function<void(void)> onDataCallback;
+-  bool run_for_jpeg; // see comment in audio_stream
++  // JPEGWorker and VideoWorker update/read this flag from different threads.
++  // Keep the demand edge synchronized so the video encoder can return to its
++  // existing wait state after the final JPEG subscriber disconnects.
++  std::atomic<bool> run_for_jpeg;
+   std::atomic<bool> bootstrap_requested{false};
+   std::atomic<bool> hasDataCallback; // see comment in audio_stream
+   std::atomic<bool> mp4_waiting_for_idr;
+-- 
+2.54.0
+

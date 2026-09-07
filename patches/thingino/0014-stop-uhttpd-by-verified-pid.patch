@@ -1,0 +1,65 @@
+diff --git a/package/thingino-uhttpd/files/S60uhttpd b/package/thingino-uhttpd/files/S60uhttpd
+--- a/package/thingino-uhttpd/files/S60uhttpd
++++ b/package/thingino-uhttpd/files/S60uhttpd
+@@ -115,28 +115,44 @@ start() {
+ stop() {
+ 	echo -c 15 "Stopping uhttpd"
+ 
+-	# Try to kill using PID file first
+-	if [ -f $PIDFILE ]; then
+-		local pid=$(cat $PIDFILE)
+-		if [ -n "$pid" ] && kill "$pid" 2>/dev/null; then
+-			echo "Stopped uhttpd (PID: $pid)"
+-		fi
+-		rm -f $PIDFILE
++	if [ ! -f "$PIDFILE" ]; then
++		echo "uhttpd is not running"
++		return 0
+ 	fi
+ 
+-	# Fallback: kill any remaining uhttpd processes
+-	if pgrep uhttpd >/dev/null 2>&1; then
+-		echo "Killing remaining uhttpd processes"
+-		pkill uhttpd 2>/dev/null
+-		sleep 1
++	local pid
++	pid=$(cat "$PIDFILE")
++	case "$pid" in
++		'' | *[!0-9]*)
++			echo "Invalid uhttpd PID file"
++			return 1
++			;;
++	esac
++
++	if ! kill -0 "$pid" 2>/dev/null; then
++		echo "Removing stale uhttpd PID file"
++		rm -f "$PIDFILE"
++		return 0
+ 	fi
+ 
+-	# Verify it's stopped
+-	if pgrep uhttpd >/dev/null 2>&1; then
+-		echo "Some uhttpd processes may still be running"
+-	else
+-		echo "All uhttpd processes stopped"
++	if [ "$(readlink "/proc/$pid/exe" 2>/dev/null)" != "/usr/bin/uhttpd" ]; then
++		echo "Refusing to stop an unverified PID: $pid"
++		return 1
+ 	fi
++
++	kill -TERM "$pid" 2>/dev/null || return 1
++	local waits=0
++	while kill -0 "$pid" 2>/dev/null && [ "$waits" -lt 50 ]; do
++		sleep 0.1
++		waits=$((waits + 1))
++	done
++	if kill -0 "$pid" 2>/dev/null; then
++		echo "uhttpd did not stop after TERM: $pid"
++		return 1
++	fi
++
++	rm -f "$PIDFILE"
++	echo "Stopped uhttpd (PID: $pid)"
+ }
+ 
+ restart() {

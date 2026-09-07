@@ -1,0 +1,113 @@
+diff --git a/src/JpegDemandPolicy.hpp b/src/JpegDemandPolicy.hpp
+index 21fe0c8..aceff1d 100644
+--- a/src/JpegDemandPolicy.hpp
++++ b/src/JpegDemandPolicy.hpp
+@@ -9,3 +9,8 @@ inline bool jpegRequestDeadlineActive(uint32_t now_ms, uint32_t deadline_ms) {
+ inline bool jpegSourceDemandActive(bool request_active, int idle_fps) {
+   return request_active || idle_fps > 0;
+ }
++
++inline bool jpegVideoDemandActive(bool request_active, int idle_fps,
++                                  bool worker_requested) {
++  return worker_requested && jpegSourceDemandActive(request_active, idle_fps);
++}
+diff --git a/src/VideoWorker.cpp b/src/VideoWorker.cpp
+index 95a3a76..aa0fb88 100644
+--- a/src/VideoWorker.cpp
++++ b/src/VideoWorker.cpp
+@@ -213,6 +213,25 @@ void VideoWorker::run() {
+   unsigned long long ms = 0;
+   bool run_for_jpeg = false;
+   auto video_state = global_video[encChn];
++  auto jpeg_video_demand_active = [&]() -> bool {
++    bool worker_requested =
++        video_state->run_for_jpeg.load(std::memory_order_acquire);
++    if (!worker_requested)
++      return false;
++
++    for (int j = 0; j < NUM_JPEG_CHANNELS; ++j) {
++      auto jpeg_stream_state = global_jpeg[j];
++      if (jpeg_stream_state && encChn == jpeg_stream_state->streamChn) {
++        int idle_fps = jpeg_stream_state->stream
++                           ? jpeg_stream_state->stream->jpeg_idle_fps
++                           : 0;
++        if (jpegVideoDemandActive(jpeg_stream_state->request_or_overrun(),
++                                  idle_fps, worker_requested))
++          return true;
++      }
++    }
++    return false;
++  };
+   std::vector<uint8_t> mp4_sample;
+   bool mp4_sample_is_key = false;
+   int64_t mp4_sample_ts_us = -1;
+@@ -437,26 +456,11 @@ void VideoWorker::run() {
+       }
+     }
+ 
+-    /* bool helper to check if this is the active jpeg channel and a jpeg is
+-     * requested while the channel is inactive
+-     */
+-    bool jpeg_wants_frames = false;
+-    for (int j = 0; j < NUM_JPEG_CHANNELS; ++j) {
+-      auto jpeg_stream_state = global_jpeg[j];
+-      if (jpeg_stream_state && encChn == jpeg_stream_state->streamChn) {
+-        int idle_fps = jpeg_stream_state->stream
+-                           ? jpeg_stream_state->stream->jpeg_idle_fps
+-                           : 0;
+-        if (jpegSourceDemandActive(jpeg_stream_state->request_or_overrun(),
+-                                   idle_fps)) {
+-          jpeg_wants_frames = true;
+-          break;
+-        }
+-      }
+-    }
+-    run_for_jpeg =
+-        jpeg_wants_frames && global_video[encChn]->run_for_jpeg.load(
+-                                  std::memory_order_acquire);
++    // Treat the worker flag as a wake edge, not an unbounded demand level.
++    // A disconnected JPEG client can leave it set until JPEGWorker reaches
++    // its own sleep transition, so every video-loop gate must also apply the
++    // request deadline (or the configured idle producer rate).
++    run_for_jpeg = jpeg_video_demand_active();
+     bool bootstrap_requested = global_video[encChn]->bootstrap_requested.load(
+         std::memory_order_relaxed);
+     bool video_clients_active =
+@@ -1217,8 +1221,7 @@ void VideoWorker::run() {
+       }
+     } else if (global_video[encChn]->onDataCallback == nullptr &&
+                !global_restart_video &&
+-               !global_video[encChn]->run_for_jpeg.load(
+-                   std::memory_order_acquire) &&
++               !run_for_jpeg &&
+                !bootstrap_requested && !global_force_video_active &&
+                !prebuffer_active) {
+       LOG_DDEBUG("VIDEO LOCK"
+@@ -1254,8 +1257,7 @@ void VideoWorker::run() {
+       while (global_video[encChn]->onDataCallback == nullptr &&
+              !video_clients &&
+              !global_restart_video &&
+-             !global_video[encChn]->run_for_jpeg.load(
+-                 std::memory_order_acquire) &&
++             !jpeg_video_demand_active() &&
+              !bootstrap_requested_inner && !global_force_video_active &&
+              !prebuffer_active_inner) {
+         global_video[encChn]->should_grab_frames.wait(lock_stream);
+diff --git a/tests/test_media_queue.cpp b/tests/test_media_queue.cpp
+index 231d446..a888171 100644
+--- a/tests/test_media_queue.cpp
++++ b/tests/test_media_queue.cpp
+@@ -56,6 +56,10 @@ static void test_jpeg_demand_deadline_and_idle_policy() {
+   assert(!jpegSourceDemandActive(false, 0));
+   assert(jpegSourceDemandActive(true, 0));
+   assert(jpegSourceDemandActive(false, 1));
++  assert(!jpegVideoDemandActive(false, 0, true));
++  assert(!jpegVideoDemandActive(true, 0, false));
++  assert(jpegVideoDemandActive(true, 0, true));
++  assert(jpegVideoDemandActive(false, 1, true));
+ }
+ 
+ static void test_exact_byte_boundary() {
+-- 
+2.54.0
+

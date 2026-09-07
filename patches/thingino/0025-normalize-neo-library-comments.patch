@@ -1,0 +1,18 @@
+diff --git a/package/ingenic-system-libs-neo/ingenic-system-libs-neo.mk b/package/ingenic-system-libs-neo/ingenic-system-libs-neo.mk
+index 1ba4a73..137587f 100644
+--- a/package/ingenic-system-libs-neo/ingenic-system-libs-neo.mk
++++ b/package/ingenic-system-libs-neo/ingenic-system-libs-neo.mk
+@@ -39,5 +39,13 @@ define INGENIC_SYSTEM_LIBS_NEO_FINALIZE_TARGET
+ 			$(TARGET_DIR)/usr/lib/libsysutils.so
+ 	)
++	$(if $(BR2_PACKAGE_INGENIC_SYSTEM_LIBS_NEO_LIBALOG),
++		$(TARGET_STRIP) --remove-section=.comment \
++			$(TARGET_DIR)/usr/lib/libalog.so
++	)
++	$(if $(BR2_PACKAGE_INGENIC_SYSTEM_LIBS_NEO_LIBSYSUTILS),
++		$(TARGET_STRIP) --remove-section=.comment \
++			$(TARGET_DIR)/usr/lib/libsysutils.so
++	)
+ endef
+ INGENIC_SYSTEM_LIBS_NEO_TARGET_FINALIZE_HOOKS += INGENIC_SYSTEM_LIBS_NEO_FINALIZE_TARGET
+ 
