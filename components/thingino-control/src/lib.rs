@@ -44,7 +44,6 @@ pub fn control_token_from_bytes(input: &[u8]) -> Option<Vec<u8>> {
     (token.len() == 64 && token.iter().all(|byte| byte.is_ascii_hexdigit())).then_some(token)
 }
 
-use std::collections::BTreeMap;
 use std::io::{self, Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};

@@ -20,6 +20,7 @@ from .media_closure import MediaClosure, load_media_closure
 from .mtd3_split import SYSTEM_FLASH_SPAN
 from .private_config import (
     PrivateConfigError,
+    derive_rtsp_viewer_credential,
     load_private_config_for_session,
     load_private_wpa_config,
     station_wifi_binding,
@@ -287,10 +288,10 @@ def _configure_prudynt_media(document: dict[str, object]) -> None:
     return _impl(sys.modules[__name__], document)
 
 
-def _configure_prudynt_management_credential(
+def _configure_prudynt_viewer_credential(
     document: dict[str, object], password: str
 ) -> None:
-    from .final_root_media import _configure_prudynt_management_credential as _impl
+    from .final_root_media import _configure_prudynt_viewer_credential as _impl
 
     return _impl(sys.modules[__name__], document, password)
 
@@ -368,6 +369,7 @@ def prepare_final_root(
         _write_private(root / "etc/hostname", (station_hostname + "\n").encode("ascii"))
         _configure_no_default_route(root)
         password = credential.decode("ascii").strip()
+        rtsp_password = derive_rtsp_viewer_credential(credential).decode("ascii").strip()
 
         def patch_onvif(document: dict[str, object]) -> None:
             server = document.get("server")
@@ -401,7 +403,7 @@ def prepare_final_root(
             # closure so the final image cannot contain enabled:true together
             # with fps:0 or buffers:-1.
             _configure_prudynt_media(document)
-            _configure_prudynt_management_credential(document, password)
+            _configure_prudynt_viewer_credential(document, rtsp_password)
             _configure_prudynt_jpeg_idle(document)
             _configure_prudynt_http_ingress(document)
 
@@ -516,7 +518,7 @@ def prepare_final_root(
                 "media_runtime_config_sha256": media_provenance[
                     "runtime_config_sha256"
                 ],
-                "media_credentials": "root-per-install-management-credential",
+                "media_credentials": "viewer-domain-separated-per-install-credential",
                 "runtime_dlopen": list(media_closure.runtime_dlopen),
                 "native_media": "hash-locked-c1-tx-isp-sensor-iq",
                 "vendor_libraries": "hash-locked-c1-global-closure",

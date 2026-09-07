@@ -573,18 +573,18 @@ class FinalRootTests(unittest.TestCase):
         self.assertFalse(document["osd"]["privacy"]["enabled"])  # type: ignore[index]
         self.assertFalse(document["osd"]["sei"]["enabled"])  # type: ignore[index]
 
-    def test_prudynt_rtsp_uses_the_per_install_management_credential(self) -> None:
+    def test_prudynt_rtsp_uses_a_separate_viewer_credential(self) -> None:
         document: dict[str, object] = {
             "rtsp": {"username": "old", "password": "__SET_LOCALLY__"}
         }
 
-        final_root._configure_prudynt_management_credential(
+        final_root._configure_prudynt_viewer_credential(
             document, "__SET_LOCALLY__"
         )
 
         self.assertEqual(
             document["rtsp"],
-            {"username": "root", "password": "__SET_LOCALLY__"},
+            {"username": "viewer", "password": "__SET_LOCALLY__"},
         )
 
     def test_prudynt_jpeg_is_idle_until_a_snapshot_or_mjpeg_client(self) -> None:

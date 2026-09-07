@@ -40,8 +40,11 @@ class PrivateInstallConfig:
 
 _ROLE_MAP = {
     "management_credential": {
-        "consumers": ["onvif", "root_webui", "rtsp"],
-        "derives": ["thingino_control_internal_token"],
+        "consumers": ["onvif", "root_webui"],
+        "derives": [
+            "rtsp_viewer_credential",
+            "thingino_control_internal_token",
+        ],
         "file": "installer.credential",
         "rotation": "explicit-with-session-binding",
     },
@@ -76,6 +79,19 @@ _TARGET = {
     "hardware_revision": "A1",
     "model": "DCS-6100LHV2",
 }
+
+
+def derive_rtsp_viewer_credential(credential: bytes) -> bytes:
+    """Derive a domain-separated RTSP-only credential from a management secret."""
+
+    if _TOKEN.fullmatch(credential) is None:
+        raise PrivateConfigError("management credential framing is invalid")
+    value = hmac.new(
+        credential.rstrip(b"\n"),
+        b"dcs6100-rtsp-viewer-credential-v1\0",
+        hashlib.sha256,
+    ).hexdigest()
+    return (value + "\n").encode("ascii")
 
 
 def _validate_wifi(ssid: str, passphrase: str) -> tuple[bytes, bytes]:
@@ -215,7 +231,7 @@ def _validate_private_files(output_dir: Path) -> dict[str, bytes]:
     return raw
 
 
-def _manifest_for(raw: dict[str, bytes]) -> dict[str, object]:
+def _manifest_v2_for(raw: dict[str, bytes]) -> dict[str, object]:
     digests = {name: hashlib.sha256(raw[name]).hexdigest() for name in _PRIVATE_FILES}
     set_hash = hashlib.sha256()
     set_hash.update(b"thingino-private-install-config-v2\0")
@@ -257,6 +273,54 @@ def _manifest_for(raw: dict[str, bytes]) -> dict[str, object]:
     }
 
 
+def _manifest_for(raw: dict[str, bytes]) -> dict[str, object]:
+    digests = {name: hashlib.sha256(raw[name]).hexdigest() for name in _PRIVATE_FILES}
+    set_hash = hashlib.sha256()
+    # The set identity is bound only to the private files, not to the manifest
+    # schema, so sealing an existing v2 set does not detach its recovery session.
+    set_hash.update(b"thingino-private-install-config-v2\0")
+    for name in _PRIVATE_FILES:
+        set_hash.update(name.encode("ascii") + b"\0" + bytes.fromhex(digests[name]))
+    return {
+        "bindings": {
+            "management_credential": {
+                "consumers": ["onvif", "root_webui"],
+                "derives": [
+                    "rtsp_viewer_credential",
+                    "thingino_control_internal_token",
+                ],
+                "file": "installer.credential",
+                "sha256": digests["installer.credential"],
+            },
+            "rtsp_viewer_credential": {
+                "consumers": ["rtsp"],
+                "derived_from": "management_credential",
+                "derivation": "hmac-sha256-dcs6100-rtsp-viewer-credential-v1",
+            },
+            "ssh_authorized_key": {
+                "consumers": ["recovery_ap", "thingino_ssh"],
+                "file": "authorized_keys",
+                "sha256": digests["authorized_keys"],
+            },
+            "station_wifi": {
+                "consumers": ["wpa_supplicant"],
+                "file": "wpa_supplicant.conf",
+                "sha256": digests["wpa_supplicant.conf"],
+            },
+            "webui_api_key": {
+                "consumers": ["thingino_control_external_api"],
+                "file": "webui-api.key",
+                "sha256": digests["webui-api.key"],
+            },
+        },
+        "credential_set_id": set_hash.hexdigest(),
+        "files": list(_PRIVATE_FILES),
+        "rotation_policy": "explicit-only-no-build-regeneration",
+        "schema_version": 3,
+        "target": _TARGET,
+    }
+
+
 def _read_manifest(path: Path) -> dict[str, object]:
     raw = _read_private_file(
         path, label="private configuration manifest", limit=16 * 1024
@@ -278,13 +342,18 @@ def seal_private_config(
     raw = _validate_private_files(output_dir)
     manifest_path = output_dir / "private-config.json"
     current = _read_manifest(manifest_path)
-    if current.get("schema_version") not in (1, 2):
+    schema_version = current.get("schema_version")
+    if schema_version not in (1, 2, 3):
         raise PrivateConfigError("private configuration schema is unsupported")
     if current.get("target") != _TARGET or current.get("files") != list(_PRIVATE_FILES):
         raise PrivateConfigError(
             "private configuration manifest does not match its target"
         )
-    if current.get("schema_version") == 2 and authorized_key is None:
+    if schema_version == 2 and current != _manifest_v2_for(raw):
+        raise PrivateConfigError(
+            "private configuration binding manifest does not match its files"
+        )
+    if schema_version == 3 and authorized_key is None:
         if current != _manifest_for(raw):
             raise PrivateConfigError(
                 "private configuration binding manifest does not match its files"
@@ -307,7 +376,7 @@ def seal_private_config(
 def load_private_config(output_dir: Path) -> PrivateInstallConfig:
     raw = _validate_private_files(output_dir)
     manifest = _read_manifest(output_dir / "private-config.json")
-    if manifest.get("schema_version") != 2:
+    if manifest.get("schema_version") != 3:
         raise PrivateConfigError(
             "private configuration is not sealed; run seal-private-install-config"
         )
@@ -463,6 +532,18 @@ def inspect_private_config(
         "exists": True,
         "fingerprint": None,
         "rotation": "with-management-credential",
+        "storage": "derived-during-final-root-build",
+    }
+    roles["rtsp_viewer_credential"] = {
+        "consumers": ["rtsp"],
+        "derived_from": "management_credential",
+        "exists": True,
+        "fingerprint": _safe_fingerprint(
+            key,
+            role="rtsp_viewer_credential",
+            value=derive_rtsp_viewer_credential(private.credential),
+        ),
+        "rotation": "with-management-credential-during-image-build",
         "storage": "derived-during-final-root-build",
     }
     roles["webui_session_id"] = {

@@ -8,14 +8,14 @@ import { applyThemePreference, type ThemePreference } from "../../app/shell";
 import { bool, text, number, secret } from "./common";
 
 export const access: ConfigFormSpec = {
-  eyebrow: "Settings / RTSP and ONVIF",
+  eyebrow: "Settings / media access",
   title: "Media access",
-  description: "Credentials and endpoints for RTSP clients and ONVIF discovery.",
+  description: "RTSP viewer credentials and endpoints. ONVIF uses the management account.",
   endpoint: routes.config.access,
   decode: decodeAccess,
   fields: [
-    text("username", "RTSP / ONVIF username"),
-    secret("password", "New RTSP / ONVIF password", "Updates RTSP and ONVIF access together. Leave blank to keep the current password."),
+    text("username", "RTSP viewer username"),
+    secret("password", "New RTSP viewer password", "Changes only RTSP viewing access. Leave blank to keep the current password."),
     number("rtsp_port", "RTSP port", 1, 65535),
     { ...text("rtsp_ch0", "Main stream path"), pattern: "[A-Za-z0-9._~-]{1,64}", maxLength: 64 },
     { ...text("rtsp_ch1", "Substream path"), pattern: "[A-Za-z0-9._~-]{1,64}", maxLength: 64 },
@@ -99,7 +99,7 @@ export function addWebuiSecurity(client: ApiClient, rendered: { node: HTMLElemen
   const password = element("input", { className: "input", attrs: { type: "password", autocomplete: "new-password", required: "", minlength: "10", maxlength: "128", "aria-label": "New management password" } });
   const confirm = element("input", { className: "input", attrs: { type: "password", autocomplete: "new-password", required: "", minlength: "10", maxlength: "128", "aria-label": "Confirm management password" } });
   const change = element("button", { className: "button primary", text: "Change password", attrs: { type: "submit" } });
-  passwordCard.append(element("h2", { text: "Management password" }), element("p", { text: "Changes the shared WebUI, RTSP and ONVIF password together. SSH remains key-only. You will sign in again after a successful change." }), password, confirm, passwordMessage, change);
+  passwordCard.append(element("h2", { text: "Management password" }), element("p", { text: "Changes the WebUI and ONVIF password together. RTSP keeps its separate viewer credential, and SSH remains key-only. You will sign in again after a successful change." }), password, confirm, passwordMessage, change);
   passwordCard.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (!password.value || password.value !== confirm.value) {
@@ -111,7 +111,7 @@ export function addWebuiSecurity(client: ApiClient, rendered: { node: HTMLElemen
       await client.postJson<JsonObject>(routes.auth.password, { password: password.value });
       password.value = "";
       confirm.value = "";
-      setMessage(passwordMessage, "Shared WebUI, RTSP and ONVIF password changed.", "success");
+      setMessage(passwordMessage, "WebUI and ONVIF password changed.", "success");
       window.location.assign("/login.html");
     } catch (error) {
       setMessage(passwordMessage, error instanceof Error ? error.message : "Password change failed.", "error");

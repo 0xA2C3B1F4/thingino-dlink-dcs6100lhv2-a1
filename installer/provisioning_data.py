@@ -20,7 +20,7 @@ from .final_root import (
     _configure_key_only_ssh,
     _configure_prudynt_http_ingress,
     _configure_prudynt_jpeg_idle,
-    _configure_prudynt_management_credential,
+    _configure_prudynt_viewer_credential,
     _configure_prudynt_media,
     _extract_base_root,
     _materialize_wpa_runtime_policy,
@@ -31,6 +31,7 @@ from .final_root import (
     _write_private,
 )
 from .mtd3_split import DATA_FLASH_SPAN
+from .private_config import derive_rtsp_viewer_credential
 from .sd_package import atomic_write
 
 
@@ -163,6 +164,7 @@ def _patch_runtime(
     _configure_key_only_ssh(root, authorized_key, dropbear_host_key, credential)
     _write_private(root / "etc/hostname", (station_hostname + "\n").encode("ascii"))
     password = credential.decode("ascii").strip()
+    rtsp_password = derive_rtsp_viewer_credential(credential).decode("ascii").strip()
 
     def patch_onvif(document: dict[str, object]) -> None:
         server = document.get("server")
@@ -193,7 +195,7 @@ def _patch_runtime(
 
     def patch_prudynt(document: dict[str, object]) -> None:
         _configure_prudynt_media(document)
-        _configure_prudynt_management_credential(document, password)
+        _configure_prudynt_viewer_credential(document, rtsp_password)
         _configure_prudynt_jpeg_idle(document)
         _configure_prudynt_http_ingress(document)
         _require_section(document, "rtsp")

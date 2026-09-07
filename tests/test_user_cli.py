@@ -1523,8 +1523,11 @@ class UserCliTests(unittest.TestCase):
             media.assert_called_once()
             service_credential.assert_called_once_with(work / "session")
             rtsp.assert_called_once()
-            self.assertEqual(rtsp.call_args.kwargs["username"], "root")
-            self.assertEqual(rtsp.call_args.kwargs["password"], b"a" * 64)
+            self.assertEqual(rtsp.call_args.kwargs["username"], "viewer")
+            self.assertEqual(
+                rtsp.call_args.kwargs["password"],
+                user_cli.derive_rtsp_viewer_credential(b"a" * 64 + b"\n")[:-1],
+            )
 
 
 if __name__ == "__main__":

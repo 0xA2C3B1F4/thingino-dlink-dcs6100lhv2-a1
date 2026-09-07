@@ -34,7 +34,7 @@
     },
     {
       "destination": "dcs6100-webui/firmware-bundle.json",
-      "sha256": "0b12e28d7c436374015ec92785303561baa3586e24d16d8b846150e78852344b",
+      "sha256": "72bfd12bb51478fe9310cb100275f2a8387f6b255e6d28ee6a01a09361335dbc",
       "source": "webui/firmware-bundle.json"
     },
     {
@@ -169,7 +169,7 @@
     },
     {
       "destination": "dcs6100-webui/src/pages/config/access.ts",
-      "sha256": "5c38f99ecd1e5f97fd0ea94102d1a0825d0e48ebf06a795effc1311ec1420386",
+      "sha256": "1254e5a33ba103fbc30aed7dc9a945fca06d3f7ca456e5570b68edc3ea812800",
       "source": "webui/src/pages/config/access.ts"
     },
     {
@@ -509,7 +509,7 @@
     },
     {
       "destination": "package/thingino-control/rust/src/camera.rs",
-      "sha256": "243c265969940feb0322758b1214b6971b183d15920d4788cf9cba2dbb44f4d1",
+      "sha256": "56515df4db6f5131469bf5be999dd629ab0310f721d6cdbfcdd26c5709f8260c",
       "source": "components/thingino-control/src/camera.rs"
     },
     {
@@ -524,7 +524,7 @@
     },
     {
       "destination": "package/thingino-control/rust/src/camera/config/access.rs",
-      "sha256": "763e150989c17fd5b77e25f931558fb789e65012730b0ef442be5f02cea0052e",
+      "sha256": "08debc3191629b4383d6e4a7974c2136f7a3054e0dda2bdba59575c49724620e",
       "source": "components/thingino-control/src/camera/config/access.rs"
     },
     {
@@ -814,7 +814,7 @@
     },
     {
       "destination": "package/thingino-control/rust/src/camera_tests.rs",
-      "sha256": "732d0b5135f41b62b04fa0ff744f4438dfa175976cb289d94e6008930c0fb866",
+      "sha256": "0d502899d8c516a7a746979bac379471227bca5bfc334df04fcdb82ccfa7153e",
       "source": "components/thingino-control/src/camera_tests.rs"
     },
     {
@@ -829,7 +829,7 @@
     },
     {
       "destination": "package/thingino-control/rust/src/lib.rs",
-      "sha256": "011950c46aaa657b15b98c7c617d06088dcca270ed52a264e42e058ca867a2ad",
+      "sha256": "4f7b27579cadb8137523e6539a23dab21074af504bda17b44b6eafc2fda1e0f2",
       "source": "components/thingino-control/src/lib.rs"
     },
     {
@@ -839,7 +839,7 @@
     },
     {
       "destination": "package/thingino-control/rust/src/protocol.rs",
-      "sha256": "16ceb4b570a300cccc6b525f865dbae8d0781c0238d38f142ac9df5aaa642a1f",
+      "sha256": "f37f55cac9ade45c3de07cc5c5bec02604905b6917a5be206c02a00b26334234",
       "source": "components/thingino-control/src/protocol.rs"
     },
     {
@@ -859,7 +859,7 @@
     },
     {
       "destination": "package/thingino-control/rust/src/router.rs",
-      "sha256": "21170d502c871b1931273b4a20b707560544f1635f6e9f138e7be5e69561e906",
+      "sha256": "0547847bb0df62429405a8964834552e354d4d425b38c3553458245dc64af68d",
       "source": "components/thingino-control/src/router.rs"
     },
     {
@@ -936,6 +936,11 @@
       "destination": "package/thingino-uhttpd/0015-require-authenticated-tls-ingress.patch",
       "sha256": "036d819e01bc2fded9d399a041cef4c75b5bb799803b95f710acea470241f1aa",
       "source": "patches/uhttpd/0015-require-authenticated-tls-ingress.patch"
+    },
+    {
+      "destination": "package/thingino-uhttpd/0016-buffer-request-before-backend.patch",
+      "sha256": "123ed7a716b79b6d403a56b0a3641b44a994e7022af4366b835b66a938ef8b40",
+      "source": "patches/uhttpd/0016-buffer-request-before-backend.patch"
     }
   ],
   "model": "DCS-6100LHV2",

@@ -535,12 +535,12 @@ def _configure_prudynt_media(facade: object, document: dict[str, object]) -> Non
     if isinstance(burnin, dict):
         burnin["format"] = "%F %T %Z"
 
-def _configure_prudynt_management_credential(facade: object,
+def _configure_prudynt_viewer_credential(facade: object,
     document: dict[str, object], password: str
 ) -> None:
     _require_section = getattr(facade, '_require_section')
     rtsp = _require_section(document, "rtsp")
-    rtsp["username"] = "root"
+    rtsp["username"] = "viewer"
     rtsp["password"] = password
 
 def _configure_prudynt_jpeg_idle(facade: object, document: dict[str, object]) -> None:

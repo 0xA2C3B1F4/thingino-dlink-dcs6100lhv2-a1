@@ -127,8 +127,8 @@ impl Backend for FakeBackend {
         if method == "POST" && target == "/api/v1/config/access" {
             if body.is_empty()
                 || !body
-                    .windows(b"\"username\":\"root\"".len())
-                    .any(|window| window == b"\"username\":\"root\"")
+                    .windows(b"\"username\":\"viewer\"".len())
+                    .any(|window| window == b"\"username\":\"viewer\"")
                 || !body
                     .windows(b"\"password\":".len())
                     .any(|window| window == b"\"password\":")
@@ -175,6 +175,20 @@ impl Backend for FakeBackend {
             };
         }
         None
+    }
+
+    fn update_management_credential(
+        &self,
+        username: &str,
+        password: &str,
+        _deadline: Instant,
+    ) -> Option<Result<BackendResponse, BackendError>> {
+        if username != "root" || !(10..=128).contains(&password.len()) {
+            return Some(Err(BackendError::Protocol));
+        }
+        Some(self.api_response(BackendResponse::json(
+            b"{\"status\":\"ok\",\"management_password_changed\":true}\n".to_vec(),
+        )))
     }
 }
 

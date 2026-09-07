@@ -107,6 +107,7 @@ from .mtd3_image import Mtd3ImageError, validate_personal_mtd3_image
 from .platform_wifi import PlatformWifiError, join_recovery_ap, join_station_wifi
 from .private_config import (
     PrivateConfigError,
+    derive_rtsp_viewer_credential,
     generate_private_config,
     inspect_private_config,
     load_private_config_for_session,

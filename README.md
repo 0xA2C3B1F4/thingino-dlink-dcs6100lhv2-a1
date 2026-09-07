@@ -279,7 +279,9 @@ your Wi-Fi password, not your Mac password or signing key. Hidden input displays
 no characters. The installer derives the WPA PSK and generates credentials.
 
 The management credential is `install-config/installer.credential`; the API
-key is `install-config/webui-api.key`. Keep them private. Do not paste them
+key is `install-config/webui-api.key`. Provisioning derives a separate initial
+RTSP `viewer` credential without writing another secret file. Keep them
+private. Do not paste them
 into chat, command arguments, logs, or Git. For automation, see
 [private input through a file descriptor](docs/installation.md#private-input-through-a-file-descriptor).
 
@@ -415,6 +417,9 @@ verification. HTTP redirects to HTTPS. The camera uses a locally generated
 certificate; verify the address and review any browser warning yourself.
 Log in as `root` with the generated management credential from
 `$DCS6100_CAMERA_ROOT/install-config/installer.credential`, not the Wi-Fi password.
+Before adding an RTSP client, set a separate viewer password under
+**Settings / Media access** and use username `viewer`. RTSP Basic authentication
+and media are unencrypted, so keep port 554 on a trusted network.
 
 Check both Preview stream selections. With Raptor, both should say
 `Live · WebRTC`; visible MJPEG fallback alone does not validate Raptor.

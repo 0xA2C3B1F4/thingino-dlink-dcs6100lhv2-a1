@@ -9,6 +9,8 @@ from pathlib import Path
 
 from installer.private_config import (
     PrivateConfigError,
+    _manifest_v2_for,
+    derive_rtsp_viewer_credential,
     generate_private_config,
     import_private_wpa_config,
     inspect_private_config,
@@ -32,6 +34,17 @@ def ed25519_public_key(*, comment: str = "") -> bytes:
 
 
 class PrivateConfigTests(unittest.TestCase):
+    def test_rtsp_viewer_credential_is_stable_and_domain_separated(self) -> None:
+        management = b"a" * 64 + b"\n"
+        viewer = derive_rtsp_viewer_credential(management)
+        self.assertEqual(viewer, derive_rtsp_viewer_credential(management))
+        self.assertNotEqual(viewer, management)
+        self.assertRegex(viewer.decode("ascii"), r"^[0-9a-f]{64}\n$")
+        self.assertNotEqual(
+            viewer,
+            derive_rtsp_viewer_credential(b"b" * 64 + b"\n"),
+        )
+
     def test_guided_wifi_derives_psk_without_storing_plaintext(self) -> None:
         payload = render_private_wpa_config(
             ssid="CameraLab",
@@ -231,7 +244,7 @@ class PrivateConfigTests(unittest.TestCase):
             self.assertTrue(authorized.startswith("ssh-ed25519 "))
             manifest = (output / "private-config.json").read_text(encoding="utf-8")
             manifest_document = json.loads(manifest)
-            self.assertEqual(manifest_document["schema_version"], 2)
+            self.assertEqual(manifest_document["schema_version"], 3)
             self.assertEqual(
                 manifest_document["rotation_policy"],
                 "explicit-only-no-build-regeneration",
@@ -240,6 +253,7 @@ class PrivateConfigTests(unittest.TestCase):
                 set(manifest_document["bindings"]),
                 {
                     "management_credential",
+                    "rtsp_viewer_credential",
                     "ssh_authorized_key",
                     "station_wifi",
                     "webui_api_key",
@@ -308,7 +322,47 @@ class PrivateConfigTests(unittest.TestCase):
             )
             self.assertEqual(
                 json.loads((output / "private-config.json").read_text())["schema_version"],
-                2,
+                3,
+            )
+
+    def test_schema_two_is_sealed_without_rotating_secret_values(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            output = Path(directory_name) / "private-bootstrap"
+            generate_private_config(
+                output_dir=output,
+                ssid="private-test-ssid",
+                passphrase="private-test-passphrase",
+                authorized_key=ed25519_public_key(),
+            )
+            raw = {
+                name: (output / name).read_bytes()
+                for name in (
+                    "authorized_keys",
+                    "installer.credential",
+                    "webui-api.key",
+                    "wpa_supplicant.conf",
+                )
+            }
+            (output / "private-config.json").write_text(
+                json.dumps(_manifest_v2_for(raw), indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            (output / "private-config.json").chmod(0o600)
+            before_set_id = _manifest_v2_for(raw)["credential_set_id"]
+
+            seal_private_config(output_dir=output)
+
+            for name, value in raw.items():
+                self.assertEqual((output / name).read_bytes(), value)
+            self.assertEqual(
+                json.loads((output / "private-config.json").read_text())["schema_version"],
+                3,
+            )
+            self.assertEqual(
+                json.loads((output / "private-config.json").read_text())[
+                    "credential_set_id"
+                ],
+                before_set_id,
             )
 
     def test_sealed_manifest_detects_file_replacement(self) -> None:

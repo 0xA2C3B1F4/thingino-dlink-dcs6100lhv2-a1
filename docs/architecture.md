@@ -97,8 +97,9 @@ never return it.
 
 uhttpd terminates TLS for the WebUI, Control, media, and snapshot routes,
 serves four static WebUI files, and proxies fixed routes through Host and
-Origin checks. Plain HTTP is limited to ONVIF SOAP compatibility. Its pumps
-are nonblocking and bounded.
+Origin checks. Plain HTTP is limited to ONVIF SOAP compatibility. It buffers
+each bounded Control or ONVIF request body before opening a loopback backend,
+and its backend pumps are nonblocking and bounded.
 CGI, dynamic request plugins, script queues, and request-time child processes
 are absent from the target build.
 

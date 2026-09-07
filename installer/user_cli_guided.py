@@ -597,6 +597,7 @@ def _verify_media(facade: object, arguments: argparse.Namespace) -> dict[str, ob
     _record_proof = getattr(facade, '_record_proof')
     _validate_config = getattr(facade, '_validate_config')
     load_media_closure = getattr(facade, 'load_media_closure')
+    derive_rtsp_viewer_credential = getattr(facade, 'derive_rtsp_viewer_credential')
     load_service_credential = getattr(facade, 'load_service_credential')
     prove_thingino_health = getattr(facade, 'prove_thingino_health')
     prove_thingino_media = getattr(facade, 'prove_thingino_media')
@@ -631,8 +632,8 @@ def _verify_media(facade: object, arguments: argparse.Namespace) -> dict[str, ob
     password = load_service_credential(validated["session_dir"])
     rtsp = verify_rtsp_h264_1080p(
         host=str(media["station_ipv4"]),
-        username="root",
-        password=password,
+        username="viewer",
+        password=derive_rtsp_viewer_credential(password + b"\n")[:-1],
     )
     media = {
         **media,
