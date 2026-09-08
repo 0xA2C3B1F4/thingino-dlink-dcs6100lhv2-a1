@@ -27,6 +27,26 @@ Use the [README](../README.md#install-from-a-public-checkout) for the complete
 UARTless universal command sequence. This page explains the alternative backup
 transport, phase evidence, and write boundaries.
 
+## Paths used in these examples
+
+First [set the shared paths](../README.md#set-paths-once), or
+[load your saved settings](../README.md#save-paths-for-another-terminal).
+Run commands from the checkout with its Python environment active. The examples
+below reuse the README variables, so you only edit path assignments, not each
+command. Keep double quotes around variable references, even without spaces.
+
+Use the README's exact capture-package and build-result assignments when a
+command needs those artifacts. Additional assignments below apply only to the
+selected alternative. A new output directory must not contain a previous
+capture or installation. Keep that earlier evidence and choose a new name.
+
+Whenever the card returns to the host,
+[identify it again](../README.md#identify-the-card-each-time) before using
+`DCS6100_SD_DEVICE` and `DCS6100_SD_MOUNT`. Do not save either value in
+`install-env.sh` or reuse a preflight from a previous insertion.
+
+## Sequence overview
+
 The implemented sequence is:
 
 1. verify the exact model, A1 revision, NOR geometry, and stock source state;
@@ -100,9 +120,9 @@ descriptor, not its contents, on the command line:
 
 ```bash
 thingino-dlink universal configure \
-  --session-dir /path/to/private/provisioning-session \
-  --output-dir /path/to/private/install-config \
-  --secrets-fd 3 3</path/to/private/confirmed-wifi.json
+  --session-dir "$DCS6100_CAMERA_ROOT/provisioning-session" \
+  --output-dir "$DCS6100_CAMERA_ROOT/install-config" \
+  --secrets-fd 3 3<"$DCS6100_CAMERA_ROOT/confirmed-wifi.json"
 ```
 
 The file must already exist and contain the owner's actual values. Do not use
@@ -114,15 +134,18 @@ remove the input file securely when no longer needed under the owner's policy.
 
 A completed installation may leave `STOCKM3.BIN` and `STOCKM3.OK` bound to
 the previous firmware. Before staging a different set, copy them to a new
-private host directory with the repository command:
+private host directory with the repository command. Identify the card again,
+then choose an unused destination name. Change the suffix for each later update:
 
 ```bash
+export DCS6100_SAVED_RECOVERY="$DCS6100_CAMERA_ROOT/saved-recovery-before-update-1"
+
 thingino-dlink universal evacuate-recovery \
-  --work-dir /path/to/private/evacuation-state \
-  --whole-device /dev/diskN \
-  --mount-root /path/to/mounted-card \
-  --output-dir /path/to/private/saved-recovery-before-update \
-  --confirm-physical-device /dev/diskN
+  --work-dir "$DCS6100_CAMERA_ROOT/evacuation-state" \
+  --whole-device "$DCS6100_SD_DEVICE" \
+  --mount-root "$DCS6100_SD_MOUNT" \
+  --output-dir "$DCS6100_SAVED_RECOVERY" \
+  --confirm-physical-device "$DCS6100_SD_DEVICE"
 ```
 
 This verifies the backup, checkpoint, and any archived backup before removing
@@ -144,55 +167,70 @@ builds and validates the source-locked MIPS toolchain, download cache, collector
 kernel, effective configuration, and matching MMC module. It does not contact a
 camera or stage removable media.
 
-With the camera powered off, insert one FAT32 SD card into the host and create
-the native removable-media preflight. On macOS:
+Set the three artifact paths to that successful result's exact values. Choose
+a new backup workspace once; its `live-set` and `complete-backup` directories
+must not exist yet. Keep it separate from `DCS6100_RECOVERY_ROOT`, which is
+for functional recovery, not an exact original backup.
+
+```bash
+export DCS6100_COLLECTOR_KERNEL="/path/from/result/collector-kernel.uimage"
+export DCS6100_COLLECTOR_CONFIG="/path/from/result/collector-linux.config"
+export DCS6100_COLLECTOR_MMC_MODULE="/path/from/result/jzmmc_v12.ko"
+export DCS6100_BACKUP_ROOT="$DCS6100_CAMERA_ROOT/original-backup-1"
+```
+
+With the camera powered off, insert one FAT32 SD card into the host,
+[identify it](../README.md#identify-the-card-each-time), and create the native
+removable-media preflight. On macOS:
 
 ```bash
 python3 scripts/platform/macos_media_preflight.py \
-  --whole-device /dev/diskN \
-  --mount-root /path/to/mounted-card \
-  --output /path/to/private/media-preflight.json
+  --whole-device "$DCS6100_SD_DEVICE" \
+  --mount-root "$DCS6100_SD_MOUNT" \
+  --output "$DCS6100_CAMERA_ROOT/media-preflight.json"
 ```
 
-Use only the three paths printed by `recovery-assets`, repeat the exact physical
-device, and choose new private output directories:
+Stage the read-only collector using those paths and the confirmed card:
 
 ```bash
 thingino-dlink stock-recovery backup-prepare \
-  --kernel /path/from/result/collector-kernel.uimage \
-  --linux-config /path/from/result/collector-linux.config \
-  --mmc-module /path/from/result/jzmmc_v12.ko \
-  --output-dir /path/to/private/live-set \
-  --mount-root /path/to/mounted-card \
-  --media-preflight /path/to/private/media-preflight.json \
-  --confirm-physical-device /dev/diskN
+  --kernel "$DCS6100_COLLECTOR_KERNEL" \
+  --linux-config "$DCS6100_COLLECTOR_CONFIG" \
+  --mmc-module "$DCS6100_COLLECTOR_MMC_MODULE" \
+  --output-dir "$DCS6100_BACKUP_ROOT/live-set" \
+  --mount-root "$DCS6100_SD_MOUNT" \
+  --media-preflight "$DCS6100_CAMERA_ROOT/media-preflight.json" \
+  --confirm-physical-device "$DCS6100_SD_DEVICE"
 ```
 
 Require the JSON result to report `write_set: []` and
 `read-only-collector-staged-unarmed`. Power the camera off before moving the SD
 card. Insert it into the matching A1 camera, connect its confirmed UART, start
-the capture command while the camera is still off, and only then power it on:
+the capture command while the camera is still off, and only then power it on.
+Set the current confirmed serial device once. Do not save it in `install-env.sh`:
 
 ```bash
+export DCS6100_SERIAL_DEVICE="/dev/cu.usbserial-N"
+
 thingino-dlink stock-recovery backup-capture \
-  --input-dir /path/to/private/live-set \
-  --linux-config /path/from/result/collector-linux.config \
-  --serial-device /dev/cu.usbserial-N \
-  --confirm-serial-device /dev/cu.usbserial-N
+  --input-dir "$DCS6100_BACKUP_ROOT/live-set" \
+  --linux-config "$DCS6100_COLLECTOR_CONFIG" \
+  --serial-device "$DCS6100_SERIAL_DEVICE" \
+  --confirm-serial-device "$DCS6100_SERIAL_DEVICE"
 ```
 
 The editable package installs the pinned `pyserial` dependency required by this
 command. The RAM collector marks all six physical partitions read-only, reads
 each partition twice, performs SD storage readback, retains the allowlisted
 stock-mtd3 vendor libraries, and halts. It never authorizes a NOR write. After a
-reported completion, power the camera off, return the card to the host, and
-finalize into a new private recovery directory:
+reported completion, power the camera off, return the card to the host,
+identify it again, and finalize into a new private recovery directory:
 
 ```bash
 thingino-dlink stock-recovery backup-validate \
-  --collector-dir /path/to/mounted-card/DCS6100B \
-  --output-dir /path/to/private/complete-backup \
-  --confirm-output-dir /path/to/private/complete-backup
+  --collector-dir "$DCS6100_SD_MOUNT/DCS6100B" \
+  --output-dir "$DCS6100_BACKUP_ROOT/complete-backup" \
+  --confirm-output-dir "$DCS6100_BACKUP_ROOT/complete-backup"
 ```
 
 Stop unless duplicate partition sets, both reconstructed 16 MiB images, and all
@@ -211,15 +249,26 @@ erases and writes physical mtd1 and mtd2. The accepted originals are therefore
 mtd0, mtd3, mtd4, and mtd5. The captured mtd1/mtd2 must instead equal the exact
 replacement images reconstructed from the authorized package.
 
+Set `DCS6100_CAPTURE_PACKAGE` and `DCS6100_CAPTURE_MANIFEST` from the
+successful `recovery-assets` result as in the README. With the camera off,
+insert and identify the card, then generate a fresh preflight:
+
+```bash
+python3 scripts/platform/macos_media_preflight.py \
+  --whole-device "$DCS6100_SD_DEVICE" \
+  --mount-root "$DCS6100_SD_MOUNT" \
+  --output "$DCS6100_CAMERA_ROOT/capture-media-preflight.json"
+```
+
 Stage the package under a non-matching inert name:
 
 ```bash
 thingino-dlink stock-recovery uartless-prepare \
-  --package /path/from/result/uartless-capture-bootstrap.bin \
-  --package-manifest /path/from/result/uartless-capture-bootstrap.manifest.json \
-  --mount-root /path/to/mounted-card \
-  --media-preflight /path/to/private/media-preflight.json \
-  --confirm-physical-device /dev/diskN
+  --package "$DCS6100_CAPTURE_PACKAGE" \
+  --package-manifest "$DCS6100_CAPTURE_MANIFEST" \
+  --mount-root "$DCS6100_SD_MOUNT" \
+  --media-preflight "$DCS6100_CAMERA_ROOT/capture-media-preflight.json" \
+  --confirm-physical-device "$DCS6100_SD_DEVICE"
 ```
 
 The result must report `armed: false`, `original_complete_backup_accepted:
@@ -228,11 +277,11 @@ Activation is a separate exact confirmation:
 
 ```bash
 thingino-dlink stock-recovery uartless-authorize \
-  --package /path/from/result/uartless-capture-bootstrap.bin \
-  --package-manifest /path/from/result/uartless-capture-bootstrap.manifest.json \
-  --mount-root /path/to/mounted-card \
-  --media-preflight /path/to/private/media-preflight.json \
-  --confirm-physical-device /dev/diskN \
+  --package "$DCS6100_CAPTURE_PACKAGE" \
+  --package-manifest "$DCS6100_CAPTURE_MANIFEST" \
+  --mount-root "$DCS6100_SD_MOUNT" \
+  --media-preflight "$DCS6100_CAMERA_ROOT/capture-media-preflight.json" \
+  --confirm-physical-device "$DCS6100_SD_DEVICE" \
   --confirm-write-set WRITE-MTD1-MTD2
 ```
 
@@ -240,30 +289,37 @@ Only `uartless-authorize` renames the reviewed package to the single filename
 matched by stock U-Boot. With the camera off, move the card to the camera and
 power it on once. This updater pass writes mtd1/mtd2 and enters its completion
 state; it does not yet run the collector. Power off, return the card to the
-host, regenerate the removable-media preflight, and make the selector inert:
+host, identify it again, regenerate the removable-media preflight, and make
+the selector inert:
 
 ```bash
+python3 scripts/platform/macos_media_preflight.py \
+  --whole-device "$DCS6100_SD_DEVICE" \
+  --mount-root "$DCS6100_SD_MOUNT" \
+  --output "$DCS6100_CAMERA_ROOT/capture-handoff-preflight.json"
+
 thingino-dlink stock-recovery uartless-handoff \
-  --package /path/from/result/uartless-capture-bootstrap.bin \
-  --package-manifest /path/from/result/uartless-capture-bootstrap.manifest.json \
-  --mount-root /path/to/mounted-card \
-  --media-preflight /path/to/private/new-media-preflight.json \
-  --confirm-physical-device /dev/diskN \
+  --package "$DCS6100_CAPTURE_PACKAGE" \
+  --package-manifest "$DCS6100_CAPTURE_MANIFEST" \
+  --mount-root "$DCS6100_SD_MOUNT" \
+  --media-preflight "$DCS6100_CAMERA_ROOT/capture-handoff-preflight.json" \
+  --confirm-physical-device "$DCS6100_SD_DEVICE" \
   --confirm-stock-uboot-result MTD1-MTD2-WRITTEN
 ```
 
 Move the passive card back to the powered-off camera and boot normally. The new
 mtd1 kernel boots the minimal mtd2 collector without UART, enforces every mtd0
 through mtd5 partition read-only, captures each current partition twice to
-`DCS6100F`, performs SD readback, and halts. Return the card to the host and
-validate into a new private schema-3 functional recovery directory:
+`DCS6100F`, performs SD readback, and halts. Power off, return the card to the
+host, identify it again, and validate into a new private schema-3 functional
+recovery directory:
 
 ```bash
 thingino-dlink stock-recovery uartless-validate \
-  --collector-dir /path/to/mounted-card/DCS6100F \
-  --package /path/from/result/uartless-capture-bootstrap.bin \
-  --output-dir /path/to/private/functional-recovery \
-  --confirm-output-dir /path/to/private/functional-recovery
+  --collector-dir "$DCS6100_SD_MOUNT/DCS6100F" \
+  --package "$DCS6100_CAPTURE_PACKAGE" \
+  --output-dir "$DCS6100_RECOVERY_ROOT" \
+  --confirm-output-dir "$DCS6100_RECOVERY_ROOT"
 ```
 
 This result may report `functional_recovery_accepted: true` only after duplicate
@@ -278,10 +334,10 @@ camera-local provisioning flow without inventing a recovery-AP session:
 
 ```bash
 thingino-dlink universal init-session \
-  --functional-recovery-dir /path/to/private/functional-recovery \
-  --preserved-readback-dir /path/to/private/functional-recovery/preserved \
-  --output-dir /path/to/private/provisioning-session \
-  --config-output-dir /path/to/private/install-config
+  --functional-recovery-dir "$DCS6100_RECOVERY_ROOT" \
+  --preserved-readback-dir "$DCS6100_RECOVERY_ROOT/preserved" \
+  --output-dir "$DCS6100_CAMERA_ROOT/provisioning-session" \
+  --config-output-dir "$DCS6100_CAMERA_ROOT/install-config"
 ```
 
 The generated session is bound to the functional recovery identity and has no
@@ -293,11 +349,11 @@ arguments. For example, later media staging uses:
 
 ```bash
 thingino-dlink prepare-card \
-  --whole-device /dev/diskN \
-  --mount-root /path/to/mounted-card \
-  --functional-recovery-dir /path/to/private/functional-recovery \
-  --preserved-readback-dir /path/to/private/functional-recovery/preserved \
-  --confirm-physical-device /dev/diskN \
+  --whole-device "$DCS6100_SD_DEVICE" \
+  --mount-root "$DCS6100_SD_MOUNT" \
+  --functional-recovery-dir "$DCS6100_RECOVERY_ROOT" \
+  --preserved-readback-dir "$DCS6100_RECOVERY_ROOT/preserved" \
+  --confirm-physical-device "$DCS6100_SD_DEVICE" \
   --confirm-target DCS-6100LHV2-A1
 ```
 

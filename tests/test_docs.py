@@ -4,6 +4,8 @@ import importlib.util
 import json
 import re
 import shlex
+import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -18,20 +20,40 @@ DOCS = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(DOCS)
 
 
-def readme_cli_examples(source: str) -> list[list[str]]:
+def bash_blocks(source: str) -> list[str]:
+    return re.findall(r"```bash\n(.*?)\n```", source, flags=re.DOTALL)
+
+
+def documented_cli_examples(source: str) -> list[list[str]]:
     """Tokenize documented commands only; never execute shell or CLI handlers."""
     commands = []
-    for block in re.findall(r"```bash\n(.*?)\n```", source, flags=re.DOTALL):
+    for block in bash_blocks(source):
         for line in block.replace("\\\n", " ").splitlines():
             tokens = shlex.split(line, comments=True)
             if tokens and tokens[0] == "thingino-dlink":
                 commands.append(tokens)
-            elif tokens[:3] in (
-                ["python", "-m", "installer"],
-                ["python", "-m", "installer.user_cli"],
+            elif (
+                tokens[:1] in (["python"], ["python3"])
+                and tokens[1:3] in (
+                    ["-m", "installer"],
+                    ["-m", "installer.user_cli"],
+                )
             ):
                 commands.append(tokens)
     return commands
+
+
+def without_secrets_redirect(tokens: list[str]) -> list[str]:
+    """Remove only the matching shell input redirect, not installer arguments."""
+    if "--secrets-fd" not in tokens:
+        return tokens
+    descriptor = tokens[tokens.index("--secrets-fd") + 1]
+    prefix = f"{descriptor}<"
+    if int(descriptor) < 3 or not tokens[-1].startswith(prefix):
+        return tokens
+    if not tokens[-1][len(prefix):]:
+        raise ValueError("documented secrets redirect has no input path")
+    return tokens[:-1]
 
 
 class DocumentationTests(unittest.TestCase):
@@ -87,28 +109,111 @@ class DocumentationTests(unittest.TestCase):
                 checked += 1
         self.assertGreater(checked, 0)
 
-    def test_readme_install_commands_parse_without_executing_handlers(self) -> None:
+    def test_install_commands_parse_without_executing_handlers(self) -> None:
         from installer.cli import build_parser as artifact_parser
         from installer.user_cli import build_parser as user_parser
 
         parsers = {"installer": artifact_parser(), "installer.user_cli": user_parser()}
+        for filename, minimum in (("README.md", 18), ("docs/installation.md", 11)):
+            source = (DOCS_ROOT / filename).read_text(encoding="utf-8")
+            examples = documented_cli_examples(source)
+            self.assertGreaterEqual(len(examples), minimum)
+            for tokens in examples:
+                tokens = without_secrets_redirect(tokens)
+                if tokens[0] == "thingino-dlink":
+                    parser, args = parsers["installer.user_cli"], tokens[1:]
+                else:
+                    parser, args = parsers[tokens[2]], tokens[3:]
+                if args == ["--help"]:
+                    continue
+                with self.subTest(filename=filename, command=tokens):
+                    parsed = parser.parse_args(args)
+                    self.assertTrue(callable(parsed.handler))
+
+    def test_example_tokenizer_preserves_quoted_paths_and_secrets_fd(self) -> None:
+        source = '''```bash
+python3 -m installer.user_cli universal configure \\
+  --session-dir "/volume with spaces/session" \\
+  --output-dir "/volume with spaces/config" \\
+  --secrets-fd 3 3<"/volume with spaces/input.json"
+```'''
+        [command] = documented_cli_examples(source)
+        self.assertIn("/volume with spaces/session", command)
+        self.assertEqual(command[-1], "3</volume with spaces/input.json")
+        self.assertEqual(without_secrets_redirect(command), command[:-1])
+        self.assertEqual(without_secrets_redirect(command)[-2:], ["--secrets-fd", "3"])
+        mismatched = [*command[:-1], "4</wrong-descriptor.json"]
+        self.assertEqual(without_secrets_redirect(mismatched), mismatched)
+        unrelated = ["thingino-dlink", "--help", "3<input.json"]
+        self.assertEqual(without_secrets_redirect(unrelated), unrelated)
+
+    def test_install_paths_are_assigned_once_and_quoted_in_commands(self) -> None:
+        sources = [
+            (DOCS_ROOT / filename).read_text(encoding="utf-8")
+            for filename in ("README.md", "docs/installation.md")
+        ]
+        assignments = set(re.findall(r"^export (DCS6100_\w+)=", "\n".join(sources), re.M))
+        references = set()
+        for source in sources:
+            for block in bash_blocks(source):
+                for line in block.replace("\\\n", " ").splitlines():
+                    if line.startswith("export "):
+                        continue
+                    with self.subTest(line=line):
+                        self.assertNotRegex(line, r"/path/(?:to|from)/|/dev/diskN|/dev/cu\.usbserial-N")
+                        quoted = re.findall(r'"[^"\n]*"', line)
+                        variables = re.findall(r"\$(DCS6100_\w+)", line)
+                        self.assertEqual(
+                            variables,
+                            re.findall(r"\$(DCS6100_\w+)", " ".join(quoted)),
+                        )
+                        references.update(variables)
+        self.assertFalse(references - assignments, references - assignments)
+        self.assertGreater(len(references), 10)
+
+    def test_install_shell_examples_have_valid_syntax_without_execution(self) -> None:
+        shell = shutil.which("bash")
+        if shell is None:
+            self.skipTest("bash is unavailable")
+        for filename in ("README.md", "docs/installation.md"):
+            source = (DOCS_ROOT / filename).read_text(encoding="utf-8")
+            for index, block in enumerate(bash_blocks(source)):
+                with self.subTest(filename=filename, block=index):
+                    result = subprocess.run(
+                        [shell, "--noprofile", "--norc", "-n"],
+                        input=block, text=True, capture_output=True, check=False,
+                        env={"PATH": "/usr/bin:/bin"}, timeout=5,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_saved_settings_keep_secrets_and_device_selection_separate(self) -> None:
         readme = (DOCS_ROOT / "README.md").read_text(encoding="utf-8")
-        examples = readme_cli_examples(readme)
-        self.assertGreaterEqual(len(examples), 18)
-        for tokens in examples:
-            if tokens[0] == "thingino-dlink":
-                parser, args = parsers["installer.user_cli"], tokens[1:]
-            else:
-                parser, args = parsers[tokens[2]], tokens[3:]
-            if args == ["--help"]:
-                continue
-            with self.subTest(command=tokens):
-                parsed = parser.parse_args(args)
-                self.assertTrue(callable(parsed.handler))
+        setup = readme.split("#### Set paths once\n", 1)[1]
+        [first, *_] = bash_blocks(setup)
+        self.assertEqual(
+            re.findall(r"^export (\w+)=", first, re.M),
+            ["DCS6100_DATA_VOLUME", "DCS6100_BUILD_ROOT", "DCS6100_CAMERA_ROOT", "DCS6100_RECOVERY_ROOT"],
+        )
+        self.assertIn('DCS6100_BUILD_ROOT="$DCS6100_DATA_VOLUME/', first)
+        self.assertIn('DCS6100_CAMERA_ROOT="$DCS6100_DATA_VOLUME/', first)
+        self.assertIn('DCS6100_RECOVERY_ROOT="$DCS6100_CAMERA_ROOT/functional-recovery"', first)
+        self.assertIn('chmod 600 "$DCS6100_CAMERA_ROOT/install-env.sh"', readme)
+        self.assertIn("Keep the SD and UART device selections out of this file", readme)
+        installation = (DOCS_ROOT / "docs/installation.md").read_text(encoding="utf-8")
+        self.assertIn("../README.md#set-paths-once", installation)
+        self.assertIn("../README.md#save-paths-for-another-terminal", installation)
+        self.assertIn('3<"$DCS6100_CAMERA_ROOT/confirmed-wifi.json"', installation)
+        commands = documented_cli_examples(installation)
+        original = next(tokens for tokens in commands if "backup-validate" in tokens)
+        functional = next(tokens for tokens in commands if "uartless-validate" in tokens)
+        self.assertIn("$DCS6100_BACKUP_ROOT/complete-backup", original)
+        self.assertNotIn("$DCS6100_RECOVERY_ROOT", original)
+        self.assertIn("$DCS6100_RECOVERY_ROOT", functional)
+        self.assertNotIn("$DCS6100_BACKUP_ROOT/complete-backup", functional)
 
     def test_readme_keeps_one_complete_universal_sequence(self) -> None:
         readme = (DOCS_ROOT / "README.md").read_text(encoding="utf-8")
-        commands = readme_cli_examples(readme)
+        commands = documented_cli_examples(readme)
         universal = [tokens for tokens in commands if tokens[1:2] == ["universal"]]
         self.assertEqual(
             [tokens[2] for tokens in universal],

@@ -34,7 +34,7 @@
       "source": "Makefile"
     },
     "README.md": {
-      "sha256": "5a8ffb5f89f54f96e43bc6de8706c4b026bf7ef8b9f4dd4cde2b7866369f67c6",
+      "sha256": "a0179ee10b216862b920054684aa5716d4a1bd5eae5db003a8f505327927e9db",
       "source": "production/README.md"
     },
     "SECURITY.md": {
@@ -586,7 +586,7 @@
       "source": "production/docs/index.md"
     },
     "docs/installation.md": {
-      "sha256": "82e9b7eb09e175b1635ffe9c4783aa354380945b73981b97a4ced4a8158360e6",
+      "sha256": "61526be399dc5439516fb26d93f1731b40aad95d2cd74ee8860bea0e70ed8bbc",
       "source": "production/docs/installation.md"
     },
     "docs/recovery.md": {
@@ -1698,7 +1698,7 @@
       "source": "tests/test_development_install.py"
     },
     "tests/test_docs.py": {
-      "sha256": "44f8088af653af3261f15b00e7e96023e3f826762080a9437f1580cde7490e20",
+      "sha256": "abf0425670c9c4ee82bf7605b1a5ea7392419632b9e22e0eebf1c6a4290dbbd5",
       "source": "tests/test_docs.py"
     },
     "tests/test_download_cache.py": {
@@ -2235,6 +2235,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "14a5f929cdc51842430cc485af3559b04b355549",
+  "source_commit": "7a4c79c14fb4c804e38968de07f76de41239cd64",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }

@@ -74,8 +74,9 @@ Never use generic Thingino full-flash images, Web Flasher, or raw flash commands
 ## Install from a public checkout
 
 These are sequential steps, not an unattended script. Read each result and
-complete the stated physical step before continuing. Replace `/path/to/...`
-with your own absolute paths. These examples are not bundled artifacts.
+complete the stated physical step before continuing. Set your paths in the
+variable assignments below; subsequent commands reuse them. These examples
+use a macOS shell and do not include firmware or camera-specific files.
 
 ### 1. Install the host tools
 
@@ -113,11 +114,25 @@ Choose a new build root outside the repository. Set the data volume to the
 exact mount root, not a directory inside it. Put both workspaces on that volume.
 Start Docker Desktop before preflight.
 
+#### Set paths once
+
+Replace `/path/to/mounted-volume` with your mounted build volume. Choose workspace
+names once here. Use a separate camera workspace for each camera; retain it
+when resuming that camera's installation. For a new build, choose a new build
+root. Do not delete an existing workspace to make a command pass.
+
 ```bash
-export DCS6100_DATA_VOLUME=/path/to/exact-mounted-volume
-export DCS6100_BUILD_ROOT=/path/to/new-build-workspace
-export DCS6100_CAMERA_ROOT=/path/to/private/camera-workspace
+export DCS6100_DATA_VOLUME="/path/to/mounted-volume"
+export DCS6100_BUILD_ROOT="$DCS6100_DATA_VOLUME/thingino/build-a1"
+export DCS6100_CAMERA_ROOT="$DCS6100_DATA_VOLUME/thingino/camera-1"
 export DCS6100_RECOVERY_ROOT="$DCS6100_CAMERA_ROOT/functional-recovery"
+```
+
+Keep the quotes, including when paths contain spaces. `local-build` reads
+`DCS6100_BUILD_ROOT` directly. The other paths are shell variables passed to
+the explicit command arguments below, not automatic CLI defaults.
+
+```bash
 umask 077
 
 thingino-dlink workflow-preflight --json \
@@ -141,9 +156,41 @@ Keep the printed `files.uartless_package` and
 `files.uartless_package_manifest` paths:
 
 ```bash
-export DCS6100_CAPTURE_PACKAGE=/path/from/recovery-assets/uartless-capture-bootstrap.bin
-export DCS6100_CAPTURE_MANIFEST=/path/from/recovery-assets/uartless-capture-bootstrap.manifest.json
+export DCS6100_CAPTURE_PACKAGE="/path/from/recovery-assets/uartless-capture-bootstrap.bin"
+export DCS6100_CAPTURE_MANIFEST="/path/from/recovery-assets/uartless-capture-bootstrap.manifest.json"
 ```
+
+Replace these two assignment values with the exact paths from the successful
+result, enclosed in double quotes. Do not guess a run directory or select
+whichever file happens to be newest.
+
+#### Save paths for another terminal
+
+After preflight succeeds and the camera workspace exists, use your editor to
+save the four path assignments from **Set paths once** as
+`$DCS6100_CAMERA_ROOT/install-env.sh`, with your actual values. Add the capture
+assignments above and, when available, the install-set, model public-key, and
+immutable builder-image assignments from steps 4 and 6. Only save paths and
+the image ID, never passwords, API keys, or key contents.
+
+```bash
+chmod 600 "$DCS6100_CAMERA_ROOT/install-env.sh"
+```
+
+In a new terminal, return to the checkout, activate `.venv`, and restore the
+OpenSSL `PATH` as in step 1. Load your saved file, adjusting this one path:
+
+```bash
+umask 077
+export DCS6100_ENV_FILE="/path/to/camera-workspace/install-env.sh"
+. "$DCS6100_ENV_FILE"
+```
+
+Source only a file you created or reviewed, since the shell executes it.
+Resume at the next unfinished step, not at a new build or recovery capture.
+Keep the SD and UART device selections out of this file. Recheck them when
+reconnecting hardware. [Installation details](docs/installation.md) use these
+same variables and define any additional paths next to the relevant example.
 
 ### 3. Capture this camera's recovery and stock media files
 
@@ -155,16 +202,24 @@ partitions twice. It preserves original mtd0/mtd3/mtd4/mtd5, but does not promis
 restoration to D-Link stock. For an exact original backup, choose the
 [read-only UART route](docs/installation.md#public-checkout-complete-backup-path).
 
-Insert the card into the Mac. Identify it with `diskutil`; never assume the
-previous disk number still applies. A whole disk is `/dev/diskN`, not
+#### Identify the card each time
+
+Repeat this identification block every time the card returns to the Mac,
+including before validation, staging, or handoff. Identify it with `diskutil`;
+never assume the previous disk number still applies. A whole disk is `/dev/diskN`, not
 `/dev/diskNs1`. macOS example:
 
 ```bash
 diskutil list external physical
-export DCS6100_SD_DEVICE=/dev/diskN
-export DCS6100_SD_MOUNT=/path/to/mounted-card
+export DCS6100_SD_DEVICE="/dev/diskN"
+export DCS6100_SD_MOUNT="/path/to/mounted-card"
 diskutil info "$DCS6100_SD_DEVICE"
+```
 
+Replace both assignment values with the confirmed whole disk and mounted
+FAT32 volume. These values apply only to the currently inserted card.
+
+```bash
 python scripts/platform/macos_media_preflight.py \
   --whole-device "$DCS6100_SD_DEVICE" \
   --mount-root "$DCS6100_SD_MOUNT" \
@@ -192,8 +247,9 @@ completion state. It stops after writing mtd1/mtd2; it has not yet run the
 collector. A timer or LED color alone is not a completion check. Read
 [boot phases](docs/installation.md#boot-phases-and-failure-handling) if uncertain.
 
-After confirmed completion, power off and return the card to the Mac. Recheck
-its device ID and regenerate preflight before handoff:
+After confirmed completion, power off and return the card to the Mac.
+[Identify the card again](#identify-the-card-each-time) and regenerate
+preflight before handoff:
 
 ```bash
 python scripts/platform/macos_media_preflight.py \
@@ -212,7 +268,8 @@ thingino-dlink stock-recovery uartless-handoff \
 
 Safely eject, insert into the powered-off camera, and power on again. This
 second boot runs the read-only collector. After completion, power off and
-return the card to the Mac. Validate its output:
+return the card to the Mac. [Identify it again](#identify-the-card-each-time),
+then validate its output:
 
 ```bash
 thingino-dlink stock-recovery uartless-validate \
@@ -230,10 +287,16 @@ checks. Keep a separate private copy of the recovery directory off the SD card.
 ### 4. Build or select the universal firmware
 
 The base build needs the acquired vendor bundle, not Wi-Fi credentials.
-Choose the profile before starting the build. For WebRTC, add
-`--raptor-rwd-artifact /path/to/reviewed/raptor-rwd.tar.gz` to the build command
-below. Run one selected build, not a base build followed by a second WebRTC build.
+Choose the profile before starting the build. For WebRTC, set the reviewed
+archive path once:
 
+```bash
+export DCS6100_RAPTOR_ARTIFACT="/path/to/reviewed/raptor-rwd.tar.gz"
+```
+
+Then add `--raptor-rwd-artifact "$DCS6100_RAPTOR_ARTIFACT"` to the build command
+below. Skip that assignment and flag for the base profile. Run one selected
+build, not a base build followed by a second WebRTC build.
 
 ```bash
 thingino-dlink inspect-vendor-bundle \
@@ -251,8 +314,8 @@ build result, logs, manifests, and model signing key pair. Copy its exact
 `install_set_dir` and `model_signing.public_key` paths:
 
 ```bash
-export DCS6100_INSTALL_SET=/path/from/build/install-set
-export DCS6100_MODEL_PUBLIC_KEY=/path/from/build/model-signing/release-ed25519.pub
+export DCS6100_INSTALL_SET="/path/from/build/install-set"
+export DCS6100_MODEL_PUBLIC_KEY="/path/from/build/model-signing/release-ed25519.pub"
 python -m installer inspect-install-set --install-set-dir "$DCS6100_INSTALL_SET"
 ```
 
@@ -328,7 +391,7 @@ session, sidecar, data image, and authorization matched.
 
 ### 7. Stage the installation card
 
-Recheck the whole-device ID and mount root, including when you skipped capture.
+[Identify the card](#identify-the-card-each-time), including when you skipped capture.
 If the card holds `STOCKM3.BIN` and `STOCKM3.OK` from an earlier install,
 first use [the verified backup-copy command](docs/installation.md#reusing-an-installation-card).
 Do not delete recovery files to make a validation error disappear.
@@ -362,7 +425,8 @@ Safely eject. Insert into the powered-off camera and power on.
 Wait for confirmed stock-updater mtd1/mtd2 completion. This first boot does not
 install the final system or prove the WebUI is ready.
 
-Power off, return the card to the Mac, and recheck its identity.
+Power off, return the card to the Mac, and
+[identify it again](#identify-the-card-each-time).
 Use exactly the same artifacts for handoff:
 
 ```bash
