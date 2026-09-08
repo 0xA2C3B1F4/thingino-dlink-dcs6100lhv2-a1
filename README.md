@@ -224,6 +224,11 @@ diskutil info "$DCS6100_SD_DEVICE"
 
 Replace both assignment values with the confirmed whole disk and mounted
 FAT32 volume. These values apply only to the currently inserted card.
+For a card previously used by another camera, follow the
+[capture archival and card reuse procedure](docs/installation.md#reusing-an-installation-card)
+first. Stale `UARTCAP.PSV` or `DCS6100F` data must be copied and verified on the
+host before removing it. Keep each camera's private recovery and configuration separate;
+reuse the existing model-universal install set.
 
 ```bash
 python scripts/platform/macos_media_preflight.py \

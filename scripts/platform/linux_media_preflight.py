@@ -160,6 +160,7 @@ def build_preflight_document(
         "external": True,
         "filesystem": "fat32",
         "host_platform": "linux",
+        "media_uuid": partition.get("uuid") or "",
         "model": model.strip(),
         "mount_root": str(resolved_root),
         "partition_device": source,
@@ -231,7 +232,7 @@ def create_preflight_document(*, whole_device: str, mount_root: Path) -> dict[st
             "--bytes",
             "--paths",
             "--output",
-            "NAME,KNAME,PATH,PKNAME,TYPE,SIZE,MODEL,RM,RO,TRAN,FSTYPE,FSVER,MOUNTPOINTS",
+            "NAME,KNAME,PATH,PKNAME,TYPE,SIZE,MODEL,RM,RO,TRAN,FSTYPE,FSVER,UUID,MOUNTPOINTS",
         ],
         label="lsblk",
     )

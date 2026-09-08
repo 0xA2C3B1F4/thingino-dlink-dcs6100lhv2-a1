@@ -697,6 +697,7 @@ def _installation_help(parser):
         "project status": "Read remembered completion and content identities without resuming work. Changed inputs or outputs require review. A completed record does not confirm a physical boot or authorize writing.",
         "project attach": "Select existing inputs once for all dependent installation stages. Requires explicit role paths; validates available same-camera recovery. Writes private project metadata. Changed inputs invalidate dependent completion. Next: project status.",
         "stock-recovery uartless-prepare": "Requires the validated recovery-assets package and manifest. Select a current mounted FAT32 card. Writes only the inert UARTCAP.PSV file on SD; no host NOR writes. Next: inspect uartless-authorize --plan-only.",
+        "stock-recovery uartless-reuse": "On macOS/Linux, plan and confirm private host archival of old UARTCAP.PSV, DCS6100F and their known partial/sidecar files. Verify all copies before removing SD originals. Active updaters block this operation; unknown files are never removed. Requires fresh media UUID, plan digest and output-directory confirmation on a different host filesystem. --resume accepts only the original verified archive. Windows archival is unsupported. Next: uartless-prepare for the next camera using its separate project.",
         "stock-recovery uartless-authorize": "Requires the exact staged capture package and current card. Review --plan-only and confirm WRITE-MTD1-MTD2. Renames the SD package to arm the stock updater; the later physical boot writes mtd1 and mtd2. Next: observe updater completion before uartless-handoff.",
         "stock-recovery uartless-handoff": "Requires operator-observed MTD1-MTD2-WRITTEN completion and the same capture package. Revalidates current SD and passivates its updater. Project status cannot supply the physical confirmation. Next: boot the passive card for capture, then uartless-validate.",
         "stock-recovery uartless-validate": "Requires completed DCS6100F collector output, the authorized package and a confirmed private output directory. Validates duplicate reads, preserved partitions and vendor material; writes host recovery evidence. This is functional recovery after mtd1/mtd2 replacement, not an exact-original backup. Next: local-build build-universal.",
@@ -725,6 +726,7 @@ def _installation_help(parser):
                     "Automation: select --non-interactive --json; media writes require --whole-device, "
                     "--mount-root and exact confirmations from --plan-only. See docs/installer-projects.md.")
         media_commands = {"universal stage", "universal handoff", "universal evacuate-recovery",
+                          "stock-recovery uartless-reuse",
                           "stock-recovery uartless-prepare", "stock-recovery uartless-authorize", "stock-recovery uartless-handoff"}
         if prefix in media_commands:
             for action in current._actions:

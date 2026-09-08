@@ -46,6 +46,7 @@ class LinuxMediaPreflightTests(unittest.TestCase):
                             "ro": False,
                             "fstype": "vfat",
                             "fsver": "FAT32",
+                            "uuid": "1234-ABCD",
                             "mountpoints": [str(root.resolve())],
                         }
                     ],
@@ -79,6 +80,7 @@ class LinuxMediaPreflightTests(unittest.TestCase):
         self.assertEqual(document["host_platform"], "linux")
         self.assertEqual(document["physical_device"], "/dev/sdb")
         self.assertEqual(document["partition_device"], "/dev/sdb1")
+        self.assertEqual(document["media_uuid"], "1234-ABCD")
 
     def test_rejects_protected_or_non_fat32_media(self) -> None:
         with tempfile.TemporaryDirectory() as directory_name:

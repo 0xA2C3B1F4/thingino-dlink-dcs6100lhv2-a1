@@ -131,6 +131,54 @@ remove the input file securely when no longer needed under the owner's policy.
 
 ## Reusing an installation card
 
+The commands in this section are for the README's non-project workflow, where
+`DCS6100_PROJECT` is unset. If you use installation projects, follow the separate
+[camera A to camera B project procedure](installer-projects.md#reuse-one-card-for-camera-a-and-camera-b)
+instead. Keep the previous camera's private host recovery and configuration.
+
+Before another UARTless capture, identify the current card again. On macOS or
+Linux, copy old `UARTCAP.PSV`, `DCS6100F` and their known partial/sidecar files to
+an unused private host directory. Choose a different suffix for each new archive.
+The destination must be outside the SD tree on a different filesystem, without
+symlink components. An active updater must first complete its explicit
+handoff/passivation workflow; this command will not remove it.
+
+```bash
+export DCS6100_SAVED_CAPTURE="$DCS6100_CAMERA_ROOT/saved-capture-before-reuse-1"
+thingino-dlink stock-recovery uartless-reuse \
+  --work-dir "$DCS6100_CAMERA_ROOT/capture-reuse-state" \
+  --whole-device "$DCS6100_SD_DEVICE" \
+  --mount-root "$DCS6100_SD_MOUNT" \
+  --output-dir "$DCS6100_SAVED_CAPTURE" \
+  --plan-only
+```
+
+Review the plan, including the archive destination and transaction markers.
+Then run the following command and enter the exact plan digest, device, target
+and `COPY-VERIFY-THEN-REMOVE-CAPTURE` confirmation when prompted:
+
+```bash
+thingino-dlink stock-recovery uartless-reuse \
+  --work-dir "$DCS6100_CAMERA_ROOT/capture-reuse-state" \
+  --whole-device "$DCS6100_SD_DEVICE" \
+  --mount-root "$DCS6100_SD_MOUNT" \
+  --output-dir "$DCS6100_SAVED_CAPTURE" \
+  --confirm-output-dir "$DCS6100_SAVED_CAPTURE" \
+  --confirm-physical-device "$DCS6100_SD_DEVICE"
+```
+
+All copies are checked before any capture source is removed. Retain the private
+archive; it preserves capture bytes without certifying incomplete data as valid
+recovery. Unknown collector files stop the operation, and unrelated root files
+remain untouched. If removal is interrupted after a verified receipt exists,
+inspect the archive, add `--resume` to the same plan command, then confirm that
+new plan with `--resume` on the second command too. If copying stopped before
+the receipt existed, keep the partial archive and choose a new destination.
+Windows capture archival is currently unsupported and stops before file writes.
+
+Capture archival does **not** evacuate `STOCKM3.BIN` or `STOCKM3.OK`. Handle those
+separate recovery files with the existing command below before new staging.
+
 A completed installation may leave `STOCKM3.BIN` and `STOCKM3.OK` bound to
 the previous firmware. Before staging a different set, copy them to a new
 private host directory with the repository command. Identify the card again,

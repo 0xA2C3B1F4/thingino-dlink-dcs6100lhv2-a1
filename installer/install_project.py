@@ -85,6 +85,7 @@ def default_selections(path: Path, build_root: Path | None = None) -> dict[str, 
     root = path.parent / (path.stem + "-private")
     selections = {
         "stock-recovery uartless-validate": {"output-dir": str(root / "recovery")},
+        "stock-recovery uartless-reuse": {"output-dir": str(root / "archived-capture")},
         "universal init-session": {"output-dir": str(root / "session"), "config-output-dir": str(root / "config")},
         "universal configure": {"output-dir": str(root / "config")},
         "universal provision": {"output": str(root / "provisioning.zip"), "data-output": str(root / "provisioning.jffs2")},
@@ -271,7 +272,15 @@ def init_project(path: Path, *, name: str, selections: dict[str, dict[str, str]]
 
 def selected_paths(project: Project, command: str, explicit: dict[str, str]) -> dict[str, str]:
     selected = dict(project.selections.get(command, {}))
+    if command == "stock-recovery uartless-reuse":
+        # Older projects have no selection for this newly added operation.
+        # This fallback stays in memory until an actual operation begins.
+        selected.setdefault("output-dir", default_selections(project.path)[command]["output-dir"])
     for key, value in explicit.items():
+        if command == "stock-recovery uartless-reuse" and key == "output-dir":
+            # A new archive destination is explicitly chosen and independently
+            # confirmed by the transaction; never replace the previous archive.
+            continue
         if key in selected and Path(value).expanduser().resolve() != Path(selected[key]).resolve():
             raise ProjectError("project_conflict", f"explicit --{key} differs from project")
     return {key: value for key, value in selected.items() if key not in explicit}

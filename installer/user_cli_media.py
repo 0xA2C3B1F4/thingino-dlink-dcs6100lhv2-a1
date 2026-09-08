@@ -48,11 +48,11 @@ def confirm_plan(arguments, plan: WritePlan) -> WriteConfirmation:
         "write_set": getattr(arguments, "confirm_stock_uboot_result", None)
                      if plan.operation.endswith("handoff") else getattr(arguments, "confirm_write_set", None),
     }
-    if not arguments.json:
+    if not arguments.json and not getattr(arguments, "non_interactive", False):
         print(json.dumps({"plan": plan.document(), "confirmations": expected}, indent=2, sort_keys=True))
         for field, value in expected.items():
             supplied[field] = input(f"Confirm {field} by typing {value}: ").strip()
-    elif not getattr(arguments, "non_interactive", False):
+    elif not getattr(arguments, "non_interactive", False) and plan.operation != "stock-recovery uartless-reuse":
         # Preserve old long-form contracts while passing a content-bound
         # confirmation to the shared service. New automation supplies all fields.
         supplied["plan_sha256"] = supplied["plan_sha256"] or expected["plan_sha256"]

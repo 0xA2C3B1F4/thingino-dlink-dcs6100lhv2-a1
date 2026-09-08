@@ -92,7 +92,7 @@ def expand(raw: list[str]) -> list[str]:
     # appearing in a label or option value must never select a command.
     positionals = []
     index = 0
-    boolean_options = {"--json", "--non-interactive", "--events-jsonl", "--plan-only", "--webrtc"}
+    boolean_options = {"--json", "--non-interactive", "--events-jsonl", "--plan-only", "--webrtc", "--resume"}
     while index < len(raw):
         item = raw[index]
         if item.startswith("--"):

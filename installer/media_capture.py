@@ -14,6 +14,7 @@ from .media_contracts import (
     WriteTemporary,
 )
 from .media_preflight import MediaError, MediaPreflight
+from .capture_state import ensure_capture_ready
 from .sd_package import (
     is_matching_update_filename,
     matching_update_filenames,
@@ -48,6 +49,7 @@ def stage_passive_verified_package(
     if root.resolve(strict=True) != preflight.mount_root:
         raise MediaError("UARTless staging root changed after preflight")
     validate_sd_root(root)
+    ensure_capture_ready(root)
     if matching_update_filenames(entry.name for entry in root.iterdir()):
         raise MediaError("stock selector is not empty before UARTless staging")
 
@@ -117,6 +119,7 @@ def activate_passive_verified_package(
     if root.resolve(strict=True) != preflight.mount_root:
         raise MediaError("UARTless activation root changed after preflight")
     validate_sd_root(root)
+    ensure_capture_ready(root, prepared=True)
 
     passive = root / passive_name
     active = root / active_name

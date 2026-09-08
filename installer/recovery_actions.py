@@ -45,6 +45,7 @@ def load_capture_package(package_path: Path, manifest_path: Path) -> tuple[bytes
 
 
 def plan_capture(inputs: CaptureMediaInputs, operation: str) -> WritePlan:
+    from .capture_state import ensure_capture_ready, file_identity, PASSIVE, validate_capture_handoff
     writes = {
         "uartless-prepare": (f"SD create: {UARTLESS_CAPTURE_PASSIVE_FILENAME}; remains inert",),
         "uartless-authorize": (f"SD rename: {UARTLESS_CAPTURE_PASSIVE_FILENAME} to {UARTLESS_CAPTURE_ACTIVE_FILENAME}",
@@ -56,6 +57,12 @@ def plan_capture(inputs: CaptureMediaInputs, operation: str) -> WritePlan:
     raw, _ = load_capture_package(inputs.package, inputs.package_manifest)
     media = validate_media_preflight_document(create_preflight_document(
         whole_device=inputs.whole_device, mount_root=inputs.mount_root), expected_root=inputs.mount_root)
+    if operation in {"uartless-prepare", "uartless-authorize"}:
+        ensure_capture_ready(inputs.mount_root, prepared=operation == "uartless-authorize")
+    if operation == "uartless-authorize" and file_identity(inputs.mount_root, PASSIVE)["sha256"] != hashlib.sha256(raw).hexdigest():
+        raise ProjectError("invalid_input", "UARTless passive package is missing or changed")
+    if operation == "uartless-handoff":
+        validate_capture_handoff(inputs.mount_root, raw)
     return WritePlan("label confirmation required; capture has no camera identity yet", "functional-capture",
         media, (("package", hashlib.sha256(raw).hexdigest()),
                 ("reserved_sd_contents", reserved_media_identity(inputs.mount_root))), writes[operation],

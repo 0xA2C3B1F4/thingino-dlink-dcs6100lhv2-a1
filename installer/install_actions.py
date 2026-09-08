@@ -64,6 +64,7 @@ class WritePlan:
                    "universal handoff": "MTD1-MTD2-WRITTEN",
                    "universal evacuate-recovery": "COPY-VERIFY-THEN-REMOVE-BACKUPS",
                    "stock-recovery uartless-prepare": "STAGE-INERT-CAPTURE",
+                   "stock-recovery uartless-reuse": "COPY-VERIFY-THEN-REMOVE-CAPTURE",
                    "stock-recovery uartless-authorize": "WRITE-MTD1-MTD2",
                    "stock-recovery uartless-handoff": "MTD1-MTD2-WRITTEN"}
         return {"plan_sha256": self.identity, "physical_device": self.media.physical_device,

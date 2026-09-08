@@ -78,9 +78,12 @@ class InstallationFlowTests(unittest.TestCase):
                         "--mount-root", str(card), *options]
                 plan = self.cli([*args, "--plan-only"])
                 result = self.cli([*args, *self.confirmations(plan, operation)])
-                inspected = self.cli([*args, "--plan-only"])["result"]
+                inspected = plan["result"]
                 self.assertNotIn("armed", inspected)
                 self.assertFalse(inspected["writes_performed"])
+                # The operation has consumed its source state; planning it again
+                # must reject rather than report another ready write.
+                self.cli([*args, "--plan-only"], expected=2)
                 phases.append(result["phase"])
                 self.assertEqual((card / (UARTLESS_CAPTURE_ACTIVE_FILENAME if operation == "uartless-authorize"
                                         else UARTLESS_CAPTURE_PASSIVE_FILENAME)).read_bytes(), self.raw)

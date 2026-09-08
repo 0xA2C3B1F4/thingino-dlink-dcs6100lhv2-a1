@@ -184,6 +184,32 @@ def _stock_uartless_prepare(facade, arguments):
     return _capture_call(arguments, "uartless-prepare")
 
 
+def _stock_uartless_reuse(facade, arguments):
+    from pathlib import Path
+    from .capture_reuse import CaptureReuseInputs, plan_capture_reuse, reuse_capture
+    from .user_cli_media import select_media, confirm_plan
+    from .user_cli_project import event
+    from .install_project import ProjectError
+    from .install_results import document
+    select_media(arguments)
+    request = CaptureReuseInputs(arguments.mount_root, arguments.whole_device,
+                                 arguments.output_dir, arguments.resume)
+    plan = plan_capture_reuse(request)
+    if arguments.plan_only:
+        return document(plan.operation, ok=True, phase="write-plan-ready", result={
+            "plan": plan.document(), "plan_sha256": plan.identity,
+            "required_confirmations": plan.required_confirmations(),
+            "required_output_dir_confirmation": str(arguments.output_dir.absolute()),
+            "write_set": [], "writes_performed": False})
+    output = arguments.confirm_output_dir
+    if output is None and not arguments.json and not arguments.non_interactive:
+        output = Path(input(f"Confirm private capture archive destination {arguments.output_dir}: ").strip())
+    if output is None:
+        raise ProjectError("missing_input", "confirm private archive destination", ("--confirm-output-dir",))
+    return reuse_capture(request, confirm_plan(arguments, plan), confirmed_output_dir=output,
+                         emit=lambda item: event(arguments, item.phase))
+
+
 def _stock_uartless_authorize(facade, arguments):
     return _capture_call(arguments, "uartless-authorize")
 

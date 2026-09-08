@@ -903,6 +903,11 @@ def _stock_uartless_prepare(arguments: argparse.Namespace) -> dict[str, object]:
     return implementation(sys.modules[__name__], arguments)
 
 
+def _stock_uartless_reuse(arguments: argparse.Namespace) -> dict[str, object]:
+    from .user_cli_stock_recovery import _stock_uartless_reuse as implementation
+    return implementation(sys.modules[__name__], arguments)
+
+
 def _stock_uartless_authorize(arguments: argparse.Namespace) -> dict[str, object]:
     from .user_cli_stock_recovery import _stock_uartless_authorize as implementation
 

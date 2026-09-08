@@ -71,6 +71,16 @@ def register_stock_recovery_commands(facade: object, commands: object) -> None:
     uartless_prepare.add_argument("--confirm-physical-device", required=True)
     uartless_prepare.set_defaults(handler=uartless_prepare_handler)
 
+    uartless_reuse = stock_commands.add_parser("uartless-reuse")
+    _add_common(uartless_reuse, inherited=True)
+    uartless_reuse.add_argument("--mount-root", type=Path)
+    uartless_reuse.add_argument("--output-dir", type=Path, required=True)
+    uartless_reuse.add_argument("--confirm-output-dir", type=Path)
+    uartless_reuse.add_argument("--confirm-physical-device")
+    uartless_reuse.add_argument("--resume", action="store_true",
+                                help="explicitly resume removal using the original verified private archive")
+    uartless_reuse.set_defaults(handler=getattr(facade, "_stock_uartless_reuse"))
+
     uartless_authorize = stock_commands.add_parser("uartless-authorize")
     _add_common(uartless_authorize, inherited=True)
     uartless_authorize.add_argument("--package", type=Path, required=True)

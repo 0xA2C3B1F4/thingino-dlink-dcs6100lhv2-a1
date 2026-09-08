@@ -184,6 +184,103 @@ It discovers the session's mDNS name and uses the retained SSH key and station p
 there is no `--host` override. `universal evacuate-recovery` also provides
 a reviewable plan before copying and removing reserved SD recovery files.
 
+## Reuse one card for camera A and camera B
+
+Keep a separate project for each camera. Reuse the same model-universal install
+set and recovery-assets package; a second camera does not require another
+firmware build. Its recovery capture, session keys, configuration, provisioning
+and authorization must be created for that camera.
+
+After camera A's installation has been independently verified, return its card
+to the host and identify the current medium again. If an updater is still
+active, complete its explicit handoff/passivation workflow first. Do not remove
+an active updater by renaming or deleting it manually to bypass this gate.
+
+On macOS or Linux, archive the old capture using camera A's project. The default
+destination is that project's private `archived-capture` directory. The host
+destination must be on a different filesystem from the card, with no symlink
+components. Windows capture archival is currently unsupported because this
+transaction requires private directory permissions and directory fsync; it
+stops before copying or removing files there.
+
+```bash
+export DCS6100_CAMERA_A_PROJECT="$DCS6100_PROJECT"
+thingino-dlink stock-recovery uartless-reuse --project "$DCS6100_CAMERA_A_PROJECT" \
+  --whole-device "$DCS6100_SD_DEVICE" --mount-root "$DCS6100_SD_MOUNT" --plan-only
+thingino-dlink stock-recovery uartless-reuse --project "$DCS6100_CAMERA_A_PROJECT" \
+  --whole-device "$DCS6100_SD_DEVICE" --mount-root "$DCS6100_SD_MOUNT"
+```
+
+Review the complete plan and confirm the private destination and write set.
+Automation additionally supplies `--non-interactive --json`, `--confirm-plan`,
+`--confirm-physical-device`, `--confirm-target`, `--confirm-output-dir` and
+`--confirm-write-set COPY-VERIFY-THEN-REMOVE-CAPTURE` from the reviewed plan.
+Current card identity, including its filesystem UUID, and capture contents are
+checked again before writes. An old plan cannot authorize changed media or data.
+
+The operation copies only `UARTCAP.PSV`, `.uartless-capture-upload.part`,
+`DCS6100F`'s fixed collector directories/files and their AppleDouble `._` files.
+Known partial files and empty collector directories are preserved too. It checks
+all host copies and publishes a private receipt before removing any SD file.
+This archive preserves bytes; it does not certify incomplete capture output as
+functional recovery. Unknown files inside `DCS6100F` stop the operation.
+Recordings and other root files remain untouched and are listed in the result.
+An interrupted updater rollback is ambiguous and requires inspection through
+its original recovery workflow; capture reuse does not remove it.
+
+If copying stops before a verified receipt exists, all SD source files remain.
+Retain the partial host directory and choose a new explicit `--output-dir` for
+the next attempt. If removal stops after the receipt exists, inspect the retained
+archive, then plan again with `--resume` and the same destination. Confirm that
+new plan explicitly. Resume verifies the entire archive and every remaining SD
+file before continuing. Existing destinations are never overwritten, and a
+changed receipt, copy, source or card stops cleanup.
+An SD `.uartless-reuse.pending` marker blocks new capture until cleanup finishes.
+The host completion marker is synced before that SD marker is removed. A completed
+archive cannot authorize removal of a new capture, even when its package bytes
+are identical. Keep the markers and original archive when an operation stops.
+For this command only, an explicit new `--output-dir` may select another archive
+destination in the same project. It still needs its own plan and destination
+confirmation; the previous archive remains intact. Older projects receive the
+new default path in memory, without a project write during `--plan-only`.
+
+If `STOCKM3.BIN`/`STOCKM3.OK` remain, use camera A's existing
+`universal evacuate-recovery --plan-only` and confirmed evacuation workflow to
+preserve that separate checkpoint before new universal staging. Capture reuse
+does not delete that checkpoint or touch camera A's validated host recovery.
+
+Select the existing install-set directory, its matching model public key, and
+the capture package/manifest from A's completed build outputs. Set these paths
+once; they contain no camera-specific recovery or session credentials. Then
+switch the selected project explicitly before initializing B:
+
+```bash
+export DCS6100_REUSE_INSTALL_SET="/path/from/camera-a/install-set"
+export DCS6100_REUSE_PUBLIC_KEY="/path/from/camera-a/model-public-key.pem"
+export DCS6100_REUSE_CAPTURE_PACKAGE="/path/from/recovery-assets/uartless-capture-bootstrap.bin"
+export DCS6100_REUSE_CAPTURE_MANIFEST="/path/from/recovery-assets/uartless-capture-bootstrap.manifest.json"
+export DCS6100_CAMERA_B_PROJECT="$DCS6100_DATA_VOLUME/thingino/camera-b/project.json"
+export DCS6100_PROJECT="$DCS6100_CAMERA_B_PROJECT"
+thingino-dlink project init --name camera-b --build-root "$DCS6100_BUILD_ROOT"
+thingino-dlink project attach \
+  --install-set-dir "$DCS6100_REUSE_INSTALL_SET" \
+  --universal-public-key "$DCS6100_REUSE_PUBLIC_KEY" \
+  --package "$DCS6100_REUSE_CAPTURE_PACKAGE" \
+  --package-manifest "$DCS6100_REUSE_CAPTURE_MANIFEST"
+```
+
+Follow `uartless-prepare`, `uartless-authorize`, `uartless-handoff` and
+`uartless-validate` under camera B's project. Prepare and authorize now reject
+stale capture directories and sidecars before reporting a ready plan. Authorize
+also checks the expected passive package, and handoff checks the active package.
+Handoff does not treat collector output as proof that a physical boot completed.
+
+Continue B's `universal init-session`, `configure`, `provision`, `authorize`,
+`stage`, `handoff` and `verify` with its own recovery and credentials. Keep A's
+project, private recovery and archive. Do not run `build-universal` again solely
+because the card or camera changed. If `DCS6100_PROJECT` is set, ensure it names
+the same project as each explicit `--project` selection.
+
 ## Automation and plan binding
 
 `--non-interactive` implies JSON output and never prompts. Supply the current
