@@ -46,9 +46,20 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
     _verify = getattr(facade, '_verify')
     _verify_media = getattr(facade, '_verify_media')
     _workflow_preflight = getattr(facade, '_workflow_preflight')
-    parser = _ArgumentParser(prog="thingino-dlink")
+    parser = _ArgumentParser(prog="thingino-dlink", description=(
+        "Install DCS-6100LHV2 A1 using validated local artifacts and same-camera recovery. "
+        "Start with local-build prepare, then follow each command's next_command. "
+        "Use project init to remember explicit paths for one camera. "
+        "SD operations require current media identity and exact confirmations."
+    ), epilog=(
+        'After selecting DCS6100_PROJECT: Interactive: thingino-dlink universal configure. '
+        'Automation: thingino-dlink --non-interactive --json local-build status. '
+        'Public guide: docs/installer-projects.md.'
+    ))
     _add_common(parser)
     commands = parser.add_subparsers(dest="command", required=True)
+    from .user_cli_project import register
+    register(parser, commands, facade)
 
     inspect_vendor = commands.add_parser("inspect-vendor-bundle")
     _add_common(inspect_vendor, inherited=True)
@@ -236,7 +247,8 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
     workflow.add_argument("--station-ipv4")
     workflow.set_defaults(handler=_workflow_preflight)
 
-    local_build = commands.add_parser("local-build")
+    local_build = commands.add_parser("local-build", help="prepare, configure and build validated local artifacts",
+        description="Start with prepare to check the host and external workspace. Bootstrap and acquire fetch locked public inputs. Recovery-assets prepares capture artifacts. Configure selects camera-private inputs; build or build-universal produces an inspected install set. These commands write the selected host workspace, not camera NOR.")
     local_build_commands = local_build.add_subparsers(
         dest="local_build_command", required=True
     )
@@ -387,7 +399,8 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
     )
     local_build_universal.set_defaults(handler=_local_build_build_universal)
 
-    universal = commands.add_parser("universal")
+    universal = commands.add_parser("universal", help="provision and stage one camera's universal installation",
+        description="Use an inspected universal build and validated same-camera recovery. Run init-session, configure, provision and authorize before stage. Stage writes SD files; physical boot later writes stock mtd1/mtd2 and final mtd1/mtd3. Handoff requires an observed stock-updater result; verify checks the running camera.")
     universal_commands = universal.add_subparsers(
         dest="universal_command", required=True
     )
@@ -502,6 +515,9 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
     universal_stage.add_argument("--confirm-physical-device")
     universal_stage.add_argument("--confirm-target")
     universal_stage.add_argument("--confirm-write-set")
+    universal_stage.add_argument("--plan-only", action="store_true",
+                                 help="validate artifacts and current media; return plan without writing")
+    universal_stage.add_argument("--confirm-plan", help="SHA-256 from this invocation's reviewed --plan-only result")
     universal_stage.set_defaults(handler=_universal_stage)
 
     universal_evacuate = universal_commands.add_parser("evacuate-recovery")
@@ -643,4 +659,86 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
     from .user_cli_parser_stock_recovery import register_stock_recovery_commands
 
     register_stock_recovery_commands(facade, commands)
+    _installation_help(parser)
     return parser
+
+
+def _installation_help(parser):
+    """Command-specific guidance beside the existing argument contracts."""
+    import argparse
+    descriptions = {
+        "local-build prepare": "Check host prerequisites and reserve the selected external build workspace. Writes host workspace metadata. Next: bootstrap.",
+        "local-build status": "Inspect the selected build workspace and missing prerequisites without building. Use before choosing the next explicit command.",
+        "local-build bootstrap": "Prepare public source/build inputs in the selected workspace. Requires prepare. Next: acquire.",
+        "local-build acquire": "Acquire and verify hash-locked public inputs in the selected workspace. Requires bootstrap and network access. Next: recovery-assets or a configured build.",
+        "local-build recovery-assets": "Build recovery capture artifacts in the selected host workspace. Requires acquired inputs. Next: select the exact-original or UARTless functional recovery procedure.",
+        "local-build configure": "Select private paths, data action and confirmed Wi-Fi input. Writes private configuration and build settings. Interactive mode asks for missing choices; automation supplies every selection and --secrets-fd. Next: build.",
+        "local-build build": "Build and inspect a camera-specific install set from validated settings or explicit private inputs. Writes the selected build workspace. Requires independent current Wi-Fi confirmation. Next: inspect and stage that install set.",
+        "local-build build-universal": "Build and inspect model-universal artifacts from validated vendor inputs. Writes the selected build workspace and model signing files. Next: universal init-session.",
+        "universal init-session": "Validate functional recovery and protected readbacks, then create a camera-bound private session in --output-dir. Requires ssh-keygen and dropbearkey. Next: configure.",
+        "universal configure": "Generate camera-private configuration in --output-dir using the selected session and confirmed Wi-Fi input. Next: provision.",
+        "universal provision": "Validate the universal bundle and recovery, then write the signed camera sidecar and JFFS2 data image. Requires configured private inputs, signing tools, unsquashfs and mkfs.jffs2. On macOS pass --mkfs-jffs2 scripts/run_container_mkfs_jffs2.sh with DCS6100_BUILDER_IMAGE set to the recorded immutable image ID; see docs/installer-projects.md. Next: authorize.",
+        "universal authorize": "Bind this camera, recovery session, universal firmware and provisioning in --output-dir. Writes authorization artifacts on the host. Next: inspect a stage --plan-only result.",
+        "universal stage": "Validate the complete camera/artifact tuple and current card. --plan-only is read-only. Execution writes verified SD files and arms a future bootstrap, activation last. Confirm the printed plan, then follow physical boot instructions before handoff.",
+        "universal handoff": "Revalidate the selected card and camera tuple after observing stock mtd1/mtd2 completion. Passivates the stock updater on SD for the next boot. Requires exact physical-result and device confirmations. Next: boot the final installer and verify.",
+        "universal evacuate-recovery": "Copy and validate an existing recovery checkpoint into --output-dir before removing its SD copy. Requires current media and exact device confirmation. Next: stage the new camera-bound install set.",
+        "universal verify": "Discover the selected session's mDNS name and verify the running camera using its retained SSH key and station pin. Requires dropbearkey, completed physical installation and network reachability. There is no host override. Host project status does not replace this check.",
+        "project init": "Create a new private camera path project. Supply --project or DCS6100_PROJECT and a local --name; optionally --build-root or a command-specific --paths JSON map. Creates project metadata and its private output directory. Next: local-build prepare or project status.",
+        "project status": "Read remembered completion and content identities without resuming work. Changed inputs or outputs require review. A completed record does not confirm a physical boot or authorize writing.",
+        "project attach": "Select existing inputs once for all dependent installation stages. Requires explicit role paths; validates available same-camera recovery. Writes private project metadata. Changed inputs invalidate dependent completion. Next: project status.",
+        "stock-recovery uartless-prepare": "Requires the validated recovery-assets package and manifest. Select a current mounted FAT32 card. Writes only the inert UARTCAP.PSV file on SD; no host NOR writes. Next: inspect uartless-authorize --plan-only.",
+        "stock-recovery uartless-authorize": "Requires the exact staged capture package and current card. Review --plan-only and confirm WRITE-MTD1-MTD2. Renames the SD package to arm the stock updater; the later physical boot writes mtd1 and mtd2. Next: observe updater completion before uartless-handoff.",
+        "stock-recovery uartless-handoff": "Requires operator-observed MTD1-MTD2-WRITTEN completion and the same capture package. Revalidates current SD and passivates its updater. Project status cannot supply the physical confirmation. Next: boot the passive card for capture, then uartless-validate.",
+        "stock-recovery uartless-validate": "Requires completed DCS6100F collector output, the authorized package and a confirmed private output directory. Validates duplicate reads, preserved partitions and vendor material; writes host recovery evidence. This is functional recovery after mtd1/mtd2 replacement, not an exact-original backup. Next: local-build build-universal.",
+        "stock-recovery backup-prepare": "Requires collector kernel, config, MMC module and an explicit media preflight/device confirmation. Builds and stages a read-only RAM collector on SD. No host NOR writes. Next: backup-capture with a confirmed UART device.",
+        "stock-recovery backup-capture": "Requires the staged read-only collector, kernel config and exact UART-device confirmation. Boots the collector through UART to capture duplicate NOR reads onto SD. No NOR writes. Next: return the card and run backup-validate.",
+        "stock-recovery backup-validate": "Requires either an existing exact recovery directory or complete collector output and a confirmed private destination. Validates exact-original duplicate backups; collector mode writes host evidence. Next: select current protected readbacks for same-camera recovery validation.",
+        "stock-recovery restore-prepare": "Requires exact-original recovery and current same-camera protected readbacks. Writes a validated stock-restore artifact set to the host output directory. Next: restore-inspect; this command does not restore camera NOR.",
+        "stock-recovery restore-inspect": "Requires exact recovery, current protected readbacks and the selected restore output. Revalidates the restore set without camera writes. Next: explicitly choose the legacy live or SD restore procedure.",
+        "stock-recovery live-prepare": "Requires exact recovery, current readbacks and collector tools. Creates a RAM restore set and stages it on confirmed SD. Next: live-authorize; camera restoration is not yet proven.",
+        "stock-recovery live-authorize": "Requires the validated RAM restore set, same-camera evidence and exact restore/device confirmations. Arms the selected SD set. Next: live-restore with separately confirmed UART transport.",
+        "stock-recovery live-restore": "Requires the authorized RAM set, same-camera recovery and exact UART selection. Runs the bounded legacy physical restore. Next: inspect its result and live-passivate; never infer success from project metadata.",
+        "stock-recovery live-passivate": "Requires validated recovery, RAM set and current confirmed SD. Passivates completed restore files. Next: verify the camera's physical stock boot independently.",
+        "stock-recovery sd-prepare": "Requires exact recovery, protected readbacks, kernel/config/MMC inputs and confirmed SD. Builds and stages the legacy stock-restore bootstrap. Next: sd-confirmation, then explicit sd-authorize.",
+        "stock-recovery sd-confirmation": "Requires the selected card and media preflight. Reads the exact authorization, handoff or retry phrase for that staged set. No writes. Next: review the named phase before explicitly invoking it.",
+        "stock-recovery sd-authorize": "Requires a validated restore set and the exact current restore/device confirmations. Arms the SD bootstrap for the bounded restore. Next: observe the actual boot result before sd-handoff.",
+        "stock-recovery sd-handoff": "Requires the validated set and exact observed stock-updater handoff phrase. Passivates the selected updater on SD. Next: follow the returned physical actions; project records are not boot evidence.",
+        "stock-recovery sd-retry": "Requires reviewed interrupted-restore evidence and the exact retry/device confirmations. Explicitly reauthorizes the bounded restore. No automatic retry is available. Next: observe physical restore/readback results.",
+        "stock-recovery sd-passivate": "Requires validated restore evidence and current confirmed SD. Passivates the completed bootstrap. Next: independently verify physical stock restoration.",
+    }
+    def visit(current, prefix=""):
+        if prefix in descriptions:
+            current.description = descriptions[prefix]
+            if prefix.startswith(("universal ", "stock-recovery uartless-")):
+                example = prefix + (' --mkfs-jffs2 "$DCS6100_MKFS_JFFS2"' if prefix == "universal provision" else "")
+                current.epilog = ("After selecting DCS6100_PROJECT, its inputs and the host tools in the guide. Interactive: thingino-dlink " + example + ". "
+                    "Automation: select --non-interactive --json; media writes require --whole-device, "
+                    "--mount-root and exact confirmations from --plan-only. See docs/installer-projects.md.")
+        media_commands = {"universal stage", "universal handoff", "universal evacuate-recovery",
+                          "stock-recovery uartless-prepare", "stock-recovery uartless-authorize", "stock-recovery uartless-handoff"}
+        if prefix in media_commands:
+            for action in current._actions:
+                if action.dest in {"whole_device", "mount_root", "media_preflight", "confirm_physical_device",
+                                   "confirm_write_set", "confirm_stock_uboot_result"}:
+                    action.required = False
+            existing = {action.dest for action in current._actions}
+            for flag, options in (("--whole-device", {}), ("--confirm-target", {}),
+                                  ("--confirm-write-set", {}), ("--confirm-plan", {}),
+                                  ("--plan-only", {"action": "store_true"})):
+                if flag[2:].replace("-", "_") not in existing:
+                    current.add_argument(flag, **options)
+        if prefix == "stock-recovery uartless-validate":
+            for action in current._actions:
+                if action.dest in {"collector_dir", "confirm_output_dir"}:
+                    action.required = False
+            current.add_argument("--whole-device")
+            current.add_argument("--mount-root", type=__import__("pathlib").Path)
+        if prefix == "universal provision":
+            for action in current._actions:
+                if action.dest in {"unsquashfs", "mkfs_jffs2"}:
+                    action.required = False
+        for action in current._actions:
+            if isinstance(action, argparse._SubParsersAction):
+                for name, child in action.choices.items():
+                    visit(child, (prefix + " " + name).strip())
+    visit(parser)

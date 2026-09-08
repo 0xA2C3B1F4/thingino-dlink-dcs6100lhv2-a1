@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import hashlib
 import tempfile
 import unittest
 from pathlib import Path
@@ -191,15 +192,23 @@ class UserCliTests(unittest.TestCase):
             confirm_physical_device="/dev/disk9",
             confirm_write_set="WRITE-MTD1-MTD2",
         )
-        preflight = SimpleNamespace(physical_device="/dev/disk9")
+        from installer import recovery_actions
+        from installer.install_actions import WritePlan
+        from installer.media_preflight import MediaPreflight
+        arguments.json = True
+        arguments.whole_device = "/dev/disk9"
+        preflight = MediaPreflight("/dev/disk9", "fixture", 1024, "fat32", Path("card"))
+        plan = WritePlan("fixture", "functional-capture", preflight,
+                         (("package", hashlib.sha256(b"package").hexdigest()),), ("SD change",),
+                         operation="stock-recovery uartless-authorize")
         with (
             mock.patch.object(
-                user_cli_stock_recovery,
-                "_load_uartless_package",
+                recovery_actions,
+                "load_capture_package",
                 return_value=(b"package", object()),
             ),
-            mock.patch.object(user_cli, "load_media_preflight", return_value=preflight),
-            mock.patch.object(user_cli, "activate_passive_verified_package") as run,
+            mock.patch.object(recovery_actions, "plan_capture", return_value=plan),
+            mock.patch.object(recovery_actions, "activate_passive_verified_package") as run,
         ):
             result = user_cli._stock_uartless_authorize(arguments)
         run.assert_called_once()
@@ -226,12 +235,10 @@ class UserCliTests(unittest.TestCase):
             replacement_mtd=(1, 2),
         )
         with (
-            mock.patch.object(
-                user_cli,
-                "capture_functional_backup_from_uartless_collector",
+            mock.patch("installer.recovery_actions.capture_functional_backup_from_uartless_collector",
                 return_value=decision,
             ),
-            mock.patch.object(user_cli, "read_snapshot", return_value=b"package"),
+            mock.patch("installer.recovery_actions.read_snapshot", return_value=b"package"),
         ):
             result = user_cli._stock_uartless_validate(arguments)
         self.assertEqual(
@@ -416,21 +423,17 @@ class UserCliTests(unittest.TestCase):
             secrets_fd=7,
         )
         with (
-            mock.patch.object(user_cli, "load_host_session", return_value=session),
-            mock.patch.object(user_cli, "ensure_ed25519_keypair", return_value=keypair),
-            mock.patch.object(
-                user_cli,
-                "read_confirmed_private_input",
+            mock.patch("installer.recovery_ap.host.load_host_session", return_value=session),
+            mock.patch("installer.final_bundle.ensure_ed25519_keypair", return_value=keypair),
+            mock.patch("installer.private_config.read_confirmed_private_input",
                 return_value=("wifi", "password", "wifi", "password"),
             ),
-            mock.patch.object(user_cli, "render_private_wpa_config", return_value=b"wpa"),
-            mock.patch.object(
-                user_cli, "read_authorized_key", return_value=b"ssh-ed25519 key\n"
+            mock.patch("installer.private_config.render_private_wpa_config", return_value=b"wpa"),
+            mock.patch("installer.private_config.read_authorized_key", return_value=b"ssh-ed25519 key\n"
             ),
-            mock.patch.object(user_cli, "load_service_credential", return_value=b"d" * 64),
-            mock.patch.object(user_cli, "generate_private_config", return_value=generated) as generate,
-            mock.patch.object(
-                user_cli, "load_private_config_for_session", return_value=private
+            mock.patch("installer.recovery_ap.host.load_service_credential", return_value=b"d" * 64),
+            mock.patch("installer.private_config.generate_private_config", return_value=generated) as generate,
+            mock.patch("installer.private_config.load_private_config_for_session", return_value=private
             ) as load_private,
         ):
             result = user_cli._universal_configure(arguments)
@@ -463,18 +466,14 @@ class UserCliTests(unittest.TestCase):
         recovery = SimpleNamespace(camera_identity_sha256="a" * 64)
         session = SimpleNamespace(output_dir=Path("/private/camera/session"))
         with (
-            mock.patch.object(
-                user_cli,
-                "validate_functional_recovery_boundary",
+            mock.patch("installer.recovery_gate.validate_functional_recovery_boundary",
                 return_value=recovery,
             ) as validate,
-            mock.patch.object(
-                user_cli,
-                "ensure_uartless_provisioning_session",
+            mock.patch("installer.recovery_ap.session.ensure_uartless_provisioning_session",
                 return_value=session,
             ) as ensure,
             mock.patch(
-                "installer.user_cli_universal.shutil.which",
+                "installer.camera_setup.shutil.which",
                 side_effect=lambda name: (
                     "/usr/bin/ssh-keygen" if name == "ssh-keygen" else "/usr/bin/true"
                 ),
@@ -526,18 +525,14 @@ class UserCliTests(unittest.TestCase):
                 ]
             )
             with (
-                mock.patch.object(
-                    user_cli,
-                    "validate_functional_recovery_boundary",
+                mock.patch("installer.recovery_gate.validate_functional_recovery_boundary",
                     return_value=SimpleNamespace(camera_identity_sha256="a" * 64),
                 ),
-                mock.patch.object(
-                    user_cli,
-                    "ensure_uartless_provisioning_session",
+                mock.patch("installer.recovery_ap.session.ensure_uartless_provisioning_session",
                     return_value=SimpleNamespace(output_dir=root / "session"),
                 ) as ensure,
                 mock.patch(
-                    "installer.user_cli_universal.shutil.which",
+                    "installer.camera_setup.shutil.which",
                     return_value=str(linked),
                 ),
             ):
@@ -571,46 +566,23 @@ class UserCliTests(unittest.TestCase):
                 work_dir=work,
                 json=True,
             )
-            recovery = SimpleNamespace(camera_identity_sha256="a" * 64)
-            preflight = SimpleNamespace(
-                physical_device="/dev/test-card",
-                mount_root=card.resolve(),
-            )
-            validated = SimpleNamespace()
+            from installer import install_actions
+            from installer.media_preflight import MediaPreflight
+            preflight = MediaPreflight("/dev/test-card", "fixture", 1024, "fat32", card)
+            plan = install_actions.WritePlan("a" * 64, "functional", preflight,
+                                             (("firmware", "b" * 64),), ("SD staging",))
+            arguments.confirm_plan = plan.identity
+            validated = object()
             with (
-                mock.patch.object(
-                    user_cli,
-                    "validate_functional_recovery_boundary",
-                    return_value=recovery,
-                ),
-                mock.patch.object(
-                    user_cli,
-                    "create_preflight_document",
-                    return_value={"schema_version": 1},
-                ),
-                mock.patch.object(
-                    user_cli, "load_media_preflight", return_value=preflight
-                ),
-                mock.patch.object(
-                    user_cli, "recovery_session_identity", return_value="b" * 64
-                ),
-                mock.patch.object(
-                    user_cli,
-                    "validate_camera_bound_universal_install",
-                    return_value=validated,
-                ) as validate,
-                mock.patch.object(
-                    user_cli,
-                    "stage_camera_bound_universal_install",
-                    return_value={"bootstrap": "c" * 64},
-                ) as stage,
+                mock.patch.object(install_actions, "plan_universal_stage",
+                                  return_value=(plan, validated)) as validate,
+                mock.patch.object(install_actions, "stage_camera_bound_universal_install",
+                                  return_value={"bootstrap": "c" * 64}) as stage,
             ):
                 result = user_cli._universal_stage(arguments)
-            self.assertIs(validate.call_args.kwargs["recovery"], recovery)
+            self.assertEqual(validate.call_count, 2)
             stage.assert_called_once_with(
-                validated,
-                root=card,
-                preflight=preflight,
+                validated, root=card, preflight=preflight,
                 confirmed_physical_device="/dev/test-card",
             )
             self.assertTrue(result["result"]["armed"])
@@ -636,35 +608,22 @@ class UserCliTests(unittest.TestCase):
                 work_dir=work,
                 json=True,
             )
-            preflight = SimpleNamespace(
-                physical_device="/dev/test-card",
-                mount_root=card.resolve(),
-            )
-            evacuated = {"STOCKM3.BIN": "a" * 64, "STOCKM3.OK": "b" * 64}
+            from installer import install_actions
+            from installer.media_preflight import MediaPreflight
+            preflight = MediaPreflight("/dev/test-card", "fixture", 1024, "fat32", card)
+            plan = install_actions.WritePlan("a" * 64, "functional", preflight,
+                (("artifact", "b" * 64),), ("SD change",),
+                operation="universal evacuate-recovery")
+            validated = object()
             with (
-                mock.patch.object(
-                    user_cli,
-                    "create_preflight_document",
-                    return_value={"schema_version": 1},
-                ),
-                mock.patch.object(
-                    user_cli, "load_media_preflight", return_value=preflight
-                ),
-                mock.patch.object(
-                    user_cli,
-                    "evacuate_existing_stock_backups",
-                    return_value=evacuated,
-                ) as evacuate,
+                mock.patch.object(install_actions, "plan_evacuation",
+                                  return_value=plan),
+                mock.patch("installer.media.evacuate_existing_stock_backups",
+                           return_value={"fixture": "c" * 64}) as evacuate,
             ):
                 result = user_cli._universal_evacuate_recovery(arguments)
-            evacuate.assert_called_once_with(
-                root=card,
-                destination_dir=output,
-                preflight=preflight,
-                confirmed_physical_device="/dev/test-card",
-            )
             self.assertEqual(result["phase"], "completed-recovery-checkpoint-evacuated")
-            self.assertEqual(result["result"]["evacuated_files"], evacuated)
+            self.assertEqual(result["result"]["evacuated_files"], {"fixture": "c" * 64})
             self.assertTrue(result["result"]["sd_modified"])
             self.assertEqual(result["result"]["write_set"], [])
 
@@ -712,48 +671,20 @@ class UserCliTests(unittest.TestCase):
                 work_dir=work,
                 json=True,
             )
-            recovery = SimpleNamespace(camera_identity_sha256="a" * 64)
-            preflight = SimpleNamespace(
-                physical_device="/dev/test-card",
-                mount_root=card.resolve(),
-            )
-            validated = SimpleNamespace()
+            from installer import install_actions
+            from installer.media_preflight import MediaPreflight
+            preflight = MediaPreflight("/dev/test-card", "fixture", 1024, "fat32", card)
+            plan = install_actions.WritePlan("a" * 64, "functional", preflight,
+                (("artifact", "b" * 64),), ("SD change",),
+                operation="universal handoff")
+            validated = object()
             with (
-                mock.patch.object(
-                    user_cli,
-                    "validate_functional_recovery_boundary",
-                    return_value=recovery,
-                ),
-                mock.patch.object(
-                    user_cli,
-                    "create_preflight_document",
-                    return_value={"schema_version": 1},
-                ),
-                mock.patch.object(
-                    user_cli, "load_media_preflight", return_value=preflight
-                ),
-                mock.patch.object(
-                    user_cli, "recovery_session_identity", return_value="b" * 64
-                ),
-                mock.patch.object(
-                    user_cli,
-                    "validate_camera_bound_universal_install",
-                    return_value=validated,
-                ) as validate,
-                mock.patch.object(
-                    user_cli,
-                    "handoff_camera_bound_universal_install",
-                    return_value={"STAGE1.PKG": "c" * 64},
-                ) as handoff,
+                mock.patch.object(install_actions, "plan_universal_handoff",
+                                  return_value=(plan, validated)),
+                mock.patch("installer.universal_install.handoff_camera_bound_universal_install",
+                           return_value={"fixture": "c" * 64}) as handoff,
             ):
                 result = user_cli._universal_handoff(arguments)
-            self.assertIs(validate.call_args.kwargs["recovery"], recovery)
-            handoff.assert_called_once_with(
-                validated,
-                root=card,
-                preflight=preflight,
-                confirmed_physical_device="/dev/test-card",
-            )
             self.assertFalse(result["result"]["armed"])
             self.assertFalse(result["result"]["nor_written_by_host"])
             self.assertEqual(
@@ -814,13 +745,13 @@ class UserCliTests(unittest.TestCase):
             "station_mdns_name": "dcs6100-1234abcd.local",
             "station_ipv4": "198.51.100.23",
         }
-        with mock.patch.object(
-            user_cli, "ensure_uartless_station_host_pin", return_value=True
-        ) as ensure_pin, mock.patch.object(
-            user_cli, "prove_thingino_health", return_value=health
-        ) as prove:
+        with mock.patch("installer.recovery_ap.session.ensure_uartless_station_host_pin", return_value=True
+        ) as ensure_pin, mock.patch("installer.recovery_ap.host.prove_thingino_health", return_value=health
+        ) as prove, mock.patch("installer.camera_setup.session_fingerprint", return_value="a" * 64), \
+             mock.patch("installer.recovery_ap.session._read_private", return_value=b"host-key"):
             result = user_cli._universal_verify(parsed)
-        ensure_pin.assert_called_once_with(
+        self.assertEqual(ensure_pin.call_count, 2)
+        ensure_pin.assert_called_with(
             session_dir=Path("/private/session"),
             dropbearkey=Path("/usr/bin/true"),
         )

@@ -236,45 +236,7 @@ def _now() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat()
 
 
-def _target(preserved_mtd: list[int] | None = None) -> dict[str, object]:
-    return {
-        "hardware_revision": TARGET.hardware_revision,
-        "model": TARGET.model,
-        "preserved_mtd": preserved_mtd or [0, 4, 5],
-    }
-
-
-def _document(
-    command: str,
-    *,
-    ok: bool,
-    phase: str,
-    written_mtd: list[int] | None = None,
-    read_back_verified: bool = False,
-    physical_actions: list[str] | None = None,
-    next_command: str | None = None,
-    result: dict[str, object] | None = None,
-    error: str | None = None,
-    preserved_mtd: list[int] | None = None,
-) -> dict[str, object]:
-    protected = preserved_mtd or [0, 4, 5]
-    return {
-        "command": command,
-        "error": error,
-        "next_command": next_command,
-        "nor": {
-            "full_physical_readback_verified": read_back_verified,
-            "preserved_mtd": protected,
-            "written_mtd": written_mtd or [],
-            "writing_now": False,
-        },
-        "ok": ok,
-        "phase": phase,
-        "physical_actions": physical_actions or [],
-        "result": result or {},
-        "schema_version": SCHEMA_VERSION,
-        "target": _target(protected),
-    }
+from .install_results import _target, document as _document, failure_details
 
 
 def _render(document: dict[str, object], *, json_mode: bool) -> None:
@@ -302,6 +264,14 @@ def _render(document: dict[str, object], *, json_mode: bool) -> None:
     result = document.get("result", {})
     if isinstance(result, dict):
         for key in (
+            "name",
+            "records",
+            "next_action",
+            "missing_prerequisites",
+            "superseded_host_records",
+            "required_confirmations",
+            "plan",
+            "plan_sha256",
             "local_phase",
             "build_root",
             "build_count",
@@ -1020,6 +990,13 @@ def _add_common(parser: argparse.ArgumentParser, *, inherited: bool = False) -> 
         type=Path,
         default=argparse.SUPPRESS if inherited else _default_work_dir(),
     )
+    parser.add_argument("--project", action="append",
+                        default=argparse.SUPPRESS if inherited else None,
+                        help="explicit private camera project, or DCS6100_PROJECT")
+    parser.add_argument("--non-interactive", action="store_true", default=default,
+                        help="never prompt; missing inputs return a structured error")
+    parser.add_argument("--events-jsonl", action="store_true", default=default,
+                        help="emit bounded progress events as JSON Lines on stderr")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1029,12 +1006,15 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    from . import user_cli_project as projects
+    from .install_project import ProjectError
     parser = build_parser()
     raw_arguments = list(sys.argv[1:] if argv is None else argv)
     try:
-        arguments = parser.parse_args(raw_arguments)
-    except ArgumentParsingError as exc:
-        if "--json" in raw_arguments:
+        arguments = parser.parse_args(projects.expand(raw_arguments))
+        projects.require_noninteractive_inputs(arguments)
+    except (ArgumentParsingError, ProjectError, OSError) as exc:
+        if "--json" in raw_arguments or "--non-interactive" in raw_arguments:
             known_commands = {
                 "preflight",
                 "prepare-card",
@@ -1054,25 +1034,30 @@ def main(argv: list[str] | None = None) -> int:
                 "diagnose-runtime",
                 "hypothesis-record",
                 "stock-recovery",
+                "project",
             }
             command = next(
                 (value for value in raw_arguments if value in known_commands),
                 "unknown",
             )
-            _render(
-                _document(
-                    command,
-                    ok=False,
-                    phase="argument-error",
-                    next_command=(
-                        f"thingino-dlink {command}"
-                        if command in known_commands
-                        else "thingino-dlink --help"
-                    ),
-                    error=str(exc),
+            failure = _document(
+                command,
+                ok=False,
+                phase="argument-error",
+                next_command=(
+                    f"thingino-dlink {command}"
+                    if command in known_commands
+                    else "thingino-dlink --help"
                 ),
-                json_mode=True,
+                error=str(exc),
             )
+            missing = (
+                list(exc.missing) if isinstance(exc, ProjectError)
+                else projects.missing_options(parser, raw_arguments)
+            )
+            failure["error_code"] = getattr(exc, "code", "missing_input" if missing else "invalid_arguments")
+            failure["missing_inputs"] = missing
+            _render(failure, json_mode=True)
             return 2
         parser.print_usage(sys.stderr)
         print(f"thingino-dlink: error: {exc}", file=sys.stderr)
@@ -1081,7 +1066,10 @@ def main(argv: list[str] | None = None) -> int:
         print("Installer will join the session recovery AP, inspect live NOR, and write only mtd3 if needed.")
         print("Do not remove power while the installer reports an mtd3 write/readback operation.")
     try:
+        active_project = projects.begin(arguments)
+        projects.event(arguments, "started")
         document = arguments.handler(arguments)
+        projects.finish(active_project, document)
     except (
         BundleError,
         CameraAuthorizationError,
@@ -1116,6 +1104,8 @@ def main(argv: list[str] | None = None) -> int:
         VendorBundleError,
         WorkflowPreflightError,
         OSError,
+        ProjectError,
+        KeyboardInterrupt,
     ) as exc:
         next_command = f"thingino-dlink {arguments.command}"
         written_mtd: list[int] = []
@@ -1149,8 +1139,11 @@ def main(argv: list[str] | None = None) -> int:
             result=result,
             error=str(exc),
         )
+        document.update(failure_details(exc))
+        projects.event(arguments, "stopped")
         _render(document, json_mode=arguments.json)
-        return 2
+        return 130 if isinstance(exc, KeyboardInterrupt) else 2
+    projects.event(arguments, "completed" if document.get("ok") else "stopped")
     _render(document, json_mode=arguments.json)
     if arguments.command == "stock-recovery" and document.get("ok") is False:
         return 2

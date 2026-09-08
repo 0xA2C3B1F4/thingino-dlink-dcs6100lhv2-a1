@@ -212,9 +212,10 @@ path. The default profile accepts public source plus seven catalog-locked
 stock media files acquired read-only from the owner's matching camera:
 
 ```bash
+export DCS6100_VENDOR_BUNDLE="/path/to/accepted/vendor-bundle"
 thingino-dlink local-build build-universal \
-  --build-root /path/to/build-workspace \
-  --vendor-bundle-dir /private/model/vendor-bundle
+  --build-root "$DCS6100_BUILD_ROOT" \
+  --vendor-bundle-dir "$DCS6100_VENDOR_BUNDLE"
 ```
 
 Keep the vendor directory local because redistribution is not cleared. The
@@ -265,6 +266,8 @@ The same per-camera session must be used for every following step:
 
 On macOS, provisioning uses `scripts/run_container_mkfs_jffs2.sh` with
 `DCS6100_BUILDER_IMAGE` set to the recorded immutable builder image ID.
+The [project workflow](installer-projects.md#configure-and-install) shows the
+short commands with those tool arguments and session-based verification.
 Linux can supply a reviewed regular `mkfs.jffs2` binary instead.
 The data image is built twice with little-endian 32 KiB erase/256-byte page
 geometry, root ownership, fixed time, 1,507,328-byte padding, and a CRC scan.
@@ -322,13 +325,14 @@ Advanced and existing workflows may bypass the saved plan by supplying all
 six private paths together. Partial explicit input is rejected:
 
 ```bash
+export DCS6100_LEGACY_PRIVATE_ROOT="/path/to/accepted/personalized-inputs"
 thingino-dlink local-build build \
-  --vendor-bundle-dir /private/device/vendor-bundle \
-  --media-closure-dir /private/device/media-closure \
-  --private-config-dir /private/device/install-config \
-  --expected-wpa-config /private/device/expected-wpa.conf \
-  --session-dir /private/device/recovery-session \
-  --raptor-rwd-artifact /private/device/raptor-rwd.tar.gz \
+  --vendor-bundle-dir "$DCS6100_LEGACY_PRIVATE_ROOT/vendor-bundle" \
+  --media-closure-dir "$DCS6100_LEGACY_PRIVATE_ROOT/media-closure" \
+  --private-config-dir "$DCS6100_LEGACY_PRIVATE_ROOT/install-config" \
+  --expected-wpa-config "$DCS6100_LEGACY_PRIVATE_ROOT/expected-wpa.conf" \
+  --session-dir "$DCS6100_LEGACY_PRIVATE_ROOT/recovery-session" \
+  --raptor-rwd-artifact "$DCS6100_LEGACY_PRIVATE_ROOT/raptor-rwd.tar.gz" \
   --data-mode initialize
 ```
 
@@ -346,8 +350,6 @@ builder owns equivalent paths beneath its generated workspace; do not mix
 manually prepared trees into an installer-owned run.
 
 ```bash
-export DCS6100_BUILD_ROOT="$(cd .. && pwd)/dcs6100-build"
-
 python3 scripts/source_checkout.py validate-lock
 python3 scripts/source_checkout.py fetch \
   --destination "$DCS6100_BUILD_ROOT/thingino-sources"
@@ -383,7 +385,7 @@ The vendor bundle validator is available without building:
 
 ```bash
 python3 -m installer.user_cli inspect-vendor-bundle \
-  --vendor-bundle-dir /path/to/private/vendor-bundle
+  --vendor-bundle-dir "$DCS6100_VENDOR_BUNDLE"
 ```
 
 The low-level `python3 -m installer inspect-vendor-bundle` form remains
@@ -413,7 +415,7 @@ WebUI from their locked source inputs.
 ## Optional Raptor overlay
 
 The guided builder accepts a reviewed source-built archive through
-`local-build build-universal --raptor-rwd-artifact`. It does not currently
+`--raptor-rwd-artifact` on `local-build build-universal`. It does not currently
 compile that Raptor archive for the user. Its source, library, and configuration
 identities must pass the component checks; an arbitrary older firmware archive
 is not a substitute.

@@ -7,9 +7,8 @@ have separate authorization.
 The source can build and stage a fixed read-only RAM collector that captures
 all original mtd0-mtd5 partitions twice before any stock updater runs. Host
 validation and both 16 MiB reconstructions must pass before any dependent
-persistent-write phase opens. One private UART-assisted RAM-collector run has
-completed this capture and host validation, but source availability alone is
-not device proof and the unopened-camera transport remains a release gate.
+persistent-write phase opens. Source availability alone is not device proof;
+the unopened-camera transport remains a release gate.
 
 There is still no proven automatic stock-U-Boot SD-to-RAM collector boot that
 leaves all six original partitions unchanged. The complete-backup source is

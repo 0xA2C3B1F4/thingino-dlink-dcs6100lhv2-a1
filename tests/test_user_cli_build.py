@@ -184,10 +184,11 @@ class BuildCommandTests(unittest.TestCase):
         ):
             code = user_cli.main(["local-build", "bootstrap", "--json"])
         self.assertEqual(code, 2)
-        self.assertEqual(json.loads(stdout.getvalue()), user_cli._document(
+        self.assertEqual(json.loads(stdout.getvalue()), {**user_cli._document(
             "local-build", ok=False, phase="stopped", next_command="thingino-dlink local-build",
             error="bootstrap refused",
-        ))
+        ), "error_code": "operation_rejected", "missing_inputs": [],
+            "operation_outcome": "stopped", "automatic_retry": False, "physical_state": "not-observed"})
 
     def test_configure_forwards_confirmed_input_only_after_validation(self) -> None:
         fields = (

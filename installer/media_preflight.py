@@ -21,6 +21,7 @@ class MediaPreflight:
     mount_root: Path
     mount_device_id: int = 0
     mount_inode: int = 0
+    media_uuid: str = ""
 
 
 DARWIN_DEVICE = re.compile(r"/dev/disk[1-9][0-9]*")
@@ -95,6 +96,9 @@ def validate_media_preflight_document(
     if expected_root.is_symlink() or not root.is_dir():
         raise MediaError("media root is not a real directory")
     root_identity = root.stat(follow_symlinks=False)
+    media_uuid = document.get("media_uuid", "")
+    if not isinstance(media_uuid, str) or len(media_uuid) > 256:
+        raise MediaError("media UUID is malformed")
     return MediaPreflight(
         physical_device=physical_device,
         model=model,
@@ -103,4 +107,5 @@ def validate_media_preflight_document(
         mount_root=root,
         mount_device_id=root_identity.st_dev,
         mount_inode=root_identity.st_ino,
+        media_uuid=media_uuid,
     )

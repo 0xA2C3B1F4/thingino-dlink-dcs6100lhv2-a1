@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import importlib.util
+import argparse
+import contextlib
+import io
 import json
 import re
 import shlex
@@ -8,6 +11,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 
@@ -43,6 +47,41 @@ def documented_cli_examples(source: str) -> list[list[str]]:
     return commands
 
 
+def inline_cli_examples(source: str) -> list[list[str]]:
+    prose = re.sub(r"```.*?```", "", source, flags=re.DOTALL)
+    commands = []
+    for snippet in re.findall(r"(?<!`)`([^`]+)`(?!`)", prose):
+        tokens = shlex.split(snippet)
+        if tokens[:1] in (["local-build"], ["universal"], ["stock-recovery"], ["project"]):
+            tokens.insert(0, "thingino-dlink")
+        if tokens[:1] == ["thingino-dlink"] or (tokens[:1] in (["python"], ["python3"])
+                and tokens[1:3] in (["-m", "installer"], ["-m", "installer.user_cli"])):
+            commands.append(tokens)
+    return commands
+
+
+def allow_command_references(parser):
+    """Inline references may omit required inputs, but supplied flags must exist."""
+    for action in parser._actions:
+        action.required = False
+        if isinstance(action, argparse._SubParsersAction):
+            for child in action.choices.values():
+                allow_command_references(child)
+    for group in parser._mutually_exclusive_groups:
+        group.required = False
+
+
+def project_example_arguments(args):
+    from installer.install_project import default_selections, ROLE_COMMANDS, link_inputs, Project
+    path = Path("/documented camera/project.json")
+    project = Project(path, "documented", default_selections(path, path.parent / "build"), {})
+    link_inputs(project, {role: str(path.parent / role) for role in ROLE_COMMANDS if role != "recovery-dir"})
+    command = " ".join(args[:2])
+    present = {value.split("=", 1)[0] for value in args if value.startswith("--")}
+    return args + [part for key, value in project.selections.get(command, {}).items()
+                   if "--" + key not in present for part in ("--" + key, value)]
+
+
 def without_secrets_redirect(tokens: list[str]) -> list[str]:
     """Remove only the matching shell input redirect, not installer arguments."""
     if "--secrets-fd" not in tokens:
@@ -57,6 +96,46 @@ def without_secrets_redirect(tokens: list[str]) -> list[str]:
 
 
 class DocumentationTests(unittest.TestCase):
+    def test_project_recovery_examples_use_linked_assets_and_default_destination(self):
+        from installer import install_project as project, user_cli, user_cli_project
+        from installer.install_results import document
+        source = (DOCS_ROOT / "docs/installer-projects.md").read_text()
+        section = source.split("## Capture functional recovery with the project\n", 1)[1].split("\n## ", 1)[0]
+        commands = documented_cli_examples(section)
+        self.assertEqual([tokens[2] for tokens in commands],
+                         ["uartless-prepare", "uartless-authorize", "uartless-handoff", "uartless-validate"])
+        with tempfile.TemporaryDirectory(prefix="documented recovery ") as directory:
+            root = Path(directory).resolve()
+            path = root / "project.json"
+            state = project.init_project(path, name="fixture", build_root=root / "build")
+            package, manifest = root / "capture.bin", root / "capture.manifest.json"
+            package.write_bytes(b"accepted recovery-assets output")
+            manifest.write_text("{}")
+            active = project.begin_operation(state, "local-build recovery-assets",
+                                               dict(state.selections["local-build recovery-assets"]))
+            project.finish_operation(active, document("local-build recovery-assets", ok=True, phase="assets-ready",
+                result={"files": {"uartless_package": str(package), "uartless_package_manifest": str(manifest)}}))
+            original = path.read_bytes()
+            with mock.patch.dict("os.environ", {"DCS6100_PROJECT": str(path)}):
+                for tokens in commands:
+                    parsed = user_cli.build_parser().parse_args(user_cli_project.expand(tokens[1:]))
+                    self.assertEqual(parsed.package, package)
+                    self.assertIsNone(parsed.whole_device)
+                    self.assertIsNone(parsed.mount_root)
+                    if parsed.stock_command == "uartless-validate":
+                        self.assertEqual(parsed.output_dir, root / "project-private/recovery")
+                        self.assertIsNone(parsed.confirm_output_dir)
+                    else:
+                        self.assertEqual(parsed.package_manifest, manifest)
+                        self.assertIsNone(parsed.confirm_plan)
+                with self.assertRaises(project.ProjectError) as error:
+                    user_cli_project.expand([*commands[-1][1:], "--output-dir", str(root / "functional-recovery")])
+                self.assertEqual(error.exception.code, "project_conflict")
+            self.assertEqual(path.read_bytes(), original)
+        self.assertIn("Stop here", section)
+        self.assertIn("Stop again", section)
+        self.assertIn("do not copy their path overrides", section)
+
     def test_local_build_quickstart_uses_one_workspace_variable(self) -> None:
         docs_root = ROOT / "production"
         if not docs_root.is_dir():
@@ -114,7 +193,8 @@ class DocumentationTests(unittest.TestCase):
         from installer.user_cli import build_parser as user_parser
 
         parsers = {"installer": artifact_parser(), "installer.user_cli": user_parser()}
-        for filename, minimum in (("README.md", 18), ("docs/installation.md", 11)):
+        for filename, minimum in (("README.md", 18), ("docs/installation.md", 11),
+                                  ("docs/build.md", 8), ("docs/installer-projects.md", 12)):
             source = (DOCS_ROOT / filename).read_text(encoding="utf-8")
             examples = documented_cli_examples(source)
             self.assertGreaterEqual(len(examples), minimum)
@@ -126,9 +206,43 @@ class DocumentationTests(unittest.TestCase):
                     parser, args = parsers[tokens[2]], tokens[3:]
                 if args == ["--help"]:
                     continue
+                if filename == "docs/installer-projects.md":
+                    args = project_example_arguments(args)
                 with self.subTest(filename=filename, command=tokens):
                     parsed = parser.parse_args(args)
                     self.assertTrue(callable(parsed.handler))
+
+    def test_inline_install_commands_and_help_examples_accept_only_real_options(self):
+        from installer.cli import build_parser as artifact_parser
+        from installer.user_cli import build_parser as user_parser
+        parsers = {"installer": artifact_parser(), "installer.user_cli": user_parser()}
+        for parser in parsers.values():
+            allow_command_references(parser)
+        examples = []
+        for filename in ("README.md", "docs/installation.md", "docs/build.md", "docs/installer-projects.md"):
+            examples.extend((filename, command) for command in inline_cli_examples((DOCS_ROOT / filename).read_text()))
+        def help_examples(parser):
+            if parser.epilog:
+                for command in re.findall(r"(?:Interactive|Automation): (thingino-dlink .*?)\.(?: |$)", parser.epilog):
+                    examples.append(("CLI help", shlex.split(command)))
+            for action in parser._actions:
+                if isinstance(action, argparse._SubParsersAction):
+                    for child in action.choices.values():
+                        help_examples(child)
+        help_examples(parsers["installer.user_cli"])
+        self.assertGreater(len(examples), 30)
+        for source, tokens in examples:
+            parser, args = (parsers["installer.user_cli"], tokens[1:]) if tokens[0] == "thingino-dlink" else (parsers[tokens[2]], tokens[3:])
+            with self.subTest(source=source, command=tokens), contextlib.redirect_stdout(io.StringIO()):
+                if args == ["--help"] or "--help" in args:
+                    with self.assertRaises(SystemExit) as result:
+                        parser.parse_args(args)
+                    self.assertEqual(result.exception.code, 0)
+                else:
+                    parser.parse_args(args)
+        from installer.user_cli import ArgumentParsingError
+        with self.assertRaises(ArgumentParsingError):
+            parsers["installer.user_cli"].parse_args(["universal", "verify", "--host", "192.0.2.10"])
 
     def test_example_tokenizer_preserves_quoted_paths_and_secrets_fd(self) -> None:
         source = '''```bash
@@ -150,7 +264,7 @@ python3 -m installer.user_cli universal configure \\
     def test_install_paths_are_assigned_once_and_quoted_in_commands(self) -> None:
         sources = [
             (DOCS_ROOT / filename).read_text(encoding="utf-8")
-            for filename in ("README.md", "docs/installation.md")
+            for filename in ("README.md", "docs/installation.md", "docs/build.md", "docs/installer-projects.md")
         ]
         assignments = set(re.findall(r"^export (DCS6100_\w+)=", "\n".join(sources), re.M))
         references = set()
@@ -175,7 +289,7 @@ python3 -m installer.user_cli universal configure \\
         shell = shutil.which("bash")
         if shell is None:
             self.skipTest("bash is unavailable")
-        for filename in ("README.md", "docs/installation.md"):
+        for filename in ("README.md", "docs/installation.md", "docs/build.md", "docs/installer-projects.md"):
             source = (DOCS_ROOT / filename).read_text(encoding="utf-8")
             for index, block in enumerate(bash_blocks(source)):
                 with self.subTest(filename=filename, block=index):

@@ -123,20 +123,8 @@ def archive_existing_stock_backup(
         raise
 
 
-def evacuate_existing_stock_backups(
-    *,
-    root: Path,
-    destination_dir: Path,
-    preflight: MediaPreflight,
-    confirmed_physical_device: str,
-) -> dict[str, str]:
-    """Copy private stock backups off-card, verify them, then clear reserved paths."""
-
-    if confirmed_physical_device != preflight.physical_device:
-        raise MediaError("exact physical-device confirmation does not match preflight")
+def inspect_stock_backup_evacuation(*, root: Path, destination_dir: Path) -> dict[str, bytes]:
     root_resolved = root.resolve(strict=True)
-    if root_resolved != preflight.mount_root:
-        raise MediaError("evacuation root changed after preflight")
     validate_sd_root(root)
     if destination_dir.exists() or destination_dir.is_symlink():
         raise MediaError("private evacuation destination already exists")
@@ -178,6 +166,25 @@ def evacuate_existing_stock_backups(
             stage2.read_bytes(),
             allow_unverified_universal_bindings=True,
         )
+
+    return snapshots
+
+
+def evacuate_existing_stock_backups(
+    *,
+    root: Path,
+    destination_dir: Path,
+    preflight: MediaPreflight,
+    confirmed_physical_device: str,
+) -> dict[str, str]:
+    """Copy private stock backups off-card, verify them, then clear reserved paths."""
+
+    if confirmed_physical_device != preflight.physical_device:
+        raise MediaError("exact physical-device confirmation does not match preflight")
+    if root.resolve(strict=True) != preflight.mount_root:
+        raise MediaError("evacuation root changed after preflight")
+    snapshots = inspect_stock_backup_evacuation(root=root, destination_dir=destination_dir)
+    destination_parent = destination_dir.parent.resolve(strict=True)
 
     hashes = {
         name: hashlib.sha256(raw).hexdigest() for name, raw in snapshots.items()

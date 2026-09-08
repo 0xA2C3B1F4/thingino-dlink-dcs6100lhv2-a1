@@ -130,6 +130,7 @@ def build_preflight_document(
         "schema_version": 1,
         "system_device": False,
         "writable": True,
+        **({"media_uuid": str(volume["VolumeUUID"])} if volume.get("VolumeUUID") else {}),
     }
 
 

@@ -1,5 +1,5 @@
 {
-  "export_policy_sha256": "3540c599f70186af6f6f1924e55333a24e528fe282ef16b3e600058e7ef3bd9b",
+  "export_policy_sha256": "02886c890e803edd1b6c674d8a1fe58858d9dfd862844ef726e3e4b13d1c988a",
   "files": {
     ".editorconfig": {
       "sha256": "77d71c2bd466915cf8363f0929ef8a1f6a25b92a21d01c6ae5c6c7f5c307fd8a",
@@ -34,7 +34,7 @@
       "source": "Makefile"
     },
     "README.md": {
-      "sha256": "a0179ee10b216862b920054684aa5716d4a1bd5eae5db003a8f505327927e9db",
+      "sha256": "af96f5542a7d3cff808a607c326ddd3deaeca4d0299b38b03f5439292d6d5768",
       "source": "production/README.md"
     },
     "SECURITY.md": {
@@ -570,7 +570,7 @@
       "source": "production/docs/architecture.md"
     },
     "docs/build.md": {
-      "sha256": "6a2e11afcc238be5b688277b19765319cb8cbb3e395596187c07fdc246b442e2",
+      "sha256": "5be759427752c47bfe4e16187bdc2aa4d240fe259467826956b4c9d31ee22f5c",
       "source": "production/docs/build.md"
     },
     "docs/features.md": {
@@ -586,8 +586,12 @@
       "source": "production/docs/index.md"
     },
     "docs/installation.md": {
-      "sha256": "61526be399dc5439516fb26d93f1731b40aad95d2cd74ee8860bea0e70ed8bbc",
+      "sha256": "7c1dfee485cd257c93b55998567729c4e964cb58fb4a7405fd32edd89049a222",
       "source": "production/docs/installation.md"
+    },
+    "docs/installer-projects.md": {
+      "sha256": "6588317cdd2f10d002e3d961c3529491a5980bf1a2be54ab14882ce2c082b8f7",
+      "source": "production/docs/installer-projects.md"
     },
     "docs/recovery.md": {
       "sha256": "26e36f60ff3a3610eb1d4460026b5948608fbd6f7d28aa579c1ce4da5a12298e",
@@ -616,6 +620,10 @@
     "installer/camera_authorization.py": {
       "sha256": "bfef36ca802df32995b05357fe2ad57770491451abb5b1cc37dbbc1f90b980f5",
       "source": "installer/camera_authorization.py"
+    },
+    "installer/camera_setup.py": {
+      "sha256": "2f0be460666653aee81b2a5a80eb00bbc797529628fba2b87ea6adc452cdc33b",
+      "source": "installer/camera_setup.py"
     },
     "installer/candidate_log.py": {
       "sha256": "61fd4aaa49c7ef49d4da8f421d3d74700cbf9efd77f47d680b4aabcb6051508e",
@@ -705,9 +713,21 @@
       "sha256": "cd83a66496d352e13f30ea7cb4d6dfb61a4fa3a5dc37312e9c3ae59e06573f63",
       "source": "installer/full_backup.py"
     },
+    "installer/install_actions.py": {
+      "sha256": "f35947cfc8408ee2a45e88c657aa8280cf670f61e0e6764f9b23d1d429d8c2a5",
+      "source": "installer/install_actions.py"
+    },
     "installer/install_policy.py": {
       "sha256": "f9e7162129b786486955e146c37a84415131ae933136747eebd3419dd1b36790",
       "source": "installer/install_policy.py"
+    },
+    "installer/install_project.py": {
+      "sha256": "c5a3710aba74432f6a8c25d143848b401062f945b5ec76bbeb2ddae55e192819",
+      "source": "installer/install_project.py"
+    },
+    "installer/install_results.py": {
+      "sha256": "0c38895550521cb39dfdf73dd952e058e01bb2ac441faf31075d0dbee6a436df",
+      "source": "installer/install_results.py"
     },
     "installer/layout.py": {
       "sha256": "4eb93a4611427b2c99dc31af8f6069b8c39b6fd80d7bfabf075e8c99fb06cca7",
@@ -762,7 +782,7 @@
       "source": "installer/macos_wifi.py"
     },
     "installer/media.py": {
-      "sha256": "29a0d69ccf19d5bfc8f2a87576b2069763d9061af0b3ac2af5479a6f86a27deb",
+      "sha256": "53b51dda9ca6d5ca54772ac613ffddd11b3f0535e21fa5f27508c20ac2963bfc",
       "source": "installer/media.py"
     },
     "installer/media_capture.py": {
@@ -790,12 +810,16 @@
       "source": "installer/media_packages.py"
     },
     "installer/media_preflight.py": {
-      "sha256": "507e91bbc101fc035979e8222bdf2ce97a6789a19a7b7ac0d6288ccde5fbf88d",
+      "sha256": "c464a55846e3d02b982167c1c0329595696802fd5bb3950da2fe787b39d8011f",
       "source": "installer/media_preflight.py"
     },
     "installer/media_replacement.py": {
       "sha256": "d7459784b5ed2dce835355441658b5b663e33c042c87dd40acfcf1ccfa3da503",
       "source": "installer/media_replacement.py"
+    },
+    "installer/media_selection.py": {
+      "sha256": "ce7c6221fe356aa328da5cfe69eab65edd74f3f3305c3bf62d0a35a0b26dc301",
+      "source": "installer/media_selection.py"
     },
     "installer/media_transactions.py": {
       "sha256": "1e12d5a639d7dede334b33f4c041d0509dfb962036435a5be6e9f41afab4b35b",
@@ -836,6 +860,10 @@
     "installer/recovery.py": {
       "sha256": "19edbdf53a45b91a8940f4b4fe93c4bcbe53680b50b75b2ba24d735dd0517de9",
       "source": "installer/recovery.py"
+    },
+    "installer/recovery_actions.py": {
+      "sha256": "58ba0cac24638c960c106c481d9a9338aa571517ccca52fdb301b34da047d2e7",
+      "source": "installer/recovery_actions.py"
     },
     "installer/recovery_ap/__init__.py": {
       "sha256": "50f83be50a0e80ce6ab62c8038e89d81b6b1edafa8cbcb770d83bc2ed598cbcc",
@@ -1070,7 +1098,7 @@
       "source": "installer/universal_install.py"
     },
     "installer/user_cli.py": {
-      "sha256": "53e95fbfa8a7b53078a09ea238289f0f705197f32bbf261eaa5fc39cb4fabc46",
+      "sha256": "d601cb119d001bd5d5b8269bd29aa3d4d68cee268e62e15cb9e4ca10dc3935a4",
       "source": "installer/user_cli.py"
     },
     "installer/user_cli_build.py": {
@@ -1085,20 +1113,28 @@
       "sha256": "6a7bbd81e347d8664b3902bd402534d574dd1e44b41ec247d1e3a8619ad07b37",
       "source": "installer/user_cli_guided.py"
     },
+    "installer/user_cli_media.py": {
+      "sha256": "5e829ab101a51b1427aef2be8ec6f1b7291d0491e146333372e5c3cdf8e06e4f",
+      "source": "installer/user_cli_media.py"
+    },
     "installer/user_cli_parser.py": {
-      "sha256": "e7a8be779d9898f1104a20b907d747c658952b9c389ed6eee90eeb041fb86e49",
+      "sha256": "adfb66ef6f367091bfb59278b30df65531955b32920905041ae9e741e373fbef",
       "source": "installer/user_cli_parser.py"
     },
     "installer/user_cli_parser_stock_recovery.py": {
-      "sha256": "960de8d1c00de261202feb24a519d720318c74365674ac578b33017a7aeff4f3",
+      "sha256": "83d057348b7c7e52cc103da6c4f16fa1b089b5c0c070e3a4547a815dbf274f44",
       "source": "installer/user_cli_parser_stock_recovery.py"
     },
+    "installer/user_cli_project.py": {
+      "sha256": "a3b1031cd42b66193b00512be9f6d967bc4175949b189a707b4490a89b3bb788",
+      "source": "installer/user_cli_project.py"
+    },
     "installer/user_cli_stock_recovery.py": {
-      "sha256": "ea1a5f3b0e722ce40d0c8c5b763cdf7c726318ea592e6b04cf7737201c6b52c9",
+      "sha256": "b0163faf639b625d64c813d949f856c62e73346dadf2e1d328ddca4f25bfa68b",
       "source": "installer/user_cli_stock_recovery.py"
     },
     "installer/user_cli_universal.py": {
-      "sha256": "8ff9501af19a0725218603379b824a1aabf51fc496fff6c05f38bed8cfc723c9",
+      "sha256": "2b045a24a507a72be7222892dca9a0f252508d94805618f52c9a51eabb01956d",
       "source": "installer/user_cli_universal.py"
     },
     "installer/vendor_bundle.py": {
@@ -1590,7 +1626,7 @@
       "source": "scripts/platform/linux_media_preflight.py"
     },
     "scripts/platform/macos_media_preflight.py": {
-      "sha256": "b5be0def66bbdecb5c34bebe698362f7895de4ce33d31f4492dde585300eb5b5",
+      "sha256": "9f65789ab3ce1b1bf4ab372798b0b8d96a53d6af55b5d84243eb7d9b936b109f",
       "source": "scripts/platform/macos_media_preflight.py"
     },
     "scripts/platform/macos_recovery_wifi.swift": {
@@ -1698,7 +1734,7 @@
       "source": "tests/test_development_install.py"
     },
     "tests/test_docs.py": {
-      "sha256": "abf0425670c9c4ee82bf7605b1a5ea7392419632b9e22e0eebf1c6a4290dbbd5",
+      "sha256": "47764ee1183fc8d92050f8e65813ae292d4fe5cb775d86723ff1285e7510f157",
       "source": "tests/test_docs.py"
     },
     "tests/test_download_cache.py": {
@@ -1720,6 +1756,18 @@
     "tests/test_full_backup.py": {
       "sha256": "7c8e050057242181368dfb9dda04d159297adf6372cfc597151b113e04c06e65",
       "source": "tests/test_full_backup.py"
+    },
+    "tests/test_install_actions.py": {
+      "sha256": "6e3d2649e15bbb701853219545eb9a3c459a4e032ece1d74c4f9ff9ccdedd354",
+      "source": "tests/test_install_actions.py"
+    },
+    "tests/test_install_project.py": {
+      "sha256": "98776c9ad1bf4d500b27cc1c1e9ca81dc3beb3b7cfd3ff50a3f3d2cf32ba97ed",
+      "source": "tests/test_install_project.py"
+    },
+    "tests/test_installation_flow.py": {
+      "sha256": "f54623889e3384e7247dcc88d4041b3fe6733f2c49daf9af2a6cbfe5473224c3",
+      "source": "tests/test_installation_flow.py"
     },
     "tests/test_installer_contracts.py": {
       "sha256": "b00c53e86212130e39d28c7ca6f1b52438689cace8ae99c21d6c8921b000c7e7",
@@ -1942,11 +1990,11 @@
       "source": "tests/test_universal_artifacts.py"
     },
     "tests/test_user_cli.py": {
-      "sha256": "68ede6dae7707aa099354fdc92c57d8da77086c8ed2c08215531622b580508f0",
+      "sha256": "0e006992d44e8d2a43435d71c988384e8367a4f8eda2211d834c4d1491cdb2b3",
       "source": "tests/test_user_cli.py"
     },
     "tests/test_user_cli_build.py": {
-      "sha256": "809667f62099a0a645ce88e6987596a86c8ab840904ef574ccf60a633fa2a10d",
+      "sha256": "97d1df19d429bd6444ee2568e0b46424bcc61cccd2d665000835630c69dcfe70",
       "source": "tests/test_user_cli_build.py"
     },
     "tests/test_vendor_bundle.py": {
@@ -2235,6 +2283,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "7a4c79c14fb4c804e38968de07f76de41239cd64",
+  "source_commit": "2a24ebac9c040cd4690ebdbc0a0a1b1a6e04b216",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }

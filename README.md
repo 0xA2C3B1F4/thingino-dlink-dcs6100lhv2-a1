@@ -27,6 +27,9 @@ Do not use its images or tools on another model or revision.
 The repository includes the installer and validators. You supply stock media
 files acquired from your camera, its recovery material, and local configuration.
 
+See [installation projects and automation](docs/installer-projects.md) to keep
+per-camera inputs once, link outputs between stages and review SD write plans.
+
 ### Base profile or WebRTC
 
 The base build combines source-built Prudynt with catalog-locked stock
@@ -307,7 +310,7 @@ thingino-dlink local-build build-universal \
 
 The legacy `--media-closure-dir` is not required by
 the default stock-media profile. Do not switch to the legacy
-`local-build configure/build` workflow by mistake.
+`local-build configure` and `local-build build` workflow by mistake.
 
 Require phase `local-build-model-universal-install-set-inspected`. Keep the
 build result, logs, manifests, and model signing key pair. Copy its exact
@@ -356,7 +359,7 @@ The model key verifies firmware. The separate authorization signer created by
 `universal configure` signs camera provisioning.
 
 ```bash
-export DCS6100_BUILDER_IMAGE=sha256:REPLACE_WITH_RECORDED_BUILDER_IMAGE_ID
+export DCS6100_BUILDER_IMAGE="sha256:REPLACE_WITH_RECORDED_BUILDER_IMAGE_ID"
 
 thingino-dlink universal provision \
   --functional-recovery-dir "$DCS6100_RECOVERY_ROOT" \

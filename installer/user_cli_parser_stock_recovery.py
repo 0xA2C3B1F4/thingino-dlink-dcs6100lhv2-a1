@@ -26,7 +26,8 @@ def register_stock_recovery_commands(facade: object, commands: object) -> None:
     restore_inspect_handler = getattr(facade, "_stock_restore_inspect")
     restore_prepare_handler = getattr(facade, "_stock_restore_prepare")
 
-    stock = commands.add_parser("stock-recovery")
+    stock = commands.add_parser("stock-recovery", help="capture, validate or restore same-camera stock recovery",
+        description="Choose recovery before installing. backup-* preserves an exact-original backup through UART-assisted capture. uartless-* replaces stock mtd1/mtd2 before functional capture and cannot claim exact-original recovery. restore-*, live-* and sd-* require validated same-camera evidence and their exact confirmations. Prepare writes host/SD artifacts; authorize arms the named physical write. Never infer physical completion from project status.")
     stock_commands = stock.add_subparsers(dest="stock_command", required=True)
 
     backup_prepare = stock_commands.add_parser("backup-prepare")
