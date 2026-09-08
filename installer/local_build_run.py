@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -963,10 +964,19 @@ def build_local_universal_install_set(
     raptor_rwd_artifact: Path | None = None,
     signing_key: Path,
     build_count: int = 1,
+    webrtc: bool = False,
+    progress: Callable[[dict[str, object]], None] | None = None,
 ) -> dict[str, object]:
     """Build once for A1 cameras; authorization and provisioning stay separate."""
 
-    return _build_local_install_set(
+    if webrtc:
+        if raptor_rwd_artifact is not None:
+            raise LocalBuildRunError("select --webrtc or an external Raptor archive")
+        from .raptor_build import build_raptor_component
+
+        component = build_raptor_component(build_root=build_root, progress=progress)
+        raptor_rwd_artifact = Path(str(component["raptor_rwd_artifact"]))
+    result = _build_local_install_set(
         build_root=build_root,
         vendor_bundle_dir=vendor_bundle_dir,
         media_closure_dir=media_closure_dir,
@@ -979,3 +989,9 @@ def build_local_universal_install_set(
         signing_key=signing_key,
         build_count=build_count,
     )
+
+    if raptor_rwd_artifact is not None:
+        result["raptor_rwd_artifact"] = str(raptor_rwd_artifact)
+    if webrtc:
+        result["raptor_rwd_source_build"] = True
+    return result

@@ -699,6 +699,22 @@ def _local_build_build(arguments: argparse.Namespace) -> dict[str, object]:
     )
 
 
+def _local_build_raptor(arguments: argparse.Namespace) -> dict[str, object]:
+    from .raptor_build import build_raptor_component
+    from .user_cli_project import progress_callback
+
+    build_root = resolve_local_build_workspace(
+        build_root=arguments.build_root, work_dir=arguments.work_dir,
+    )
+    result = build_raptor_component(
+        build_root=build_root, progress=progress_callback(arguments),
+    )
+    return _document(
+        "local-build build-raptor", ok=True, phase="raptor-component-validated",
+        next_command="thingino-dlink local-build build-universal", result=result,
+    )
+
+
 def _local_build_build_universal(
     arguments: argparse.Namespace,
 ) -> dict[str, object]:

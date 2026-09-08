@@ -85,7 +85,8 @@ class BuildUniversalInstallSet(Protocol):
     def __call__(
         self, *, build_root: Path, vendor_bundle_dir: Path,
         media_closure_dir: Path | None, raptor_rwd_artifact: Path | None,
-        signing_key: Path, build_count: int,
+        signing_key: Path, build_count: int, webrtc: bool = False,
+        progress: Callable[[dict[str, object]], None] | None = None,
     ) -> dict[str, object]: ...
 
 
@@ -448,7 +449,13 @@ def _local_build_build_universal(
         signing_key,
         getattr(arguments, "signing_public_key", None),
     )
+    from .user_cli_project import progress_callback
+
+    build_options = {}
+    if getattr(arguments, "webrtc", False):
+        build_options = {"webrtc": True, "progress": progress_callback(arguments)}
     result = build_local_universal_install_set(
+        **build_options,
         build_root=build_root,
         vendor_bundle_dir=arguments.vendor_bundle_dir,
         media_closure_dir=arguments.media_closure_dir,

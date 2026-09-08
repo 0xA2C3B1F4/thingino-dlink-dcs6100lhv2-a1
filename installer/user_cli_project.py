@@ -92,7 +92,7 @@ def expand(raw: list[str]) -> list[str]:
     # appearing in a label or option value must never select a command.
     positionals = []
     index = 0
-    boolean_options = {"--json", "--non-interactive", "--events-jsonl", "--plan-only"}
+    boolean_options = {"--json", "--non-interactive", "--events-jsonl", "--plan-only", "--webrtc"}
     while index < len(raw):
         item = raw[index]
         if item.startswith("--"):
@@ -108,6 +108,8 @@ def expand(raw: list[str]) -> list[str]:
     command = " ".join(raw[family_index:family_index + 2])
     project = load_project(path)
     additions = selected_paths(project, command, explicit_paths)
+    if command == "local-build build-universal" and "--webrtc" in raw:
+        additions.pop("raptor-rwd-artifact", None)
     if "work-dir" not in explicit_paths and "work-dir" not in additions:
         additions["work-dir"] = str(path.parent / (path.stem + ".work"))
     if command.startswith("local-build ") and "build-root" not in explicit_paths and "build-root" not in additions:
@@ -151,6 +153,8 @@ def begin(args):
         return None
     project = load_project(path)
     selected = dict(project.selections.get(command, {}))
+    if command == "local-build build-universal" and getattr(args, "webrtc", False):
+        selected.pop("raptor-rwd-artifact", None)
     for field in PATH_FIELDS:
         value = getattr(args, field.replace("-", "_"), None)
         if value is not None:
@@ -192,6 +196,15 @@ def missing_options(parser, raw: list[str]) -> list[str]:
                     current = children.choices[token]
                     break
                 if token.startswith("--") and "=" not in token and token not in {
-                        "--json", "--non-interactive", "--events-jsonl", "--plan-only"}:
+                        "--json", "--non-interactive", "--events-jsonl", "--plan-only", "--webrtc"}:
                     offset += 1
     return missing
+
+
+def progress_callback(args):
+    def emit(update: dict[str, object]) -> None:
+        if getattr(args, "events_jsonl", False):
+            import sys
+            print(json.dumps({"schema_version": 1, "event": "progress", **update},
+                             sort_keys=True), file=sys.stderr, flush=True)
+    return emit

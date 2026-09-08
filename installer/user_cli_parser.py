@@ -364,6 +364,12 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
         help="advanced override; must match a saved plan when one is used",
     )
     local_build_build.set_defaults(handler=_local_build_build)
+    raptor_build = local_build_commands.add_parser(
+        "build-raptor", help="acquire locked public sources and build the WebRTC component offline"
+    )
+    _add_common(raptor_build, inherited=True)
+    raptor_build.add_argument("--build-root", type=Path)
+    raptor_build.set_defaults(handler=getattr(facade, '_local_build_raptor'))
     local_build_universal = local_build_commands.add_parser("build-universal")
     _add_common(local_build_universal, inherited=True)
     local_build_universal.add_argument("--build-root", type=Path)
@@ -382,7 +388,10 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
         type=Path,
         help="advanced: accepted legacy C1 closure instead of the public matched-media profile",
     )
-    local_build_universal.add_argument(
+    raptor_selection = local_build_universal.add_mutually_exclusive_group()
+    raptor_selection.add_argument("--webrtc", action="store_true",
+        help="build and include the locked Raptor WebRTC component from public sources")
+    raptor_selection.add_argument(
         "--raptor-rwd-artifact",
         type=Path,
         help="advanced: add the optional reviewed WebRTC component",
@@ -667,6 +676,7 @@ def _installation_help(parser):
     """Command-specific guidance beside the existing argument contracts."""
     import argparse
     descriptions = {
+        "local-build build-raptor": "Acquire locked public Raptor sources and compile the static-TLS component offline. Requires prepare. Writes host build/cache data and links the validated artifact to the selected project. Next: build-universal.",
         "local-build prepare": "Check host prerequisites and reserve the selected external build workspace. Writes host workspace metadata. Next: bootstrap.",
         "local-build status": "Inspect the selected build workspace and missing prerequisites without building. Use before choosing the next explicit command.",
         "local-build bootstrap": "Prepare public source/build inputs in the selected workspace. Requires prepare. Next: acquire.",

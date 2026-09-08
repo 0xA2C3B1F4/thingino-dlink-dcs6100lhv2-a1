@@ -12,7 +12,7 @@ RUN dpkg --add-architecture amd64 \
     && apt-get install -y --no-install-recommends \
       autoconf bc bison build-essential ca-certificates ccache cmake cpio curl \
       dialog file flex gawk git jq libcrypt-dev libncurses-dev \
-      libusb-1.0-0-dev m4 make mtd-utils mtools nodejs npm parted patch perl python3 \
+      libusb-1.0-0-dev m4 make mtd-utils mtools nodejs npm parted patch perl pkg-config python3 \
       python3-jsonschema ripgrep rsync shfmt squashfs-tools swig \
       u-boot-tools unzip wget whiptail xz-utils zstd \
       libc6:amd64 libgcc-s1:amd64 libstdc++6:amd64 zlib1g:amd64 \

@@ -29,7 +29,8 @@ from installer.runtime_candidate import (  # noqa: E402
     _validate_provenance,
 )
 from installer.stage1.build import validate_final_root  # noqa: E402
-from scripts.raptor_rwd_runtime import validate_artifact  # noqa: E402
+from installer.raptor_component import validate_persistent_artifact as validate_artifact  # noqa: E402
+from installer.raptor_component import validate_runtime_dependencies  # noqa: E402
 
 
 MAX_BASE_BYTES = 8 * 1024 * 1024
@@ -206,8 +207,11 @@ def artifact_destination(relative: str) -> str:
 def _validate_component_provenance(normalized_tar: bytes) -> dict[str, object]:
     """Bind the accepted artifact to this checkout's RWD sources and policy."""
 
+    source_build = None
     try:
         with tarfile.open(fileobj=io.BytesIO(normalized_tar), mode="r:") as archive:
+            if "component.json" in archive.getnames():
+                source_build = json.load(archive.extractfile("component.json"))
             lock_member = archive.getmember("raptor-lock.json")
             config_member = archive.getmember("etc/raptor.conf")
             lock_source = archive.extractfile(lock_member)
@@ -261,13 +265,16 @@ def _validate_component_provenance(normalized_tar: bytes) -> dict[str, object]:
                 "sha256": hashlib.sha256(raw).hexdigest(),
             }
         )
-    return {
+    provenance = {
         "config_sha256": hashlib.sha256(checkout_config).hexdigest(),
         "excluded_sources": sorted(excluded_sources),
         "lock_sha256": hashlib.sha256(checkout_lock).hexdigest(),
         "patches": patches,
         "sources": {name: sources[name] for name in build_closure},
     }
+    if source_build is not None:
+        provenance["source_build"] = source_build
+    return provenance
 
 
 def _install_artifact(
@@ -618,6 +625,11 @@ def build_persistent_root(
 
         base_owned_runtime = _base_owned_runtime_identities(root)
         installed = _install_artifact(root, normalized_tar, static_rwd_tls=static_rwd_tls)
+        if "source_build" in source_provenance:
+            try:
+                validate_runtime_dependencies(root)
+            except ValueError as exc:
+                raise PersistentCandidateError(str(exc)) from exc
         if split_mtd3:
             _remove_unused_route_library(root)
         init_path = root / "etc/init.d/S31prudynt"

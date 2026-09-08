@@ -40,11 +40,14 @@ GPIO18, and 1920x1080 geometry. Public upstream sensor modules are not substitut
 
 Raptor `rwd` adds video-only WebRTC using Prudynt's existing encoders.
 It supports one WebRTC client at a time; the selected profile is 15 fps.
-The guided builder currently consumes a separately reviewed, source-built
-`--raptor-rwd-artifact`. It does not build that archive automatically.
+Select `local-build build-universal --webrtc`. The installer acquires locked
+public sources, builds the component offline, validates it and includes it
+automatically. No separately prepared Raptor archive is required.
+An existing reviewed archive remains supported with `--raptor-rwd-artifact`.
 See [Raptor inputs](components/raptor-rwd/README.md#build-inputs) and
 [overlay validation](docs/build.md#optional-raptor-overlay).
-Omitting that input does not produce the recently tested WebRTC candidate.
+Without `--webrtc` or an explicit or project-selected artifact, the base profile provides
+RTSP and MJPEG. Source-build success does not establish camera acceptance.
 
 ## Before you start
 
@@ -290,21 +293,16 @@ checks. Keep a separate private copy of the recovery directory off the SD card.
 ### 4. Build or select the universal firmware
 
 The base build needs the acquired vendor bundle, not Wi-Fi credentials.
-Choose the profile before starting the build. For WebRTC, set the reviewed
-archive path once:
-
-```bash
-export DCS6100_RAPTOR_ARTIFACT="/path/to/reviewed/raptor-rwd.tar.gz"
-```
-
-Then add `--raptor-rwd-artifact "$DCS6100_RAPTOR_ARTIFACT"` to the build command
-below. Skip that assignment and flag for the base profile. Run one selected
-build, not a base build followed by a second WebRTC build.
+Choose the profile before starting the build. The command below selects WebRTC
+and builds Raptor from locked public sources. Without a project-selected Raptor
+artifact, omitting `--webrtc` selects the base profile. A project remembers its
+accepted artifact and uses it even when the flag is omitted. For a base build,
+use an explicit build workspace without that project selection.
 
 ```bash
 thingino-dlink inspect-vendor-bundle \
   --vendor-bundle-dir "$DCS6100_RECOVERY_ROOT/vendor"
-thingino-dlink local-build build-universal \
+thingino-dlink local-build build-universal --webrtc \
   --vendor-bundle-dir "$DCS6100_RECOVERY_ROOT/vendor"
 ```
 

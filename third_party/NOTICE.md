@@ -51,3 +51,16 @@ When redistribution rights are uncertain, this project may publish source
 locations, required patch deltas, hashes, and a local acquisition or extraction
 recipe instead of a binary artifact. That publication records the technical
 delta; it does not create or imply a license grant for third-party context.
+
+## Raptor source reconstruction
+
+The source acquisition lock under `components/raptor-rwd/` records public base
+commits, patch hashes, exact reconstructed Git trees and upstream license hashes.
+The reconstruction patches retain the component's existing license treatment;
+their publication does not create new distribution rights. Compy's transitive
+slice99, datatype99, interface99 and metalang99 sources and the mbedTLS framework
+are pinned with their LICENSE hashes. Their original notices remain in the
+acquired source trees. The linked common library's vendored monocypher and cJSON
+are bound by its exact Git tree. Review their per-file notices and corresponding
+source obligations before distributing binaries. The local component build does
+not close that review or any full-firmware distribution gate.

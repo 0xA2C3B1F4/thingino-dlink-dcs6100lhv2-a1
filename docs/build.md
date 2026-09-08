@@ -205,6 +205,67 @@ physical partitions read-only. The stock restorer uses
 and mtd3 writable. Their kernels, effective configs, and matching MMC modules
 are private recovery inputs, not public firmware artifacts.
 
+## Build WebRTC from public sources
+
+After `local-build prepare`, select the validated vendor bundle and WebRTC:
+
+```bash
+export DCS6100_VENDOR_BUNDLE="/path/to/accepted/vendor-bundle"
+thingino-dlink local-build build-universal --webrtc \
+  --build-root "$DCS6100_BUILD_ROOT" \
+  --vendor-bundle-dir "$DCS6100_VENDOR_BUNDLE"
+```
+
+To build and validate only the component, without camera inputs or a firmware build:
+
+```bash
+thingino-dlink local-build build-raptor --non-interactive --json --events-jsonl \
+  --build-root "$DCS6100_BUILD_ROOT"
+```
+
+Both commands use the same source acquisition, toolchain and offline build core.
+A selected installation project remembers the resulting `raptor_rwd_artifact`
+and supplies it to `build-universal`; the explicit `--webrtc` flag always selects
+the source-build/cache path even when a project remembers an older artifact.
+The explicit alternative remains `--raptor-rwd-artifact /path/to/accepted.tar.gz`.
+It cannot be combined with `--webrtc` on the same command line.
+
+`components/raptor-rwd/source-build-lock.json` binds public base commits, Git
+base trees, reconstruction patch SHA-256 values, accepted trees, licenses and
+transitive dependencies. The three reconstruction patches reproduce the
+original Compy, Raptor and IPC trees exactly. Raptor's existing `0001` and `0002`
+runtime patches are then applied in order and the final tree is checked.
+Compy's slice99, datatype99, interface99 and metalang99 headers and mbedTLS's
+framework are acquired before compilation. Vendored monocypher and cJSON are
+bound by the common library tree. No source lookup occurs during compilation.
+
+The builder uses the existing source-built, hash-locked Thingino GCC 16 SDK
+and the validated ARM64 builder container. SDK acquisition and construction
+use the existing installer infrastructure. The Raptor compile container has
+networking disabled. It produces rwd, RSS, Compy and static LTO mbedTLS from
+sources in a task-owned 2 GiB ext4 image on the build volume, using the same
+Docker loop-mount approach as the existing macOS build runners. This preserves
+the SDK's Linux links without extracting it through an APFS bind mount.
+Docker uses a privileged container to mount that regular image file inside its
+Linux VM. Only the task workspace and validated read-only inputs are mounted;
+no host camera or SD device is passed. The compile itself runs as the unprivileged
+`builder` user, and the wrapper unmounts the image on exit. The retained workspace
+path is included in the result. Host-side cleanup checks the invocation's unique
+container name and ownership label before removing a container left by an
+interrupted Docker client.
+The component validator checks every ELF's 4 KiB LOAD alignment,
+absence of RPATH/RUNPATH and allowed dynamic dependencies. The archive contains
+only rwd, two RSS libraries, configuration and provenance. It contains no old
+Prudynt, Control, uhttpd or WebUI binaries. The legacy RAM artifact remains valid
+under its original member contract.
+
+Source and artifact caches bind the full recipe, builder image identity,
+toolchain SHA-256 and source trees. Changed or incomplete cache entries fail
+closed. A failed component build cannot continue into firmware packaging.
+JSON results include the artifact, hashes, ELF audit, retained run directory
+and build log. `--events-jsonl` emits phase progress on stderr.
+Licensing, distribution rights and physical acceptance remain separate gates.
+
 ## Build one reusable A1 firmware
 
 The model-universal path is separate from the older personalized configure
@@ -233,8 +294,8 @@ the matching stock IQ file and IMP 1.1.4 library, and the pinned open-source
 keeps the IPv6-enabled T31 ABI used by the validated stock modules. This
 provides RTSP and MJPEG without requiring the legacy
 private media closure. `--media-closure-dir` selects the older accepted closure,
-and `--raptor-rwd-artifact` adds the separately reviewed WebRTC component. Both
-are optional advanced inputs and must pass their source and artifact checks.
+and `--webrtc` builds and adds the Raptor component from locked public sources.
+An existing accepted `--raptor-rwd-artifact` remains supported as an alternative.
 
 The command has no arguments for camera recovery, WPA, recovery session,
 management credential, API key, hostname, or SSH identity. It creates a
@@ -414,18 +475,17 @@ WebUI from their locked source inputs.
 
 ## Optional Raptor overlay
 
-The guided builder accepts a reviewed source-built archive through
-`--raptor-rwd-artifact` on `local-build build-universal`. It does not currently
-compile that Raptor archive for the user. Its source, library, and configuration
-identities must pass the component checks; an arbitrary older firmware archive
-is not a substitute.
+Select `--webrtc` on `local-build build-universal` to build the component from
+locked public sources. An accepted external archive can still be supplied with
+`--raptor-rwd-artifact`. Source, library and configuration identities must pass
+the component checks; an arbitrary older firmware archive is not a substitute.
 
 
-`prepare-final-root` produces the matched-media RTSP/MJPEG base root. To build
-the optional WebRTC profile, run `components/raptor-rwd/build_persistent.py`
-before split-kernel or stage-1 packaging with the accepted base root and
-provenance, the source-built Raptor artifact, its exact digest, and
-`--static-rwd-tls --split-mtd3`.
+`prepare-final-root` produces the matched-media RTSP/MJPEG base root. The
+universal builder invokes `components/raptor-rwd/build_persistent.py` before
+split-kernel or stage-1 packaging with the accepted base root, provenance,
+validated component and `--static-rwd-tls --split-mtd3`. No manual overlay step
+is needed.
 
 The overlay preserves and hash-checks current base-owned Control, WebUI,
 uhttpd, init, and Prudynt files. It must retain the Prudynt initialization
@@ -441,6 +501,34 @@ validator must both pass for the WebRTC profile. Their absence is valid only
 when the manifest records the matched-media base profile and no Raptor overlay.
 
 ## Output gates
+
+### Source component validation, 2026-09-08
+
+A clean standalone public export of development commit
+`2c54c50c2403f738a295130b20ad463aa109b41a` completed the `local-build build-raptor`
+command above on an ARM64 macOS host with Docker. All ten source trees were
+acquired from their public repositories; the SDK had been built from locked
+sources in the same task. Its archive matched
+`9871abf2b79138fdfa2b684cf0f142bfbc3a37a4553e4af3b56804ea6a1b3412`.
+The component compile ran offline with builder image
+`sha256:a3815c8c4fe4f67545a0d0c8b8c70f42f507c849d57bd22e5febd850fb83fbd7`.
+
+The validated component archive was 364,243 bytes, SHA-256
+`3fc181ad0f680f48208633960506ef83176f0b53cbf84961326c4a1ac91369a9`.
+Stripped rwd, RSS common and RSS IPC were respectively 545,000, 141,508 and
+26,180 bytes. All three passed the 4 KiB LOAD, MIPS ABI, dynamic dependency
+and no-RPATH/RUNPATH checks. No shared mbedTLS, IMP or HAL dependency remained.
+An immediate CLI repeat and a `build-raptor --project` call both returned
+`cached: true` with the same archive digest. `project status` reported the
+operation completed, and the project linked the artifact to `build-universal`.
+The dev check passed 784 tests; the standalone public check passed 769 tests.
+
+This evidence covers component construction, validation, cache reuse and
+project linking. It does not establish full universal firmware construction,
+two-build reproducibility, target ABI execution or physical camera behavior.
+The source-component overlay checks that its required libraries, including
+`libatomic.so.1` and `/lib/ld.so.1`, exist inside the resulting image and rejects
+a missing dependency. Release and distribution gates below remain open.
 
 A build manifest must bind every input and output hash, size, effective
 configuration, source revision, toolchain, and selected media profile. When

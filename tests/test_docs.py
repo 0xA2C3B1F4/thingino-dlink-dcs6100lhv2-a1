@@ -347,7 +347,8 @@ python3 -m installer.user_cli universal configure \\
         self.assertIn("MTD1-MTD2-WRITTEN", handoff)
         self.assertFalse(any(tokens[1:2] == ["stage-install-set"] for tokens in commands))
         self.assertIn("--raptor-rwd-artifact", readme)
-        self.assertIn("does not build that archive automatically", readme)
+        self.assertIn("local-build build-universal --webrtc", readme)
+        self.assertIn("No separately prepared Raptor archive is required", readme)
 
     def test_agent_skill_removed_without_removing_low_level_cli(self) -> None:
         readme = (DOCS_ROOT / "README.md").read_text(encoding="utf-8")

@@ -43,6 +43,22 @@ thingino-dlink local-build acquire
 thingino-dlink local-build recovery-assets
 ```
 
+## Select WebRTC
+
+After preparation, a project can build the component without camera inputs:
+
+```bash
+thingino-dlink local-build build-raptor --non-interactive --json --events-jsonl
+```
+
+The successful result links the validated component to `local-build build-universal`.
+After attaching or acquiring the vendor bundle, run that command normally.
+Alternatively, use `local-build build-universal --webrtc` to acquire, build and
+include the component in one command. Repeating `--webrtc` revalidates or builds
+the current source recipe; a remembered artifact does not override the flag.
+Both paths use the same headless build core. No manual Raptor archive is needed.
+See [source-build details](build.md#build-webrtc-from-public-sources).
+
 ## Capture functional recovery with the project
 
 Use these short commands while `DCS6100_PROJECT` is selected. The README's long

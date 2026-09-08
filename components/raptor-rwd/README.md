@@ -54,11 +54,17 @@ Their presence is not authorization to contact a camera.
 
 ## Build inputs
 
-Build `rwd`, `librss_ipc`, `librss_common`, Compy, and the pinned mbedTLS
-closure from the recorded source commits. Keep binaries outside the repository.
-For the fixed split-mtd3 system region, build rwd with static LTO mbedTLS and
-verify that the ELF has no mbedTLS `DT_NEEDED` entry.
+Use `thingino-dlink local-build build-universal --webrtc` after local preparation
+and vendor acquisition. The installer builds the component from public locked
+sources and links it automatically. For a component-only build, use
+`thingino-dlink local-build build-raptor`.
 
-Licensing and corresponding-source gates are tracked in
-[`third_party/NOTICE.md`](../../third_party/NOTICE.md) and
-[`docs/status.md`](../../docs/status.md).
+`source-build-lock.json` defines public bases and reconstruction patches that
+produce the exact accepted trees in `raptor-lock.json`, followed by the existing
+two RWD patches. Transitive source and license identities are included. The
+persistent component archive contains only rwd, RSS libraries, configuration
+and provenance, with static LTO TLS. Existing reviewed external RAM archives
+remain accepted through `--raptor-rwd-artifact`.
+
+See [build instructions](../../docs/build.md#build-webrtc-from-public-sources).
+Build success does not close licensing, redistribution or camera acceptance gates.

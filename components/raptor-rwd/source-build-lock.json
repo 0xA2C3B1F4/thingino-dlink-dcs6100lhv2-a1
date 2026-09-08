@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "sources": {
+    "raptor": {
+      "url": "https://github.com/gtxaspec/raptor.git",
+      "base": "17b36386f980a24c7c90adb7c9b46f31b41c3b24",
+      "base_tree": "9525370fc9f1a20f0743efe75a8426ca35dc8d11",
+      "patches": [
+        {
+          "path": "patches/raptor-source/raptor.patch",
+          "sha256": "a464fbcf81c18413d0bc65f332969f4a68b84502e6c1fd0f38870ffdfe373ae3"
+        }
+      ],
+      "tree": "ad92a10d7b9ec25bf66505e39b1f459e7e172080",
+      "license": "LICENSE",
+      "license_sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+    },
+    "raptor-ipc": {
+      "url": "https://github.com/gtxaspec/raptor-ipc.git",
+      "base": "ce78064748416037bf8e3a5e1000c0ef497b35ed",
+      "base_tree": "3be9b5bad45bfa5247cdc5da1d0b8b35923661e6",
+      "patches": [
+        {
+          "path": "patches/raptor-source/raptor-ipc.patch",
+          "sha256": "fa31ca310c42393be1383ad4c1f06ddaf21a5c0192995a529f75167aeb52d02a"
+        }
+      ],
+      "tree": "9f1d9a6abd93f08b4e368341caad0285b92a2068",
+      "license": "LICENSE",
+      "license_sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+    },
+    "compy": {
+      "url": "https://github.com/gtxaspec/compy.git",
+      "base": "0c53f0f48042e96781c74cf0359020dc5312857f",
+      "base_tree": "a70712bc91ad8041ca52acb22ae22a998c8d56e2",
+      "patches": [
+        {
+          "path": "patches/raptor-source/compy.patch",
+          "sha256": "a24df57eb764e43d4bce8a1c8ad89107a7bbbb4495fba8a90b53a0e4b83327f2"
+        }
+      ],
+      "tree": "b7d88f71ed9d3b0019efd82a19832a01a8b8c837",
+      "license": "LICENSE",
+      "license_sha256": "da50d92a25d6e849b82699c31a2d7bcb0427b7eff44ba607e597ab22301f9412"
+    },
+    "raptor-common": {
+      "url": "https://github.com/gtxaspec/raptor-common.git",
+      "base": "75d83e8bd2c6d2a2c8ef2b8a7040d74b84236d04",
+      "base_tree": "82d8b92869edaf2744b83ad10cc5ba5586712b65",
+      "patches": [],
+      "tree": "82d8b92869edaf2744b83ad10cc5ba5586712b65",
+      "license": "LICENSE",
+      "license_sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+    },
+    "mbedtls": {
+      "url": "https://github.com/Mbed-TLS/mbedtls.git",
+      "base": "0bebf8b8c7f07abe3571ded48a11aa907a1ffb20",
+      "base_tree": "bf18187c533d0f9c5cb5bf9220b5828c38e86fcb",
+      "tree": "bf18187c533d0f9c5cb5bf9220b5828c38e86fcb",
+      "patches": [],
+      "license": "LICENSE",
+      "license_sha256": "9b405ef4c89342f5eae1dd828882f931747f71001cfba7d114801039b52ad09b"
+    },
+    "slice99": {
+      "url": "https://github.com/Hirrolot/slice99.git",
+      "base": "54122292e51a87403a1cdd5ff4e43fd25c3e0761",
+      "base_tree": "322393f8302ecc1f2fd24f0c520dfc66bfcb7f65",
+      "tree": "322393f8302ecc1f2fd24f0c520dfc66bfcb7f65",
+      "patches": [],
+      "license": "LICENSE",
+      "license_sha256": "3c714ad5cb186fa36af4d83004cbc6af0223779dfe21d99f40edd65c972e0e00"
+    },
+    "datatype99": {
+      "url": "https://github.com/Hirrolot/datatype99.git",
+      "base": "e24fc6a8baadc82a99708829a38aeba027bbcdd9",
+      "base_tree": "2da46e791f94ec1c3d414694a2813ff9c9478ab0",
+      "tree": "2da46e791f94ec1c3d414694a2813ff9c9478ab0",
+      "patches": [],
+      "license": "LICENSE",
+      "license_sha256": "3c714ad5cb186fa36af4d83004cbc6af0223779dfe21d99f40edd65c972e0e00"
+    },
+    "interface99": {
+      "url": "https://github.com/Hirrolot/interface99.git",
+      "base": "723bc751f13ef221e6adf285015737387010518b",
+      "base_tree": "897dc1b167b422965d3cc34505c6d9272b998359",
+      "tree": "897dc1b167b422965d3cc34505c6d9272b998359",
+      "patches": [],
+      "license": "LICENSE",
+      "license_sha256": "8433fcfb3d0879288d62743cd7d26a6453bdf137a82ee34f47e763f81f9079de"
+    },
+    "metalang99": {
+      "url": "https://github.com/Hirrolot/metalang99.git",
+      "base": "5337c43d869a1985eb3aef4e316b728b7a9ac916",
+      "base_tree": "fefc5a3989dd8631e850dedd2dab88f181593b1b",
+      "tree": "fefc5a3989dd8631e850dedd2dab88f181593b1b",
+      "patches": [],
+      "license": "LICENSE",
+      "license_sha256": "3c714ad5cb186fa36af4d83004cbc6af0223779dfe21d99f40edd65c972e0e00"
+    },
+    "mbedtls-framework": {
+      "url": "https://github.com/Mbed-TLS/mbedtls-framework.git",
+      "base": "dff9da04438d712f7647fd995bc90fadd0c0e2ce",
+      "base_tree": "b3302e98b7c3c6d68c9e8e83b8175bb2078f2bcc",
+      "tree": "b3302e98b7c3c6d68c9e8e83b8175bb2078f2bcc",
+      "patches": [],
+      "license": "LICENSE",
+      "license_sha256": "11402351e38392230bb8934ba1095c0c0049a296c0f8821f76e4672dff54b490"
+    }
+  },
+  "runtime_tree": "2b1cc48de65d698e0453c469fb28009648f67018"
+}

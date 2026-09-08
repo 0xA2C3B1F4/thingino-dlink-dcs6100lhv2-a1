@@ -425,6 +425,8 @@ class LocalBuildRunTests(unittest.TestCase):
             self.assertEqual(run_manifest["project_head"], "c" * 40)
             self.assertEqual(run_manifest["sources_lock_sha256"], "b" * 64)
             run_dir = Path(result["run_dir"])
+            if universal and overlay:
+                self.assertEqual(result.pop("raptor_rwd_artifact"), str(artifact))
             self.assertEqual(result, {
                 "artifact_scope": scope,
                 "build_count": build_count,
