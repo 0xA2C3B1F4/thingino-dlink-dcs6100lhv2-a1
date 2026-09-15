@@ -1458,7 +1458,7 @@
       "source": "profiles/dlink-dcs6100lhv2-a1/recovery-ap-kernel.fragment"
     },
     "profiles/dlink-dcs6100lhv2-a1/source-profile.json": {
-      "sha256": "6335ba9b998ef3a21e78f8b3c5beb6c1385bda17de64a2fdc6d55651c86b4224",
+      "sha256": "6ac01cd5a7ec1255c91997f1066b33b29e78efc0ab76c9025af3d314155b17f9",
       "source": "profiles/dlink-dcs6100lhv2-a1/source-profile.json"
     },
     "profiles/dlink-dcs6100lhv2-a1/stock-restore-kernel.fragment": {
@@ -1498,7 +1498,7 @@
       "source": "scripts/build_recovery_ap_entropy.sh"
     },
     "scripts/build_thingino_control.py": {
-      "sha256": "5cb06075a3cf14ef4d336815208997ebe8e845b9736bf4e2a5788b2af593aae7",
+      "sha256": "d45ef27b65404f024d0b1397db6aacb31585914be3070b4fe5d9e4e3ce325c7f",
       "source": "scripts/build_thingino_control.py"
     },
     "scripts/check.sh": {
@@ -1658,7 +1658,7 @@
       "source": "tests/test_artifacts.py"
     },
     "tests/test_build_thingino_control.py": {
-      "sha256": "f69dfe661a20b9f7af91d6a0e2140e832560ce62882faf2cfaf71605f3ea5d28",
+      "sha256": "2292a40dfae77f61e369041c5dd226c94c42f4940de456c06cd7d190fdd24a57",
       "source": "tests/test_build_thingino_control.py"
     },
     "tests/test_candidate_log.py": {
@@ -2335,6 +2335,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "fbc20f761907eac0fd415014a59ce1364596b4f2",
+  "source_commit": "5d464f14536ff204508f4bc3cb9d12b27b54a606",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }

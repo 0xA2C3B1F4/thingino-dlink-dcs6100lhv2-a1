@@ -249,7 +249,7 @@
     },
     {
       "destination": "package/thingino-control/build-rust.py",
-      "sha256": "5cb06075a3cf14ef4d336815208997ebe8e845b9736bf4e2a5788b2af593aae7",
+      "sha256": "d45ef27b65404f024d0b1397db6aacb31585914be3070b4fe5d9e4e3ce325c7f",
       "source": "scripts/build_thingino_control.py"
     },
     {

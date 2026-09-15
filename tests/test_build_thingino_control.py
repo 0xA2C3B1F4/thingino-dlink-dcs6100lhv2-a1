@@ -285,7 +285,9 @@ class ThinginoControlBuilderTests(unittest.TestCase):
 
     def test_raptor_feature_is_explicit_and_recorded(self) -> None:
         with self.fixture.manifest.open("a") as stream:
-            stream.write('\n[features]\ndefault = []\nraptor-backend = []\n')
+            stream.write(
+                '\n[features]\ndefault = ["raptor-backend"]\nraptor-backend = []\n'
+            )
         with mock.patch.object(builder, "_run", side_effect=self.fixture.command):
             result = builder.build(replace(self.fixture.inputs, raptor_backend=True))
         self.assertEqual(result["features"], ["raptor-backend"])
@@ -295,11 +297,14 @@ class ThinginoControlBuilderTests(unittest.TestCase):
 
     def test_raptor_feature_rejects_missing_or_implicitly_enabled_feature(self) -> None:
         original = self.fixture.manifest.read_text()
-        for extra in ['', '\n[features]\ndefault = ["raptor-backend"]\nraptor-backend = []\n',
-                      '\n[features]\ndefault = []\nraptor-backend = ["other"]\n']:
+        for extra in [
+            '',
+            '\n[features]\ndefault = []\nraptor-backend = []\n',
+            '\n[features]\ndefault = ["raptor-backend"]\nraptor-backend = ["other"]\n',
+        ]:
             self.fixture.manifest.write_text(original + extra)
             with (mock.patch.object(builder, "_run", side_effect=self.fixture.command),
-                  self.assertRaisesRegex(builder.ControlBuildError, "default-off")):
+                  self.assertRaisesRegex(builder.ControlBuildError, "only default")):
                 builder.build(replace(self.fixture.inputs, raptor_backend=True))
             self.assertFalse(self.fixture.output.exists())
         self.assertEqual(self.fixture.cargo_calls, [])

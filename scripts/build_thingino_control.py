@@ -565,8 +565,13 @@ def build(inputs: BuildInputs) -> dict[str, object]:
     if inputs.raptor_backend:
         document = tomllib.loads(_read_regular(inputs.manifest, "Cargo manifest").decode())
         features = document.get("features", {})
-        if features.get("default") != [] or features.get("raptor-backend") != []:
-            raise ControlBuildError("experimental Raptor requires an explicit dependency-free, default-off feature")
+        if (
+            features.get("default") != ["raptor-backend"]
+            or features.get("raptor-backend") != []
+        ):
+            raise ControlBuildError(
+                "Raptor must be the only default, dependency-free Control backend"
+            )
         feature_arguments = ["--no-default-features", "--features", "raptor-backend"]
 
     workspace = Path(
@@ -640,7 +645,7 @@ def parser() -> argparse.ArgumentParser:
     argument_parser.add_argument("--data-volume-root", type=Path, required=True)
     argument_parser.add_argument("--repository-root", type=Path)
     argument_parser.add_argument("--raptor-backend", action="store_true",
-                                 help="build the experimental default-off Raptor adapter")
+                                 help="build the mandatory Raptor backend explicitly")
     return argument_parser
 
 
