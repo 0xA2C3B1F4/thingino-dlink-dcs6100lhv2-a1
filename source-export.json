@@ -874,7 +874,7 @@
       "source": "installer/local_build_package.py"
     },
     "installer/local_build_run.py": {
-      "sha256": "61c2ec9cb529470628f711253df29c6fcca644108af62270ff3ded31267108f9",
+      "sha256": "5a5940f894776f07bbad68af2f67b344c33377def79f1275661188e837cc855c",
       "source": "installer/local_build_run.py"
     },
     "installer/local_build_support.py": {
@@ -1438,7 +1438,7 @@
       "source": "profiles/dlink-dcs6100lhv2-a1/defconfig"
     },
     "profiles/dlink-dcs6100lhv2-a1/download-cache.json": {
-      "sha256": "119ed2a55dae9b055841ffcb8492e473b0022f0d1a640cb1ccca17a7328cc91a",
+      "sha256": "80d957427a8a573ceb168b032047c2878597a33d4747aefcf50cad7db88df95b",
       "source": "profiles/dlink-dcs6100lhv2-a1/download-cache.json"
     },
     "profiles/dlink-dcs6100lhv2-a1/kernel.fragment": {
@@ -1546,7 +1546,7 @@
       "source": "scripts/container_build_stock_restore_kernel.sh"
     },
     "scripts/container_build_thingino.sh": {
-      "sha256": "87e2911c0afa6f06fd170706db484f331e5764c3527008935c8ef197d513a901",
+      "sha256": "9ffa9465264410caf5497932e3538c5305589422cc3a8ad9a2001ab5c3723f08",
       "source": "scripts/container_build_thingino.sh"
     },
     "scripts/container_build_thingino_toolchain.sh": {
@@ -1554,7 +1554,7 @@
       "source": "scripts/container_build_thingino_toolchain.sh"
     },
     "scripts/container_fetch_thingino_downloads.sh": {
-      "sha256": "31f03c4edb10a14c8be96ca29e777851fdcc06c2ce121956f4815326ffea714e",
+      "sha256": "e4b132b0e9d258fdde34aaec49582ef3d47fd0392276edc89f99eb0787cd2cb2",
       "source": "scripts/container_fetch_thingino_downloads.sh"
     },
     "scripts/container_fetch_thingino_toolchain_downloads.sh": {
@@ -1742,7 +1742,7 @@
       "source": "tests/test_local_build_bootstrap.py"
     },
     "tests/test_local_build_run.py": {
-      "sha256": "15f483319f6e33cd25b41d9ed8b1e736c45f0e0d08b59e7dfbbdd127b4ad1d70",
+      "sha256": "48bd6c1ce95ec07c107630541bf9d3bb5716007c9fb2352b07ec7b3b6359c694",
       "source": "tests/test_local_build_run.py"
     },
     "tests/test_macos_media_preflight.py": {
@@ -1826,7 +1826,7 @@
       "source": "tests/test_raptor_full_component.py"
     },
     "tests/test_raptor_full_pipeline.py": {
-      "sha256": "6d61ee0fe3983fa94dcc3b2f390e3104a8a44e9d0a893aa380242e745077fb25",
+      "sha256": "6691239b312f3ba4e9e64daceb84916f81c605f0be6492305f7943a5ca06f1e8",
       "source": "tests/test_raptor_full_pipeline.py"
     },
     "tests/test_raptor_full_root.py": {
@@ -2335,6 +2335,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "1118831915080af2ccf993cb2e864cef7919091c",
+  "source_commit": "fbc20f761907eac0fd415014a59ce1364596b4f2",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }

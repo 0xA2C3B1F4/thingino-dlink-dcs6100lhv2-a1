@@ -38,6 +38,10 @@ runuser -u builder -- env \
   commit -q -m prepared-source
 
 common_env="HOME=/home/builder LC_ALL=C.UTF-8 LANG=C.UTF-8 TZ=UTC SOURCE_DATE_EPOCH=$source_epoch THINGINO_CONTAINER_BUILD=1 CAMERA=$profile PRISTINE=1 CCACHE_DISABLE=1 BR2_DL_DIR=$source_dir/dl THINGINO_OUTPUT_DIR=$output_dir DCS6100_VENDOR_BUNDLE_DIR=$workspace/empty DCS6100_AUDIOPROCESS_LINK_FILE=$workspace/empty/audio-link DCS6100_RUST_TOOLCHAIN_DIR=$workspace/empty DCS6100_RUST_SOURCE_DIR=$workspace/empty DCS6100_INGENIC_TOOLCHAIN_DIR=$workspace/empty GIT_ASKPASS=/bin/false GIT_CONFIG_COUNT=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_KEY_0=http.version GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_VALUE_0=HTTP/1.1 GIT_TERMINAL_PROMPT=0 WORKFLOW=1"
+media_fragment=$source_dir/configs/cameras-exp/$profile/raptor-support.fragment
+test -f "$media_fragment"
+test ! -L "$media_fragment"
+set -- "THINGINO_USER_FRAGMENT_FILES=$media_fragment"
 
 retry_network_fetch() {
   label=$1
@@ -56,10 +60,28 @@ retry_network_fetch() {
 }
 
 runuser -u builder -- env $common_env \
-  make -C "$source_dir" CAMERA="$profile" GROUP=exp defconfig
+  make -C "$source_dir" CAMERA="$profile" GROUP=exp "$@" defconfig
+grep -Fxq 'BR2_PACKAGE_THINGINO_STREAMER_NONE=y' "$output_dir/.config"
+if grep -Eq '^BR2_PACKAGE_.*PRUDYNT.*=y$' "$output_dir/.config"; then
+  echo "Raptor download fetch selected Prudynt" >&2
+  exit 1
+fi
+if grep -Fxq 'BR2_THINGINO_LIBSTDCPP=y' "$output_dir/.config"; then
+  echo "Raptor download fetch selected the unused C++ runtime" >&2
+  exit 1
+fi
 retry_network_fetch "locked Buildroot source fetch" \
   runuser -u builder -- env $common_env \
-    make -C "$source_dir" CAMERA="$profile" GROUP=exp source
+    make -C "$source_dir" CAMERA="$profile" GROUP=exp "$@" source
+grep -Fxq 'BR2_PACKAGE_THINGINO_STREAMER_NONE=y' "$output_dir/.config"
+if grep -Eq '^BR2_PACKAGE_.*PRUDYNT.*=y$' "$output_dir/.config"; then
+  echo "Raptor source fetch regenerated a Prudynt config" >&2
+  exit 1
+fi
+if grep -Fxq 'BR2_THINGINO_LIBSTDCPP=y' "$output_dir/.config"; then
+  echo "Raptor source fetch regenerated the unused C++ runtime" >&2
+  exit 1
+fi
 # Thingino invokes this host dependency directly during the full build, so the
 # generic source target does not discover it.
 retry_network_fetch "locked host-libyaml source fetch" \

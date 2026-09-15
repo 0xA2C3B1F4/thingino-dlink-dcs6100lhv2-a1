@@ -12,12 +12,29 @@ from installer import local_build_package, local_build_run, raptor_full_build, r
 
 
 class FullPipelineTests(unittest.TestCase):
+    def test_download_fetch_uses_the_same_raptor_support_fragment(self):
+        repository = Path(__file__).resolve().parents[1]
+        fetch = (repository / "scripts/container_fetch_thingino_downloads.sh").read_text()
+        self.assertIn(
+            'media_fragment=$source_dir/configs/cameras-exp/$profile/raptor-support.fragment',
+            fetch,
+        )
+        self.assertIn('set -- "THINGINO_USER_FRAGMENT_FILES=$media_fragment"', fetch)
+        self.assertIn('GROUP=exp "$@" defconfig', fetch)
+        self.assertIn('GROUP=exp "$@" source', fetch)
+        self.assertIn("grep -Fxq 'BR2_PACKAGE_THINGINO_STREAMER_NONE=y'", fetch)
+        self.assertIn("grep -Eq '^BR2_PACKAGE_.*PRUDYNT.*=y$'", fetch)
+        self.assertIn("grep -Fxq 'BR2_THINGINO_LIBSTDCPP=y'", fetch)
+        self.assertGreaterEqual(
+            fetch.count("grep -Fxq 'BR2_PACKAGE_THINGINO_STREAMER_NONE=y'"), 2
+        )
+
     def test_support_build_gate_rejects_retired_media_and_cpp_runtime(self):
         repository = Path(__file__).resolve().parents[1]
         script = (repository / "scripts/container_build_thingino.sh").read_text()
         gate_start = "grep -Fxq 'BR2_PACKAGE_THINGINO_STREAMER_NONE=y'"
         gate_end = 'test -x "$output_dir/target/usr/sbin/wpa_supplicant"'
-        gate = gate_start + script.split(gate_start, 1)[1].split(gate_end, 1)[0]
+        gate = gate_start + script.rsplit(gate_start, 1)[1].split(gate_end, 1)[0]
         fragment = (repository / "profiles/dlink-dcs6100lhv2-a1/raptor-support.fragment").read_text()
         self.assertIn("# BR2_THINGINO_LIBSTDCPP is not set", fragment)
         self.assertNotIn("BR2_THINGINO_LIBSTDCPP=y", fragment)

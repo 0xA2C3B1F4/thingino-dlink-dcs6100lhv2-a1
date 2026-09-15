@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from collections.abc import Callable
@@ -102,10 +103,28 @@ def _prepare_download_cache(
         "prepared Thingino source manifest",
     )
     source_manifest_sha256 = _sha256(source_manifest)
+    fetch_contract_sha256 = _sha256(
+        _regular(
+            root / "scripts/container_fetch_thingino_downloads.sh",
+            "Thingino download fetch contract",
+        )
+    )
+    download_policy_sha256 = _sha256(
+        _regular(
+            root / "profiles/dlink-dcs6100lhv2-a1/download-cache.json",
+            "Thingino download-cache policy",
+        )
+    )
+    cache_key_sha256 = hashlib.sha256(
+        (
+            f"{lock_sha256}\n{source_manifest_sha256}\n"
+            f"{fetch_contract_sha256}\n{download_policy_sha256}\n"
+        ).encode()
+    ).hexdigest()
     destination = (
         build_root
         / "cache/downloads"
-        / f"thingino-downloads-{lock_sha256}-{source_manifest_sha256}.tar"
+        / f"thingino-downloads-{cache_key_sha256}.tar"
     )
     if destination.exists() or destination.is_symlink():
         try:
@@ -113,6 +132,9 @@ def _prepare_download_cache(
             return destination, {
                 **identity,
                 "prepared_source_manifest_sha256": source_manifest_sha256,
+                "fetch_contract_sha256": fetch_contract_sha256,
+                "download_policy_sha256": download_policy_sha256,
+                "cache_key_sha256": cache_key_sha256,
             }
         except DownloadCacheError as exc:
             raise LocalBuildRunError(str(exc)) from exc
@@ -155,6 +177,9 @@ def _prepare_download_cache(
     return destination, {
         **identity,
         "prepared_source_manifest_sha256": source_manifest_sha256,
+        "fetch_contract_sha256": fetch_contract_sha256,
+        "download_policy_sha256": download_policy_sha256,
+        "cache_key_sha256": cache_key_sha256,
     }
 
 

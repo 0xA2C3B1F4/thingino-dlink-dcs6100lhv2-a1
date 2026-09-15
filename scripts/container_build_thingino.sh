@@ -103,6 +103,15 @@ set -- "THINGINO_USER_FRAGMENT_FILES=$media_fragment"
 test ! -f "$output_dir/.config" || unlink "$output_dir/.config"
 runuser -u builder -- env $common_env \
 	make -C "$source_dir" CAMERA="$profile" GROUP=exp "$@" defconfig
+grep -Fxq 'BR2_PACKAGE_THINGINO_STREAMER_NONE=y' "$output_dir/.config"
+if grep -Eq '^BR2_PACKAGE_.*PRUDYNT.*=y$' "$output_dir/.config"; then
+	echo "full Raptor base defconfig selected Prudynt" >&2
+	exit 1
+fi
+if grep -Fxq 'BR2_THINGINO_LIBSTDCPP=y' "$output_dir/.config"; then
+	echo "full Raptor base defconfig selected the unused C++ runtime" >&2
+	exit 1
+fi
 runuser -u builder -- env $common_env \
 	make -C "$source_dir" CAMERA="$profile" GROUP=exp "$@" \
 		build

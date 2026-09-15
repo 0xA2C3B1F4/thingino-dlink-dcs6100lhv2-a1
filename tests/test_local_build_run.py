@@ -30,6 +30,12 @@ class LocalBuildRunTests(unittest.TestCase):
             prepared_source.mkdir()
             manifest = prepared_source / "dcs6100-source-preparation.json"
             manifest.write_bytes(b'{"profile":"first"}\n')
+            (root / "scripts").mkdir()
+            fetch_contract = root / "scripts/container_fetch_thingino_downloads.sh"
+            fetch_contract.write_text("first fetch contract\n")
+            policy = root / "profiles/dlink-dcs6100lhv2-a1/download-cache.json"
+            policy.parent.mkdir(parents=True)
+            policy.write_text("first policy\n")
 
             def fetch(_arguments: list[str], **_: object) -> None:
                 result = run_dir / "download-fetch-result"
@@ -66,13 +72,47 @@ class LocalBuildRunTests(unittest.TestCase):
                     lock_sha256="b" * 64,
                     thingino_toolchain=root / "toolchain.tar.gz",
                 )
+                (run_dir / "download-fetch-result").rmdir()
+                fetch_contract.write_text("second fetch contract\n")
+                third, third_identity = local_build_run._prepare_download_cache(
+                    root=root,
+                    run_dir=run_dir,
+                    build_root=build_root,
+                    prepared_source=prepared_source,
+                    builder_image="sha256:" + "a" * 64,
+                    lock_sha256="b" * 64,
+                    thingino_toolchain=root / "toolchain.tar.gz",
+                )
+                (run_dir / "download-fetch-result").rmdir()
+                policy.write_text("second policy\n")
+                fourth, fourth_identity = local_build_run._prepare_download_cache(
+                    root=root,
+                    run_dir=run_dir,
+                    build_root=build_root,
+                    prepared_source=prepared_source,
+                    builder_image="sha256:" + "a" * 64,
+                    lock_sha256="b" * 64,
+                    thingino_toolchain=root / "toolchain.tar.gz",
+                )
 
             self.assertNotEqual(first, second)
+            self.assertNotEqual(second, third)
+            self.assertNotEqual(third, fourth)
             self.assertTrue(first.is_file())
             self.assertTrue(second.is_file())
+            self.assertTrue(third.is_file())
+            self.assertTrue(fourth.is_file())
             self.assertNotEqual(
                 first_identity["prepared_source_manifest_sha256"],
                 second_identity["prepared_source_manifest_sha256"],
+            )
+            self.assertNotEqual(
+                second_identity["fetch_contract_sha256"],
+                third_identity["fetch_contract_sha256"],
+            )
+            self.assertNotEqual(
+                third_identity["download_policy_sha256"],
+                fourth_identity["download_policy_sha256"],
             )
 
     def test_stage1_uses_homebrew_llvm_instead_of_apple_clang(self) -> None:
