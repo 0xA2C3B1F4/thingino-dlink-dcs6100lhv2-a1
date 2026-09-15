@@ -1438,7 +1438,7 @@
       "source": "profiles/dlink-dcs6100lhv2-a1/defconfig"
     },
     "profiles/dlink-dcs6100lhv2-a1/download-cache.json": {
-      "sha256": "7c9dd4e3db282850ba468f8a90787aa0b0c7b105fdc758fd29c0ad71dcf5a27a",
+      "sha256": "119ed2a55dae9b055841ffcb8492e473b0022f0d1a640cb1ccca17a7328cc91a",
       "source": "profiles/dlink-dcs6100lhv2-a1/download-cache.json"
     },
     "profiles/dlink-dcs6100lhv2-a1/kernel.fragment": {
@@ -2335,6 +2335,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "442dc7aa0fe4ef363f0dd792464da82d569c1bb0",
+  "source_commit": "1118831915080af2ccf993cb2e864cef7919091c",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }
