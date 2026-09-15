@@ -698,6 +698,7 @@ pre { font-family: var(--font-code); }
 .control-card h2 { margin-top: 0; }
 .control-row { align-items: center; border-top: 1px solid var(--line); display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr) auto; padding: 0.9rem 0; }
 .control-row:first-of-type { margin-top: 1rem; }
+.control-recovery { grid-column: 1 / -1; width: 100%; }
 .control-row div { display: grid; }
 .control-row small { color: var(--muted); }
 .preview-page .control-row { position: relative; }

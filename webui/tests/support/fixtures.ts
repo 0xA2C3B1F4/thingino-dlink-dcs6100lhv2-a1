@@ -81,6 +81,8 @@ export const imageFixture = {
 export const imagingRuntimeFixture = {
   code: 200,
   result: "success",
+  source: "raptor",
+  persistent: true,
   message: {
     fields: {
       brightness: { supported: true, min: 0, max: 255, value: 128, default: 128 },

@@ -13,6 +13,8 @@ from installer import (
     local_build_package,
     local_build_run,
     local_build_support,
+    raptor_full_build,
+    raptor_full_root,
 )
 
 
@@ -84,36 +86,36 @@ class LocalBuildRunTests(unittest.TestCase):
             selected = local_build_support._llvm_tools()
         self.assertEqual(selected, (clang.resolve(), lld.resolve()))
 
-    def test_build_runs_two_clean_builds_overlay_split_and_inspection(self) -> None:
+    def test_full_raptor_build_runs_two_clean_builds_split_and_inspection(self) -> None:
         self._exercise_install_build(build_count=2)
 
-    def test_single_build_does_not_claim_reproducibility(self) -> None:
+    def test_full_raptor_single_build_does_not_claim_reproducibility(self) -> None:
         self._exercise_install_build(build_count=1)
 
-    def test_universal_build_without_overlay_uses_vendor_audio_and_signing(self) -> None:
-        self._exercise_install_build(build_count=1, universal=True, overlay=False)
+    def test_universal_build_always_composes_full_raptor(self) -> None:
+        self._exercise_install_build(build_count=1, universal=True)
 
-    def test_universal_two_builds_bind_overlay_provenance(self) -> None:
+    def test_universal_two_builds_bind_base_reproducibility(self) -> None:
         self._exercise_install_build(build_count=2, universal=True)
 
-    def test_failed_second_build_retains_owner_and_log_without_success_manifest(self) -> None:
+    def test_full_raptor_failed_second_build_retains_owner_and_log_without_success_manifest(self) -> None:
         self._exercise_install_build(build_count=2, failure="build-b")
 
-    def test_failed_inspection_retains_reproducibility_without_success_manifest(self) -> None:
+    def test_full_raptor_failed_inspection_retains_reproducibility_without_success_manifest(self) -> None:
         self._exercise_install_build(build_count=1, failure="inspection")
 
-    def test_acquisition_os_error_keeps_owner_and_exception_cause(self) -> None:
+    def test_full_raptor_acquisition_os_error_keeps_owner_and_exception_cause(self) -> None:
         self._exercise_install_build(build_count=1, failure="acquisition")
 
-    def test_overlay_without_provenance_never_reaches_packaging(self) -> None:
-        self._exercise_install_build(build_count=1, failure="overlay")
-
-    def test_invalid_universal_root_manifest_never_reaches_signing(self) -> None:
-        self._exercise_install_build(build_count=1, universal=True, failure="provenance")
+    def test_universal_preserve_build_reaches_camera_authorized_packaging(self) -> None:
+        self._exercise_install_build(
+            build_count=1, universal=True, data_mode="preserve"
+        )
 
     def _exercise_install_build(
-        self, *, build_count: int, universal: bool = False,
-        overlay: bool = True, failure: str | None = None,
+        self, *, build_count: int, universal: bool = True,
+        failure: str | None = None,
+        data_mode: str = "initialize",
     ) -> None:
         with tempfile.TemporaryDirectory() as name:
             root = Path(name)
@@ -131,14 +133,13 @@ class LocalBuildRunTests(unittest.TestCase):
             audio.write_bytes(b"audio")
             wpa = private / "current-wpa.conf"
             wpa.write_bytes(b"wpa")
-            artifact = private / "raptor.tar.gz"
-            artifact.write_bytes(b"raptor")
             signing_key = private / "release.pem"
             signing_key.write_bytes(b"synthetic-signing-input")
             (private / "vendor/files").mkdir()
             (private / "vendor/files/libaudioProcess.so").write_bytes(b"audio")
-            scope = "model-universal" if universal else "device-personalized"
-            suffix = "universal" if universal else "private"
+            scope = "model-universal"
+            full_raptor = True
+            suffix = "universal"
             events: list[str] = []
             acquired_root = root / "acquired"
             for relative in ("source", "rust-source", "rust-toolchain"):
@@ -160,11 +161,7 @@ class LocalBuildRunTests(unittest.TestCase):
                 events.append(label)
                 self.assertEqual(_["builder_image"], "sha256:" + "a" * 64)
                 self.assertEqual(
-                    _["audio_link"],
-                    private / (
-                        "vendor/files/libaudioProcess.so"
-                        if universal else "media/files/lib/libaudioProcess.so"
-                    ),
+                    _["audio_link"], private / "vendor/files/libaudioProcess.so"
                 )
                 build = run_dir / label
                 result = build / "result"
@@ -184,32 +181,31 @@ class LocalBuildRunTests(unittest.TestCase):
 
             def prepare_final(*, output_dir: Path, **_: object) -> None:
                 events.append("final-root")
-                if universal:
-                    self.assertEqual(_["base_rootfs"], b"thingino-base.squashfs")
-                    self.assertIsNone(_["media_closure"])
-                else:
-                    self.assertEqual(_["private_config_dir"], private / "config")
-                    self.assertEqual(_["expected_wpa_config_path"], wpa)
-                    self.assertEqual(_["session_dir"], private / "session")
+                self.assertEqual(_["base_rootfs"], b"thingino-base.squashfs")
+                self.assertIsNone(_["media_closure"])
                 output_dir.mkdir()
                 (output_dir / f"system.{suffix}.squashfs").write_bytes(b"base")
                 (output_dir / f"final-root.{suffix}.json").write_text('{"prepared": true}')
 
-            def raptor_build(*, output_dir: Path, **_: object):
-                events.append("overlay")
-                self.assertEqual(_["artifact_scope"], scope)
-                self.assertEqual(_["artifact_sha256"], local_build_run._sha256(artifact))
-                self.assertEqual(_["base_rootfs_path"].name, f"system.{suffix}.squashfs")
-                self.assertTrue(_["static_rwd_tls"])
-                self.assertTrue(_["split_mtd3"])
+            def full_component(**_: object):
+                events.append("full-component")
+                self.assertEqual(_["base_rootfs"].read_bytes(), b"base")
+                self.assertEqual(_["base_workspace"].name, "workspace.ext4")
+                return {
+                    "artifact": str(root / "raptor-full.tar.gz"),
+                    "sha256": "e" * 64,
+                    "identity": {"build_inputs": {"base": "fresh"}},
+                }
+
+            def compose_full(*, output_dir: Path, **_: object) -> None:
+                events.append("full-compose")
+                self.assertEqual(_["component_sha256"], "e" * 64)
+                self.assertEqual(_["build_inputs"], {"base": "fresh"})
                 output_dir.mkdir()
-                (output_dir / f"system.{suffix}.squashfs").write_bytes(b"hsqs-final")
-                (output_dir / f"final-root.{suffix}.json").write_text('{"overlay": true}')
-                if failure == "provenance":
-                    (output_dir / f"final-root.{suffix}.json").write_text("invalid")
-                if failure == "overlay":
-                    return {}
-                return {"raptor_rwd": {"source_provenance": {}}}
+                (output_dir / "system.universal.squashfs").write_bytes(b"hsqs-final")
+                (output_dir / "final-root.universal.json").write_text(
+                    '{"raptor_full": true}'
+                )
 
             def split_run(_arguments: list[str], *, label: str, **_: object) -> None:
                 events.append("split")
@@ -230,17 +226,14 @@ class LocalBuildRunTests(unittest.TestCase):
 
             def install_set(*, output_dir: Path, **_: object) -> None:
                 events.append("package")
-                self.assertEqual(_["system"], b"hsqs-final" if overlay else b"base")
+                self.assertEqual(_["system"], b"hsqs-final")
                 self.assertEqual(_["final_kernel"], b"final-kernel.uimage")
-                if universal:
-                    self.assertEqual(_["signing_key"], signing_key)
-                    self.assertEqual(
-                        _["universal_root_manifest"],
-                        {"overlay" if overlay else "prepared": True},
-                    )
-                    self.assertNotIn("data_mode", _)
-                else:
-                    self.assertEqual(_["data_mode"], "initialize")
+                self.assertEqual(_["signing_key"], signing_key)
+                self.assertEqual(
+                    _["universal_root_manifest"],
+                    {"raptor_full": True},
+                )
+                self.assertEqual(_["data_mode"], data_mode)
                 output_dir.mkdir()
 
             def inspect(*_: object):
@@ -261,11 +254,8 @@ class LocalBuildRunTests(unittest.TestCase):
                     "sha256": "d" * 64,
                 },
             }
-            media = SimpleNamespace(
-                by_path=lambda: {"lib/libaudioProcess.so": SimpleNamespace(raw=b"audio")}
-            )
             inspection = {
-                "data_mode": "initialize",
+                "data_mode": data_mode,
                 "layout": "dcs6100lhv2-a1-mtd3-split-v1",
                 "ok": True,
                 "schema_version": 2,
@@ -285,7 +275,6 @@ class LocalBuildRunTests(unittest.TestCase):
                 mock.patch.object(local_build_inputs, "_project_root", return_value=project),
                 mock.patch.object(local_build_run, "_run_id", return_value="build-characterized"),
                 mock.patch.object(local_build_inputs, "load_vendor_bundle"),
-                mock.patch.object(local_build_inputs, "load_media_closure", return_value=media),
                 mock.patch.object(
                     local_build_run,
                     "acquire_locked_public_inputs",
@@ -326,23 +315,20 @@ class LocalBuildRunTests(unittest.TestCase):
                     side_effect=lambda name, **_: root / name,
                 ),
                 mock.patch.object(
-                    local_build_package,
-                    "prepare_from_private_directory",
-                    side_effect=prepare_final,
-                ),
-                mock.patch.object(
                     local_build_package, "prepare_universal_final_root",
                     side_effect=prepare_final,
                 ),
                 mock.patch.object(
-                    local_build_package,
-                    "_raptor_module",
-                    return_value=SimpleNamespace(build_persistent_root=raptor_build),
+                    raptor_full_build,
+                    "build_full_component",
+                    side_effect=full_component,
+                ),
+                mock.patch.object(
+                    raptor_full_root,
+                    "compose_universal_root",
+                    side_effect=compose_full,
                 ),
                 mock.patch.object(local_build_package, "_run", side_effect=split_run),
-                mock.patch.object(
-                    local_build_package, "build_install_set", side_effect=install_set,
-                ),
                 mock.patch.object(
                     local_build_package, "build_universal_install_set",
                     side_effect=install_set,
@@ -360,20 +346,11 @@ class LocalBuildRunTests(unittest.TestCase):
                 arguments = dict(
                     build_root=build_root,
                     vendor_bundle_dir=private / "vendor",
-                    raptor_rwd_artifact=artifact if overlay else None,
                     build_count=build_count,
                 )
-                if universal:
-                    build = local_build_run.build_local_universal_install_set
-                    arguments["signing_key"] = signing_key
-                else:
-                    build = local_build_run.build_local_install_set
-                    arguments.update(
-                        media_closure_dir=private / "media",
-                        private_config_dir=private / "config",
-                        expected_wpa_config_path=wpa,
-                        session_dir=private / "session",
-                    )
+                build = local_build_run.build_local_universal_install_set
+                arguments["signing_key"] = signing_key
+                arguments["data_mode"] = data_mode
                 if failure:
                     with self.assertRaisesRegex(
                         local_build_run.LocalBuildRunError, "failure|failed|provenance"
@@ -403,11 +380,11 @@ class LocalBuildRunTests(unittest.TestCase):
             )
             self.assertEqual(
                 events,
-                clean_calls + ["final-root"] + (["overlay"] if overlay else [])
+                clean_calls + ["final-root"]
+                + ["full-component", "full-compose"]
                 + ["split", "package", "inspection"],
             )
-            self.assertEqual(result["reproducible"], build_count == 2)
-            self.assertEqual(result["raptor_rwd_overlay"], overlay)
+            self.assertFalse(result["reproducible"])
             self.assertEqual(result["artifact_scope"], scope)
             self.assertEqual(result["schema_version"], 2)
             self.assertFalse(result["public_firmware_release_gate_consulted"])
@@ -421,30 +398,26 @@ class LocalBuildRunTests(unittest.TestCase):
             )
             self.assertEqual(run_manifest["build_count"], build_count)
             self.assertEqual(run_manifest["reproducibility"]["builds"], build_count)
-            self.assertEqual(run_manifest["private"], not universal)
+            self.assertFalse(run_manifest["private"])
             self.assertEqual(run_manifest["project_head"], "c" * 40)
             self.assertEqual(run_manifest["sources_lock_sha256"], "b" * 64)
             run_dir = Path(result["run_dir"])
-            if universal and overlay:
-                self.assertEqual(result.pop("raptor_rwd_artifact"), str(artifact))
+            self.assertTrue(result.pop("raptor_full_source_build"))
             self.assertEqual(result, {
                 "artifact_scope": scope,
+                "media_backend": "raptor",
                 "build_count": build_count,
                 "build_root": str(build_root),
-                "data_mode": "initialize",
+                "data_mode": data_mode,
                 "install_set_dir": str(run_dir / "install-set"),
                 "inspection": inspection,
                 "nor_writes": False,
                 "public_firmware_release_gate_consulted": False,
-                "raptor_rwd_overlay": overlay,
-                "reproducible": build_count == 2,
+                "reproducible": False,
                 "run_dir": str(run_dir),
                 "schema_version": 2,
                 "status": "host-built and inspected; live installation not authorized",
-                "universal_firmware": (
-                    str(run_dir / "install-set/thingino-universal.tgb")
-                    if universal else None
-                ),
+                "universal_firmware": str(run_dir / "install-set/thingino-universal.tgb"),
             })
             self.assertEqual(run_dir.name, "build-characterized")
             self.assertEqual(run_dir.stat().st_mode & 0o777, 0o700)
@@ -457,7 +430,11 @@ class LocalBuildRunTests(unittest.TestCase):
             self.assertNotIn(str(signing_key), json.dumps(run_manifest))
             if build_count == 1:
                 self.assertEqual(
-                    run_manifest["reproducibility"], {"builds": 1, "byte_identical": None}
+                    run_manifest["reproducibility"], {
+                        "builds": 1,
+                        "byte_identical": None,
+                        "scope": "base-image-only",
+                    }
                 )
 
     def test_invalid_inputs_fail_before_acquisition_or_run_ownership(self) -> None:
@@ -466,27 +443,24 @@ class LocalBuildRunTests(unittest.TestCase):
             arguments = {
                 "build_root": root,
                 "vendor_bundle_dir": root,
-                "media_closure_dir": None,
-                "private_config_dir": None,
-                "expected_wpa_config_path": None,
-                "session_dir": None,
-                "raptor_rwd_artifact": None,
                 "data_mode": "initialize",
                 "artifact_scope": "model-universal",
                 "signing_key": root / "signing.pem",
                 "build_count": 1,
             }
             cases = (
-                ({"artifact_scope": "unknown"}, "artifact scope is invalid"),
-                ({"data_mode": "preserve"}, "requires initialize"),
                 (
-                    {"artifact_scope": "device-personalized", "data_mode": "invalid"},
-                    "data mode is invalid",
+                    {"artifact_scope": "unknown"},
+                    "personalized local builds are retired; use model-universal full Raptor",
                 ),
+                ({"data_mode": "factory-reset"}, "requires initialize or preserve"),
+                ({"data_mode": "invalid"}, "requires initialize or preserve"),
                 ({"build_count": 3}, "must be one or two"),
-                ({"private_config_dir": root}, "accepts no camera inputs"),
                 ({"signing_key": None}, "requires signing"),
-                ({"artifact_scope": "device-personalized"}, "inputs are incomplete"),
+                (
+                    {"artifact_scope": "device-personalized"},
+                    "personalized local builds are retired; use model-universal full Raptor",
+                ),
                 ({"signing_key": root / "missing"}, "signing key is missing"),
             )
             with (
@@ -620,17 +594,28 @@ class LocalBuildRunTests(unittest.TestCase):
             result = local_build_run.build_local_universal_install_set(
                 build_root=Path("/build"),
                 vendor_bundle_dir=Path("/model/vendor"),
-                media_closure_dir=Path("/model/media"),
-                raptor_rwd_artifact=Path("/model/raptor.tar"),
                 signing_key=Path("/model/release.pem"),
             )
         self.assertEqual(result["artifact_scope"], "model-universal")
         values = build.call_args.kwargs
-        self.assertIsNone(values["private_config_dir"])
-        self.assertIsNone(values["expected_wpa_config_path"])
-        self.assertIsNone(values["session_dir"])
         self.assertEqual(values["data_mode"], "initialize")
         self.assertEqual(values["artifact_scope"], "model-universal")
+        self.assertNotIn("media_closure_dir", values)
+        self.assertNotIn("full_raptor", values)
+
+    def test_universal_build_wrapper_forwards_preserve_mode(self) -> None:
+        with mock.patch.object(
+            local_build_run,
+            "_build_local_install_set",
+            return_value={"artifact_scope": "model-universal"},
+        ) as build:
+            local_build_run.build_local_universal_install_set(
+                build_root=Path("/build"),
+                vendor_bundle_dir=Path("/model/vendor"),
+                signing_key=Path("/model/release.pem"),
+                data_mode="preserve",
+            )
+        self.assertEqual(build.call_args.kwargs["data_mode"], "preserve")
 
     def test_two_build_request_requires_matching_workspace_capacity(self) -> None:
         with mock.patch.object(
@@ -647,14 +632,10 @@ class LocalBuildRunTests(unittest.TestCase):
                 local_build_run.LocalBuildRunError,
                 "does not reserve capacity",
             ):
-                local_build_run.build_local_install_set(
+                local_build_run.build_local_universal_install_set(
                     build_root=Path("/external/build"),
                     vendor_bundle_dir=Path("/private/vendor"),
-                    media_closure_dir=Path("/private/media"),
-                    private_config_dir=Path("/private/config"),
-                    expected_wpa_config_path=Path("/private/wpa"),
-                    session_dir=Path("/private/session"),
-                    raptor_rwd_artifact=Path("/private/raptor.tar.gz"),
+                    signing_key=Path("/private/release.pem"),
                     build_count=2,
                 )
 

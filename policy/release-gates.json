@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status_date": "2026-09-02",
+  "status_date": "2026-09-15",
   "scopes": [
     {
       "id": "source-publication",
@@ -23,12 +23,6 @@
           "status": "closed",
           "requirement": "CI runs WebUI typecheck, unit tests, production build, bundle scan, and Chromium fixtures.",
           "evidence": [".github/workflows/check.yml", "webui/playwright.config.ts"]
-        },
-        {
-          "id": "prudynt-patch-disclosure",
-          "status": "closed",
-          "requirement": "The complete required Prudynt patch series is published with the unresolved upstream license status disclosed and without claiming MIT or open-source terms for Prudynt-derived context.",
-          "evidence": ["profiles/dlink-dcs6100lhv2-a1/source-profile.json", "third_party/LICENSE_REVIEW.md", "third_party/NOTICE.md"]
         }
       ]
     },
@@ -36,12 +30,6 @@
       "id": "firmware-release",
       "ready": false,
       "gates": [
-        {
-          "id": "prudynt-license-grant",
-          "status": "blocked",
-          "requirement": "The final Prudynt source and binary distribution terms are established.",
-          "evidence": ["third_party/LICENSE_REVIEW.md"]
-        },
         {
           "id": "rtl8188fu-license-closure",
           "status": "blocked",
@@ -93,18 +81,12 @@
           "status": "blocked",
           "requirement": "The macOS, Linux, and Windows host contracts pass CI; each claimed physical-media path still needs recorded removable-media acceptance.",
           "evidence": [".github/workflows/check.yml", "docs/installation.md", "docs/status.md"]
-        }
-      ]
-    },
-    {
-      "id": "optional-webrtc-profile-release",
-      "ready": false,
-      "gates": [
+        },
         {
           "id": "raptor-corresponding-source",
           "status": "blocked",
-          "requirement": "The optional Raptor rwd link closure, notices, local patches, and corresponding-source delivery are reviewed together before distributing that WebRTC profile.",
-          "evidence": ["components/raptor-rwd/raptor-lock.json", "third_party/NOTICE.md"]
+          "requirement": "The full Raptor source closure, notices, local patches, and corresponding-source delivery are reviewed together before distributing firmware.",
+          "evidence": ["components/raptor/source-build-lock.json", "third_party/LICENSE_REVIEW.md", "third_party/NOTICE.md"]
         }
       ]
     }

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from dataclasses import replace
 import tempfile
 import unittest
 from pathlib import Path
@@ -190,6 +191,7 @@ class ThinginoControlBuilderTests(unittest.TestCase):
         self.assertEqual(self.fixture.output.read_bytes(), b"fixture-mips-control")
         self.assertEqual(self.fixture.output.stat().st_mode & 0o777, 0o755)
         self.assertEqual(result["dt_needed"], ["libc.so.6", "libgcc_s.so.1"])
+        self.assertEqual(result["features"], [])
         self.assertEqual(result["glibc_versions"], ["2.4", "2.16"])
         self.assertEqual(len(self.fixture.cargo_calls), 1)
         argv, environment = self.fixture.cargo_calls[0]
@@ -210,6 +212,7 @@ class ThinginoControlBuilderTests(unittest.TestCase):
         )
         self.assertEqual(environment["CARGO_NET_OFFLINE"], "true")
         self.assertEqual(environment["CARGO_INCREMENTAL"], "0")
+        self.assertEqual(environment["CARGO_BUILD_JOBS"], "2")
         self.assertEqual(environment["RUSTC_BOOTSTRAP"], "1")
         self.assertEqual(
             environment["CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS"],
@@ -217,6 +220,8 @@ class ThinginoControlBuilderTests(unittest.TestCase):
         )
         self.assertEqual(environment["RUST_SRC_PATH"], str(self.fixture.rust_source / "library"))
         self.assertIn("-Ctarget-cpu=mips32r2", environment["RUSTFLAGS"])
+        self.assertIn("-Cpanic=abort", environment["RUSTFLAGS"])
+        self.assertIn("-Cforce-unwind-tables=no", environment["RUSTFLAGS"])
         self.assertIn("-mhard-float", MODULE_PATH.read_text(encoding="utf-8"))
         linker = next(self.fixture.scratch.glob(".thingino-control-build-*/mips-linker"), None)
         self.assertIsNone(linker, "successful builds must clean their temporary linker")
@@ -277,6 +282,27 @@ class ThinginoControlBuilderTests(unittest.TestCase):
             builder.build(self.fixture.inputs)
         self.assertEqual(self.fixture.cargo_calls, [])
         self.assertFalse(self.fixture.output.exists())
+
+    def test_raptor_feature_is_explicit_and_recorded(self) -> None:
+        with self.fixture.manifest.open("a") as stream:
+            stream.write('\n[features]\ndefault = []\nraptor-backend = []\n')
+        with mock.patch.object(builder, "_run", side_effect=self.fixture.command):
+            result = builder.build(replace(self.fixture.inputs, raptor_backend=True))
+        self.assertEqual(result["features"], ["raptor-backend"])
+        self.assertEqual(len(result["cargo_lock_sha256"]), 64)
+        argv, _ = self.fixture.cargo_calls[0]
+        self.assertEqual(argv[-3:], ["--no-default-features", "--features", "raptor-backend"])
+
+    def test_raptor_feature_rejects_missing_or_implicitly_enabled_feature(self) -> None:
+        original = self.fixture.manifest.read_text()
+        for extra in ['', '\n[features]\ndefault = ["raptor-backend"]\nraptor-backend = []\n',
+                      '\n[features]\ndefault = []\nraptor-backend = ["other"]\n']:
+            self.fixture.manifest.write_text(original + extra)
+            with (mock.patch.object(builder, "_run", side_effect=self.fixture.command),
+                  self.assertRaisesRegex(builder.ControlBuildError, "default-off")):
+                builder.build(replace(self.fixture.inputs, raptor_backend=True))
+            self.assertFalse(self.fixture.output.exists())
+        self.assertEqual(self.fixture.cargo_calls, [])
 
     def test_elf_contract_rejects_wrong_abi_interpreter_and_dependency(self) -> None:
         candidate = self.fixture.root / "candidate"
@@ -344,6 +370,21 @@ class ThinginoControlBuilderTests(unittest.TestCase):
             self.assertRaisesRegex(builder.ControlBuildError, "MIPS32r2"),
         ):
             builder.validate_elf(candidate, readelf=self.fixture.readelf)
+
+    def test_binary_size_limit_accepts_boundary_and_reports_oversize(self) -> None:
+        candidate = self.fixture.root / "bounded-candidate"
+        candidate.write_bytes(b"x" * builder.MAX_BINARY_INPUT)
+        with mock.patch.object(builder, "_run", side_effect=self.fixture.command):
+            evidence = builder.validate_elf(candidate, readelf=self.fixture.readelf)
+            self.assertEqual(evidence["size"], builder.MAX_BINARY_INPUT)
+            with candidate.open("ab") as stream:
+                stream.write(b"x")
+            with self.assertRaisesRegex(
+                builder.ControlBuildError,
+                rf"built Thingino Control exceeds size limit: "
+                rf"{builder.MAX_BINARY_INPUT + 1} bytes; maximum {builder.MAX_BINARY_INPUT} bytes",
+            ):
+                builder.validate_elf(candidate, readelf=self.fixture.readelf)
 
     def test_output_must_be_outside_repository_and_on_approved_volume(self) -> None:
         inside = builder.BuildInputs(

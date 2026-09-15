@@ -14,7 +14,7 @@ from installer.stage2 import (
     Stage2Error,
     build_stage2,
     validate_legacy_stage2_v1,
-    validate_retired_stage2_v2_42_22,
+    validate_retired_stage2_v2_39_25,
     validate_retired_stage2_v2_ipv6_disabled,
     validate_stage2,
 )
@@ -93,15 +93,15 @@ class Stage2Tests(unittest.TestCase):
         )
 
     def _retired_v2_payload(
-        self, *, memory_42_22: bool = True, ipv6_disabled: bool = False
+        self, *, memory_42_22: bool = False, ipv6_disabled: bool = False
     ) -> bytes:
         system = test_squashfs(0x18000)
         layout = derive_final_layout(len(system))
         command_line = final_kernel_command_line(layout)
-        if memory_42_22:
+        if not memory_42_22:
             command_line = command_line.replace(
-                "mem=39M@0x0 rmem=25M@0x2700000",
                 "mem=42M@0x0 rmem=22M@0x2a00000",
+                "mem=39M@0x0 rmem=25M@0x2700000",
             )
         if ipv6_disabled:
             command_line = command_line.replace(
@@ -154,13 +154,13 @@ class Stage2Tests(unittest.TestCase):
         )
         self.assertEqual(validate_stage2(payload).data_mode, "preserve")
 
-    def test_retired_42_22_schema2_is_migration_only(self) -> None:
+    def test_retired_39_25_schema2_is_migration_only(self) -> None:
         retired = self._retired_v2_payload()
-        self.assertEqual(validate_retired_stage2_v2_42_22(retired).raw, retired)
+        self.assertEqual(validate_retired_stage2_v2_39_25(retired).raw, retired)
         with self.assertRaisesRegex(ValueError, "exact final command line"):
             validate_stage2(retired)
         with self.assertRaisesRegex(ValueError, "exact final command line"):
-            validate_retired_stage2_v2_42_22(self._payload())
+            validate_retired_stage2_v2_39_25(self._payload())
 
     def test_ipv6_disabled_predecessors_are_migration_only(self) -> None:
         for old_memory in (False, True):

@@ -1,0 +1,25 @@
+{
+  "contract": "raptor-stream-profile-v1",
+  "route": "/api/v1/prudynt",
+  "domains": ["stream0", "stream1"],
+  "request": {
+    "min_streams": 1,
+    "max_streams": 2,
+    "fields": {
+      "profile": {
+        "type": "integer",
+        "enum": [0, 1, 2],
+        "labels": ["Baseline", "Main", "High"]
+      }
+    }
+  },
+  "semantics": [
+    "The operation is available only for an active H264 owner with exact encoder and ring-header readback.",
+    "Control preflights every requested stream before the first restart.",
+    "RVD performs a full stream restart and requires the recreated encoder and ring profile_idc to agree.",
+    "Control saves once and requires independent disk and final live agreement for every requested stream.",
+    "Any failure after the first restart attempt is partial_apply and requires reload before explicit retry.",
+    "A failed restart or post-restart readback remains recovery_required until full RVD bootstrap."
+  ],
+  "evidence_limit": "SDK configuration and owner readback; no emitted bitstream or decoder interoperability claim"
+}

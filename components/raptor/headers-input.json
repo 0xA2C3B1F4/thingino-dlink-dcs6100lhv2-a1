@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "url": "https://github.com/gtxaspec/ingenic-headers.git",
+  "base": "f573958ebe2a851a6ba0493288b47bc0122daf36",
+  "base_tree": "cdc342f404af4cec5d078b6a1d7bfc88d32e90c9",
+  "tree": "cdc342f404af4cec5d078b6a1d7bfc88d32e90c9",
+  "patches": [],
+  "notice": "README.md",
+  "notice_sha256": "236883ff1d99ad12ad83c64e70a3a332859e330a2c9b510035d80e50f7ab523e",
+  "license_status": "unspecified",
+  "redistribution": "not-authorized-by-this-repository"
+}

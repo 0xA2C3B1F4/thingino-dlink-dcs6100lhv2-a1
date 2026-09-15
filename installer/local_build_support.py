@@ -24,7 +24,7 @@ def _project_root() -> Path:
         root / "scripts/run_macos_thingino_build.sh",
         root / "scripts/run_macos_split_kernel_build.sh",
         root / "scripts/run_macos_collector_kernel_build.sh",
-        root / "components/raptor-rwd/build_persistent.py",
+        root / "components/raptor/S96raptor",
     )
     if not all(path.is_file() and not path.is_symlink() for path in required):
         raise LocalBuildRunError("project local-build implementation is incomplete")

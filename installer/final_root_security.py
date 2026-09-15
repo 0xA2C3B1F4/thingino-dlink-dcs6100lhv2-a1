@@ -341,7 +341,7 @@ def _configure_control(facade: object, document: dict[str, object], credential: 
     port = control.get("port", 1998)
     if isinstance(port, bool) or not isinstance(port, int) or port != 1998:
         raise FinalRootError("Thingino Control port is not the pinned loopback port")
-    control["backend"] = "prudynt"
+    control["backend"] = "raptor"
     control["listen"] = "127.0.0.1"
     control["port"] = 1998
     control["token"] = hashlib.sha256(

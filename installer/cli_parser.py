@@ -440,4 +440,23 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
     from .cli_parser_stock_recovery import register_stock_recovery_commands
 
     register_stock_recovery_commands(facade, commands)
+    if not getattr(facade, "LEGACY_INSTALLER_AVAILABLE", False):
+        legacy_commands = {
+            "build-personal-mtd3",
+            "install-personal-mtd3",
+            "reconcile-camera-state",
+            "activate-personal-mtd3",
+            "complete-personal-install",
+            "create-private-install-config",
+            "seal-private-install-config",
+            "prepare-final-root",
+            "create-legacy-migration-profile",
+        }
+        for name in legacy_commands:
+            commands.choices.pop(name, None)
+        commands._choices_actions[:] = [
+            action
+            for action in commands._choices_actions
+            if action.dest not in legacy_commands
+        ]
     return parser

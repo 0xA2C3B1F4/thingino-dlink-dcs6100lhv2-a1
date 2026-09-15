@@ -272,6 +272,15 @@ def stage_camera_bound_universal_install(
         or staged_stage2.read_bytes() != validated.stage2.raw
     )
     authorization = validated.authorization
+    checkpoint = root / media.RECOVERY_CHECKPOINT_FILENAME
+    checkpoint_sidecar = root / ("._" + checkpoint.name)
+    if checkpoint.exists() or checkpoint.is_symlink() or checkpoint_sidecar.exists():
+        media._validate_recovery_checkpoint(
+            root,
+            validated.stage2.raw,
+            authorization_bytes=authorization.binary,
+            provisioning_bytes=validated.provisioning_data,
+        )
     payloads = {
         PROVISIONING_CARD_NAME: validated.provisioning_data,
         AUTHORIZATION_CARD_NAME: authorization.raw_manifest,

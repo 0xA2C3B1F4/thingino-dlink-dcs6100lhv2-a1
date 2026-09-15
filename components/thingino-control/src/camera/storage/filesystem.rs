@@ -2,33 +2,6 @@
 
 use super::*;
 
-pub(in crate::camera) fn mounted_writable(proc_mounts: &Path, mount: &Path) -> bool {
-    let Ok(bytes) = read_bounded(proc_mounts, FILE_LIMIT) else {
-        return false;
-    };
-    let mount = mount.to_string_lossy();
-    String::from_utf8_lossy(&bytes).lines().any(|line| {
-        let fields = line.split_ascii_whitespace().collect::<Vec<_>>();
-        fields.len() >= 4 && fields[1] == mount && fields[3].split(',').any(|option| option == "rw")
-    })
-}
-
-pub(in crate::camera) fn storage_mounts(path: &Path) -> Vec<Value> {
-    let Some(text) = read_text_value(path, FILE_LIMIT) else {
-        return Vec::new();
-    };
-    text.lines()
-        .filter_map(|line| {
-            let mut fields = line.split_ascii_whitespace();
-            fields.next()?;
-            let mount = fields.next()?;
-            let filesystem = fields.next()?;
-            matches!(filesystem, "vfat" | "exfat" | "nfs" | "nfs4" | "cifs")
-                .then(|| Value::String(mount.replace("\\040", " ")))
-        })
-        .collect()
-}
-
 #[derive(Default)]
 pub(in crate::camera) struct FilesystemStats {
     pub(in crate::camera) total: u64,
@@ -76,7 +49,7 @@ pub(in crate::camera) fn filesystem_stats(_path: &Path) -> Option<FilesystemStat
     None
 }
 
-impl PrudyntBackend {
+impl HostBackend {
     pub(in crate::camera) fn overlay(&self) -> Result<BackendResponse, BackendError> {
         let stats = filesystem_stats(&self.paths.overlay).unwrap_or_default();
         let percent = stats

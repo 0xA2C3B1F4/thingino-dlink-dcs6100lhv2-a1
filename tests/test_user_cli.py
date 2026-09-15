@@ -19,6 +19,34 @@ from installer import (
 
 
 class UserCliTests(unittest.TestCase):
+    _LEGACY_TESTS = {
+        "test_workflow_preflight_parser_accepts_collector_build",
+        "test_parser_facade_preserves_help_and_dispatch_identity",
+        "test_global_options_work_before_or_after_command",
+        "test_guided_install_accepts_only_one_explicit_recovery_class",
+        "test_local_build_configure_parser_has_no_secret_arguments",
+        "test_local_build_configure_validates_paths_before_reading_wifi",
+        "test_local_build_build_parser_keeps_secrets_in_files",
+        "test_local_build_build_reports_migration_error",
+        "test_local_install_set_stager_binds_data_mode_and_physical_device",
+        "test_failed_complete_backup_gate_prevents_media_and_live_install_actions",
+        "test_json_argument_error_uses_the_stable_document",
+        "test_status_is_read_only_and_reports_separate_write_history",
+        "test_install_wraps_existing_orchestration_and_reports_no_rewrite",
+        "test_failed_install_reports_completed_current_mtd3_write",
+        "test_prepare_card_exact_rerun_does_not_rewrite_files",
+        "test_media_verification_is_separate_and_requires_management_first",
+        "test_invalid_runtime_candidate_is_rejected_before_camera_observation",
+        "test_unconfigured_status_has_the_full_stable_status_shape",
+    }
+
+    def setUp(self) -> None:
+        if (
+            not user_cli.LEGACY_INSTALLER_AVAILABLE
+            and self._testMethodName in self._LEGACY_TESTS
+        ):
+            self.skipTest("legacy personal installer is not exported")
+
     def test_guided_cli_inspects_vendor_bundle_with_shared_loader(self) -> None:
         parser = user_cli.build_parser()
         arguments = parser.parse_args(
@@ -293,16 +321,14 @@ class UserCliTests(unittest.TestCase):
                 "build-universal",
                 "--vendor-bundle-dir",
                 "vendor",
-                "--media-closure-dir",
-                "media",
-                "--raptor-rwd-artifact",
-                "raptor.tar",
                 "--signing-key",
                 "release.pem",
             ]
         )
         self.assertEqual(model.local_build_command, "build-universal")
         self.assertFalse(hasattr(model, "private_config_dir"))
+        self.assertFalse(hasattr(model, "media_closure_dir"))
+        self.assertFalse(hasattr(model, "raptor_rwd_artifact"))
         provision = parser.parse_args(
             [
                 "universal",
@@ -344,11 +370,58 @@ class UserCliTests(unittest.TestCase):
                 "vendor",
             ]
         )
-        self.assertIsNone(arguments.media_closure_dir)
-        self.assertIsNone(arguments.raptor_rwd_artifact)
         self.assertIsNone(arguments.signing_key)
+        self.assertEqual(arguments.data_mode, "initialize")
         self.assertEqual(arguments.build_count, 1)
+        self.assertFalse(hasattr(arguments, "media_closure_dir"))
+        self.assertFalse(hasattr(arguments, "raptor_rwd_artifact"))
+        self.assertFalse(hasattr(arguments, "webrtc"))
         self.assertIs(arguments.handler, user_cli._local_build_build_universal)
+
+    def test_universal_build_and_authorization_accept_preserve(self) -> None:
+        build_arguments = user_cli.build_parser().parse_args(
+            [
+                "local-build", "build-universal", "--vendor-bundle-dir", "vendor",
+                "--data-mode", "preserve",
+            ]
+        )
+        self.assertEqual(build_arguments.data_mode, "preserve")
+
+        authorization = user_cli.build_parser().parse_args(
+            [
+                "universal", "authorize",
+                "--functional-recovery-dir", "functional",
+                "--preserved-readback-dir", "preserved",
+                "--universal-bundle", "firmware.tgb",
+                "--universal-public-key", "model.pub",
+                "--provisioning", "provisioning.zip",
+                "--provisioning-data", "data.jffs2",
+                "--provisioning-public-key", "camera.pub",
+                "--session-dir", "session",
+                "--signing-key", "camera.pem",
+                "--output-dir", "authorization",
+                "--data-action", "preserve",
+            ]
+        )
+        self.assertEqual(authorization.data_action, "preserve")
+
+    def test_universal_build_help_exposes_only_the_full_raptor_contract(self) -> None:
+        parser = user_cli.build_parser()
+        local_build = next(
+            action for action in parser._actions
+            if isinstance(action, user_cli.argparse._SubParsersAction)
+        ).choices["local-build"]
+        build_universal = next(
+            action for action in local_build._actions
+            if isinstance(action, user_cli.argparse._SubParsersAction)
+        ).choices["build-universal"]
+        help_text = build_universal.format_help()
+        self.assertIn("Build and inspect model-universal artifacts", help_text)
+        self.assertIn("--vendor-bundle-dir", help_text)
+        self.assertNotIn("media closure", help_text)
+        self.assertNotIn("RWD", help_text)
+        self.assertNotIn("--webrtc", help_text)
+        self.assertNotIn("--raptor-rwd-artifact", help_text)
 
     def test_universal_build_generates_a_stable_default_model_signer(self) -> None:
         root = Path("/external/build")
@@ -356,8 +429,6 @@ class UserCliTests(unittest.TestCase):
             build_root=root,
             work_dir=Path("/state"),
             vendor_bundle_dir=Path("/camera/vendor"),
-            media_closure_dir=None,
-            raptor_rwd_artifact=None,
             signing_key=None,
             signing_public_key=None,
         )
@@ -383,9 +454,12 @@ class UserCliTests(unittest.TestCase):
             Path("/external/build-private/model-signing/release-ed25519.pem"),
             None,
         )
-        self.assertIsNone(build.call_args.kwargs["media_closure_dir"])
-        self.assertIsNone(build.call_args.kwargs["raptor_rwd_artifact"])
+        self.assertNotIn("media_closure_dir", build.call_args.kwargs)
+        self.assertNotIn("raptor_rwd_artifact", build.call_args.kwargs)
+        self.assertEqual(build.call_args.kwargs["data_mode"], "initialize")
         self.assertEqual(build.call_args.kwargs["build_count"], 1)
+        self.assertNotIn("webrtc", build.call_args.kwargs)
+        self.assertTrue(callable(build.call_args.kwargs["progress"]))
         self.assertEqual(result["result"]["model_signing"], keypair)
         self.assertEqual(
             result["next_command"], "thingino-dlink universal init-session"
@@ -748,14 +822,21 @@ class UserCliTests(unittest.TestCase):
         with mock.patch("installer.recovery_ap.session.ensure_uartless_station_host_pin", return_value=True
         ) as ensure_pin, mock.patch("installer.recovery_ap.host.prove_thingino_health", return_value=health
         ) as prove, mock.patch("installer.camera_setup.session_fingerprint", return_value="a" * 64), \
-             mock.patch("installer.recovery_ap.session._read_private", return_value=b"host-key"):
+             mock.patch("installer.recovery_ap.session._read_private", return_value=b"host-key"), \
+             mock.patch("installer.recovery_ap.host.prove_thingino_application", return_value={
+                 "application_gate": "passed"
+             }) as application:
             result = user_cli._universal_verify(parsed)
-        self.assertEqual(ensure_pin.call_count, 2)
+        self.assertEqual(ensure_pin.call_count, 3)
         ensure_pin.assert_called_with(
             session_dir=Path("/private/session"),
             dropbearkey=Path("/usr/bin/true"),
         )
         prove.assert_called_once_with(session_dir=Path("/private/session"))
+        application.assert_called_once_with(
+            session_dir=Path("/private/session"), station_ipv4="198.51.100.23"
+        )
+        self.assertEqual(result["result"]["application_gate"], "passed")
         self.assertEqual(
             result["phase"], "camera-bound-universal-management-verified"
         )
@@ -852,7 +933,6 @@ class UserCliTests(unittest.TestCase):
             vendor_bundle_dir=Path("/private/vendor"),
             media_closure_dir=Path("/private/media"),
             session_dir=Path("/private/session"),
-            raptor_rwd_artifact=Path("/private/raptor-rwd.tar.gz"),
             data_mode="initialize",
             secrets_fd=None,
         )
@@ -895,8 +975,6 @@ class UserCliTests(unittest.TestCase):
                 "/private/current-wpa.conf",
                 "--session-dir",
                 "/private/session",
-                "--raptor-rwd-artifact",
-                "/private/raptor-rwd.tar.gz",
             ]
         )
         self.assertIsNone(arguments.build_root)
@@ -906,47 +984,21 @@ class UserCliTests(unittest.TestCase):
         self.assertFalse(hasattr(arguments, "token"))
         self.assertIs(arguments.handler, user_cli._local_build_build)
 
-    def test_local_build_build_uses_configure_recorded_settings(self) -> None:
-        root = Path("/external/build")
-        settings = {
-            "build_root": str(root),
-            "data_mode": "preserve",
-            "expected_wpa_config": "/private/expected-wpa.conf",
-            "media_closure_dir": "/private/media",
-            "private_config_dir": "/private/config",
-            "raptor_rwd_artifact": "/private/raptor-rwd.tar.gz",
-            "session_dir": "/private/session",
-            "vendor_bundle_dir": "/private/vendor",
-        }
-        arguments = SimpleNamespace(
-            build_root=root,
-            work_dir=Path("/state"),
-            settings=None,
-            vendor_bundle_dir=None,
-            media_closure_dir=None,
-            private_config_dir=None,
-            expected_wpa_config=None,
-            session_dir=None,
-            raptor_rwd_artifact=None,
-            data_mode=None,
+    def test_local_build_build_reports_migration_error(self) -> None:
+        arguments = user_cli.build_parser().parse_args(
+            ["local-build", "build", "--settings", "/private/settings.json"]
         )
         with (
-            mock.patch.object(user_cli, "resolve_local_build_workspace", return_value=root),
-            mock.patch.object(user_cli, "load_local_build_settings", return_value=settings),
-            mock.patch.object(
-                user_cli,
-                "build_local_install_set",
-                return_value={"install_set_dir": "/private/result"},
-            ) as build,
+            mock.patch.object(user_cli, "load_local_build_settings") as load,
+            mock.patch.object(user_cli, "build_local_install_set") as build,
         ):
-            result = user_cli._local_build_build(arguments)
-        self.assertEqual(result["phase"], "local-build-install-set-inspected")
-        self.assertEqual(build.call_args.kwargs["build_count"], 1)
-        self.assertEqual(build.call_args.kwargs["data_mode"], "preserve")
-        self.assertEqual(
-            build.call_args.kwargs["expected_wpa_config_path"],
-            Path("/private/expected-wpa.conf"),
-        )
+            with self.assertRaisesRegex(
+                user_cli.UserInstallerError,
+                "local-build build is retired; use local-build build-universal",
+            ):
+                arguments.handler(arguments)
+        load.assert_not_called()
+        build.assert_not_called()
 
     def test_local_install_set_stager_binds_data_mode_and_physical_device(self) -> None:
         with tempfile.TemporaryDirectory() as name:

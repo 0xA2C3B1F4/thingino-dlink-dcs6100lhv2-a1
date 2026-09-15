@@ -18,20 +18,16 @@ from .final_root import (
     _configure_control,
     _configure_ha_live_image,
     _configure_key_only_ssh,
-    _configure_prudynt_http_ingress,
-    _configure_prudynt_jpeg_idle,
-    _configure_prudynt_viewer_credential,
-    _configure_prudynt_media,
     _extract_base_root,
     _materialize_wpa_runtime_policy,
     _patch_json,
-    _require_section,
     _run,
     _validate_universal_tree,
     _write_private,
 )
 from .mtd3_split import DATA_FLASH_SPAN
 from .private_config import derive_rtsp_viewer_credential
+from . import raptor_provisioning
 from .sd_package import atomic_write
 
 
@@ -55,7 +51,7 @@ class ProvisioningDataImage:
         return hashlib.sha256(self.raw).hexdigest()
 
 
-PROVISIONING_ENABLED_INIT = ("etc/init.d/S96rwd",)
+PROVISIONING_ENABLED_INIT = (raptor_provisioning.SERVICE,)
 
 _RUNTIME_PATHS = (
     "etc/dlink-media-closure.private.json",
@@ -63,7 +59,6 @@ _RUNTIME_PATHS = (
     "etc/dropbear/dropbear_ed25519_host_key",
     "etc/hostname",
     "etc/onvif.json",
-    "etc/prudynt.json",
     "etc/shadow",
     "etc/thingino-api.key",
     "etc/thingino.json",
@@ -72,6 +67,12 @@ _RUNTIME_PATHS = (
     *UNIVERSAL_DISABLED_INIT,
     *PROVISIONING_ENABLED_INIT,
 )
+
+
+def _runtime_paths(root: Path) -> tuple[str, ...]:
+    if not (root / raptor_provisioning.SERVICE).is_file():
+        raise ProvisioningDataError("universal root lacks the Raptor provisioning service")
+    return _RUNTIME_PATHS + raptor_provisioning.CONFIGS
 
 
 def _copy_runtime_path(source_root: Path, overlay_root: Path, relative: str) -> None:
@@ -193,39 +194,13 @@ def _patch_runtime(
         _configure_control(document, credential)
         _configure_ha_live_image(document)
 
-    def patch_prudynt(document: dict[str, object]) -> None:
-        _configure_prudynt_media(document)
-        _configure_prudynt_viewer_credential(document, rtsp_password)
-        _configure_prudynt_jpeg_idle(document)
-        _configure_prudynt_http_ingress(document)
-        _require_section(document, "rtsp")
-
     _patch_json(root / "etc/onvif.json", patch_onvif)
     _patch_json(root / "etc/thingino.json", patch_thingino)
-    _patch_json(root / "etc/prudynt.json", patch_prudynt)
     _write_private(root / "etc/thingino-api.key", api_key)
 
-    runtime_config = (root / "etc/prudynt.json").read_bytes()
-    runtime_sha256 = hashlib.sha256(runtime_config).hexdigest()
-    media_path = root / "etc/dlink-media-closure.private.json"
-    try:
-        media = json.loads(media_path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise ProvisioningDataError("universal media provenance is invalid") from exc
-    entries = [
-        entry
-        for entry in media.get("files", [])
-        if isinstance(entry, dict) and entry.get("path") == "etc/prudynt.json"
-    ]
-    if len(entries) != 1:
-        raise ProvisioningDataError("universal media provenance lacks Prudynt config")
-    media["runtime_config_sha256"] = runtime_sha256
-    entries[0]["sha256"] = runtime_sha256
-    entries[0]["size"] = len(runtime_config)
-    _write_private(
-        media_path,
-        (json.dumps(media, indent=2, sort_keys=True) + "\n").encode("utf-8"),
-    )
+    if not (root / raptor_provisioning.SERVICE).is_file():
+        raise ProvisioningDataError("universal root lacks the Raptor provisioning service")
+    raptor_provisioning.provision_runtime(root, rtsp_password)
     _write_private(
         root / "etc/dcs6100-personal-image.json",
         (
@@ -329,7 +304,7 @@ def build_provisioning_data_image(
         # upperdir/workdir pair.
         upper = overlay
         upper.mkdir(parents=True, mode=0o755)
-        for relative in _RUNTIME_PATHS:
+        for relative in _runtime_paths(extracted):
             if (
                 relative in PROVISIONING_ENABLED_INIT
                 and not (extracted / relative).exists()

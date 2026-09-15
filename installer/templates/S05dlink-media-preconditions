@@ -2,9 +2,7 @@
 set -eu
 
 start() {
-	# The recovery supervisor enters this root through rcS, not inittab/rcF.
-	# Recreate the two normal Thingino prerequisites before S06/S10/S11/S31.
-	# A same-boot retry must not accept a marker or pidfile from an exited process.
+	# Clear stale owner markers before the composed Raptor service starts.
 	rm -f /run/prudynt-dlink-media.ready /run/prudynt.pid
 	/etc/init.d/F01datetime start
 
@@ -14,8 +12,7 @@ start() {
 	fi
 	chmod 1777 /dev/shm
 
-	# The recovery supervisor has just read and mounted the personal SquashFS.
-	# Release its clean cache pages before the T31 media modules request
+	# Release clean cache pages before the T31 media modules request
 	# contiguous order-6 and order-5 allocations.
 	sync
 	echo 3 >/proc/sys/vm/drop_caches
@@ -26,3 +23,4 @@ case "${1:-}" in
 	stop) true ;;
 	*) exit 1 ;;
 esac
+

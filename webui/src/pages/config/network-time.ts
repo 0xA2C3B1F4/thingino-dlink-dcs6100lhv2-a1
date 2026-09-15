@@ -41,7 +41,8 @@ export function resolveTimezoneSearch(query: unknown, options: unknown): string 
 export const network: ConfigFormSpec = {
   eyebrow: "Settings / network",
   title: "Network settings",
-  description: "Local addresses, wireless credentials and interface policy. Saving may interrupt this browser connection.",
+  description: "Saved wireless credentials, addressing and hostname. Restart the camera to apply changes to the running network. Check the new connection details before restarting.",
+  successMessage: () => "Settings saved. Restart the camera to apply Wi-Fi, addressing and hostname changes. The current connection has not been reconfigured.",
   endpoint: routes.config.network,
   decode: decodeNetwork,
   groupSections: true,
@@ -87,7 +88,21 @@ export const time: ConfigFormSpec = {
   title: "Time and timezone",
   description: "Choose the camera timezone. The local clock is read back after every load and save so the change is visible without a reboot.",
   endpoint: routes.config.time,
-  decode: decodeTime,
+  decode: (value) => {
+    const decoded = decodeTime(value);
+    if (decoded.source === "raptor") {
+      if (typeof decoded.timezone_reload_supported !== "boolean" || typeof decoded.timezone_applied !== "boolean" || (decoded.timezone_applied && !decoded.timezone_reload_supported)) throw new TypeError("Timezone apply state is inconsistent.");
+      const applyStatus = !decoded.timezone_reload_supported
+        ? "A required media service could not be verified. Timezone changes are unavailable."
+        : decoded.timezone_applied ? "Applied to required services" : "Not confirmed; reload and retry saving";
+      return { ...decoded, time_control: decoded.timezone_reload_supported, raptor_time: true, timezone_apply_status: applyStatus };
+    }
+    return { ...decoded, time_control: true, raptor_time: false };
+  },
+  save: async (client, value, loaded) => {
+    const reply = await client.postJson<unknown>(routes.config.time, value);
+    if (loaded.source === "raptor" && (typeof reply !== "object" || reply === null || !("persistent" in reply) || reply.persistent !== true || !("applied" in reply) || reply.applied !== true)) throw new TypeError("Raptor timezone application was not confirmed. Reload and retry saving.");
+  },
   groupSections: true,
   loadTransform: loadTimeConfig,
   fields: [
@@ -104,6 +119,7 @@ export const time: ConfigFormSpec = {
       },
       { ...text("current_local_time", "Camera local time", true), readOnly: true, description: "Read-only time reported by the camera after the last load." },
     ]),
+    { ...text("timezone_apply_status", "Timezone application"), readOnly: true, visibleWhen: { path: "raptor_time", equals: true } },
     ...section("Advanced", [
       bool("dhcp_ignore_timezone", "Ignore DHCP timezone"),
       text("ntp_server_0", "NTP server 1"),
@@ -118,6 +134,10 @@ export const time: ConfigFormSpec = {
     return servers.some((server) => typeof server === "string" && server.trim()) ? undefined : "Configure at least one NTP server.";
   },
 };
+
+for (const field of time.fields) {
+  if (!field.readOnly) field.enabledWhen = { path: "time_control", equals: true };
+}
 
 /**
  * Build the canonical time mutation from the visible form model.  The
@@ -135,6 +155,8 @@ export function buildTimeUpdate(value: JsonObject): JsonObject {
   delete next.sync_status_raw_base64;
   delete next.tz_name;
   delete next.tz_data;
+  if (next.source === "raptor" && next.time_control !== true) throw new TypeError("Timezone reload is unavailable.");
+  for (const key of ["source", "time_control", "raptor_time", "timezone_reload_supported", "timezone_applied", "timezone_apply_status"]) delete next[key];
   if (!timezone) throw new TypeError("Choose one supported timezone from the suggestions.");
   next.timezone = timezone;
   return { ...next, action: "update" };
@@ -175,22 +197,39 @@ export function loadTimeConfig(value: JsonObject): JsonObject {
   return next;
 }
 
-export function addTimeSync(client: ApiClient, rendered: { node: HTMLElement }): void {
+export function addTimeSync(client: ApiClient, rendered: { node: HTMLElement }): () => void {
   const sync = button("Sync time now", "button secondary");
   rendered.node.querySelector(".form-actions")?.prepend(sync);
   const message = rendered.node.querySelector<HTMLElement>(".message")!;
+  const clock = rendered.node.querySelector<HTMLInputElement>('[name="current_local_time"]')!;
+  let cancelled = false;
   sync.addEventListener("click", async () => {
+    if (cancelled || sync.disabled) return;
     sync.disabled = true;
     setMessage(message, "Synchronizing time…");
+    let synchronized = false;
     try {
       await client.empty(routes.actions.syncTime, { method: "POST" });
+      synchronized = true;
+      if (cancelled) return;
+      const observed = decodeTime(await client.json<unknown>(routes.config.time));
+      if (cancelled) return;
+      // Refresh only the observed clock. A full form reload would discard drafts.
+      clock.value = cameraLocalTime(observed);
       setMessage(message, "Time synchronized.", "success");
     } catch (error) {
-      setMessage(message, error instanceof Error ? error.message : "Time synchronization failed.", "error");
+      if (cancelled) return;
+      if (synchronized) {
+        clock.value = "";
+        setMessage(message, "Time synchronized, but the camera clock could not be read back. Reload to check the time.", "error");
+      } else {
+        setMessage(message, error instanceof Error ? error.message : "Time synchronization failed.", "error");
+      }
     } finally {
-      sync.disabled = false;
+      if (!cancelled) sync.disabled = false;
     }
   });
+  return () => { cancelled = true; };
 }
 
 export function addWifiScan(client: ApiClient, rendered: { node: HTMLElement }): void {

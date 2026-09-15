@@ -95,12 +95,16 @@ test -z "$(grep -RIlE '/x/[^[:space:]]*\.cgi|agent\.cgi|thingino[-_ ]agent|/bin/
 
 install -d -o builder -g builder "$output_dir"
 common_env="HOME=/home/builder LC_ALL=C.UTF-8 LANG=C.UTF-8 TZ=UTC SOURCE_DATE_EPOCH=$source_epoch THINGINO_CONTAINER_BUILD=1 CAMERA=$profile PRISTINE=1 CCACHE_DISABLE=1 BR2_DL_DIR=$source_dir/dl THINGINO_OUTPUT_DIR=$output_dir DCS6100_VENDOR_BUNDLE_DIR=$vendor_site DCS6100_AUDIOPROCESS_LINK_FILE=$audio_link DCS6100_RUST_TOOLCHAIN_DIR=$rust_toolchain DCS6100_RUST_SOURCE_DIR=$rust_source DCS6100_INGENIC_TOOLCHAIN_DIR=$ingenic_toolchain WORKFLOW=1"
+media_fragment=$source_dir/configs/cameras-exp/$profile/raptor-support.fragment
+test -f "$media_fragment"
+test ! -L "$media_fragment"
+set -- "THINGINO_USER_FRAGMENT_FILES=$media_fragment"
 
 test ! -f "$output_dir/.config" || unlink "$output_dir/.config"
 runuser -u builder -- env $common_env \
-	make -C "$source_dir" CAMERA="$profile" GROUP=exp defconfig
+	make -C "$source_dir" CAMERA="$profile" GROUP=exp "$@" defconfig
 runuser -u builder -- env $common_env \
-	make -C "$source_dir" CAMERA="$profile" GROUP=exp \
+	make -C "$source_dir" CAMERA="$profile" GROUP=exp "$@" \
 		build
 if grep -R -Fq 'error while loading shared libraries:' "$output_dir/logs" 2>/dev/null; then
 	echo "Buildroot host tool failed to load a shared library" >&2
@@ -122,30 +126,25 @@ test -f "$iq"
 test -s "$timezone_catalog"
 grep -Fq '"n":"Europe/Helsinki","v":"EET-2EEST,M3.5.0/3,M10.5.0/4"' \
 	"$timezone_catalog"
-prudynt_package=$output_dir/per-package/prudynt-t/target/usr/bin/prudynt
-prudynt_merged=$output_dir/target/usr/bin/prudynt
-prudynt_normalized=$output_dir/build/.dlink-prudynt-final-gate
-test -x "$prudynt_merged"
-test -x "$prudynt_package"
-rm -f "$prudynt_normalized"
-trap 'rm -f "$prudynt_normalized"' EXIT HUP INT TERM
-"$output_dir/per-package/prudynt-t/host/bin/mipsel-linux-objcopy" \
-	--remove-section=.comment "$prudynt_package" "$prudynt_normalized"
-cmp "$prudynt_normalized" "$prudynt_merged"
-rm -f "$prudynt_normalized"
-trap - EXIT HUP INT TERM
-grep -aFq '/snapshot' "$output_dir/target/usr/bin/prudynt"
-grep -aFq 'loopback ingress required' "$output_dir/target/usr/bin/prudynt"
-grep -aFq 'per-request JPEG quality and size are unsupported' \
-	"$output_dir/target/usr/bin/prudynt"
-grep -aFq 'http.loopback_only' "$output_dir/target/usr/bin/prudynt"
-grep -aFq '127.0.0.1:' "$output_dir/target/usr/bin/prudynt"
-grep -aFq 'D-Link media restart: replacing process without SDK teardown' \
-	"$output_dir/target/usr/bin/prudynt"
-grep -aFq '/etc/TZ' "$output_dir/target/usr/bin/prudynt"
-grep -aFq 'HTTPMJPEG: pthread_create failed' \
-	"$output_dir/target/usr/bin/prudynt"
-grep -Fq '"loopback_only"' "$output_dir/target/etc/prudynt.json"
+grep -Fxq 'BR2_PACKAGE_THINGINO_STREAMER_NONE=y' "$output_dir/.config"
+if grep -Eq '^BR2_PACKAGE_.*PRUDYNT.*=y$' "$output_dir/.config"; then
+	echo "full Raptor base selected Prudynt" >&2
+	exit 1
+fi
+if grep -Fxq 'BR2_THINGINO_LIBSTDCPP=y' "$output_dir/.config"; then
+	echo "full Raptor base selected the unused C++ runtime" >&2
+	exit 1
+fi
+for library in "$output_dir"/target/lib/libstdc++.so* "$output_dir"/target/usr/lib/libstdc++.so*; do
+	test ! -e "$library"
+	test ! -L "$library"
+done
+for relative in usr/bin/prudynt usr/bin/prudyntctl etc/prudynt.json etc/init.d/S31prudynt; do
+	test ! -e "$output_dir/target/$relative"
+	test ! -L "$output_dir/target/$relative"
+done
+test ! -e "$output_dir/per-package/prudynt-t"
+test -z "$(find "$output_dir/build" -maxdepth 1 -name 'prudynt-t-*' -print -quit)"
 test -x "$output_dir/target/usr/sbin/wpa_supplicant"
 test -x "$output_dir/target/usr/sbin/dropbear"
 test -x "$output_dir/target/usr/sbin/mdnsd"
@@ -159,17 +158,10 @@ printf '%s  %s\n' \
 	d8da684a19b1eac7b5f69844495cfd1c4d04f28db792b9eb605b6deb3978f271 "$output_dir/target/usr/lib/mdev/automount" \
 	| sha256sum -c -
 test -x "$output_dir/target/etc/init.d/S06ircut"
-test -x "$output_dir/target/etc/init.d/S31prudynt"
-printf '%s  %s\n' \
-	52c5b61705da5b750f9286265510a563fbc780d3cf86d51dd82df1197fcc988b "$output_dir/target/etc/init.d/S31prudynt" \
-	| sha256sum -c -
-grep -Fq 'IFS= read -r TZ_VALUE < /etc/TZ' \
-	"$output_dir/target/etc/init.d/S31prudynt"
 test "$(grep -c 'usleep 100000' "$output_dir/target/etc/init.d/S06ircut")" -eq 2
 grep -Fq 'rm -f /run/transfer.bin /run/transfer.footer' \
 	"$output_dir/target/etc/init.d/S06ircut"
 test -z "$(grep -E '\bircut (on|off)\b' "$output_dir/target/etc/init.d/S06ircut" || true)"
-test -z "$(grep -E 'curl|thingino-api\.key|API_URL' "$output_dir/target/etc/init.d/S31prudynt" || true)"
 test -x "$output_dir/target/usr/bin/uhttpd"
 test -x "$output_dir/target/usr/sbin/onvif-httpd"
 test -x "$output_dir/target/etc/init.d/S94onvif-httpd"

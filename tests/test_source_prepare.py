@@ -52,6 +52,14 @@ def digest(raw: bytes) -> str:
 
 
 class SourceProfileTests(unittest.TestCase):
+    def test_raptor_motion_workers_use_mips32_supported_atomics(self) -> None:
+        for name in ("motion_email.rs", "motion_ftp.rs", "motion_gotify.rs", "motion_ntfy.rs", "motion_telegram.rs", "motion_webhook.rs"):
+            source = (
+                ROOT / "components/thingino-control/src/raptor_backend" / name
+            ).read_text(encoding="utf-8")
+            self.assertNotIn("AtomicU64", source, name)
+            self.assertIn("AtomicU32", source, name)
+
     def test_project_patches_are_raw_diffs(self) -> None:
         for patch_path in sorted((ROOT / "patches").rglob("*.patch")):
             text = patch_path.read_text(encoding="utf-8")
@@ -127,6 +135,7 @@ class SourceProfileTests(unittest.TestCase):
                 "0014-allow-prometheus-control-responses.patch",
                 "0015-require-authenticated-tls-ingress.patch",
                 "0016-buffer-request-before-backend.patch",
+                "0017-bind-recording-file-identity.patch",
             ):
                 patch_text = (
                     ROOT / "patches" / "uhttpd" / patch_name
@@ -212,10 +221,27 @@ class SourceProfileTests(unittest.TestCase):
         profile = PREP.load_profile()
         self.assertEqual(profile["model"], "DCS-6100LHV2")
         self.assertEqual(profile["hardware_revision"], "A1")
-        self.assertEqual(len(profile["thingino_patches"]), 21)
-        self.assertEqual(len(profile["installed_files"]), 188)
+        self.assertEqual(len(profile["thingino_patches"]), 19)
+        self.assertEqual(len(profile["installed_files"]), 163)
         installed_sources = {entry["source"] for entry in profile["installed_files"]}
         self.assertTrue({
+            "components/thingino-control/src/raptor.rs",
+            "components/thingino-control/src/raptor_backend.rs",
+            "components/thingino-control/src/raptor_backend/access.rs",
+            "components/thingino-control/src/raptor_backend/imaging.rs",
+            "components/thingino-control/src/raptor_backend/motion.rs",
+            "components/thingino-control/src/raptor_backend/motion_actions.rs",
+            "components/thingino-control/src/raptor_backend/motion_lifecycle.rs",
+            "components/thingino-control/src/raptor_backend/motion_gotify.rs",
+            "components/thingino-control/src/raptor_backend/motion_email.rs",
+            "components/thingino-control/src/raptor_backend/motion_email_tests.rs",
+            "components/thingino-control/src/raptor_backend/motion_ftp.rs",
+            "components/thingino-control/src/raptor_backend/motion_ftp_tests.rs",
+            "components/thingino-control/src/raptor_backend/motion_ntfy.rs",
+            "components/thingino-control/src/raptor_backend/motion_roi.rs",
+            "components/thingino-control/src/raptor_backend/motion_telegram.rs",
+            "components/thingino-control/src/raptor_backend/motion_webhook.rs",
+            "components/thingino-control/src/raptor_backend/privacy.rs",
             "webui/firmware-bundle.json",
             "webui/scripts/build.mjs",
             "webui/scripts/firmware-bundle.mjs",
@@ -237,13 +263,13 @@ class SourceProfileTests(unittest.TestCase):
             "collector-kernel.fragment",
         )
         self.assertEqual(
-            profile["installed_files"][3]["destination"],
+            profile["installed_files"][4]["destination"],
             "configs/cameras-exp/"
             "dlink_dcs6100lhv2_a1_t31n_os02g10_rtl8188fu/"
             "recovery-ap-kernel.fragment",
         )
         self.assertEqual(
-            profile["installed_files"][4]["destination"],
+            profile["installed_files"][5]["destination"],
             "configs/cameras-exp/"
             "dlink_dcs6100lhv2_a1_t31n_os02g10_rtl8188fu/"
             "stock-restore-kernel.fragment",
@@ -280,27 +306,18 @@ class SourceProfileTests(unittest.TestCase):
                 "package/thingino-control/rust/storage-worker/mod.rs",
                 "package/thingino-control/rust/src/camera.rs",
                 "package/thingino-control/rust/src/camera/actions.rs",
-                "package/thingino-control/rust/src/camera/api.rs",
                 "package/thingino-control/rust/src/camera/config/access.rs",
                 "package/thingino-control/rust/src/camera/config/crontab.rs",
-                "package/thingino-control/rust/src/camera/config/daynight.rs",
                 "package/thingino-control/rust/src/camera/config/domains.rs",
                 "package/thingino-control/rust/src/camera/config/gpio.rs",
-                "package/thingino-control/rust/src/camera/config/imaging.rs",
                 "package/thingino-control/rust/src/camera/config/mod.rs",
                 "package/thingino-control/rust/src/camera/config/network.rs",
-                "package/thingino-control/rust/src/camera/config/recorder.rs",
-                "package/thingino-control/rust/src/camera/config/schema.rs",
-                "package/thingino-control/rust/src/camera/config/send.rs",
                 "package/thingino-control/rust/src/camera/config/time.rs",
                 "package/thingino-control/rust/src/camera/diagnostics.rs",
-                "package/thingino-control/rust/src/camera/files.rs",
-                "package/thingino-control/rust/src/camera/maintenance.rs",
-                "package/thingino-control/rust/src/camera/motion.rs",
+                "package/thingino-control/rust/src/camera/host.rs",
                 "package/thingino-control/rust/src/camera/motion_events.rs",
                 "package/thingino-control/rust/src/camera/network.rs",
                 "package/thingino-control/rust/src/camera/platform.rs",
-                "package/thingino-control/rust/src/camera/prudynt.rs",
                 "package/thingino-control/rust/src/camera/runtime.rs",
                 "package/thingino-control/rust/src/camera/storage.rs",
                 "package/thingino-control/rust/src/json.rs",
@@ -314,46 +331,6 @@ class SourceProfileTests(unittest.TestCase):
                 "package/thingino-control/rust/src/web_auth.rs",
                 "package/thingino-control/rust/src/whip.rs",
                 "package/thingino-onvif/0001-persistent-httpd-no-request-children.patch",
-                "package/prudynt-t/0010-media-bound-JPEG-demand-and-receive-lifecycle.patch",
-                "package/prudynt-t/0011-http-keep-shared-JPEG-static-and-loopback-only.patch",
-                "package/prudynt-t/0012-media-replace-unsafe-dlink-video-restarts.patch",
-                "package/prudynt-t/0013-http-bound-mjpeg-client-threads.patch",
-                "package/prudynt-t/0014-media-keep-dlink-live-controls-in-process.patch",
-                "package/prudynt-t/0015-reload-camera-timezone.patch",
-                "package/prudynt-t/0016-scale-burnin-osd-per-stream.patch",
-                "package/prudynt-t/0017-motion-add-nonblocking-Control-observation-output.patch",
-                "package/prudynt-t/0018-motion-remove-legacy-shell-event-path.patch",
-                "package/prudynt-t/0019-motion-clear-stale-state-on-process-start.patch",
-                "package/prudynt-t/0020-config-reload-after-complete-write.patch",
-                "package/prudynt-t/0021-media-stabilize-IPC-clients-and-expose-queue-metrics.patch",
-                "package/prudynt-t/0022-recorder-require-keyframe-safe-durable-segments.patch",
-                "package/prudynt-t/0023-ipc-add-bounded-versioned-JSON-framing.patch",
-                "package/prudynt-t/0024-jpeg-recover-failed-starts-and-isolate-snapshot-files.patch",
-                "package/prudynt-t/0025-rtsp-bound-socket-and-audio-queues-by-bytes-and-elements.patch",
-                "package/prudynt-t/0026-motion-clear-active-marker-before-thread-exit.patch",
-                "package/prudynt-t/0027-jpeg-expose-per-channel-lifecycle-metrics.patch",
-                "package/prudynt-t/0028-privacy-ack-and-recorder-segment-timestamps.patch",
-                "package/prudynt-t/0029-privacy-and-recorder-failure-transactions.patch",
-                "package/prudynt-t/0030-osd-centralize-group-lifecycle.patch",
-                "package/prudynt-t/0031-video-ready-startup-barrier.patch",
-                "package/prudynt-t/0032-recorder-reject-volatile-and-root-mounts.patch",
-                "package/prudynt-t/0033-recorder-close-segments-before-process-exit.patch",
-                "package/prudynt-t/0034-dlink-disable-unsupported-defog.patch",
-                "package/prudynt-t/0035-release-error-handling-and-imp-init-rollback.patch",
-                "package/prudynt-t/0036-explicit-release-debug-logging.patch",
-                "package/prudynt-t/0037-recorder-direct-framed-ipc.patch",
-                "package/prudynt-t/0038-lifecycle-preserve-retry-safe-teardown-state.patch",
-                "package/prudynt-t/0039-recorder-include-framed-control-socket-declaration.patch",
-                "package/prudynt-t/0040-logging-use-the-declared-critical-level.patch",
-                "package/prudynt-t/0041-media-retire-ready-marker-across-process-restart.patch",
-                "package/prudynt-t/0042-motion-snapshot-config-before-ivs-restart.patch",
-                "package/prudynt-t/0043-worker-startup-and-join-ownership.patch",
-                "package/prudynt-t/0044-bound-repeated-worker-error-logs.patch",
-                "package/prudynt-t/0045-refuse-motion-init-with-stale-ivs-state.patch",
-                "package/prudynt-t/0046-jpeg-publish-and-send-complete-frames.patch",
-                "package/prudynt-t/0047-media-publish-stream0-to-raptor-ring.patch",
-                "package/prudynt-t/0048-dlink-preserve-encoder-fps-across-daynight.patch",
-                "package/prudynt-t/0049-dlink-split-privacy-cover-across-distinct-layers.patch",
                 "dcs6100-webui/src/app/fullscreen-preview.ts",
                 "package/thingino-uhttpd/0007-proxy-thingino-control.patch",
                 "package/thingino-uhttpd/0008-disable-cgi-and-proxy-onvif.patch",
@@ -365,6 +342,7 @@ class SourceProfileTests(unittest.TestCase):
                 "package/thingino-uhttpd/0014-allow-prometheus-control-responses.patch",
                 "package/thingino-uhttpd/0015-require-authenticated-tls-ingress.patch",
                 "package/thingino-uhttpd/0016-buffer-request-before-backend.patch",
+                "package/thingino-uhttpd/0017-bind-recording-file-identity.patch",
             }
             <= installed_destinations
         )
@@ -389,7 +367,6 @@ class SourceProfileTests(unittest.TestCase):
                 "package/ingenic-sdk/ingenic-sdk.mk",
                 "scripts/rootfs_script.sh",
                 "thingino.mk",
-                "package/prudynt-t/prudynt-t.mk",
                 "package/thingino-kopt/thingino-kopt.mk",
             ],
         )
@@ -399,13 +376,14 @@ class SourceProfileTests(unittest.TestCase):
             "incremental-package-",
             "DCS_DLINK_MINIMAL_PIPELINE",
             "DCS_DLINK_SKIP_HARDWARE_OSD",
+            "DCS_DLINK_ALLOW_UNSYNCED_STARTUP",
+            "DCS_DLINK_OS02G10_IQ",
+            "DCS_DLINK_MEDIA_READY",
+            "DCS_DLINK_SKIP_ISP_BYPASS",
         ):
             self.assertNotIn(forbidden, thingino)
         for required in (
             "SOURCE_DATE_EPOCH",
-            "DCS_DLINK_OS02G10_IQ",
-            "DCS_DLINK_MEDIA_READY",
-            "DCS_DLINK_SKIP_ISP_BYPASS",
             "THINGINO_MMC0_MAX_FREQ := 24000000",
         ):
             self.assertIn(required, thingino)
@@ -424,11 +402,9 @@ class SourceProfileTests(unittest.TestCase):
             [
                 "package/ingenic-lib/ingenic-lib.mk",
                 "package/ingenic-sdk/ingenic-sdk.mk",
-                "package/prudynt-t/Config.in",
-                "package/prudynt-t/prudynt-t.mk",
             ],
         )
-        self.assertIn("IMP_SDK_VERSION := 1.1.4", imp114)
+        self.assertIn("SDK_VERSION := 1.1.4", imp114)
         self.assertIn("INGENIC_SDK_MODULE_MAKE_OPTS += ISP_FW_VER=1.1.4", imp114)
 
         kernel_release = (
@@ -452,24 +428,6 @@ class SourceProfileTests(unittest.TestCase):
         self.assertIn("EXFAT_NOFUSE_LICENSE_FILES = LICENSE", exfat_source)
         self.assertNotIn("+EXFAT_NOFUSE_SITE_METHOD = git", exfat_source)
 
-        prudynt_startup = (
-            ROOT / "patches/thingino/0024-retry-prudynt-until-media-ready.patch"
-        ).read_text(encoding="utf-8")
-        for required in (
-            'READY="/run/prudynt-dlink-media.ready"',
-            'while [ "$i" -lt 150 ]',
-            'is_alive && [ "$(cat "$READY" 2>/dev/null || true)" = 1080p-started ]',
-            'while [ "$attempt" -le 3 ]',
-            'Prudynt failed to reach media-ready after 3 attempts',
-        ):
-            self.assertIn(required, prudynt_startup)
-        self.assertEqual(
-            prudynt_startup.count(
-                'start-stop-daemon -S -b -m -p "$PIDFILE" -x "$DAEMON"'
-            ),
-            2,
-        )
-
         normalized_neo = (
             ROOT / "patches/thingino/0025-normalize-neo-library-comments.patch"
         ).read_text(encoding="utf-8")
@@ -477,57 +435,6 @@ class SourceProfileTests(unittest.TestCase):
         self.assertEqual(normalized_neo.count("--remove-section=.comment"), 2)
         self.assertIn("$(TARGET_DIR)/usr/lib/libalog.so", normalized_neo)
         self.assertIn("$(TARGET_DIR)/usr/lib/libsysutils.so", normalized_neo)
-
-    def test_privacy_cover_plan_has_no_gaps_and_uses_distinct_opaque_layers(self) -> None:
-        source = (
-            ROOT / "patches/prudynt/0049-dlink-split-privacy-cover-across-distinct-layers.patch"
-        ).read_text(encoding="utf-8")
-        header_patch = source.split("+++ b/src/PrivacyCoverPlan.hpp\n", 1)[1].split(
-            "diff --git", 1
-        )[0]
-        header = "\n".join(line[1:] for line in header_patch.splitlines()
-                           if line.startswith("+"))
-        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as tmp:
-            program = Path(tmp) / "privacy.cpp"
-            program.write_text(header.replace("#pragma once", "") + r'''
-#include <cassert>
-int main() {
-  for (int height : {4, 99, 100, 101, 359, 360, 361, 540, 1079, 1080, 1081}) {
-    PrivacyCoverRegion top{}, bottom{}, single{};
-    assert(planPrivacyCoverRegion(height, 2, 0, top));
-    assert(planPrivacyCoverRegion(height, 2, 1, bottom));
-    assert(top.top == 0 && top.bottom + 1 == bottom.top);
-    assert(bottom.bottom == height - 1);
-    assert(top.layer == 6 && bottom.layer == 7);
-    assert(bottom.top == (height > 100 ? 100 : (height / 2) & ~1));
-    assert(top.scale == 1.0f && bottom.scale == 1.0f);
-    assert(top.alpha == 255 && bottom.alpha == 255);
-    assert(planPrivacyCoverRegion(height, 1, 0, single));
-    assert(single.top == 0 && single.bottom == height - 1 && single.layer == 1);
-  }
-  PrivacyCoverRegion out{};
-  assert(!planPrivacyCoverRegion(1, 2, 0, out));
-  assert(!planPrivacyCoverRegion(1080, 0, 0, out));
-  assert(!planPrivacyCoverRegion(1080, 2, -1, out));
-  assert(!planPrivacyCoverRegion(1080, 2, 2, out));
-}
-'''.replace("#include <cassert>", "#include <cassert>\n#include <initializer_list>"),
-                               encoding="utf-8")
-            binary = Path(tmp) / "privacy-test"
-            subprocess.run(["c++", "-std=c++11", "-Wall", "-Wextra", "-Werror",
-                            str(program), "-o", str(binary)], check=True,
-                           capture_output=True, text=True, timeout=30)
-            subprocess.run([str(binary)], check=True, timeout=5)
-        for required in (
-            "+  grpAttr.gAlphaEn = 1;",
-            "+  grpAttr.fgAlhpa = plan.alpha;",
-            "+  grpAttr.bgAlhpa = 0;",
-            "+  grpAttr.layer = plan.layer;",
-            "+  for (int &stored : vs->privacy_osd_handles) {",
-            "+    if (!createPrivacyCover(ch)) goto rollback;",
-            "+      restored = createPrivacyCover(ch) && restored;",
-        ):
-            self.assertIn(required, source)
 
     def test_verified_service_stop_and_daynight_routing(self) -> None:
         uhttpd_stop = (
@@ -555,17 +462,15 @@ int main() {
             "Thingino Control observes this canonical state file",
             "printf 1 > /sys/class/gpio/gpio50/value",
             "usleep 100000",
-            "package/prudynt-t/files/S31prudynt",
         ):
             self.assertIn(required, daynight_control)
+        self.assertNotIn("package/prudynt-t/", daynight_control)
         self.assertNotIn("-THINGINO_DAYNIGHTD_DEPENDENCIES", daynight_control)
         daynight_removed = "\n".join(
             line[1:]
             for line in daynight_control.splitlines()
             if line.startswith("-") and not line.startswith("---")
         )
-        self.assertIn('API_URL="http://127.0.0.1:8080/api/v1/config"', daynight_removed)
-        self.assertIn('if curl -s "$API_URL"', daynight_removed)
         daynight_added = "\n".join(
             line[1:]
             for line in daynight_control.splitlines()
@@ -580,572 +485,7 @@ int main() {
         ):
             self.assertNotIn(forbidden, daynight_added)
 
-    def test_prudynt_media_queue_and_jpeg_lifecycle_patches(self) -> None:
-        prudynt_media = (
-            ROOT / "patches/prudynt/0002-dlink-media-baseline.patch"
-        ).read_text(encoding="utf-8")
-        for required in (
-            'path == "/snapshot"',
-            'qs == "ch=0"',
-            'qs == "ch=1"',
-            "get_snapshot_ch_local_http(snapshot_ch, image)",
-            "INADDR_LOOPBACK",
-            'Content-Type: image/jpeg\\r\\nContent-Disposition: ',
-            "SO_SNDTIMEO",
-        ):
-            self.assertIn(required, prudynt_media)
-        self.assertNotIn("/tmp/snapshot", prudynt_media)
-
-        prudynt_shared = (
-            ROOT / "patches/prudynt/0003-rtsp-share-immutable-video-payloads.patch"
-        ).read_text(encoding="utf-8")
-        self.assertIn("class SharedPayload", prudynt_shared)
-        self.assertIn("std::shared_ptr<const Storage>", prudynt_shared)
-        self.assertIn("nalu.data = shared_payload", prudynt_shared)
-        self.assertNotIn("\n+  NaluPool naluPool", prudynt_shared)
-
-        prudynt_queues = (
-            ROOT / "patches/prudynt/0004-rtsp-bound-slow-client-video-queues.patch"
-        ).read_text(encoding="utf-8")
-        for required in (
-            "RTSP_VIDEO_TAP_MAX_BYTES = 512 * 1024",
-            "FrameRecoveryGate",
-            "queued_bytes",
-            "eviction_count",
-            "waiting_for_random_access_",
-            "sendQueueBytes -= static_cast<size_t>(n)",
-        ):
-            self.assertIn(required, prudynt_queues)
-        self.assertIn("if (!backpressure && s->videoTap)", prudynt_queues)
-
-        prudynt_jpeg_idle = (
-            ROOT / "patches/prudynt/0005-jpeg-preserve-zero-idle-frame-rate.patch"
-        ).read_text(encoding="utf-8")
-        self.assertIn("jpegIdleFpsPolicy", prudynt_jpeg_idle)
-        self.assertIn("jpeg_refresh > 0 ? 1", prudynt_jpeg_idle)
-        self.assertNotIn("StopRecvPic", prudynt_jpeg_idle)
-        self.assertNotIn("DestroyChn", prudynt_jpeg_idle)
-
-        prudynt_queue_tests = (
-            ROOT
-            / "patches/prudynt/0006-test-cover-queue-element-and-client-isolation-limits.patch"
-        ).read_text(encoding="utf-8")
-        self.assertIn("test_exact_element_boundary", prudynt_queue_tests)
-        self.assertIn("test_slow_client_does_not_block_fast_client", prudynt_queue_tests)
-
-        prudynt_jpeg_lifecycle = (
-            ROOT
-            / "patches/prudynt/0007-jpeg-synchronize-video-demand-lifecycle.patch"
-        ).read_text(encoding="utf-8")
-        self.assertIn("std::atomic<bool> run_for_jpeg", prudynt_jpeg_lifecycle)
-        self.assertIn("std::memory_order_release", prudynt_jpeg_lifecycle)
-        self.assertIn("std::memory_order_acquire", prudynt_jpeg_lifecycle)
-        self.assertNotIn("IMP_Encoder_StopRecvPic", prudynt_jpeg_lifecycle)
-
-        prudynt_jpeg_deadline = (
-            ROOT
-            / "patches/prudynt/0008-jpeg-expire-source-demand-after-disconnect.patch"
-        ).read_text(encoding="utf-8")
-        self.assertIn("subscriber_deadline_ms", prudynt_jpeg_deadline)
-        self.assertIn("jpegRequestDeadlineActive", prudynt_jpeg_deadline)
-        self.assertIn("jpegSourceDemandActive", prudynt_jpeg_deadline)
-        self.assertNotIn("std::atomic<int64_t>", prudynt_jpeg_deadline)
-
-        prudynt_jpeg_standby = (
-            ROOT
-            / "patches/prudynt/0009-jpeg-apply-expiry-to-the-video-standby-gate.patch"
-        ).read_text(encoding="utf-8")
-        self.assertIn("jpegVideoDemandActive", prudynt_jpeg_standby)
-        self.assertIn("!run_for_jpeg", prudynt_jpeg_standby)
-        self.assertIn("!jpeg_video_demand_active()", prudynt_jpeg_standby)
-        self.assertNotIn("IMP_Encoder_StopRecvPic", prudynt_jpeg_standby)
-
-        prudynt_receive_lifecycle = (
-            ROOT
-            / "patches/prudynt/0010-media-bound-JPEG-demand-and-receive-lifecycle.patch"
-        ).read_text(encoding="utf-8")
-        for required in (
-            "EncoderReceiveLifecycle",
-            "socketPeerClosed",
-            "mjpegSharedEncoderMutationRequested",
-            "IMP_Encoder_StopRecvPic",
-            "IMP_Encoder_StartRecvPic",
-        ):
-            self.assertIn(required, prudynt_receive_lifecycle)
-
-        prudynt_http_ingress = (
-            ROOT
-            / "patches/prudynt/0011-http-keep-shared-JPEG-static-and-loopback-only.patch"
-        ).read_text(encoding="utf-8")
-        prudynt_http_added = "\n".join(
-            line[1:]
-            for line in prudynt_http_ingress.splitlines()
-            if line.startswith("+") and not line.startswith("+++")
-        )
-        for required in (
-            "http.loopback_only",
-            '"loopback_only": false',
-            "httpBindHostAddress(loopback_only_)",
-            "per-request JPEG quality and size are unsupported",
-            "MSG_NOSIGNAL",
-        ):
-            self.assertIn(required, prudynt_http_added)
-        self.assertNotIn("global_jpeg[ch]->quality_override = q", prudynt_http_added)
-
-        prudynt_dlink_restart = (
-            ROOT
-            / "patches/prudynt/0012-media-replace-unsafe-dlink-video-restarts.patch"
-        ).read_text(encoding="utf-8")
-        for required in (
-            "DLinkMediaProcessAction",
-            "FD_CLOEXEC",
-            'execv("/proc/self/exe"',
-            "normalizeVideoFps",
-            "restart_video || restart_audio",
-            "global_restart_audio",
-            "D-Link shutdown: exiting without unsafe SDK teardown",
-        ):
-            self.assertIn(required, prudynt_dlink_restart)
-        self.assertNotIn("fork(", prudynt_dlink_restart)
-        self.assertNotIn("system(", prudynt_dlink_restart)
-
-    def test_prudynt_live_controls_timezone_and_osd_patches(self) -> None:
-        prudynt_live_controls = (
-            ROOT
-            / "patches/prudynt/0014-media-keep-dlink-live-controls-in-process.patch"
-        ).read_text(encoding="utf-8")
-        for required in (
-            "DLinkLiveControlPolicy",
-            "dlinkAudioWorkerRequired",
-            "dlinkLiveAudioRestartRequired",
-            "AudioOutputWorker::applyMute(!enabled)",
-            "global_restart_motion",
-            "dlinkMotionVideoRestartRequired",
-        ):
-            self.assertIn(required, prudynt_live_controls)
-        self.assertNotIn("fork(", prudynt_live_controls)
-        self.assertNotIn("system(", prudynt_live_controls)
-
-        prudynt_timezone = (
-            ROOT / "patches/prudynt/0015-reload-camera-timezone.patch"
-        ).read_text(encoding="utf-8")
-        for required in (
-            'std::fopen("/etc/TZ", "r")',
-            "strcspn(value, \"\\r\\n\")",
-            "reload_dlink_timezone()",
-            "dlink_timezone_environment",
-            'std::strncmp(*entry, "TZ=", 3)',
-            'environment.emplace_back("TZ=" + timezone)',
-            'execve("/proc/self/exe"',
-        ):
-            self.assertIn(required, prudynt_timezone)
-        prudynt_timezone_added = "\n".join(
-            line[1:]
-            for line in prudynt_timezone.splitlines()
-            if line.startswith("+") and not line.startswith("+++")
-        )
-        self.assertNotIn("src/OSD.cpp", prudynt_timezone)
-        self.assertNotIn("setenv(", prudynt_timezone_added)
-        self.assertNotIn("unsetenv(", prudynt_timezone_added)
-        self.assertNotIn("tzset(", prudynt_timezone_added)
-        self.assertNotIn('execv("/proc/self/exe"', prudynt_timezone_added)
-        self.assertNotIn("fork(", prudynt_timezone_added)
-        self.assertNotIn("system(", prudynt_timezone_added)
-        self.assertNotIn("popen(", prudynt_timezone_added)
-
-        prudynt_osd_scale = (
-            ROOT / "patches/prudynt/0016-scale-burnin-osd-per-stream.patch"
-        ).read_text(encoding="utf-8")
-        for required in (
-            "automaticBurninScale",
-            "kAutoScaleWidth = 480",
-            "streamWidth) + kAutoScaleWidth - 1",
-            "std::clamp(roundedUp, 1, kBurninMaxScale)",
-            "new_scale = automaticBurninScale(stream_width)",
-            "ts_scale_ = automaticBurninScale(stream_width)",
-        ):
-            self.assertIn(required, prudynt_osd_scale)
-
-    def test_prudynt_motion_lifecycle_patches(self) -> None:
-        prudynt_motion = (
-            ROOT
-            / "patches/prudynt/0017-motion-add-nonblocking-Control-observation-output.patch"
-        ).read_text(encoding="utf-8")
-        for required in (
-            "SOCK_DGRAM | SOCK_NONBLOCK | SOCK_CLOEXEC",
-            "errno == EINVAL || errno == EPROTONOSUPPORT",
-            "::socket(AF_UNIX, SOCK_DGRAM, 0)",
-            "::fcntl(socketFd_, F_GETFD, 0)",
-            "descriptorFlags | FD_CLOEXEC",
-            "MSG_DONTWAIT",
-            r'\"event\":\"motion\"',
-            'return "suppressed"',
-            "initialGrace_",
-            "motion event output tests passed",
-        ):
-            self.assertIn(required, prudynt_motion)
-        prudynt_motion_removal = (
-            ROOT / "patches/prudynt/0018-motion-remove-legacy-shell-event-path.patch"
-        ).read_text(encoding="utf-8")
-        prudynt_motion_added = "\n".join(
-            line[1:]
-            for line in prudynt_motion_removal.splitlines()
-            if line.startswith("+") and not line.startswith("+++")
-        )
-        self.assertNotIn("system(", prudynt_motion_added)
-        self.assertNotIn("popen(", prudynt_motion_added)
-        self.assertNotIn("fork(", prudynt_motion_added)
-        self.assertIn("-              ret = system(cmd);", prudynt_motion_removal)
-        self.assertIn("-        ret = system(cmd);", prudynt_motion_removal)
-        prudynt_motion_restart = (
-            ROOT
-            / "patches/prudynt/0019-motion-clear-stale-state-on-process-start.patch"
-        ).read_text(encoding="utf-8")
-        for required in (
-            '@@ -88,7 +88,15 @@ constexpr const char *kPrudyntRunDir',
-            'kPrudyntMotionStatePath = "/run/prudynt/motion.active"',
-            "clear_stale_motion_state();",
-            "errno != ENOENT",
-        ):
-            self.assertIn(required, prudynt_motion_restart)
-
-        prudynt_motion_stop = (
-            ROOT
-            / "patches/prudynt/0026-motion-clear-active-marker-before-thread-exit.patch"
-        ).read_text(encoding="utf-8")
-        prudynt_motion_stop_result = [
-            line[1:]
-            for line in prudynt_motion_stop.splitlines()
-            if (line.startswith(" ") or line.startswith("+"))
-            and not line.startswith("+++")
-        ]
-        self.assertLess(
-            prudynt_motion_stop_result.index("  remove_motion_detection_state_file();"),
-            prudynt_motion_stop_result.index("  exit();"),
-        )
-
-    def test_prudynt_config_recording_and_recovery_patches(self) -> None:
-        prudynt_config_reload = (
-            ROOT / "patches/prudynt/0020-config-reload-after-complete-write.patch"
-        ).read_text(encoding="utf-8")
-        prudynt_config_reload_added = "\n".join(
-            line[1:]
-            for line in prudynt_config_reload.splitlines()
-            if line.startswith("+") and not line.startswith("+++")
-        )
-        for required in (
-            "inotify_add_watch(inotifyFd, cfg->filePath.c_str(), IN_CLOSE_WRITE)",
-            "if (event->mask & IN_CLOSE_WRITE)",
-            "truncate/write intermediate state",
-        ):
-            self.assertIn(required, prudynt_config_reload_added)
-        self.assertNotIn("IN_MODIFY", prudynt_config_reload_added)
-        self.assertNotIn("IN_ALL_EVENTS", prudynt_config_reload_added)
-
-        prudynt_media_metrics = (
-            ROOT
-            / "patches/prudynt/0021-media-stabilize-IPC-clients-and-expose-queue-metrics.patch"
-        ).read_text(encoding="utf-8")
-        for required in (
-            "ClientCounterLease::acquire(",
-            "prudynt_rtsp_queue_bytes",
-            "prudynt_rtsp_queue_drops_total",
-            "prudynt_rtsp_recoveries_total",
-            "prudynt_ipc_mjpeg_clients",
-        ):
-            self.assertIn(required, prudynt_media_metrics)
-
-        prudynt_recorder_safety = (
-            ROOT
-            / "patches/prudynt/0022-recorder-require-keyframe-safe-durable-segments.patch"
-        ).read_text(encoding="utf-8")
-        for required in (
-            "firstKeyframeIndex(prebuffer_frames)",
-            "firstKeyframeIndex(pending_frames_during_flush)",
-            "bool writeFully(",
-            "O_NOFOLLOW",
-            "::fsync(fd_)",
-        ):
-            self.assertIn(required, prudynt_recorder_safety)
-
-        prudynt_recorder_mount_policy = (
-            ROOT
-            / "patches/prudynt/0032-recorder-reject-volatile-and-root-mounts.patch"
-        ).read_text(encoding="utf-8")
-        for required in (
-            'recorderMountAllowed("/mnt/sdcard", "vfat", true)',
-            'recorderMountAllowed("/run", "tmpfs", true)',
-            'recorderMountAllowed("/mnt/ram", "tmpfs", true)',
-            'recorderMountAllowed("/mnt/thingino", "jffs2", true)',
-            "recorderMountFilesystemAllowed(entry.fsType)",
-        ):
-            self.assertIn(required, prudynt_recorder_mount_policy)
-
-        prudynt_recorder_teardown = (
-            ROOT
-            / "patches/prudynt/0033-recorder-close-segments-before-process-exit.patch"
-        ).read_text(encoding="utf-8")
-        for required in (
-            "void MP4ControlSocket::stopAll()",
-            "if (!write_channel_state_file(channel, path, duration_seconds))",
-            "O_CREAT | O_EXCL | O_WRONLY | O_CLOEXEC | O_NOFOLLOW",
-            "::rename(temporary_path.c_str(), state_path.c_str())",
-            "MP4ControlSocket::stopAll();",
-        ):
-            self.assertIn(required, prudynt_recorder_teardown)
-
-        prudynt_dlink_isp_capability = (
-            ROOT / "patches/prudynt/0034-dlink-disable-unsupported-defog.patch"
-        ).read_text(encoding="utf-8")
-        for required in (
-            "DCS_DLINK_OS02G10_IQ",
-            "supportsDefog(true, true)",
-            ".has_isp_defog = DLinkISPCapabilityPolicy::supportsDefog(",
-            "D-Link ISP capability policy tests passed",
-        ):
-            self.assertIn(required, prudynt_dlink_isp_capability)
-
-        prudynt_release_error_handling = (
-            ROOT
-            / "patches/prudynt/0035-release-error-handling-and-imp-init-rollback.patch"
-        ).read_text(encoding="utf-8")
-        for required in (
-            "Error handling must never disappear from a production build",
-            "return log_condition_",
-            "class IMPSystemLifecycle",
-            "lifecycle_.teardown",
-            "refusing to start media workers",
-            "test_release_error_handling.cpp",
-        ):
-            self.assertIn(required, prudynt_release_error_handling)
-
-        prudynt_release_debug = (
-            ROOT / "patches/prudynt/0036-explicit-release-debug-logging.patch"
-        ).read_text(encoding="utf-8")
-        for required in (
-            "ENABLE_LOG_DEBUG is supplied by build.sh",
-            "PRUDYNT_LOGGER_STANDALONE",
-            "-DENABLE_LOG_DEBUG",
-        ):
-            self.assertIn(required, prudynt_release_debug)
-
-        prudynt_recorder_ipc = (
-            ROOT / "patches/prudynt/0037-recorder-direct-framed-ipc.patch"
-        ).read_text(encoding="utf-8")
-        for required in (
-            "MP4ControlSocket::startLoop(channel, duration_seconds)",
-            "bool MP4ControlSocket::stop(int channel)",
-            "request_ok = handle_mp4(v, out, sep) && request_ok",
-            '! grep -q \'open("/run/prudynt/mp4ctl"\'',
-        ):
-            self.assertIn(required, prudynt_recorder_ipc)
-
-        prudynt_retry_safe_teardown = (
-            ROOT
-            / "patches/prudynt/0038-lifecycle-preserve-retry-safe-teardown-state.patch"
-        ).read_text(encoding="utf-8")
-        for required in (
-            "class MotionLifecycle",
-            "Keep this stage and all of its prerequisites active",
-            "Motion cleanup failed; retrying while dependencies are intact",
-            "IMPSystem cleanup failed; retrying while dependencies are intact",
-            "IMP_IVS_CreateMoveInterface() returned null",
-        ):
-            self.assertIn(required, prudynt_retry_safe_teardown)
-
-        prudynt_recorder_ipc_compile = (
-            ROOT
-            / "patches/prudynt/0039-recorder-include-framed-control-socket-declaration.patch"
-        ).read_text(encoding="utf-8")
-        self.assertIn('#include "MP4ControlSocket.hpp"', prudynt_recorder_ipc_compile)
-
-        prudynt_critical_logging = (
-            ROOT / "patches/prudynt/0040-logging-use-the-declared-critical-level.patch"
-        ).read_text(encoding="utf-8")
-        for required in (
-            "Logger::CRIT",
-            'LOG_CRIT("critical startup failure")',
-        ):
-            self.assertIn(required, prudynt_critical_logging)
-
-        prudynt_media_ready_lifecycle = (
-            ROOT
-            / "patches/prudynt/0041-media-retire-ready-marker-across-process-restart.patch"
-        ).read_text(encoding="utf-8")
-        for required in (
-            "clear_stale_dlink_media_ready();",
-            "unlink(kDLinkMediaReadyPath)",
-            "process_action != DLinkMediaProcessAction::Continue",
-        ):
-            self.assertIn(required, prudynt_media_ready_lifecycle)
-
-        prudynt_motion_snapshot = (
-            ROOT
-            / "patches/prudynt/0042-motion-snapshot-config-before-ivs-restart.patch"
-        ).read_text(encoding="utf-8")
-        for required in (
-            "MotionRuntimeConfig CFG::motionRuntimeConfig() const",
-            "normalizeMotionGeometry",
-            "runtime_config_ = cfg->motionRuntimeConfig();",
-            "test_motion_geometry.cpp",
-            "partial_reload{1920, 0",
-        ):
-            self.assertIn(required, prudynt_motion_snapshot)
-
-        prudynt_thread_ownership = (
-            ROOT
-            / "patches/prudynt/0043-worker-startup-and-join-ownership.patch"
-        ).read_text(encoding="utf-8")
-        for required in (
-            "reported.compare_exchange_strong",
-            "if (ret == 0)",
-            "audio_thread_joinable = true",
-            "motion_thread_joinable = ret == 0",
-            "rtsp_thread_joinable = ret == 0",
-            "if (motion_thread_joinable)",
-            "if (rtsp_thread_joinable)",
-            "BackchannelWorker thread caught exception",
-        ):
-            self.assertIn(required, prudynt_thread_ownership)
-
-        prudynt_bounded_error_logs = (
-            ROOT / "patches/prudynt/0044-bound-repeated-worker-error-logs.patch"
-        ).read_text(encoding="utf-8")
-        for required in (
-            "class RepeatedFailureGate",
-            "FirstFailure",
-            "Recovered",
-            "std::numeric_limits<uint16_t>::max()",
-            "test_repeated_failure_gate.cpp",
-            "IMP_IVS_PollingResult recovered after",
-            "std::chrono::milliseconds(10)",
-            "IPC: accept recovered after",
-        ):
-            self.assertIn(required, prudynt_bounded_error_logs)
-
-        prudynt_motion_reinit_guard = (
-            ROOT
-            / "patches/prudynt/0045-refuse-motion-init-with-stale-ivs-state.patch"
-        ).read_text(encoding="utf-8")
-        for required in (
-            "if (!lifecycle_.empty())",
-            "const int cleanup_ret = exit()",
-            "cleanup_ret != 0 || !lifecycle_.empty()",
-            "Motion initialization refused while prior IVS resources",
-        ):
-            self.assertIn(required, prudynt_motion_reinit_guard)
-
-        prudynt_complete_jpeg = (
-            ROOT
-            / "patches/prudynt/0046-jpeg-publish-and-send-complete-frames.patch"
-        ).read_text(encoding="utf-8")
-        for required in (
-            "jpegFrameMatches",
-            "prudynt_jpeg_invalid_frames_total",
-            "write_full(cfd, img.data(), img.size())",
-            "test_jpeg_frame_policy_rejects_partial_and_wrong_frames",
-            "-bool write_chunked_paced",
-        ):
-            self.assertIn(required, prudynt_complete_jpeg)
-
-        prudynt_raptor_ring = (
-            ROOT
-            / "patches/prudynt/0047-media-publish-stream0-to-raptor-ring.patch"
-        ).read_text(encoding="utf-8")
-        for required in (
-            'const char *ring_name = channel == 0 ? "main" : "sub"',
-            "channel == 0 ? 2U * 1024U * 1024U : 512U * 1024U",
-            "demand.external = raptor_ring.hasReaders()",
-            "IMP_Encoder_RequestIDR(encChn)",
-            "raptor_ring.publish(raptor_frame.data()",
-            "PRUDYNT_RAPTOR_IPC_LIBRARY",
-        ):
-            self.assertIn(required, prudynt_raptor_ring)
-
-        prudynt_daynight_fps = (
-            ROOT
-            / "patches/prudynt/0048-dlink-preserve-encoder-fps-across-daynight.patch"
-        ).read_text(encoding="utf-8")
-        dlink_guard = prudynt_daynight_fps.index(
-            "+#if !defined(DCS_DLINK_MEDIA_READY)"
-        )
-        generic_fps_change = prudynt_daynight_fps.index(
-            "hal::encoder::set_framerate(ch, effective_fps, 1);", dlink_guard
-        )
-        guard_end = prudynt_daynight_fps.index("+#endif", generic_fps_change)
-        self.assertLess(dlink_guard, generic_fps_change)
-        self.assertLess(generic_fps_change, guard_end)
-
-        prudynt_ipc_frame = (
-            ROOT / "patches/prudynt/0023-ipc-add-bounded-versioned-JSON-framing.patch"
-        ).read_text(encoding="utf-8")
-        for required in (
-            'prefix = "PRUDYNT/1 JSON "',
-            "kMaxRequestBytes = 16 * 1024",
-            '"ERR request_too_large\\n"',
-            "decodeFramedJson(req, kMaxRequestBytes)",
-        ):
-            self.assertIn(required, prudynt_ipc_frame)
-
-        prudynt_jpeg_recovery = (
-            ROOT
-            / "patches/prudynt/0024-jpeg-recover-failed-starts-and-isolate-snapshot-files.patch"
-        ).read_text(encoding="utf-8")
-        for required in (
-            "sh.success.load(std::memory_order_acquire)",
-            "imp_encoder->deinit(false)",
-            '".tmp.ch"',
-            "O_NOFOLLOW",
-        ):
-            self.assertIn(required, prudynt_jpeg_recovery)
-
-        prudynt_rtsp_queue = (
-            ROOT
-            / "patches/prudynt/0025-rtsp-bound-socket-and-audio-queues-by-bytes-and-elements.patch"
-        ).read_text(encoding="utf-8")
-        for required in (
-            "kRtspSocketQueueMaxElements = 1024",
-            "kRtspSocketQueueMaxBytes = 1024 * 1024",
-            "kRtspAudioTapMaxBytes = 256 * 1024",
-            "rtspSocketQueueCanAppend(",
-        ):
-            self.assertIn(required, prudynt_rtsp_queue)
-
-        prudynt_jpeg_metrics = (
-            ROOT
-            / "patches/prudynt/0027-jpeg-expose-per-channel-lifecycle-metrics.patch"
-        ).read_text(encoding="utf-8")
-        for required in (
-            "prudynt_jpeg_worker_running",
-            "prudynt_jpeg_receiving",
-            "prudynt_jpeg_receive_start_failures_total",
-            "prudynt_jpeg_receive_stop_failures_total",
-            "prudynt_jpeg_source_timeouts_total",
-            "test_media_metrics_track_jpeg_lifecycle_per_channel",
-        ):
-            self.assertIn(required, prudynt_jpeg_metrics)
-
     def test_timezone_kernel_and_aac_build_patches(self) -> None:
-        startup_timezone = (
-            ROOT / "patches/thingino/0017-pass-camera-timezone-to-prudynt.patch"
-        ).read_text(encoding="utf-8")
-        for required in (
-            "load_timezone()",
-            "IFS= read -r TZ_VALUE < /etc/TZ",
-            "export TZ",
-            "unset TZ",
-            "load_timezone",
-            "start_daemon",
-        ):
-            self.assertIn(required, startup_timezone)
-        startup_timezone_added = "\n".join(
-            line[1:]
-            for line in startup_timezone.splitlines()
-            if line.startswith("+") and not line.startswith("+++")
-        )
-        self.assertNotIn("curl", startup_timezone_added)
-        self.assertNotIn("cat /etc/TZ", startup_timezone_added)
-
         linux_patch_directories = (
             ROOT / "patches/thingino/0018-create-linux-patch-directories.patch"
         ).read_text(encoding="utf-8")
@@ -1214,27 +554,6 @@ int main() {
             "fsck -V -y",
         ):
             self.assertNotIn(forbidden, sd_automount_added)
-
-    def test_prudynt_http_client_bounds(self) -> None:
-        prudynt_http_clients = (
-            ROOT / "patches/prudynt/0013-http-bound-mjpeg-client-threads.patch"
-        ).read_text(encoding="utf-8")
-        for required in (
-            "HTTPClientAdmission",
-            "256U * 1024U",
-            "PTHREAD_CREATE_DETACHED",
-            "pthread_create failed",
-            "client handler failed",
-        ):
-            self.assertIn(required, prudynt_http_clients)
-        prudynt_http_client_added = "\n".join(
-            line[1:]
-            for line in prudynt_http_clients.splitlines()
-            if line.startswith("+") and not line.startswith("+++")
-        )
-        self.assertNotIn(
-            "std::thread(&HTTPMJPEG::handle_client", prudynt_http_client_added
-        )
 
     def test_hostapd_and_control_build_integration(self) -> None:
         hostapd = (
@@ -1532,7 +851,7 @@ int main() {
         self.assertIn('GIT_COMMITTER_DATE="@$source_epoch +0000"', container_build)
         self.assertIn("symbolic-ref HEAD refs/heads/master", container_build)
         for required in (
-            'make -C "$source_dir" CAMERA="$profile" GROUP=exp \\\n\t\tbuild',
+            'make -C "$source_dir" CAMERA="$profile" GROUP=exp "$@" \\\n\t\tbuild',
             "error while loading shared libraries:",
             "Buildroot host tool failed to load a shared library",
             'find "$output_dir/target" -print0 | tr -cd',
@@ -1546,11 +865,6 @@ int main() {
             'node "$webui_source/scripts/firmware-bundle.mjs" "$webui_dist"',
             'webui_manifest=$(node "$webui_source/scripts/firmware-bundle.mjs"',
             '"webui": $webui_manifest',
-            'mipsel-linux-objcopy"',
-            "--remove-section=.comment",
-            'cmp "$prudynt_normalized" "$prudynt_merged"',
-            "per-request JPEG quality and size are unsupported",
-            "http.loopback_only",
             "f892759f47e0296ea175bf4247f661a11381037bafec7800326298d73d0a7273",
             "10a133f02022bab9c3e0d765c7acb4fd049758cf49cb3affc8e7618951288139",
             "d01fea85b5aa9e08bb3d97d3f8b592a3cafe2e1e84d5c19ba4999d2123f70c4b",
@@ -1562,15 +876,10 @@ int main() {
             'test ! -e "$output_dir/target/usr/sbin/envfromcard"',
             "d8da684a19b1eac7b5f69844495cfd1c4d04f28db792b9eb605b6deb3978f271",
             'test -x "$output_dir/target/etc/init.d/S06ircut"',
-            'test -x "$output_dir/target/etc/init.d/S31prudynt"',
-            "52c5b61705da5b750f9286265510a563fbc780d3cf86d51dd82df1197fcc988b",
             'timezone_catalog=$output_dir/target/usr/share/tz.json',
             '"n":"Europe/Helsinki","v":"EET-2EEST,M3.5.0/3,M10.5.0/4"',
-            "grep -aFq '/etc/TZ'",
-            "IFS= read -r TZ_VALUE < /etc/TZ",
             "grep -c 'usleep 100000'",
             "rm -f /run/transfer.bin /run/transfer.footer",
-            "grep -E 'curl|thingino-api\\.key|API_URL'",
             'test -x "$output_dir/target/usr/sbin/onvif-httpd"',
             'test -x "$output_dir/target/etc/init.d/S94onvif-httpd"',
             'test ! -e "$output_dir/target/usr/sbin/thingino-agentd"',
@@ -1600,7 +909,6 @@ int main() {
         imp114 = (
             ROOT / "patches/thingino/0002-dlink-glibc-imp114.patch"
         ).read_text(encoding="utf-8")
-        self.assertIn("PRUDYNT_IMP_LANG := LIBIMP_LANG=zh", imp114)
         self.assertIn("INGENIC_LIB_SITE_METHOD = local", imp114)
         self.assertIn("INGENIC_LIB_SITE = $(DCS6100_VENDOR_BUNDLE_DIR)", imp114)
         self.assertIn("INGENIC_LIB_REDISTRIBUTE = NO", imp114)
@@ -1612,42 +920,8 @@ int main() {
         self.assertEqual(imp114.count("$(DCS6100_AUDIOPROCESS_LINK_FILE)"), 5)
         self.assertIn("archive is not fetched or packaged", imp114)
         self.assertNotIn("IMP_SDK_LIB_DIR", imp114)
-
-    def test_media_baseline_preserves_supported_features(self) -> None:
-        media = (
-            ROOT / "patches/prudynt/0002-dlink-media-baseline.patch"
-        ).read_text(encoding="utf-8")
-        media_paths = [
-            line.split(" b/", 1)[1]
-            for line in media.splitlines()
-            if line.startswith("diff --git a/")
-        ]
-        self.assertEqual(
-            media_paths,
-            [
-                "src/HTTPMJPEG.cpp",
-                "src/Config.cpp",
-                "src/IMPSystem.cpp",
-                "src/main.cpp",
-                "src/VideoWorker.cpp",
-            ],
-        )
-        self.assertNotIn("src/simple-rtsp/", media)
-        self.assertNotIn("X-DCS-RTSP-Stats", media)
-        self.assertIn("1080p-started", media)
-        self.assertIn("DCS_DLINK_ALLOW_UNSYNCED_STARTUP", media)
-        self.assertIn("continuing before wall-clock", media)
-        self.assertIn('line == "unknown"', media)
-        self.assertNotIn("DCS_DLINK_MINIMAL_PIPELINE", media)
-        self.assertNotIn("DCS_DLINK_SKIP_HARDWARE_OSD", media)
-
-    def test_rtsp_authentication_patch_contract(self) -> None:
-        auth = (
-            ROOT / "patches/prudynt/0001-enforce-rtsp-basic-auth.patch"
-        ).read_text(encoding="utf-8")
-        self.assertEqual(auth.count("diff --git a/src/simple-rtsp/"), 2)
-        self.assertIn("WWW-Authenticate: Basic", auth)
-        self.assertNotIn("X-DCS-RTSP-Stats", auth)
+        self.assertNotIn("package/prudynt-t/", imp114)
+        self.assertNotIn("PRUDYNT_IMP_", imp114)
 
     def _fixture(self, directory: Path) -> tuple[Path, Path, Path, dict]:
         public_root = directory / "public"

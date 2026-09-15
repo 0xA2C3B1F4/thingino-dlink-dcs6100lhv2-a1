@@ -1,46 +1,43 @@
 use std::collections::BTreeMap;
 use std::fs::{self, File, OpenOptions};
-use std::io::{self, Read, Write};
+use std::io::{self, Write};
 use std::net::{TcpStream, ToSocketAddrs, UdpSocket};
 #[cfg(target_os = "linux")]
 use std::os::raw::{c_char, c_int, c_void};
 use std::os::unix::fs::{FileTypeExt, MetadataExt, OpenOptionsExt, PermissionsExt};
-use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
+#[cfg(test)]
+use std::sync::Arc;
+use std::sync::Mutex;
 #[cfg(target_os = "linux")]
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use crate::decode::percent_decode_form;
 use crate::json::{self, Value};
-use crate::{
-    Backend, BackendError, BackendResponse, BackendRoute, DayNightMode, MAX_SNAPSHOT_BYTES,
-};
+use crate::{BackendError, BackendResponse};
 
 mod actions;
-mod api;
 mod config;
 mod diagnostics;
-mod files;
-mod ha;
+pub(crate) mod ha;
+mod host;
 mod maintenance;
-mod motion;
-mod motion_datagram;
-pub(in crate::camera) mod motion_events;
-mod motion_queue;
-mod motion_state;
+pub(crate) mod motion_datagram;
+pub(crate) mod motion_events;
+pub(crate) mod motion_state;
 mod network;
 mod platform;
-mod prudynt;
 mod runtime;
 mod storage;
 
-use ha::HaService;
 use maintenance::*;
 use network::*;
 use platform::*;
+#[cfg(feature = "raptor-backend")]
+pub(crate) use storage::RaptorStorageWorkerError;
+pub(crate) use storage::base64_encode;
 use storage::*;
 
 #[derive(Clone, Debug)]
@@ -188,232 +185,22 @@ impl Default for CameraPaths {
     }
 }
 
-pub struct PrudyntBackend {
-    paths: CameraPaths,
-    motion: Arc<motion::MotionService>,
+#[doc(hidden)]
+pub struct HostBackend {
+    pub(in crate::camera) paths: CameraPaths,
     config_lock: Mutex<()>,
-    daynight_history: Mutex<Vec<Value>>,
-    audio_state: Mutex<AudioRuntimeState>,
-    daynight_reapply: Mutex<Option<Instant>>,
     timezone_lock: Mutex<()>,
-    storage_format: Mutex<StorageFormatState>,
-    ha: Arc<HaService>,
 }
 
-impl PrudyntBackend {
-    pub fn new(paths: CameraPaths) -> Self {
-        Self::with_motion_sink(paths, Arc::new(motion_events::DisabledMotionEventSink))
-    }
-
-    pub(in crate::camera) fn with_motion_sink(
-        paths: CameraPaths,
-        sink: Arc<dyn motion_events::MotionEventSink>,
-    ) -> Self {
-        let audio_state = configured_audio_state(&paths);
-        let motion = motion::MotionService::with_sink(paths.clone(), sink);
+impl HostBackend {
+    #[cfg_attr(not(feature = "raptor-backend"), allow(dead_code))]
+    pub(crate) fn new(paths: CameraPaths) -> Self {
         Self {
             paths,
-            motion,
             config_lock: Mutex::new(()),
-            daynight_history: Mutex::new(Vec::new()),
-            audio_state: Mutex::new(audio_state),
-            daynight_reapply: Mutex::new(None),
             timezone_lock: Mutex::new(()),
-            storage_format: Mutex::new(StorageFormatState::default()),
-            ha: Arc::new(HaService::new()),
         }
     }
-
-    pub fn start_maintenance(self: &Arc<Self>) {
-        let _ = self.motion.start();
-        let backend = Arc::clone(self);
-        thread::Builder::new()
-            .name("control-maint".to_owned())
-            .spawn(move || maintenance_loop(backend))
-            .expect("Thingino Control maintenance thread must start");
-    }
-
-    // The HA adapter consumes this seam in its separate integration commit.
-    #[allow(dead_code)]
-    pub(in crate::camera) fn set_motion_event_sink(
-        &self,
-        sink: Arc<dyn motion_events::MotionEventSink>,
-    ) {
-        self.motion.set_sink(sink);
-    }
-
-    pub fn start_ha(self: &Arc<Self>) {
-        self.ha.start(Arc::clone(self));
-        let sink: Arc<dyn motion_events::MotionEventSink> = self.ha.clone();
-        self.set_motion_event_sink(sink);
-    }
-
-    pub fn shutdown_ha(&self) -> io::Result<()> {
-        self.ha.shutdown()
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-struct AudioRuntimeState {
-    microphone: bool,
-    speaker: bool,
-}
-
-fn configured_audio_state(paths: &CameraPaths) -> AudioRuntimeState {
-    let document = read_bounded(&paths.prudynt_config, FILE_LIMIT)
-        .ok()
-        .and_then(|raw| json::parse(&raw).ok());
-    AudioRuntimeState {
-        microphone: document
-            .as_ref()
-            .and_then(|value| value.get_path("audio.mic_enabled"))
-            .and_then(Value::as_bool)
-            .unwrap_or(false),
-        speaker: document
-            .as_ref()
-            .and_then(|value| value.get_path("audio.spk_enabled"))
-            .and_then(Value::as_bool)
-            .unwrap_or(false),
-    }
-}
-
-fn daynight_config(original: &[u8], mode: DayNightMode) -> Result<Vec<u8>, BackendError> {
-    let mut config = json::parse(original).map_err(|_| BackendError::Protocol)?;
-    config
-        .set_path("daynight.enabled", Value::Bool(mode == DayNightMode::Auto))
-        .map_err(|_| BackendError::Protocol)?;
-    config
-        .set_path(
-            "daynight.force_mode",
-            Value::String(match mode {
-                DayNightMode::Auto => String::new(),
-                DayNightMode::Day => "day".to_owned(),
-                DayNightMode::Night => "night".to_owned(),
-            }),
-        )
-        .map_err(|_| BackendError::Protocol)?;
-    let mut updated = config.to_json().into_bytes();
-    updated.push(b'\n');
-    Ok(updated)
-}
-
-fn serialized_mutation(method: &str, target: &str) -> bool {
-    if !matches!(method, "POST" | "PUT") {
-        return false;
-    }
-    target.starts_with("/api/v1/config/")
-        || target == "/api/v1/prudynt"
-        || target == "/api/v1/imaging"
-        || target == "/api/v1/recorder"
-        || target == "/api/v1/services/send/config"
-        || target.starts_with("/api/v1/files?")
-        || target.starts_with("/api/v1/files/text?")
-        || target == "/api/v1/actions/factory-reset"
-}
-
-impl Backend for PrudyntBackend {
-    fn request(
-        &self,
-        route: BackendRoute,
-        deadline: Instant,
-    ) -> Result<BackendResponse, BackendError> {
-        match route {
-            BackendRoute::Health => self.health(),
-            BackendRoute::RuntimeMedia => self.runtime_media(),
-            BackendRoute::Config => self.config(),
-            BackendRoute::Snapshot(stream_id) => self.snapshot(stream_id, deadline),
-            BackendRoute::DayNight(mode) => self.daynight(mode, deadline),
-        }
-    }
-
-    fn api_request(
-        &self,
-        method: &str,
-        target: &str,
-        body: &[u8],
-        deadline: Instant,
-    ) -> Option<Result<BackendResponse, BackendError>> {
-        let _mutation_guard = if serialized_mutation(method, target) {
-            match self.config_lock.lock() {
-                Ok(guard) => Some(guard),
-                Err(_) => return Some(Err(BackendError::Unavailable)),
-            }
-        } else {
-            None
-        };
-        api::dispatch(self, method, target, body, deadline)
-    }
-
-    fn update_management_credential(
-        &self,
-        username: &str,
-        password: &str,
-        deadline: Instant,
-    ) -> Option<Result<BackendResponse, BackendError>> {
-        let _mutation_guard = match self.config_lock.lock() {
-            Ok(guard) => guard,
-            Err(_) => return Some(Err(BackendError::Unavailable)),
-        };
-        Some(PrudyntBackend::update_management_credential(
-            self, username, password, deadline,
-        ))
-    }
-
-    fn authorize_media(&self, target: &str) -> bool {
-        if matches!(
-            target,
-            "/api/v1/actions/snapshot?stream_id=0"
-                | "/api/v1/actions/snapshot?stream_id=1"
-                | "/onvif/image.cgi"
-                | "/onvif/image1.cgi"
-        ) {
-            return true;
-        }
-        if target == "/media/v1/osd-sei" {
-            return true;
-        }
-        if target.starts_with("/media/v1/mjpeg?") {
-            return query_param(target, "stream")
-                .ok()
-                .flatten()
-                .is_some_and(|value| matches!(value.as_str(), "0" | "1"));
-        }
-        if !target.starts_with("/media/v1/file?") {
-            return false;
-        }
-        let Some(path) = query_param(target, "path").ok().flatten() else {
-            return false;
-        };
-        let Ok(path) = validated_absolute_path(&path) else {
-            return false;
-        };
-        let Ok(metadata) = path.symlink_metadata() else {
-            return false;
-        };
-        if !metadata.is_file() || metadata.file_type().is_symlink() {
-            return false;
-        }
-        fs::canonicalize(path)
-            .map(|path| path_is_within_roots(&path, &self.paths.media_roots))
-            .unwrap_or(false)
-    }
-}
-
-fn query_param(target: &str, key: &str) -> Result<Option<String>, BackendError> {
-    let Some((_, query)) = target.split_once('?') else {
-        return Ok(None);
-    };
-    let mut found = None;
-    for pair in query.split('&') {
-        let (raw_key, raw_value) = pair.split_once('=').unwrap_or((pair, ""));
-        if url_decode(raw_key)? == key {
-            if found.is_some() {
-                return Err(BackendError::Protocol);
-            }
-            found = Some(url_decode(raw_value)?);
-        }
-    }
-    Ok(found)
 }
 
 fn form_param(body: &[u8], key: &str) -> Option<String> {
@@ -448,10 +235,6 @@ fn json_response(value: Value) -> Result<BackendResponse, BackendError> {
     let mut body = value.to_json().into_bytes();
     body.push(b'\n');
     Ok(BackendResponse::json(body))
-}
-
-fn action_ok() -> BackendResponse {
-    BackendResponse::json(b"{\"status\":\"ok\"}\n".to_vec())
 }
 
 fn secret_field(name: &str) -> bool {
@@ -509,46 +292,11 @@ fn remove_unchanged_secret_fields(value: &mut Value) {
     }
 }
 
-fn retain_changed_fields(update: &mut Value, current: Option<&Value>) -> bool {
-    match (update, current) {
-        (Value::Object(update), Some(Value::Object(current))) => {
-            update.retain(|name, value| retain_changed_fields(value, current.get(name)));
-            !update.is_empty()
-        }
-        (update, Some(current)) => update != current,
-        (_, None) => true,
-    }
-}
-
-fn value_or(document: &Value, path: &str, fallback: Value) -> Value {
-    document.get_path(path).cloned().unwrap_or(fallback)
-}
-
-fn read_json_or_empty(path: &Path) -> Result<Value, BackendError> {
-    match read_bounded(path, FILE_LIMIT) {
-        Ok(bytes) => json::parse(&bytes).map_err(|_| BackendError::Protocol),
-        Err(BackendError::Unavailable) => Ok(Value::Object(BTreeMap::new())),
-        Err(error) => Err(error),
-    }
-}
-
-fn json_number(document: &Value, path: &str) -> Result<f64, BackendError> {
-    match document.get_path(path) {
-        Some(Value::Number(value)) => value.parse().map_err(|_| BackendError::Protocol),
-        _ => Err(BackendError::Protocol),
-    }
-}
-
-fn json_u64(document: &Value, path: &str) -> Result<u64, BackendError> {
-    let direct = document.get_path(path);
-    let nested = document.get_path(&format!("{path}.pin"));
-    match direct
-        .filter(|value| matches!(value, Value::Number(_) | Value::String(_)))
-        .or(nested)
-    {
-        Some(Value::Number(value)) => value.parse().map_err(|_| BackendError::Protocol),
-        Some(Value::String(value)) => value.parse().map_err(|_| BackendError::Protocol),
-        _ => Err(BackendError::Protocol),
+pub(in crate::camera) fn value_u64(value: &Value) -> Option<u64> {
+    match value {
+        Value::Number(value) => value.parse().ok(),
+        Value::String(value) => value.parse().ok(),
+        _ => None,
     }
 }
 
@@ -575,35 +323,11 @@ fn form_bool(form: &BTreeMap<String, String>, key: &str) -> bool {
         .is_some_and(|value| matches!(value.as_str(), "1" | "true" | "on" | "yes"))
 }
 
-fn form_u64(form: &BTreeMap<String, String>, key: &str, minimum: u64) -> Result<u64, BackendError> {
-    form.get(key)
-        .ok_or(BackendError::Protocol)?
-        .parse::<u64>()
-        .ok()
-        .filter(|value| *value >= minimum)
-        .ok_or(BackendError::Protocol)
-}
-
-fn safe_path_fragment(value: &str) -> bool {
-    value.len() <= 512
-        && !value.contains(['\0', '\r', '\n'])
-        && !Path::new(value)
-            .components()
-            .any(|component| component == std::path::Component::ParentDir)
-}
-
 fn raw_or(value: &Value, path: &str, fallback: &str) -> String {
     value
         .get_path(path)
         .map(Value::to_json)
         .unwrap_or_else(|| fallback.to_owned())
-}
-
-fn string_or_null(value: &Value, path: &str) -> String {
-    match value.get_path(path) {
-        Some(Value::String(text)) if !text.is_empty() => Value::String(text.clone()).to_json(),
-        _ => "null".to_owned(),
-    }
 }
 
 fn object<const N: usize>(entries: [(&str, Value); N]) -> Value {
@@ -619,25 +343,6 @@ fn number(value: u64) -> Value {
     Value::Number(value.to_string())
 }
 
-fn decimal(value: f64) -> Value {
-    Value::Number(format!("{value:.2}"))
-}
-
-fn stream_config(config: &Value, stream_id: u8) -> String {
-    let prefix = format!("stream{stream_id}");
-    format!(
-        "{{\"id\":{stream_id},\"enabled\":{},\"audio_enabled\":{},\"width\":{},\"height\":{},\"fps\":{},\"bitrate\":{},\"format\":{},\"mode\":{}}}",
-        raw_or(config, &format!("{prefix}.enabled"), "false"),
-        raw_or(config, &format!("{prefix}.audio_enabled"), "false"),
-        raw_or(config, &format!("{prefix}.width"), "null"),
-        raw_or(config, &format!("{prefix}.height"), "null"),
-        raw_or(config, &format!("{prefix}.fps"), "null"),
-        raw_or(config, &format!("{prefix}.bitrate"), "null"),
-        raw_or(config, &format!("{prefix}.format"), "null"),
-        raw_or(config, &format!("{prefix}.mode"), "null"),
-    )
-}
-
 fn bool_json(value: bool) -> &'static str {
     if value { "true" } else { "false" }
 }
@@ -645,3 +350,10 @@ fn bool_json(value: bool) -> &'static str {
 #[cfg(test)]
 #[path = "camera_tests.rs"]
 mod tests;
+
+/// Query the filesystem of an already held directory, not a replaceable path.
+#[cfg(feature = "raptor-backend")]
+pub(crate) fn recording_filesystem_stats(fd: i32) -> Option<(u64, u64, u64)> {
+    let stats = filesystem_stats(Path::new(&format!("/proc/self/fd/{fd}")))?;
+    Some((stats.total, stats.used, stats.free))
+}

@@ -1,7 +1,6 @@
 #[cfg(target_os = "linux")]
 use super::super::{c_char, c_int, c_void};
 
-pub(in crate::camera) const SIGHUP: i32 = 1;
 pub(in crate::camera) const RB_AUTOBOOT: i32 = 0x0123_4567;
 pub(in crate::camera) const FILE_LIMIT: u64 = 128 * 1024;
 #[cfg(target_os = "linux")]
@@ -33,7 +32,6 @@ pub(in crate::camera) const O_NOFOLLOW: i32 = 0x100;
 pub(in crate::camera) const O_NOFOLLOW: i32 = 0;
 
 unsafe extern "C" {
-    pub(in crate::camera) fn kill(pid: i32, signal: i32) -> i32;
     pub(in crate::camera) fn clock_settime(clock_id: i32, value: *const Timespec) -> i32;
     pub(in crate::camera) fn reboot(command: i32) -> i32;
     pub(in crate::camera) fn sync();

@@ -10,6 +10,8 @@ interface ControlDefinition {
   label: string;
   detail: string;
   state: (heartbeat: RuntimeHeartbeat) => boolean | null;
+  blocked?: (heartbeat: RuntimeHeartbeat) => boolean;
+  unavailableLabel?: (heartbeat: RuntimeHeartbeat) => string;
   command: (enabled: boolean) => LiveControlCommand;
 }
 
@@ -26,10 +28,9 @@ export function dayNightSelection(
 
 export function previewStreamUsable(candidate: 0 | 1, state: RuntimeMedia): boolean {
   const selected = candidate === 0 ? state.stream0 : state.stream1;
-  // The hybrid runtime keeps Prudynt as media owner, so Control can report the
-  // enabled main stream as unavailable when the volatile executable path is
-  // not /usr/bin/prudynt. Let WHIP prove stream-0 availability and retain the
-  // existing MJPEG fallback if rwd is not listening.
+  // Raptor reports video availability independently from its JPEG slots. Let
+  // WHIP prove stream-0 availability and retain the MJPEG fallback if RWD is
+  // not listening.
   return selected.enabled === true && (candidate === 0 || selected.available === true);
 }
 
@@ -38,14 +39,14 @@ const controls: ControlDefinition[] = [
   { label: "Microphone", detail: "Capture audio with the active stream", state: (h) => booleanState(h.mic_enabled), command: (enabled) => ({ kind: "microphone", enabled }) },
   { label: "Speaker", detail: "Enable the camera speaker output", state: (h) => booleanState(h.spk_enabled), command: (enabled) => ({ kind: "speaker", enabled }) },
   { label: "Privacy mode", detail: "Hide video using the configured privacy state", state: (h) => booleanState(h.privacy_enabled), command: (enabled) => ({ kind: "privacy", enabled }) },
-  { label: "Motion detection", detail: "Enable event detection", state: (h) => booleanState(h.motion_enabled), command: (enabled) => ({ kind: "motion", enabled }) },
-  { label: "Record main stream", detail: "Write clips from stream 0", state: (h) => booleanState(h.rec_ch0), command: (enabled) => ({ kind: "recording", enabled, stream: 0 }) },
-  { label: "Record substream", detail: "Write clips from stream 1", state: (h) => booleanState(h.rec_ch1), command: (enabled) => ({ kind: "recording", enabled, stream: 1 }) },
+  { label: "Motion detection", detail: "Enable event detection", state: (h) => h.controls_supported?.motion === false ? null : booleanState(h.motion_enabled), command: (enabled) => ({ kind: "motion", enabled }) },
+  { label: "Record main stream", detail: "Write clips from stream 0", state: (h) => booleanState(h.rec_ch0), blocked: (h) => h.rec_ch0 !== true && h.rec_ch0_available === false, unavailableLabel: (h) => h.rec_ch0_reason === "no_sd" ? "Off · No SD card" : h.rec_ch0_reason === "no_space" ? "Off · SD space low" : "Off · Unavailable", command: (enabled) => ({ kind: "recording", enabled, stream: 0 }) },
+  { label: "Record substream", detail: "Write clips from stream 1", state: (h) => booleanState(h.rec_ch1), blocked: (h) => h.rec_ch1 !== true && h.rec_ch1_available === false, unavailableLabel: (h) => h.rec_ch1_reason === "no_sd" ? "Off · No SD card" : h.rec_ch1_reason === "no_space" ? "Off · SD space low" : "Off · Unavailable", command: (enabled) => ({ kind: "recording", enabled, stream: 1 }) },
   { label: "IR filter", detail: "Physical IR-cut filter", state: (h) => nullableBinary(h.ircut_state), command: (enabled) => ({ kind: "ircut", enabled }) },
   { label: "850 nm IR LED", detail: "D-Link A1 infrared illumination", state: (h) => nullableBinary(h.ir850_state), command: (enabled) => ({ kind: "ir850", enabled }) },
 ];
 
-function booleanState(value: boolean): boolean {
+function booleanState(value: boolean | null): boolean | null {
   return value;
 }
 
@@ -58,10 +59,21 @@ function colorState(value: 0 | 1 | null | undefined): boolean | null {
   return value === 0 ? true : value === 1 ? false : null;
 }
 
-function formatUptime(value: RuntimeHeartbeat["uptime"]): string {
-  const days = Math.floor(value / 86400);
-  const hours = Math.floor((value % 86400) / 3600);
-  return `${days} days, ${hours} hours`;
+export function previewVideoSummary(
+  stream: 0 | 1,
+  media: RuntimeMedia | null,
+  heartbeat: Pick<RuntimeHeartbeat, "rec_ch0" | "rec_ch1"> | null,
+): { value: string; detail: string } {
+  const label = stream === 0 ? "Main stream" : "Substream";
+  if (!media) return { value: `${label} status unknown`, detail: "Waiting for runtime media state" };
+  const active = stream === 0 ? media.stream0 : media.stream1;
+  const recording = stream === 0 ? heartbeat?.rec_ch0 : heartbeat?.rec_ch1;
+  const state = !active.enabled ? "disabled" : !active.available ? "unavailable"
+    : recording === true ? "recording" : "ready";
+  return {
+    value: `${label} ${state}`,
+    detail: `${active.width ?? "—"} × ${active.height ?? "—"} · ${active.fps ?? "—"} fps · ${active.format ?? "video"}`,
+  };
 }
 
 export function renderPreview(
@@ -145,7 +157,7 @@ export function renderPreview(
   }
   dayNightRow.append(dayNightCopy, dayNightGroup);
   controlCard.append(dayNightRow);
-  const controlRows = new Map<ControlDefinition, { button: HTMLButtonElement; state: HTMLSpanElement }>();
+  const controlRows = new Map<ControlDefinition, { button: HTMLButtonElement; state: HTMLSpanElement; recovery: HTMLButtonElement[] }>();
   const pendingControls = new Set<ControlDefinition>();
   for (const [index, control] of controls.entries()) {
     const row = element("div", { className: "control-row" });
@@ -162,8 +174,21 @@ export function renderPreview(
     toggle.append(state);
     toggle.disabled = true;
     row.append(copy, toggle);
+    const recovery: HTMLButtonElement[] = [];
+    const kind = control.command(false).kind;
+    const targets = kind === "privacy"
+      ? [["Retry privacy protection", true], ["Turn privacy off", false]] as const
+      : kind === "motion" ? [["Retry stopping motion", false]] as const
+      : kind === "recording" ? [[control.label === "Record main stream" ? "Stop main stream recording" : "Stop substream recording", false]] as const : [];
+    for (const [label, enabled] of targets) {
+      const retryTarget = button(label, "button secondary control-recovery");
+      retryTarget.hidden = true;
+      retryTarget.addEventListener("click", () => void applyControl(control, enabled));
+      recovery.push(retryTarget);
+      row.append(retryTarget);
+    }
     controlCard.append(row);
-    controlRows.set(control, { button: toggle, state });
+    controlRows.set(control, { button: toggle, state, recovery });
   }
   const content = element("div", { className: "preview-content" });
   content.append(message, hero, previewStateLine, statusGrid, liveCard);
@@ -202,6 +227,7 @@ export function renderPreview(
   };
   let stream = 0 as 0 | 1;
   let heartbeat: RuntimeHeartbeat | null = null;
+  let heartbeatRequest: Promise<void> | null = null;
   let media: RuntimeMedia | null = null;
   let previewStarted = false;
   let previewAttempted = false;
@@ -224,6 +250,7 @@ export function renderPreview(
 
   function startPreview(force = false): void {
     window.clearTimeout(focusTimeout);
+    updateVideoSummary();
     if (!media || !previewStreamUsable(stream, media)) {
       previewStarted = false;
       previewAttempted = false;
@@ -282,28 +309,41 @@ export function renderPreview(
     }
     for (const [control, row] of controlRows) {
       const active = control.state(heartbeat);
-      row.button.disabled = active === null || pendingControls.has(control);
-      row.button.textContent = active === null ? "Unavailable" : control.label === "Motion detection" && active && heartbeat.motion_active ? "Active" : active ? "On" : "Off";
-      row.button.setAttribute("aria-pressed", active === null ? "false" : String(active));
+      row.button.disabled = active === null || control.blocked?.(heartbeat) === true || pendingControls.has(control);
+      row.button.textContent = active === null ? "Unavailable" : control.blocked?.(heartbeat) ? control.unavailableLabel?.(heartbeat) ?? "Unavailable" : control.label === "Motion detection" && active && heartbeat.motion_active ? "Active" : active ? "On" : "Off";
+      row.button.setAttribute("aria-pressed", active === null ? "mixed" : String(active));
       row.button.classList.toggle("active", active === true);
+      const kind = control.command(false).kind;
+      const command = control.command(false);
+      const recorderNeedsStop = command.kind === "recording" && heartbeat[`rec_ch${command.stream}_file_closed`] === false;
+      const retrySupported = recorderNeedsStop || ((kind === "privacy" || kind === "motion") && heartbeat.controls_supported?.[kind] === true);
+      for (const recovery of row.recovery) {
+        recovery.hidden = active !== null || !retrySupported;
+        recovery.disabled = pendingControls.has(control);
+      }
     }
-    statusValues[0]!.value.textContent = heartbeat.rec_ch0 ? "Main stream recording" : "Main stream ready";
-    statusValues[0]!.detail.textContent = `Day / night: ${heartbeat.daynight_mode}`;
-    statusValues[1]!.value.textContent = "Local connection";
-    statusValues[1]!.detail.textContent = `Uptime ${formatUptime(heartbeat.uptime)}`;
+    updateVideoSummary();
+  }
+
+  function updateVideoSummary(): void {
+    const summary = previewVideoSummary(stream, media, heartbeat);
+    statusValues[0]!.value.textContent = summary.value;
+    statusValues[0]!.detail.textContent = summary.detail;
   }
 
   async function refreshRuntime(): Promise<void> {
     try {
-      const next = await api.heartbeat();
-      const system = await api.system();
       const media = await api.media();
       if (cancelled) return;
-      updateControls(next);
       updateStreamAvailability(media);
+      await loadHeartbeat();
+      if (cancelled) return;
+      const system = await api.system();
+      if (cancelled) return;
       updateRuntimeSummary(system, media);
       setMessage(message);
     } catch (error) {
+      invalidateMotion();
       if (!cancelled) setMessage(message, error instanceof Error ? error.message : "Unable to load live state.", "error");
     }
   }
@@ -316,9 +356,21 @@ export function renderPreview(
     }
   }
 
-  async function loadHeartbeat(): Promise<void> {
-    const next = await api.heartbeat();
-    if (!cancelled) updateControls(next);
+  function invalidateMotion(): void {
+    if (!cancelled && heartbeat) updateControls({ ...heartbeat, motion_enabled: null, motion_active: null });
+  }
+
+  async function loadHeartbeat(fresh = false): Promise<void> {
+    // A read started before a mutation cannot confirm that mutation.
+    if (fresh && heartbeatRequest) await heartbeatRequest.catch(() => undefined);
+    if (heartbeatRequest) return heartbeatRequest;
+    heartbeatRequest = api.heartbeat().then((next) => {
+      if (!cancelled) updateControls(next);
+    }).catch((error: unknown) => {
+      invalidateMotion();
+      throw error;
+    }).finally(() => { heartbeatRequest = null; });
+    return heartbeatRequest;
   }
 
   function applyAcceptedDayNight(mode: DayNightSelection): void {
@@ -332,7 +384,7 @@ export function renderPreview(
 
   function updateRuntimeSummary(system: Awaited<ReturnType<ControlApi["system"]>>, media: RuntimeMedia): void {
     const active = stream === 0 ? media.stream0 : media.stream1;
-    statusValues[0]!.detail.textContent = `${active.width ?? "—"} × ${active.height ?? "—"} · ${active.fps ?? "—"} fps · ${active.format ?? "video"}`;
+    updateVideoSummary();
     statusValues[1]!.value.textContent = system.network.online ? "Network connected" : "Disconnected";
     statusValues[1]!.detail.textContent = system.network.ip || "Address unavailable";
     statusValues[2]!.value.textContent = "Storage available";
@@ -344,7 +396,7 @@ export function renderPreview(
     endpoints.replaceChildren();
     endpoints.append(element("span", { className: "endpoint-label", text: "Player endpoints" }));
     for (const entry of [
-      { label: "RTSP", value: `rtsp://${host}:${rtsp?.port ?? 554}/${active.rtsp_endpoint ?? (stream === 0 ? "ch0" : "ch1")}` },
+      { label: "RTSP", value: rtsp?.port && active.rtsp_endpoint ? `rtsp://${host}:${rtsp.port}/${active.rtsp_endpoint}` : "Unavailable" },
       { label: "MJPEG", value: new URL(routes.media.mjpeg(stream), location.origin).href },
     ]) {
       const row = element("div", { className: "endpoint-row" });
@@ -366,7 +418,7 @@ export function renderPreview(
         // transition and configuration update complete. Reflect that accepted
         // state immediately, then reconcile it with the runtime heartbeat.
         applyAcceptedDayNight(mode);
-        await loadHeartbeat();
+        await loadHeartbeat(true);
         setMessage(message);
       } catch (error) {
         setMessage(message, error instanceof Error ? error.message : "The day / night request failed.", "error");
@@ -377,37 +429,53 @@ export function renderPreview(
   }
 
   for (const [control, row] of controlRows) {
-    row.button.addEventListener("click", async () => {
+    row.button.addEventListener("click", () => {
       const current = heartbeat ? control.state(heartbeat) : null;
-      if (current === null || pendingControls.has(control)) return;
-      pendingControls.add(control);
-      row.button.disabled = true;
-      try {
-        const command = control.command(!current);
-        await api.setLiveControl(command);
-        await loadHeartbeat();
-        if (command.kind === "motion") {
-          // The action acknowledges the request before the IVS worker has
-          // necessarily published its new state. Do not wait for the normal
-          // five-second refresh or show an unconfirmed optimistic state.
-          const deadline = performance.now() + 4_000;
-          while (!cancelled && heartbeat && control.state(heartbeat) !== !current) {
-            if (performance.now() >= deadline) {
-              throw new Error("Motion state was not confirmed. Check the camera state before retrying.");
-            }
-            await new Promise<void>((resolve) => window.setTimeout(resolve, 250));
-            if (!cancelled) await loadHeartbeat();
-          }
-        }
-        if (cancelled) return;
-        setMessage(message);
-      } catch (error) {
-        setMessage(message, error instanceof Error ? error.message : "The control request failed.", "error");
-      } finally {
-        pendingControls.delete(control);
-        row.button.disabled = !heartbeat || control.state(heartbeat) === null;
-      }
+      if (current === null || (heartbeat && control.blocked?.(heartbeat)) || pendingControls.has(control)) return;
+      void applyControl(control, !current);
     });
+  }
+
+  async function applyControl(control: ControlDefinition, enabled: boolean): Promise<void> {
+    if (pendingControls.has(control)) return;
+    pendingControls.add(control);
+    if (heartbeat) updateControls(heartbeat);
+    try {
+      const command = control.command(enabled);
+      await api.setLiveControl(command);
+      await loadHeartbeat(true);
+      if (command.kind === "motion") {
+        // The action acknowledges the request before the IVS worker has
+        // necessarily published its new state. Do not wait for the normal
+        // five-second refresh or show an unconfirmed optimistic state.
+        const deadline = performance.now() + 4_000;
+        while (!cancelled && heartbeat && control.state(heartbeat) !== enabled) {
+          if (performance.now() >= deadline) {
+            throw new Error("Motion state was not confirmed. Check the camera state before retrying.");
+          }
+          await new Promise<void>((resolve) => window.setTimeout(resolve, 250));
+          if (!cancelled) await loadHeartbeat(true);
+        }
+      }
+      if (cancelled) return;
+      setMessage(message);
+    } catch (error) {
+      // Failed application can change only part of the device state. Read
+      // it again so recovery never uses an old toggle value as its target.
+      try {
+        await loadHeartbeat(true);
+      } catch {
+        if (!cancelled && heartbeat) {
+          const kind = control.command(enabled).kind;
+          if (kind === "privacy") updateControls({ ...heartbeat, privacy_enabled: null });
+          if (kind === "motion") updateControls({ ...heartbeat, motion_enabled: null, motion_active: null });
+        }
+      }
+      if (!cancelled) setMessage(message, error instanceof Error ? error.message : "The control request failed.", "error");
+    } finally {
+      pendingControls.delete(control);
+      if (!cancelled && heartbeat) updateControls(heartbeat);
+    }
   }
 
   streamSelect.addEventListener("change", () => {

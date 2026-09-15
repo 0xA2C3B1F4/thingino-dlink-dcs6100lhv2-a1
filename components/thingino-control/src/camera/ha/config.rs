@@ -1,8 +1,8 @@
 use super::super::*;
 
-pub(super) const MIN_STATE_INTERVAL: u64 = 5;
-pub(super) const MIN_DISCOVERY_INTERVAL: u64 = 60;
-pub(super) const MIN_CAMERA_INTERVAL: u64 = 5;
+pub(in crate::camera) const MIN_STATE_INTERVAL: u64 = 5;
+pub(in crate::camera) const MIN_DISCOVERY_INTERVAL: u64 = 60;
+pub(in crate::camera) const MIN_CAMERA_INTERVAL: u64 = 5;
 
 pub(super) struct HaConfig {
     pub(super) enabled: bool,

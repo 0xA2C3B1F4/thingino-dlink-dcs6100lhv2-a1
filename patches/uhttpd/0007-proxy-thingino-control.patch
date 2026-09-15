@@ -23,7 +23,7 @@ index 0000000..cfccb97
 + * This file is limited to the DCS-6100LHV2 source profile. It keeps browser
 + * requests on uhttpd's same-origin TLS listener. /api/v1 is relayed to Rust;
 + * authenticated snapshots, /media/v1 MJPEG, and metadata are relayed directly
-+ * to Prudynt so media never occupies a Rust worker or spawns a request process.
++ * to the media backend so media never occupies a Rust worker or spawns a request process.
 + */
 +
 +#include <arpa/inet.h>
@@ -1015,7 +1015,7 @@ diff --git a/main.c b/main.c
 index 24619fb..542e890 100644
 --- a/main.c
 +++ b/main.c
-@@ -316,6 +316,7 @@ int main(int argc, char **argv)
+@@ -289,6 +289,7 @@ int main(int argc, char **argv)
  
  	BUILD_BUG_ON(sizeof(uh_buf) < PATH_MAX);
  
@@ -1027,7 +1027,7 @@ diff --git a/uhttpd.h b/uhttpd.h
 index 47fb766..116213f 100644
 --- a/uhttpd.h
 +++ b/uhttpd.h
-@@ -217,6 +217,34 @@ struct dispatch_proc {
+@@ -209,6 +209,34 @@ struct dispatch_proc {
  	char status_msg[64];
  };
  
@@ -1062,7 +1062,7 @@ index 47fb766..116213f 100644
  struct dispatch_handler {
  	struct list_head list;
  	bool script;
-@@ -267,8 +295,11 @@ struct dispatch {
+@@ -259,8 +287,11 @@ struct dispatch {
  		struct {
  			struct blob_attr **hdr;
  			int fd;
@@ -1074,7 +1074,7 @@ index 47fb766..116213f 100644
  #ifdef HAVE_UBUS
  		struct dispatch_ubus ubus;
  #endif
-@@ -306,6 +337,7 @@ extern struct config conf;
+@@ -298,6 +329,7 @@ extern struct config conf;
  extern const char * const http_versions[];
  extern const char * const http_methods[];
  extern struct dispatch_handler cgi_dispatch;
@@ -1082,7 +1082,7 @@ index 47fb766..116213f 100644
  
  void uh_index_add(const char *filename);
  
-@@ -362,6 +394,8 @@ int uh_handler_add(const char *file);
+@@ -354,6 +386,8 @@ int uh_handler_add(const char *file);
  int uh_handler_run(struct client *cl, char **url, bool fallback);
  
  struct path_info *uh_path_lookup(struct client *cl, const char *url);

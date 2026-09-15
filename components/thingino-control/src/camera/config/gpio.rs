@@ -25,7 +25,7 @@ fn dlink_a1_hardware_io() -> Vec<Value> {
     ]
 }
 
-impl PrudyntBackend {
+impl HostBackend {
     pub(in crate::camera) fn gpio_config(&self) -> Result<BackendResponse, BackendError> {
         let thingino = json::parse(&read_bounded(&self.paths.thingino_config, FILE_LIMIT)?)
             .map_err(|_| BackendError::Protocol)?;

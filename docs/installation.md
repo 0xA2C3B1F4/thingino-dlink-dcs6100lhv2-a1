@@ -85,6 +85,14 @@ the host for handoff is required between the boots in each sequence.
 | Installation, first boot | Stock U-Boot installs the reviewed bootstrap/kernel and stops | Confirm updater completion before `universal handoff`. |
 | Installation, second boot | Stage 1 validates, backs up, writes, verifies, activates, and reboots | Run `universal verify` on the station network, then browser/media acceptance. |
 
+`universal verify` checks both pinned management access and live application
+readiness. WebUI HTTPS and Control must respond. The full Raptor profile also
+requires its completed startup, all managed services, and nonempty main/substream
+JPEG responses. A reachable SSH service alone is not an installation pass.
+The probe is read-only and does not restart failed services. Older images without
+the application probe cannot pass this check. Browser login, WebRTC playback and
+controls still require their separate acceptance tests.
+
 The stock updater's completion loop and Stage 1 failure indications are
 different states. Red blinking can indicate stock-updater completion, but is
 not a universal success indicator. Stage 1 requests
@@ -202,7 +210,7 @@ Retain the private output. Do not manually delete a mismatching checkpoint.
 ## Public-checkout complete-backup path
 
 After `local-build prepare`, `bootstrap`, and `acquire`, build the public
-read-only recovery inputs before `local-build configure`:
+read-only recovery inputs for the backup workflow:
 
 ```bash
 thingino-dlink local-build recovery-assets --json
@@ -283,9 +291,9 @@ thingino-dlink stock-recovery backup-validate \
 Stop unless duplicate partition sets, both reconstructed 16 MiB images, and all
 storage readbacks pass. Keep the output private and never substitute another
 camera's backup. The vendor bundle and protected readback must pass their own
-documented producers and validators. A private media closure and reviewed
-Raptor artifact are optional advanced inputs, not prerequisites for the
-matched-media universal build.
+documented producers and validators. The universal build always composes full
+Raptor from the locked public source inputs and does not accept a private media
+closure or an external media artifact.
 
 ## UARTless functional-capture alternative
 
@@ -392,17 +400,10 @@ camera transport. Continue with the exact `universal configure` command printed
 by the installer; enter Wi-Fi values only through its hidden prompts.
 
 Functional recovery is accepted only through explicitly functional-aware CLI
-arguments. For example, later media staging uses:
-
-```bash
-thingino-dlink prepare-card \
-  --whole-device "$DCS6100_SD_DEVICE" \
-  --mount-root "$DCS6100_SD_MOUNT" \
-  --functional-recovery-dir "$DCS6100_RECOVERY_ROOT" \
-  --preserved-readback-dir "$DCS6100_RECOVERY_ROOT/preserved" \
-  --confirm-physical-device "$DCS6100_SD_DEVICE" \
-  --confirm-target DCS-6100LHV2-A1
-```
+arguments. Later media staging uses `thingino-dlink universal stage`. First
+run its printed `--plan-only` command, review the bound device and write set,
+then repeat with the exact `--confirm-plan` digest. The production export does
+not expose the retired `prepare-card` workflow.
 
 The exact `--recovery-dir` and functional `--functional-recovery-dir` arguments
 are mutually exclusive. Functional-aware results keep
@@ -427,8 +428,7 @@ metadata to `vendor-bundle.private.json`.
 For the model-universal build, these catalog-locked bytes are model inputs and
 must normalize identically across compatible A1 acquisitions. Camera-specific
 station details, management/API credentials, and SSH material belong only to
-the separate provisioning sidecar. The legacy personalized build still embeds
-those values and must not be reused on another camera.
+the separate provisioning sidecar.
 
 ## Reusing one firmware on multiple cameras
 
@@ -481,7 +481,7 @@ and second-camera acceptance remain open release gates.
 
 ## Data actions
 
-The legacy personalized install set binds exactly one mtd3 data action:
+The universal install set binds exactly one mtd3 data action:
 
 - `initialize` creates the first private stock-mtd3 backup and checkpoint,
   installs the fixed system, and erases the new data region;
@@ -512,17 +512,14 @@ The separate `dcs6100-thingino` entry point and `python3 -m installer` module
 are the lower-level artifact CLI and do not contain `local-build` or `universal`. Command presence does
 not make an artifact public or authorize a write.
 
-## Local install set and supported host systems
+## Supported host systems
 
-The legacy personalized firmware build and its device-specific inputs stay on
-your computer. After `python3 -m installer inspect-install-set` accepts the
-exact local output, stage that legacy development set on macOS, Linux, or
-Windows with `thingino-dlink stage-install-set`. This command is not the
-model-universal staging path. It validates the install set,
-requires the expected `initialize`, `preserve`, or `factory-reset` data action,
-requires `--recovery-dir` and `--preserved-readback-dir` to pass before media
-staging,
-performs the native removable-media preflight, and uses the common
+The guided full-Raptor build targets Apple Silicon macOS. Universal SD staging
+has host adapters for macOS, Linux, and Windows. After
+`python3 -m installer inspect-install-set` accepts the exact local output, use
+the `universal stage` and `universal handoff` commands in the README. They
+validate the install set, require the expected `initialize` or `preserve` data
+action, perform native removable-media preflight, and use the common
 temporary-write, readback, and activation-last stager.
 
 The native adapters use:

@@ -10,30 +10,70 @@ import { bool, text, number, secret } from "./common";
 export const access: ConfigFormSpec = {
   eyebrow: "Settings / media access",
   title: "Media access",
-  description: "RTSP viewer credentials and endpoints. ONVIF uses the management account.",
+  description: "RTSP viewer credentials and endpoints. Saving disconnects existing RTSP viewers. ONVIF uses the management account where supported.",
   endpoint: routes.config.access,
   decode: decodeAccess,
+  loadTransform: (value) => ({ ...value, microphone_path_editable: value.source !== "raptor" }),
+  validate: validateAccessUpdate,
   fields: [
     text("username", "RTSP viewer username"),
     secret("password", "New RTSP viewer password", "Changes only RTSP viewing access. Leave blank to keep the current password."),
     number("rtsp_port", "RTSP port", 1, 65535),
     { ...text("rtsp_ch0", "Main stream path"), pattern: "[A-Za-z0-9._~-]{1,64}", maxLength: 64 },
     { ...text("rtsp_ch1", "Substream path"), pattern: "[A-Za-z0-9._~-]{1,64}", maxLength: 64 },
-    { ...text("rtsp_mic", "Microphone stream path"), pattern: "[A-Za-z0-9._~-]{1,64}", maxLength: 64 },
+    { ...text("rtsp_mic", "Microphone stream path"), enabledWhen: { path: "microphone_path_editable", equals: true }, pattern: "[A-Za-z0-9._~-]{1,64}", maxLength: 64 },
     { ...number("onvif_port", "ONVIF port", 1, 65535), readOnly: true },
     { ...bool("onvif_enabled", "ONVIF active through same-origin ingress"), readOnly: true },
   ],
   saveTransform: buildAccessUpdate,
 };
 
-export function buildAccessUpdate(value: JsonObject): JsonObject {
-  const update: JsonObject = { onvif_port: 80, onvif_enabled: true };
+export function buildAccessUpdate(value: JsonObject, loaded: JsonObject = {}): JsonObject {
+  const raptor = loaded.source === "raptor";
+  const update: JsonObject = raptor ? {} : { onvif_port: 80, onvif_enabled: true };
   for (const field of ["username", "rtsp_ch0", "rtsp_ch1", "rtsp_mic"] as const) {
+    if (field === "rtsp_mic" && raptor) continue;
     if (typeof value[field] === "string" && value[field].trim()) update[field] = value[field];
   }
   if (typeof value.password === "string" && value.password) update.password = value.password;
   if (typeof value.rtsp_port === "number") update.rtsp_port = value.rtsp_port;
   return update;
+}
+
+export function validateAccessUpdate(value: JsonObject, loaded: JsonObject): string | undefined {
+  if (loaded.source !== "raptor") {
+    return undefined;
+  }
+  const safeText = (text: string, min: number, max: number) =>
+    text.length >= min && text.length <= max && /^[\x20-\x7e]+$/.test(text)
+    && text.trim() === text && !text.includes(" #");
+  if (typeof value.username !== "string" || !safeText(value.username, 1, 64) || value.username.includes(" ")) {
+    return "Enter an RTSP username of 1–64 printable characters without spaces.";
+  }
+  if (typeof value.password === "string" && value.password && !safeText(value.password, 10, 127)) {
+    return "Use 10–127 printable password characters without surrounding spaces or a space followed by #.";
+  }
+  if (loaded.auth_enabled === false && !value.password) {
+    return "Set a viewer password before saving RTSP access.";
+  }
+  if (typeof value.rtsp_port !== "number" || !Number.isInteger(value.rtsp_port) || value.rtsp_port < 1 || value.rtsp_port > 65535 || [80, 443, 8080, 8555].includes(value.rtsp_port)) {
+    return "Choose an RTSP port outside the reserved WebUI and media service ports.";
+  }
+  return validateRaptorStreamPaths(value.rtsp_ch0, value.rtsp_ch1);
+}
+
+export function validateRaptorStreamPaths(main: unknown, sub: unknown): string | undefined {
+  const paths = [main, sub];
+  for (const [id, path] of paths.entries()) {
+    if (path === `stream${id}`) continue;
+    if (typeof path !== "string" || !/^[A-Za-z0-9_.-]{1,63}$/.test(path) || ["main", "sub", "jpeg", "jpeg_sub", "audio", "backchannel", ".", ".."].includes(path) || /^stream[0-9]+$/.test(path)) {
+      return "Use distinct stream paths of 1–63 letters, digits, dots, underscores or hyphens; reserved names are unavailable.";
+    }
+  }
+  if (main === sub) {
+    return "Main and substream paths must differ.";
+  }
+  return undefined;
 }
 
 export const webui: ConfigFormSpec = {
@@ -79,10 +119,11 @@ export const admin: ConfigFormSpec = {
 export const logging: ConfigFormSpec = {
   eyebrow: "Settings / remote logging",
   title: "Remote logging",
-  description: "Forward local system logs to a server on the trusted network.",
+  description: "Forward system logs to a server on the trusted network. Local logs are held in memory, not a persistent log file. Restart the camera to apply saved logging settings.",
+  successMessage: () => "Settings saved. Restart the camera to apply logging changes. Saving alone does not restart the logging service.",
   endpoint: routes.config.remoteLogging,
   decode: decodeRemoteLogging,
-  fields: [bool("enabled", "Forward logs to the remote server"), text("host", "Log server"), number("port", "Port", 1, 65535), bool("file", "Keep a local log file")],
+  fields: [bool("enabled", "Forward logs to the remote server"), text("host", "Log server"), number("port", "Port", 1, 65535), bool("file", "Keep local logs while forwarding")],
 };
 
 export function addWebuiSecurity(client: ApiClient, rendered: { node: HTMLElement }): void {

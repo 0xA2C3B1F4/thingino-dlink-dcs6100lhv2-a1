@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import os
 import struct
 import tempfile
 import tarfile
@@ -12,17 +13,15 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from installer import cli as installer_cli
 from installer.cli import build_parser
 from installer.recovery_ap.host import (
-    RUNTIME_ACTIVATE_COMMAND,
-    RUNTIME_RECEIVE_COMMAND,
-    RUNTIME_ROLLBACK_COMMAND,
-    RUNTIME_STATUS_COMMAND,
     RecoveryNorState,
     RecoveryApHostError,
     _digest,
     _station_payload,
     activate_personal_mtd3,
+    collect_runtime_snapshot,
     diagnose_thingino_failure,
     extract_camera_vendor_bundle,
     install_recovery_ap,
@@ -38,6 +37,7 @@ from installer.recovery_ap.host import (
 )
 from installer.mtd3_image import build_personal_mtd3_image
 from installer.ram_boot import build_ramdisk_uimage
+from installer.raptor_runtime_protocol import command as raptor_runtime_command
 
 
 def squashfs_stub() -> bytes:
@@ -126,20 +126,25 @@ class RecoveryApHostTests(unittest.TestCase):
                 ssh_arguments(session, host="8.8.8.8", command="status")
             with self.assertRaises(RecoveryApHostError):
                 ssh_arguments(session, host="192.168.88.1", command="sh")
-            for command in (
-                RUNTIME_RECEIVE_COMMAND,
-                RUNTIME_ACTIVATE_COMMAND,
-                RUNTIME_STATUS_COMMAND,
-                RUNTIME_ROLLBACK_COMMAND,
-            ):
-                self.assertEqual(
-                    ssh_arguments(session, host="192.168.88.1", command=command)[-1],
-                    command,
-                )
-            self.assertIn('awk \'$2 == "/run"', RUNTIME_RECEIVE_COMMAND)
-            self.assertIn("|| exit 1", RUNTIME_RECEIVE_COMMAND)
+            from installer.raptor_runtime_protocol import command as runtime_command
 
-    def test_uartless_session_allows_only_pinned_final_health_transport(self) -> None:
+            raptor_command = runtime_command(
+                "invoke", "a" * 32, "b" * 64, "status"
+            )
+            self.assertEqual(
+                ssh_arguments(
+                    session, host="192.168.88.1", command=raptor_command
+                )[-1],
+                raptor_command,
+            )
+            with self.assertRaises(RecoveryApHostError):
+                ssh_arguments(
+                    session,
+                    host="192.168.88.1",
+                    command="/bin/sh /run/thingino-runtime-candidate/activate.sh activate",
+                )
+
+    def test_uartless_session_allows_only_pinned_health_and_diagnostics(self) -> None:
         with tempfile.TemporaryDirectory() as name:
             station_pin = Path(name) / "station_known_hosts"
             station_pin.write_text("pinned\n", encoding="ascii")
@@ -159,6 +164,35 @@ class RecoveryApHostTests(unittest.TestCase):
             )
             self.assertEqual(arguments[-1], command)
             self.assertIn("StrictHostKeyChecking=yes", arguments)
+            application = ssh_arguments(
+                session, host="198.51.100.23", command="dlink-application-verify",
+                allow_uartless_station_health=True,
+            )
+            self.assertEqual(application[-1], "dlink-application-verify")
+            self.assertIn("StrictHostKeyChecking=yes", application)
+            diagnostic = ssh_arguments(
+                session, host="198.51.100.23", command="dlink-runtime-snapshot",
+                allow_uartless_station_health=True,
+            )
+            self.assertEqual(diagnostic[-1], "dlink-runtime-snapshot")
+            self.assertIn(f"UserKnownHostsFile={station_pin}", diagnostic)
+            self.assertIn(f"HostKeyAlias={session.station_mdns_name}", diagnostic)
+            self.assertIn("StrictHostKeyChecking=yes", diagnostic)
+            for command in ("dlink-runtime-snapshot; reboot", "reboot", "sh"):
+                with self.assertRaises(RecoveryApHostError):
+                    ssh_arguments(session, host="198.51.100.23", command=command,
+                                  allow_uartless_station_health=True)
+            with self.assertRaises(RecoveryApHostError):
+                ssh_arguments(session, host="198.51.100.23", command="dlink-runtime-snapshot")
+            with self.assertRaisesRegex(RecoveryApHostError, "pin is missing"):
+                ssh_arguments(replace(session, station_known_hosts=None),
+                              host="198.51.100.23", command="dlink-runtime-snapshot",
+                              allow_uartless_station_health=True)
+            with self.assertRaises(RecoveryApHostError):
+                ssh_arguments(
+                    session, host="198.51.100.23", command="dlink-application-verify; reboot",
+                    allow_uartless_station_health=True,
+                )
             with self.assertRaisesRegex(
                 RecoveryApHostError, "no recovery-AP transport"
             ):
@@ -172,8 +206,151 @@ class RecoveryApHostTests(unittest.TestCase):
                 ssh_arguments(
                     session,
                     host="192.168.88.1",
-                    command=RUNTIME_ACTIVATE_COMMAND + "; reboot",
+                    command=raptor_runtime_command(
+                        "invoke", "a" * 32, "b" * 64, "status"
+                    ) + "; reboot",
                 )
+
+    def test_runtime_snapshot_uses_session_specific_station_transport(self) -> None:
+        for uartless in (False, True):
+            with self.subTest(uartless=uartless), tempfile.TemporaryDirectory() as name:
+                root = private_session(Path(name))
+                session = replace(load_host_session(root),
+                                  session_kind="uartless-functional-provisioning" if uartless else "recovery-ap",
+                                  transport_enabled=not uartless)
+                with patch("installer.recovery_ap.host.load_host_session", return_value=session), \
+                     patch("installer.recovery_ap.host.resolve_recovery_ap_station", return_value=("camera.local", "198.51.100.23")) as resolve, \
+                     patch("installer.recovery_ap.host._exchange", return_value=b'{"schema_version":1}') as exchange:
+                    self.assertEqual(collect_runtime_snapshot(session_dir=root), {"schema_version": 1})
+                    resolve.assert_called_once_with(root, allow_uartless_station=uartless)
+                    exchange.assert_called_once_with(
+                        session, host="198.51.100.23", command="dlink-runtime-snapshot",
+                        timeout=90.0, allow_uartless_station_health=uartless,
+                    )
+
+    def test_uartless_raptor_transport_is_explicit_and_station_pinned(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path(os.environ["TMPDIR"]).resolve(strict=True)) as name:
+            pin = Path(name) / "station_known_hosts"
+            pin.write_text("pinned\n", encoding="ascii")
+            session = replace(load_host_session(private_session(Path(name))),
+                              session_kind="uartless-functional-provisioning",
+                              transport_enabled=False, station_known_hosts=pin)
+            command = raptor_runtime_command("invoke", "a" * 32, "b" * 64, "status")
+            arguments = ssh_arguments(session, host="198.51.100.23", command=command,
+                                      allow_uartless_raptor_runtime=True)
+            self.assertIn(f"UserKnownHostsFile={pin}", arguments)
+            self.assertIn(f"HostKeyAlias={session.station_mdns_name}", arguments)
+            self.assertIn("StrictHostKeyChecking=yes", arguments)
+            for flags in ({}, {"allow_uartless_station_health": True}):
+                with self.assertRaises(RecoveryApHostError):
+                    ssh_arguments(session, host="198.51.100.23", command=command, **flags)
+            for rejected in ("status", "reboot", "sh", "receive 1 " + "a" * 64,
+                             "install-mtd3 " + "a" * 64,
+                             "thingino-health; sha256sum /dev/mtd3", command + "; true"):
+                with self.subTest(command=rejected), self.assertRaises(RecoveryApHostError):
+                    ssh_arguments(session, host="198.51.100.23", command=rejected,
+                                  allow_uartless_raptor_runtime=True)
+            pin.unlink()
+            with self.assertRaisesRegex(RecoveryApHostError, "pin is missing"):
+                ssh_arguments(session, host="198.51.100.23", command=command,
+                              allow_uartless_raptor_runtime=True)
+
+    def test_raptor_exchange_errors_expose_only_safe_operation_metadata(self) -> None:
+        from installer.recovery_ap.host import _exchange
+        import subprocess
+        with tempfile.TemporaryDirectory(dir=Path(os.environ["TMPDIR"]).resolve(strict=True)) as name:
+            session = load_host_session(private_session(Path(name)))
+            secret = "private-credential-and-path"
+            for values, label in (
+                (("initialize", "a" * 32, "b" * 64, "c" * 64), "operation=initialize"),
+                (("receive", "a" * 32, "baseline.sha256", "100", "b" * 64),
+                 "operation=receive member=baseline.sha256"),
+            ):
+                command = raptor_runtime_command(*values)
+                failures = (
+                    (SimpleNamespace(returncode=2, stdout=secret.encode(), stderr=secret.encode()),
+                     f"rejected ssh_returncode=2 command_bytes={len(command.encode())}"
+                     f" stderr_bytes={len(secret.encode())} ssh_diagnostic=other"),
+                    (subprocess.TimeoutExpired(secret, 20, output=secret, stderr=secret), "timeout"),
+                    (OSError(secret), "transport-error"),
+                )
+                for failure, reason in failures:
+                    options = {"side_effect": failure} if isinstance(failure, Exception) else {"return_value": failure}
+                    with self.subTest(operation=values[0], reason=reason), \
+                         patch("installer.recovery_ap.host.subprocess.run", **options), \
+                         self.assertRaises(RecoveryApHostError) as raised:
+                        _exchange(session, host="198.51.100.23", command=command, payload=secret.encode())
+                    self.assertEqual(str(raised.exception), f"Raptor runtime {label} {reason}")
+                    self.assertNotIn(secret, str(raised.exception))
+                    self.assertNotIn("a" * 32, str(raised.exception))
+                    if isinstance(failure, Exception):
+                        self.assertTrue(raised.exception.__suppress_context__)
+            with patch("installer.recovery_ap.host.subprocess.run", return_value=SimpleNamespace(
+                    returncode=2, stdout=b"", stderr=secret.encode())), \
+                 self.assertRaisesRegex(RecoveryApHostError, "^authenticated recovery-AP exchange was rejected$"):
+                _exchange(session, host="198.51.100.23", command="status")
+
+    def test_runtime_stderr_categories_are_bounded_and_never_echo_remote_text(self) -> None:
+        from installer.recovery_ap.transport import _runtime_stderr_category
+        for raw, expected in (
+            (b"", "empty"),
+            (b"Received disconnect from private-address: String too long", "ssh-string-too-long"),
+            (b"Received disconnect from private-address: command too long private-secret", "command-too-long"),
+            (b"exec request failed on channel 0 private-secret", "exec-request-failed"),
+            (b"Connection closed by private-address port 22", "connection-closed"),
+            (b"raptor_error=quarantine-rejected\n", "receiver-quarantine-rejected"),
+            (b"private-secret" + b"x" * 4096 + b"command too long", "other"),
+        ):
+            with self.subTest(expected=expected):
+                self.assertEqual(_runtime_stderr_category(raw), expected)
+
+    def test_uartless_station_probe_is_one_shot_and_ap_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path(os.environ["TMPDIR"]).resolve(strict=True)) as name:
+            session_dir = private_session(Path(name))
+            pin = Path(name) / "station_known_hosts"
+            pin.write_text("pinned\n", encoding="ascii")
+            session = replace(load_host_session(session_dir),
+                              session_kind="uartless-functional-provisioning",
+                              transport_enabled=False, station_known_hosts=pin)
+            def run(arguments, **kwargs):
+                self.assertEqual(kwargs["timeout"], 20.0)
+                self.assertEqual(len(kwargs["input"]), 4096)
+                self.assertIn(f"UserKnownHostsFile={pin}", arguments)
+                self.assertEqual(arguments[-1], "thingino-health; sha256sum /dev/mtd3")
+                return SimpleNamespace(returncode=0, stderr=b"", stdout=(
+                    f"healthy {session.station_mdns_name}\n".encode("ascii")
+                    + kwargs["input"] + b"a" * 64 + b"  /dev/mtd3\n"))
+            with patch("installer.recovery_ap.host.load_host_session", return_value=session), \
+                 patch("installer.recovery_ap.host.subprocess.run", side_effect=run) as mocked:
+                result = probe_recovery_ap(session_dir=session_dir, host="198.51.100.23",
+                                           expected_state="station", allow_uartless_station=True)
+                self.assertEqual(result["mtd3_sha256"], "a" * 64)
+                mocked.assert_called_once()
+                with self.assertRaises(RecoveryApHostError):
+                    probe_recovery_ap(session_dir=session_dir, host="198.51.100.23",
+                                      expected_state="ap", allow_uartless_station=True)
+                mocked.assert_called_once()
+
+    def test_raptor_ram_commands_preserve_pins_and_reject_modified_receiver(self) -> None:
+        from installer.raptor_runtime_protocol import command as runtime_command
+        with tempfile.TemporaryDirectory() as name:
+            session = load_host_session(private_session(Path(name)))
+            for values in [("initialize", "a" * 32, "b" * 64, "c" * 64),
+                           ("receive", "a" * 32, "usr/bin/rvd", "1024", "b" * 64),
+                           ("seal", "a" * 32, "b" * 64),
+                           ("invoke", "a" * 32, "b" * 64, "start")]:
+                command = runtime_command(*values)
+                arguments = ssh_arguments(session, host="192.168.88.2", command=command)
+                self.assertEqual(arguments[-1], command)
+                for option in ("StrictHostKeyChecking=yes", "HostKeyAlias=192.168.88.1",
+                               "ClearAllForwardings=yes", "PasswordAuthentication=no",
+                               f"UserKnownHostsFile={session.known_hosts}"):
+                    self.assertIn(option, arguments)
+                with self.assertRaises(RecoveryApHostError):
+                    ssh_arguments(session, host="192.168.88.2", command=command + "; true")
+                with self.assertRaises(RecoveryApHostError):
+                    ssh_arguments(replace(session, transport_enabled=False),
+                                  host="192.168.88.2", command=command)
 
     def test_recovery_image_install_is_validated_uploaded_and_hash_bound(self) -> None:
         with tempfile.TemporaryDirectory() as name:
@@ -271,50 +448,16 @@ class RecoveryApHostTests(unittest.TestCase):
             self.assertEqual(result["mtd3_sha256"], mtd3_sha256)
             self.assertFalse(result["nor_writes"])
 
-    def test_failure_diagnostics_are_authenticated_bounded_and_read_only(self) -> None:
+    def test_retired_failure_diagnostics_fail_closed_without_transport(self) -> None:
         with tempfile.TemporaryDirectory() as name:
             session_dir = private_session(Path(name))
-            log = b"IMP_ISP_Open failed\n"
-            report = (
-                b"schema=1\n"
-                b"thingino_mounts=absent\n"
-                b"cleanup=complete\n"
-                + f"prudynt_log_size={len(log)}\n".encode("ascii")
-                + f"prudynt_log_sha256={hashlib.sha256(log).hexdigest()}\n".encode("ascii")
-                + b"prudynt_log_tail_begin\n"
-                + log.rstrip(b"\n")
-                + b"\nprudynt_log_tail_end\n"
-            )
-
-            def run(arguments, **_kwargs):
-                self.assertEqual(arguments[-1], "thingino-failure")
-                return SimpleNamespace(returncode=0, stdout=report, stderr=b"")
-
-            with patch("installer.recovery_ap.host.subprocess.run", side_effect=run):
-                result = diagnose_thingino_failure(
-                    session_dir=session_dir,
-                    host="192.168.88.1",
-                )
-            self.assertEqual(result["cleanup"], "complete")
-            self.assertEqual(result["thingino_mounts"], "absent")
-            self.assertEqual(result["prudynt_log_tail"], "IMP_ISP_Open failed")
-            self.assertFalse(result["nor_writes"])
-
-    def test_failure_diagnostics_reject_malformed_framing(self) -> None:
-        with tempfile.TemporaryDirectory() as name:
-            session_dir = private_session(Path(name))
-            with patch(
-                "installer.recovery_ap.host.subprocess.run",
-                return_value=SimpleNamespace(
-                    returncode=0,
-                    stdout=b"schema=1\nthingino_mounts=present\n",
-                    stderr=b"",
-                ),
-            ), self.assertRaisesRegex(RecoveryApHostError, "framing"):
-                diagnose_thingino_failure(
-                    session_dir=session_dir,
-                    host="192.168.88.1",
-                )
+            with patch("installer.recovery_ap.host.subprocess.run") as run:
+                with self.assertRaisesRegex(RecoveryApHostError, "retired"):
+                    diagnose_thingino_failure(
+                        session_dir=session_dir,
+                        host="192.168.88.1",
+                    )
+            run.assert_not_called()
 
     def test_provisioning_derives_psk_and_uses_stdin_only(self) -> None:
         ssid = "Private Camera Lab"
@@ -582,6 +725,8 @@ class RecoveryApHostTests(unittest.TestCase):
                 self.assertEqual(decision["safe_next_action"], expected)
 
     def test_cli_exposes_read_only_reconciliation(self) -> None:
+        if not installer_cli.LEGACY_INSTALLER_AVAILABLE:
+            self.skipTest("legacy personal installer is not exported")
         arguments = build_parser().parse_args(
             [
                 "reconcile-camera-state",

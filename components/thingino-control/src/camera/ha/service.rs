@@ -3,10 +3,11 @@
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 #[cfg(test)]
 use std::sync::mpsc::{self, Receiver};
-use std::sync::{Arc, Mutex, Weak};
+use std::sync::{Arc, Mutex};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-use super::super::{PrudyntBackend, json_response, number, object};
+use super::super::{json_response, number, object};
+use super::backend::WeakBackend;
 use super::motion::MotionSlot;
 use crate::json::{self, Value};
 use crate::{BackendError, BackendResponse};
@@ -60,8 +61,8 @@ impl Default for RuntimeState {
     }
 }
 
-pub(in crate::camera) struct HaService {
-    backend: Mutex<Weak<PrudyntBackend>>,
+pub(crate) struct HaService {
+    backend: Mutex<Option<WeakBackend>>,
     worker: Mutex<Option<WorkerControl>>,
     runtime: Arc<Mutex<RuntimeState>>,
     queue_depth: Arc<AtomicUsize>,
@@ -83,13 +84,21 @@ struct TestBarrier {
 #[derive(Default)]
 struct HaTestHooks {
     fail_next_spawn: AtomicBool,
+    fail_next_image_write: AtomicBool,
     start_barrier: Mutex<Option<TestBarrier>>,
     pre_exit_barrier: Mutex<Option<TestBarrier>>,
     exit_barrier: Mutex<Option<TestBarrier>>,
 }
 
 impl HaService {
-    pub(in crate::camera) fn action(&self, body: &[u8]) -> Result<BackendResponse, BackendError> {
+    #[cfg(all(test, feature = "raptor-backend"))]
+    pub(super) fn fail_next_image_write(&self) {
+        self.test_hooks
+            .fail_next_image_write
+            .store(true, Ordering::Release);
+    }
+
+    pub(crate) fn action(&self, body: &[u8]) -> Result<BackendResponse, BackendError> {
         let request = json::parse(body).map_err(|_| BackendError::Protocol)?;
         let fields = request.as_object().ok_or(BackendError::Protocol)?;
         if fields.len() != 1 {
@@ -105,6 +114,19 @@ impl HaService {
             "publish_state" => Request::PublishState,
             _ => return Err(BackendError::Protocol),
         };
+        let backend = self
+            .backend
+            .lock()
+            .map_err(|_| BackendError::Unavailable)?
+            .as_ref()
+            .and_then(|backend| backend.upgrade());
+        if let Some(backend) = backend
+            && !super::config::HaConfig::load(backend.paths())?.enabled
+        {
+            return Err(BackendError::Unsupported(
+                "Home Assistant integration is disabled",
+            ));
+        }
         self.enqueue(request)?;
         json_response(object([
             ("status", Value::String("accepted".to_owned())),
@@ -112,7 +134,7 @@ impl HaService {
         ]))
     }
 
-    pub(in crate::camera) fn runtime(&self) -> Result<BackendResponse, BackendError> {
+    pub(crate) fn runtime(&self) -> Result<BackendResponse, BackendError> {
         let runtime = self
             .runtime
             .lock()

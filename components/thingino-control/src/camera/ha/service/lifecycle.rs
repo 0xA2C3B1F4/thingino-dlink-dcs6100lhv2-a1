@@ -2,11 +2,12 @@
 use std::io;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
-use std::sync::{Arc, Mutex, Weak};
+use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 #[cfg(test)]
 use std::time::Duration;
 
+use super::super::backend::HaBackend;
 use super::super::{
     config::HaConfig,
     motion::{MotionSlot, MotionUpdate},
@@ -16,7 +17,7 @@ use super::{EVENT_QUEUE_CAPACITY, HaService, Request, RuntimeState, update_runti
 #[cfg(test)]
 use super::{HaTestHooks, TestBarrier};
 use crate::BackendError;
-use crate::camera::{PrudyntBackend, motion_events::MotionEventDisposition};
+use crate::camera::motion_events::MotionEventDisposition;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum WorkerState {
@@ -33,9 +34,9 @@ pub(super) struct WorkerControl {
 }
 
 impl HaService {
-    pub(in crate::camera) fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
-            backend: Mutex::new(Weak::new()),
+            backend: Mutex::new(None),
             worker: Mutex::new(None),
             runtime: Arc::new(Mutex::new(RuntimeState::default())),
             queue_depth: Arc::new(AtomicUsize::new(0)),
@@ -48,24 +49,29 @@ impl HaService {
         }
     }
 
-    pub(in crate::camera) fn start(&self, backend: Arc<PrudyntBackend>) {
+    #[cfg(feature = "raptor-backend")]
+    pub(crate) fn start_raptor(&self, backend: Arc<crate::RaptorBackend>) {
+        self.start_backend(HaBackend::Raptor(backend));
+    }
+
+    fn start_backend(&self, backend: HaBackend) {
         *self
             .backend
             .lock()
-            .expect("HA backend lock must be available") = Arc::downgrade(&backend);
+            .expect("HA backend lock must be available") = Some(backend.downgrade());
         self.reconfigure();
     }
 
-    pub(in crate::camera) fn reconfigure(&self) {
+    pub(crate) fn reconfigure(&self) {
         let Some(backend) = self
             .backend
             .lock()
             .ok()
-            .and_then(|backend| backend.upgrade())
+            .and_then(|backend| backend.as_ref().and_then(|backend| backend.upgrade()))
         else {
             return;
         };
-        let (enabled, motion_enabled, invalid) = match HaConfig::load(&backend.paths) {
+        let (enabled, motion_enabled, invalid) = match HaConfig::load(backend.paths()) {
             Ok(config) => (
                 config.enabled,
                 config.enabled && config.entities.motion,
@@ -148,13 +154,13 @@ impl HaService {
         let config_generation = Arc::clone(&self.config_generation);
         let motion_slot = Arc::clone(&self.motion_slot);
         let worker_shutdown = Arc::clone(&shutdown_requested);
-        let service = Arc::clone(&backend.ha);
+        let service = Arc::clone(backend.service());
         let handle = self.spawn_worker(move || {
             loop {
                 #[cfg(test)]
                 wait_test_barrier(&service.test_hooks.start_barrier, "start");
                 let exit_generation = worker_loop(
-                    Arc::clone(&backend),
+                    backend.clone(),
                     &receiver,
                     Arc::clone(&runtime),
                     Arc::clone(&queue_depth),
@@ -194,7 +200,7 @@ impl HaService {
         }
     }
 
-    pub(in crate::camera) fn shutdown(&self) -> io::Result<()> {
+    pub(crate) fn shutdown(&self) -> io::Result<()> {
         self.accept_motion.store(false, Ordering::Release);
         self.motion_slot.reset();
         let (launch_generation, handle) = {

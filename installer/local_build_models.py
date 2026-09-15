@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from .media_closure import MediaClosure
 from .vendor_bundle import VendorBundle
 
 
@@ -16,12 +15,6 @@ class ValidatedBuildInputs:
     head: str
     vendor_bundle_dir: Path
     vendor_bundle: VendorBundle
-    media_closure_dir: Path | None
-    media_closure: MediaClosure | None
-    private_config_dir: Path | None
-    expected_wpa_config_path: Path | None
-    session_dir: Path | None
-    raptor_rwd_artifact: Path | None
     signing_key: Path | None
     audio_link: Path
     artifact_scope: str
@@ -41,6 +34,7 @@ class BuildEnvironment:
     rust_source: Path
     rust_toolchain: Path
     ingenic_toolchain_archive: Path
+    thingino_toolchain_archive: Path
 
 
 @dataclass(frozen=True)

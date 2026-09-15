@@ -190,12 +190,18 @@ def validate_legacy_stage2_v1(raw: bytes) -> LegacyStage2V1Payload:
 
 
 def build_stage2(
-    *, final_kernel: bytes, system_rootfs: bytes, data_mode: str = "initialize"
+    *, final_kernel: bytes, system_rootfs: bytes, data_mode: str = "initialize",
+    development_profile: str | None = None,
 ) -> bytes:
     if data_mode not in DATA_MODES:
         raise Stage2Error("stage-2 data mode is invalid")
     layout = derive_final_layout(len(system_rootfs))
     command_line = final_kernel_command_line(layout)
+    if development_profile is not None:
+        from .raptor_development import validate_candidate
+
+        command_line = validate_candidate(profile=development_profile,
+            kernel=final_kernel, system=system_rootfs, data_mode=data_mode)
     validate_uimage_command_line(
         final_kernel,
         command_line,
@@ -234,20 +240,20 @@ def build_stage2(
     digest_offset = _STRUCT_SIZE - 32
     header = header[:digest_offset] + digest + header[digest_offset + 32 :]
     raw = header + final_kernel + system_rootfs
-    validate_stage2(raw)
+    validate_stage2_for_profile(raw, development_profile)
     return raw
 
 
 def _retired_v2_kernel_command_line(layout: object) -> str:
-    """Return the one schema-2 command line retired by the 39/25 fix."""
+    """Keep the old 39/25 layout readable for passive SD-file replacement."""
 
     current = final_kernel_command_line(layout)
-    current_memory = "mem=39M@0x0 rmem=25M@0x2700000"
+    current_memory = "mem=42M@0x0 rmem=22M@0x2a00000"
     if current.count(current_memory) != 1:
         raise AssertionError("current final memory split identity changed")
     return current.replace(
         current_memory,
-        "mem=42M@0x0 rmem=22M@0x2a00000",
+        "mem=39M@0x0 rmem=25M@0x2700000",
     )
 
 
@@ -355,7 +361,22 @@ def validate_stage2(raw: bytes) -> Stage2Payload:
     return _validate_stage2(raw, accept_retired_v2_memory_split=False)
 
 
-def validate_retired_stage2_v2_42_22(raw: bytes) -> Stage2Payload:
+def validate_stage2_for_profile(raw: bytes, profile: str | None) -> Stage2Payload:
+    """Keep normal admission unchanged; a named experiment binds exact bytes."""
+    if profile is None:
+        return validate_stage2(raw)
+    from .raptor_development import PROFILES, validate_candidate
+
+    if profile not in PROFILES:
+        raise Stage2Error("unknown development media profile")
+    parsed = _validate_stage2(raw, accept_retired_v2_memory_split=False,
+                             accept_retired_ipv6_disabled=True)
+    validate_candidate(profile=profile, kernel=parsed.kernel, system=parsed.system,
+                       data_mode=parsed.data_mode)
+    return parsed
+
+
+def validate_retired_stage2_v2_39_25(raw: bytes) -> Stage2Payload:
     """Validate the exact prior schema-2 payload only for passive replacement."""
 
     return _validate_stage2(raw, accept_retired_v2_memory_split=True)

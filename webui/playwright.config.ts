@@ -3,6 +3,8 @@ import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: "./browser-tests",
   fullyParallel: false,
+  // The fixture server shares mutable scenario state across test files.
+  workers: 1,
   retries: 0,
   reporter: "line",
   use: {
@@ -21,6 +23,7 @@ export default defineConfig({
     name: "chromium",
     use: {
       browserName: "chromium",
+      ...(process.env.WEBUI_BROWSER_EXECUTABLE ? { launchOptions: { executablePath: process.env.WEBUI_BROWSER_EXECUTABLE } } : {}),
       ...(process.env.WEBUI_BROWSER_CHANNEL === "chrome" ? { channel: "chrome" as const } : {}),
     },
   }],

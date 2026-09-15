@@ -41,7 +41,7 @@ from installer.runtime_policy import (
 from installer.sd_package import atomic_write, generate_bootstrap, parse_package, validate_bootstrap
 from installer.stage2 import DATA_MODES
 from installer.stage2 import FILENAME as STAGE2_FILENAME
-from installer.stage2 import build_stage2, validate_stage2
+from installer.stage2 import build_stage2, validate_stage2, validate_stage2_for_profile
 from installer.stage1.squashfs_listing import listing_modes, listing_paths
 
 
@@ -291,11 +291,15 @@ def render_contract(
     system: bytes,
     mmc_module: bytes,
     require_camera_authorization: bool = False,
+    development_profile: str | None = None,
 ) -> bytes:
-    parsed = validate_stage2(stage2)
-    if require_camera_authorization and parsed.data_mode != "initialize":
+    parsed = validate_stage2_for_profile(stage2, development_profile)
+    if require_camera_authorization and parsed.data_mode not in {
+        "initialize",
+        "preserve",
+    }:
         raise Stage1BuildError(
-            "camera-authorized universal stage 1 requires initialize data mode"
+            "camera-authorized universal stage 1 requires initialize or preserve data mode"
         )
     lines = [
         "#ifndef DCS6100_STAGE1_GENERATED_CONTRACT_H",
@@ -570,19 +574,33 @@ def _build_install_set(
     artifact_scope: str = "device-personalized",
     universal_root_manifest: dict[str, object] | None = None,
     universal_signing_key: Path | None = None,
+    development_profile: str | None = None,
 ) -> dict[str, object]:
     os.chmod(output_dir, 0o700)
     validate_squashfs(system)
+    development_command_line = None
+    if development_profile is not None:
+        from installer.raptor_development import validate_build_inputs, validate_candidate
+
+        if artifact_scope != "device-personalized":
+            raise Stage1BuildError("development Raptor is not a universal release profile")
+        development_command_line = validate_candidate(
+            profile=development_profile, kernel=final_kernel, system=system,
+            data_mode=data_mode,
+        )
+        validate_build_inputs(installer_kernel=installer_kernel,
+                              linux_config=final_linux_config, mmc=mmc_module)
     if artifact_scope == "device-personalized":
         if universal_root_manifest is not None:
             raise Stage1BuildError("personalized install set received universal metadata")
-        validate_final_root(
-            system, unsquashfs=unsquashfs, temporary_parent=output_dir.parent
-        )
+        if development_profile is None:
+            validate_final_root(
+                system, unsquashfs=unsquashfs, temporary_parent=output_dir.parent
+            )
     elif artifact_scope == "model-universal":
-        if data_mode != "initialize":
+        if data_mode not in {"initialize", "preserve"}:
             raise Stage1BuildError(
-                "model-universal first-install set requires initialize data mode"
+                "model-universal install set requires initialize or preserve data mode"
             )
         if not isinstance(universal_root_manifest, dict):
             raise Stage1BuildError("model-universal root manifest is required")
@@ -593,6 +611,7 @@ def _build_install_set(
             universal_root_manifest.get("artifact_scope") != "model-universal"
             or universal_root_manifest.get("contains_device_secrets") is not False
             or universal_root_manifest.get("provisioning_required") is not True
+            or universal_root_manifest.get("composition_required", False) is not False
             or not isinstance(system_identity, dict)
             or system_identity.get("sha256") != hashlib.sha256(system).hexdigest()
             or system_identity.get("size") != len(system)
@@ -607,7 +626,7 @@ def _build_install_set(
         partition_limit=TARGET.partition(1).size,
         expected_entry=None,
     )
-    final_command_line = final_kernel_command_line(layout)
+    final_command_line = development_command_line or final_kernel_command_line(layout)
     validate_uimage_command_line(
         final_kernel,
         final_command_line,
@@ -620,6 +639,7 @@ def _build_install_set(
         final_kernel=final_kernel,
         system_rootfs=system,
         data_mode=data_mode,
+        development_profile=development_profile,
     )
     contract = render_contract(
         stage2=stage2,
@@ -627,6 +647,7 @@ def _build_install_set(
         system=system,
         mmc_module=mmc_module,
         require_camera_authorization=artifact_scope == "model-universal",
+        development_profile=development_profile,
     )
     stage1_root_path = output_dir / "stage1-bootstrap.squashfs"
     stage1_root = build_stage1_root(
@@ -660,6 +681,7 @@ def _build_install_set(
         universal_firmware_sha256 = hashlib.sha256(universal_bundle).hexdigest()
     manifest = {
         "schema_version": 2,
+        **({"development_profile": development_profile} if development_profile is not None else {}),
         "artifact_scope": artifact_scope,
         "provisioning": (
             "separate-per-camera-audit-and-jffs2"
@@ -669,7 +691,7 @@ def _build_install_set(
         "universal_firmware_sha256": universal_firmware_sha256,
         "status": "host-built install set; generation does not authorize live use",
         **(
-            {"physical_write_policy": universal_physical_write_policy()}
+            {"physical_write_policy": universal_physical_write_policy(data_mode)}
             if artifact_scope == "model-universal"
             else {}
         ),
@@ -809,6 +831,7 @@ def build_install_set(
     mksquashfs: Path,
     unsquashfs: Path,
     data_mode: str = "initialize",
+    development_profile: str | None = None,
 ) -> dict[str, object]:
     if output_dir.exists():
         raise Stage1BuildError("refusing to reuse an install-set output directory")
@@ -829,6 +852,7 @@ def build_install_set(
             mksquashfs=mksquashfs,
             unsquashfs=unsquashfs,
             data_mode=data_mode,
+            development_profile=development_profile,
         )
         os.replace(working, output_dir)
     except BaseException:
@@ -851,6 +875,7 @@ def build_universal_install_set(
     lld: Path,
     mksquashfs: Path,
     unsquashfs: Path,
+    data_mode: str = "initialize",
 ) -> dict[str, object]:
     """Build one identical model payload; camera authorization stays separate."""
 
@@ -872,7 +897,7 @@ def build_universal_install_set(
             lld=lld,
             mksquashfs=mksquashfs,
             unsquashfs=unsquashfs,
-            data_mode="initialize",
+            data_mode=data_mode,
             artifact_scope="model-universal",
             universal_root_manifest=universal_root_manifest,
             universal_signing_key=signing_key,
@@ -896,6 +921,10 @@ def main() -> int:
     parser.add_argument("--lld")
     parser.add_argument("--mksquashfs")
     parser.add_argument("--unsquashfs")
+    from installer.raptor_development import PROFILES
+
+    parser.add_argument("--development-profile", choices=tuple(PROFILES),
+                        help="admit only the exact reviewed private Raptor candidate; requires preserve")
     parser.add_argument(
         "--data-mode",
         choices=("initialize", "preserve", "factory-reset"),
@@ -915,6 +944,7 @@ def main() -> int:
             mksquashfs=_resolve(arguments.mksquashfs, "mksquashfs"),
             unsquashfs=_resolve(arguments.unsquashfs, "unsquashfs"),
             data_mode=arguments.data_mode,
+            development_profile=arguments.development_profile,
         )
     except (OSError, ValueError) as exc:
         print(json.dumps({"error": str(exc), "ok": False}, sort_keys=True))

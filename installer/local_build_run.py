@@ -1,4 +1,4 @@
-"""Run the complete private, device-local schema-2 firmware build."""
+"""Run the complete model-universal full-Raptor schema-2 firmware build."""
 
 from __future__ import annotations
 
@@ -39,7 +39,6 @@ from .local_build_support import (
     _run,
     _sha256,
 )
-from .media_closure import MediaClosureError
 from .sd_package import (
     atomic_write,
     generate_bootstrap,
@@ -757,11 +756,12 @@ def _acquire_build_environment(
         rust_source=rust_source,
         rust_toolchain=rust_toolchain,
         ingenic_toolchain_archive=ingenic_toolchain_archive,
+        thingino_toolchain_archive=thingino_toolchain,
     )
 
 
 def _build_clean_roots(
-    inputs: ValidatedBuildInputs, environment: BuildEnvironment, run_dir: Path
+    inputs: ValidatedBuildInputs, environment: BuildEnvironment, run_dir: Path,
 ) -> CleanBuildResult:
     """Run exactly the reserved build count and retain the comparison evidence."""
 
@@ -818,34 +818,25 @@ def _write_install_build_manifest(
     """Record successful host inspection without camera inputs or signing material."""
 
     run_manifest = {
-        "artifact_scope": inputs.artifact_scope,
+        "artifact_scope": "model-universal",
+        "media_backend": "raptor",
         "build_count": inputs.build_count,
         "data_mode": inputs.data_mode,
         "download_cache": environment.download_identity,
         "install_set": "install-set",
         "inspection": packaged.inspection,
-        "private": inputs.artifact_scope == "device-personalized",
+        "private": False,
         "project_head": inputs.head,
-        "provisioning": (
-            "separate-per-camera-sidecar"
-            if inputs.artifact_scope == "model-universal"
-            else "embedded-device-personalization"
-        ),
+        "provisioning": "separate-per-camera-sidecar",
         "public_firmware_release_gate_consulted": False,
-        "raptor_rwd_overlay": inputs.raptor_rwd_artifact is not None,
-        "reproducibility": clean.reproducibility,
+        "reproducibility": {**clean.reproducibility, "scope": "base-image-only"},
         "schema_version": RUN_SCHEMA_VERSION,
         "sources_lock_sha256": environment.lock_sha256,
         "status": "host-built and inspected; live installation not authorized",
         "thingino_toolchain": environment.thingino_toolchain_identity,
     }
     atomic_write(
-        run_dir
-        / (
-            "local-build-run.universal.json"
-            if inputs.artifact_scope == "model-universal"
-            else "local-build-run.private.json"
-        ),
+        run_dir / "local-build-run.universal.json",
         (json.dumps(run_manifest, indent=2, sort_keys=True) + "\n").encode(),
         mode=0o600,
     )
@@ -855,26 +846,22 @@ def _build_local_install_set(
     *,
     build_root: Path,
     vendor_bundle_dir: Path,
-    media_closure_dir: Path | None,
-    private_config_dir: Path | None,
-    expected_wpa_config_path: Path | None,
-    session_dir: Path | None,
-    raptor_rwd_artifact: Path | None,
     data_mode: str,
     artifact_scope: str,
-    signing_key: Path | None,
+    signing_key: Path,
     build_count: int,
+    progress: Callable[[dict[str, object]], None] | None = None,
 ) -> dict[str, object]:
-    """Build one explicitly personalized or model-universal install set."""
+    """Build one signed model-universal full-Raptor install set."""
+
+    if artifact_scope != "model-universal":
+        raise LocalBuildRunError(
+            "personalized local builds are retired; use model-universal full Raptor"
+        )
 
     inputs = validate_build_inputs(
         build_root=build_root,
         vendor_bundle_dir=vendor_bundle_dir,
-        media_closure_dir=media_closure_dir,
-        private_config_dir=private_config_dir,
-        expected_wpa_config_path=expected_wpa_config_path,
-        session_dir=session_dir,
-        raptor_rwd_artifact=raptor_rwd_artifact,
         data_mode=data_mode,
         artifact_scope=artifact_scope,
         signing_key=signing_key,
@@ -887,14 +874,18 @@ def _build_local_install_set(
     try:
         environment = _acquire_build_environment(inputs, run_dir)
         clean = _build_clean_roots(inputs, environment, run_dir)
-        final_root = prepare_install_root(inputs, environment, clean, run_dir)
+        final_root = prepare_install_root(
+            inputs, environment, clean, run_dir,
+            progress=progress,
+        )
         packaged = package_install_root(inputs, environment, clean, final_root, run_dir)
-        _write_install_build_manifest(inputs, environment, clean, packaged, run_dir)
+        _write_install_build_manifest(
+            inputs, environment, clean, packaged, run_dir,
+        )
     except (
         DownloadCacheError,
         FinalRootError,
         LocalBuildAcquireError,
-        MediaClosureError,
         Stage1BuildError,
         VendorBundleError,
         source_prepare.PreparationError,
@@ -906,7 +897,8 @@ def _build_local_install_set(
         raise LocalBuildRunError(str(exc)) from exc
 
     return {
-        "artifact_scope": inputs.artifact_scope,
+        "artifact_scope": "model-universal",
+        "media_backend": "raptor",
         "build_count": inputs.build_count,
         "build_root": str(inputs.build_root),
         "data_mode": inputs.data_mode,
@@ -914,16 +906,11 @@ def _build_local_install_set(
         "inspection": packaged.inspection,
         "nor_writes": False,
         "public_firmware_release_gate_consulted": False,
-        "raptor_rwd_overlay": inputs.raptor_rwd_artifact is not None,
-        "reproducible": clean.reproducibility.get("byte_identical") is True,
+        "reproducible": False,
         "run_dir": str(run_dir),
         "schema_version": 2,
         "status": "host-built and inspected; live installation not authorized",
-        "universal_firmware": (
-            str(packaged.directory / "thingino-universal.tgb")
-            if inputs.artifact_scope == "model-universal"
-            else None
-        ),
+        "universal_firmware": str(packaged.directory / "thingino-universal.tgb"),
     }
 
 
@@ -935,24 +922,17 @@ def build_local_install_set(
     private_config_dir: Path,
     expected_wpa_config_path: Path,
     session_dir: Path,
-    raptor_rwd_artifact: Path,
     data_mode: str = "initialize",
     build_count: int = 1,
 ) -> dict[str, object]:
-    """Legacy personalized build; its bytes must not be shared as universal."""
+    """Retired personalized build entrypoint.
 
-    return _build_local_install_set(
-        build_root=build_root,
-        vendor_bundle_dir=vendor_bundle_dir,
-        media_closure_dir=media_closure_dir,
-        private_config_dir=private_config_dir,
-        expected_wpa_config_path=expected_wpa_config_path,
-        session_dir=session_dir,
-        raptor_rwd_artifact=raptor_rwd_artifact,
-        data_mode=data_mode,
-        artifact_scope="device-personalized",
-        signing_key=None,
-        build_count=build_count,
+    Keep the symbol for callers that can report a structured migration error,
+    but reject it before resolving or creating any build workspace.
+    """
+
+    raise LocalBuildRunError(
+        "personalized local builds are retired; use local-build build-universal"
     )
 
 
@@ -960,38 +940,21 @@ def build_local_universal_install_set(
     *,
     build_root: Path,
     vendor_bundle_dir: Path,
-    media_closure_dir: Path | None = None,
-    raptor_rwd_artifact: Path | None = None,
     signing_key: Path,
+    data_mode: str = "initialize",
     build_count: int = 1,
-    webrtc: bool = False,
     progress: Callable[[dict[str, object]], None] | None = None,
 ) -> dict[str, object]:
-    """Build once for A1 cameras; authorization and provisioning stay separate."""
+    """Build the source-complete universal Raptor image for A1 cameras."""
 
-    if webrtc:
-        if raptor_rwd_artifact is not None:
-            raise LocalBuildRunError("select --webrtc or an external Raptor archive")
-        from .raptor_build import build_raptor_component
-
-        component = build_raptor_component(build_root=build_root, progress=progress)
-        raptor_rwd_artifact = Path(str(component["raptor_rwd_artifact"]))
     result = _build_local_install_set(
         build_root=build_root,
         vendor_bundle_dir=vendor_bundle_dir,
-        media_closure_dir=media_closure_dir,
-        private_config_dir=None,
-        expected_wpa_config_path=None,
-        session_dir=None,
-        raptor_rwd_artifact=raptor_rwd_artifact,
-        data_mode="initialize",
+        data_mode=data_mode,
         artifact_scope="model-universal",
         signing_key=signing_key,
         build_count=build_count,
+        progress=progress,
     )
-
-    if raptor_rwd_artifact is not None:
-        result["raptor_rwd_artifact"] = str(raptor_rwd_artifact)
-    if webrtc:
-        result["raptor_rwd_source_build"] = True
+    result["raptor_full_source_build"] = True
     return result

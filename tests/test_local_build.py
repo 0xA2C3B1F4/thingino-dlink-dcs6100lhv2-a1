@@ -27,7 +27,6 @@ class LocalBuildWorkspaceTests(unittest.TestCase):
                 "credential": b"a" * 64 + b"\n",
                 "media_closure_dir": root / "media",
                 "private_root": private,
-                "raptor_rwd_artifact": root / "raptor.tar.gz",
                 "session_dir": root / "session",
                 "vendor_bundle_dir": root / "vendor",
             }
@@ -44,7 +43,6 @@ class LocalBuildWorkspaceTests(unittest.TestCase):
                         vendor_bundle_dir=root / "vendor",
                         media_closure_dir=root / "media",
                         session_dir=root / "session",
-                        raptor_rwd_artifact=root / "raptor.tar.gz",
                         data_mode="initialize",
                         ssid="one",
                         passphrase="password-one",
@@ -66,7 +64,6 @@ class LocalBuildWorkspaceTests(unittest.TestCase):
                 "credential": b"a" * 64 + b"\n",
                 "media_closure_dir": root / "media",
                 "private_root": private,
-                "raptor_rwd_artifact": root / "raptor.tar.gz",
                 "session_dir": session,
                 "vendor_bundle_dir": root / "vendor",
             }
@@ -94,7 +91,6 @@ class LocalBuildWorkspaceTests(unittest.TestCase):
                     vendor_bundle_dir=root / "vendor",
                     media_closure_dir=root / "media",
                     session_dir=session,
-                    raptor_rwd_artifact=root / "raptor.tar.gz",
                     data_mode="preserve",
                     ssid="private-test-ssid",
                     passphrase="private-test-passphrase",

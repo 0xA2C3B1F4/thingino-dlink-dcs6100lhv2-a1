@@ -129,6 +129,7 @@ pub(super) struct Api {
         c_int,
         bool,
     ) -> c_int,
+    want_write: unsafe extern "C" fn(*mut Mosquitto) -> bool,
     subscribe: unsafe extern "C" fn(*mut Mosquitto, *mut c_int, *const c_char, c_int) -> c_int,
 }
 
@@ -240,6 +241,10 @@ impl Api {
             "mosquitto_subscribe",
             unsafe extern "C" fn(*mut Mosquitto, *mut c_int, *const c_char, c_int) -> c_int
         );
+        let want_write = symbol!(
+            "mosquitto_want_write",
+            unsafe extern "C" fn(*mut Mosquitto) -> bool
+        );
         let mut users = LIBRARY_USERS
             .lock()
             .map_err(|_| "libmosquitto lifecycle lock unavailable")?;
@@ -270,6 +275,7 @@ impl Api {
             loop_once,
             publish,
             subscribe,
+            want_write,
         })
     }
 }
@@ -298,6 +304,8 @@ pub(super) struct Client {
     api: Api,
     client: *mut Mosquitto,
     callbacks: Box<CallbackState>,
+    #[cfg(test)]
+    pub(super) fail_next_image_write: bool,
 }
 
 impl Client {
@@ -326,6 +334,8 @@ impl Client {
             api,
             client,
             callbacks,
+            #[cfg(test)]
+            fail_next_image_write: false,
         })
     }
 
@@ -464,6 +474,44 @@ impl Client {
         payload: &[u8],
         retained: bool,
     ) -> Result<(), &'static str> {
+        self.publish_qos(topic, payload, retained, 1)
+    }
+
+    pub(super) fn pending_write(&self) -> bool {
+        // SAFETY: the sole worker owns this live client.
+        unsafe { (self.api.want_write)(self.client) }
+    }
+
+    pub(super) fn publish_image(
+        &mut self,
+        topic: &str,
+        payload: &[u8],
+    ) -> Result<(), &'static str> {
+        if payload.len() > 256 * 1024 || self.pending_write() {
+            return Err("MQTT image queue unavailable");
+        }
+        #[cfg(test)]
+        if std::mem::take(&mut self.fail_next_image_write) {
+            return Err("injected MQTT image write failure");
+        }
+        self.publish_qos(topic, payload, false, 0)?;
+        let until = std::time::Instant::now() + std::time::Duration::from_millis(250);
+        while self.pending_write() && std::time::Instant::now() < until {
+            self.loop_once(10)?;
+        }
+        if self.pending_write() {
+            return Err("MQTT image write timed out");
+        }
+        Ok(())
+    }
+
+    fn publish_qos(
+        &mut self,
+        topic: &str,
+        payload: &[u8],
+        retained: bool,
+        qos: c_int,
+    ) -> Result<(), &'static str> {
         let topic = topic_cstring(topic)?;
         if payload.len() > MAX_PAYLOAD_BYTES {
             return Err("MQTT payload too large");
@@ -478,7 +526,7 @@ impl Client {
                     topic.as_ptr(),
                     length,
                     payload.as_ptr().cast(),
-                    1,
+                    qos,
                     retained,
                 )
             },

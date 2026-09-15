@@ -21,10 +21,17 @@ from .collector.output import (
     validate_collector_output,
     validate_protected_collector_output,
 )
-from .development_install import (
-    DevelopmentInstallError,
-    complete_personal_install,
-)
+LEGACY_INSTALLER_AVAILABLE = (Path(__file__).with_name("development_install.py")).is_file()
+if LEGACY_INSTALLER_AVAILABLE:
+    from .development_install import DevelopmentInstallError, complete_personal_install
+else:
+    class DevelopmentInstallError(ValueError):
+        """The legacy personal installer is not part of the public export."""
+
+    def complete_personal_install(*args, **kwargs):
+        raise DevelopmentInstallError(
+            "the legacy personal installer is not part of this export"
+        )
 from .final_bundle import (
     BundleError,
     build_final_bundle,

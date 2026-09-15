@@ -331,7 +331,7 @@ def authorize_camera(request: AuthorizationInputs, *, emit: EventSink | None = N
 
 def verify_camera(request: VerifyInputs, *, emit: EventSink | None = None) -> InstallationResult:
     from .recovery_ap.session import ensure_uartless_station_host_pin as ensure_station_pin
-    from .recovery_ap.host import prove_thingino_health
+    from .recovery_ap.host import prove_thingino_application, prove_thingino_health
     if emit:
         emit(InstallationEvent("validating", "verify_camera"))
 
@@ -356,6 +356,14 @@ def verify_camera(request: VerifyInputs, *, emit: EventSink | None = None) -> In
     if session_fingerprint(request.session_dir) != session_identity:
         raise ProjectError("changed_input", "session identity changed during verification")
     ensure_station_pin(session_dir=request.session_dir, dropbearkey=dropbearkey)
+    if emit:
+        emit(InstallationEvent("validating", "verify_application"))
+    application = prove_thingino_application(
+        session_dir=request.session_dir, station_ipv4=str(health["station_ipv4"])
+    )
+    if session_fingerprint(request.session_dir) != session_identity:
+        raise ProjectError("changed_input", "session identity changed during verification")
+    ensure_station_pin(session_dir=request.session_dir, dropbearkey=dropbearkey)
     return _document(
         "universal verify",
         ok=True,
@@ -364,6 +372,7 @@ def verify_camera(request: VerifyInputs, *, emit: EventSink | None = None) -> In
         next_command=None,
         result={
             **health,
+            **application,
             "safe_next_action": "installation-complete",
             "station_host_pin_created": station_pin_created,
             "station_host_pin": str(request.session_dir / "host/station_known_hosts"),

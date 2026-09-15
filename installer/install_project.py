@@ -29,7 +29,7 @@ class ProjectError(ValueError):
 # must always come from the current invocation.
 PATH_FIELDS = frozenset({
     "build-root", "work-dir", "private-root", "vendor-bundle-dir",
-    "media-closure-dir", "session-dir", "raptor-rwd-artifact", "settings",
+    "media-closure-dir", "session-dir", "settings",
     "private-config-dir", "recovery-dir", "functional-recovery-dir",
     "preserved-readback-dir", "install-set-dir", "universal-bundle",
     "universal-public-key", "provisioning", "provisioning-data",
@@ -76,7 +76,6 @@ ROLE_COMMANDS = {
     "linux-config": ("stock-recovery backup-prepare", "stock-recovery backup-capture"),
     "mmc-module": ("stock-recovery backup-prepare",),
     "settings": ("local-build build",),
-    "raptor-rwd-artifact": ("local-build build-universal",),
     "media-closure-dir": ("local-build build-universal",),
 }
 
@@ -93,7 +92,7 @@ def default_selections(path: Path, build_root: Path | None = None) -> dict[str, 
         "universal evacuate-recovery": {"output-dir": str(root / "evacuated-stock")},
     }
     if build_root is not None:
-        for name in ("prepare", "status", "bootstrap", "acquire", "recovery-assets", "configure", "build", "build-universal", "build-raptor"):
+        for name in ("prepare", "status", "bootstrap", "acquire", "recovery-assets", "configure", "build", "build-universal"):
             selections["local-build " + name] = {"build-root": str(build_root.expanduser().resolve())}
     return selections
 
@@ -407,7 +406,6 @@ def finish_operation(active: tuple[Project, str, dict[str, str]] | None, documen
         "functional_recovery_dir": "functional-recovery-dir", "recovery_dir": "recovery-dir",
         "preserved_readback_dir": "preserved-readback-dir", "vendor_bundle_dir": "vendor-bundle-dir",
         "settings_path": "settings", "universal_firmware": "universal-bundle",
-        "raptor_rwd_artifact": "raptor-rwd-artifact",
     }
     for key, role in result_roles.items():
         if isinstance(result.get(key), str):
@@ -436,15 +434,9 @@ def finish_operation(active: tuple[Project, str, dict[str, str]] | None, documen
         linked["universal-bundle"] = str(Path(linked["install-set-dir"]) / "thingino-universal.tgb")
     for role, value in linked.items():
         artifacts[role] = {"path": value, "sha256": tracked_fingerprint(role, Path(value))}
-    if command in {"local-build build-raptor", "local-build build-universal"}:
-        component = linked.pop("raptor-rwd-artifact", None)
-        if component is not None:
-            link_inputs(project, {"raptor-rwd-artifact": component}, replace_existing=True)
-            if command == "local-build build-universal":
-                inputs = {**inputs, "raptor-rwd-artifact": tracked_fingerprint(
-                    "raptor-rwd-artifact", Path(component))}
     source_rebuild = (command == "local-build build-universal"
-                      and result.get("raptor_rwd_source_build") is True)
+                      and (result.get("raptor_full_source_build") is True
+                           or result.get("raptor_rwd_source_build") is True))
     link_inputs(project, linked, replace_existing=source_rebuild)
     project.records[command] = {"state": "completed", "inputs": inputs,
                                 "outputs": snapshot(paths, outputs=True, command=command), "artifacts": artifacts}

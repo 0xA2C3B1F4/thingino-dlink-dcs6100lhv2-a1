@@ -5,19 +5,19 @@ use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use super::super::backend::HaBackend;
 use super::super::{commands, config::HaConfig, motion::MotionSlot, mqtt};
 use super::publication::{
     publish, publish_discovery, publish_live_image, publish_motion_resync, publish_motion_updates,
     publish_states,
 };
 use super::{Request, RuntimeState, clear_command_error, unix_now, update_runtime};
-use crate::camera::PrudyntBackend;
 
 const KEEPALIVE_SECONDS: u16 = 30;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub(super) fn worker_loop(
-    backend: Arc<PrudyntBackend>,
+    backend: HaBackend,
     receiver: &Receiver<Request>,
     runtime: Arc<Mutex<RuntimeState>>,
     queue_depth: Arc<AtomicUsize>,
@@ -36,7 +36,7 @@ pub(super) fn worker_loop(
             observed_generation = current_generation;
             backoff_attempt = 0;
         }
-        let config = match HaConfig::load(&backend.paths) {
+        let config = match HaConfig::load(backend.paths()) {
             Ok(config) => config,
             Err(_) => {
                 motion_slot.reset();
@@ -173,7 +173,7 @@ pub(super) struct SessionRequests {
 }
 
 fn connected_session(
-    backend: &Arc<PrudyntBackend>,
+    backend: &HaBackend,
     config: &HaConfig,
     receiver: &Receiver<Request>,
     observed_generation: usize,
@@ -186,6 +186,10 @@ fn connected_session(
         motion_slot,
         shutdown_requested,
     } = context;
+    let current = || {
+        generation.load(Ordering::Acquire) == observed_generation
+            && !shutdown_requested.load(Ordering::Acquire)
+    };
     let api = match mqtt::Api::load() {
         Ok(api) => api,
         Err(error) => return SessionEnd::Failure(error),
@@ -226,6 +230,9 @@ fn connected_session(
         }
     }
 
+    if !current() {
+        return SessionEnd::Reconfigure(generation.load(Ordering::Acquire));
+    }
     for topic in commands::command_topics(config) {
         if client.subscribe(&topic).is_err() {
             return SessionEnd::Failure("MQTT subscribe failed");
@@ -235,11 +242,15 @@ fn connected_session(
         &mut client,
         runtime,
         &config.availability_topic(),
-        b"online",
+        if backend.is_raptor() {
+            b"offline"
+        } else {
+            b"online"
+        },
         true,
     )
     .is_err()
-        || publish_discovery(&mut client, runtime, config, backend).is_err()
+        || publish_discovery(&mut client, runtime, config, backend, &current).is_err()
     {
         return SessionEnd::Failure("MQTT initial publish failed");
     }
@@ -251,14 +262,22 @@ fn connected_session(
         backend,
         &mut last_published,
         true,
+        &current,
     )
     .is_err()
     {
         return SessionEnd::Failure("camera state unavailable");
     }
     if config.entities.motion {
-        if publish_motion_resync(&mut client, runtime, config, backend, &mut last_published)
-            .is_err()
+        if publish_motion_resync(
+            &mut client,
+            runtime,
+            config,
+            backend,
+            &mut last_published,
+            &current,
+        )
+        .is_err()
             || publish_motion_updates(
                 &mut client,
                 runtime,
@@ -266,6 +285,7 @@ fn connected_session(
                 backend,
                 motion_slot,
                 &mut last_published,
+                &current,
             )
             .is_err()
         {
@@ -275,7 +295,9 @@ fn connected_session(
         while motion_slot.take_next().is_some() {}
     }
     let now = Instant::now();
-    let mut next_state = now + config.state_interval;
+    let state_interval = config.state_interval;
+    let mut next_state = now + state_interval;
+    let mut next_motion = now + Duration::from_millis(500);
     let mut next_discovery = now + config.discovery_interval;
     update_runtime(runtime, |state| {
         state.state = "online";
@@ -285,7 +307,16 @@ fn connected_session(
         state.reconnect_at = None;
     });
     if config.entities.live_view
-        && publish_live_image(&mut client, runtime, config, backend).is_err()
+        && publish_live_image(
+            &mut client,
+            runtime,
+            config,
+            backend,
+            1,
+            &current,
+            &mut last_published,
+        )
+        .is_err()
     {
         return SessionEnd::Failure("MQTT camera image publish failed");
     }
@@ -324,7 +355,26 @@ fn connected_session(
             update_runtime(runtime, |state| {
                 state.received_commands = state.received_commands.saturating_add(1);
             });
-            match backend.ha_execute_command(command) {
+            if !current() {
+                break;
+            }
+            if backend.is_raptor() && command == commands::Command::Snapshot {
+                if publish_live_image(
+                    &mut client,
+                    runtime,
+                    config,
+                    backend,
+                    0,
+                    &current,
+                    &mut last_published,
+                )
+                .is_err()
+                {
+                    return SessionEnd::Failure("MQTT snapshot publish failed");
+                }
+                continue;
+            }
+            match backend.execute(command) {
                 Ok(Some(snapshot)) => {
                     if publish(
                         &mut client,
@@ -347,6 +397,7 @@ fn connected_session(
                         backend,
                         &mut last_published,
                         false,
+                        &current,
                     ) {
                         Ok(()) => update_runtime(runtime, clear_command_error),
                         Err(_) => update_runtime(runtime, |state| {
@@ -362,7 +413,11 @@ fn connected_session(
         update_runtime(runtime, |state| {
             state.dropped_messages = client.dropped_messages()
         });
-        if requested.motion
+        let poll_motion = backend.is_raptor() && Instant::now() >= next_motion;
+        if requested.motion || poll_motion {
+            next_motion = Instant::now() + Duration::from_millis(500);
+        }
+        if (requested.motion || poll_motion)
             && config.entities.motion
             && publish_motion_updates(
                 &mut client,
@@ -371,6 +426,7 @@ fn connected_session(
                 backend,
                 motion_slot,
                 &mut last_published,
+                &current,
             )
             .is_err()
         {
@@ -378,7 +434,7 @@ fn connected_session(
         }
         let now = Instant::now();
         if requested.discovery || now >= next_discovery {
-            if publish_discovery(&mut client, runtime, config, backend).is_err() {
+            if publish_discovery(&mut client, runtime, config, backend, &current).is_err() {
                 return SessionEnd::Failure("MQTT discovery publish failed");
             }
             next_discovery = now + config.discovery_interval;
@@ -391,6 +447,7 @@ fn connected_session(
                 backend,
                 &mut last_published,
                 requested.state,
+                &current,
             )
             .is_err()
             {
@@ -398,10 +455,20 @@ fn connected_session(
                     state.last_error = Some("camera state unavailable")
                 });
             }
-            next_state = now + config.state_interval;
+            next_state = now + state_interval;
         }
         if config.entities.live_view && now >= next_camera {
-            if publish_live_image(&mut client, runtime, config, backend).is_err() {
+            if publish_live_image(
+                &mut client,
+                runtime,
+                config,
+                backend,
+                1,
+                &current,
+                &mut last_published,
+            )
+            .is_err()
+            {
                 return SessionEnd::Failure("MQTT live-view publish failed");
             }
             next_camera = now + config.camera_interval;

@@ -19,6 +19,14 @@ from scripts.platform.media_preflight import (
     create_preflight_document,
 )
 
+
+_LEGACY_INSTALLER_MODULES = (
+    Path(__file__).with_name("development_install.py"),
+    Path(__file__).with_name("user_cli_guided.py"),
+    Path(__file__).with_name("workflow_preflight.py"),
+)
+LEGACY_INSTALLER_AVAILABLE = all(path.is_file() for path in _LEGACY_INSTALLER_MODULES)
+
 from .candidate_log import (
     CandidateLogError,
     candidate_status,
@@ -26,12 +34,26 @@ from .candidate_log import (
     decide_candidate,
     record_candidate_run,
 )
-from .development_install import (
-    STATE_NAME,
-    DevelopmentInstallError,
-    build_personal_candidate,
-    complete_personal_install,
-)
+if LEGACY_INSTALLER_AVAILABLE:
+    from .development_install import (
+        STATE_NAME,
+        DevelopmentInstallError,
+        build_personal_candidate,
+        complete_personal_install,
+    )
+else:
+    STATE_NAME = "install-state.private.json"
+
+    class DevelopmentInstallError(ValueError):
+        """The legacy personal installer is not part of the public export."""
+
+    def _legacy_installer_unavailable(*args, **kwargs):
+        raise DevelopmentInstallError(
+            "the legacy personal installer is not part of this export"
+        )
+
+    build_personal_candidate = _legacy_installer_unavailable
+    complete_personal_install = _legacy_installer_unavailable
 from .collector.build import CollectorBuildError, build_collector_root
 from .full_backup import (
     FullBackupError,
@@ -190,12 +212,28 @@ from .stock_restore.set import (
     stage_stock_restore_bootstrap_set,
     stage_stock_restore_ram_set,
 )
-from .workflow_preflight import (
-    MODES as WORKFLOW_MODES,
-    WorkflowPreflightError,
-    observe_camera_state,
-    run_workflow_preflight,
-)
+if LEGACY_INSTALLER_AVAILABLE:
+    from .workflow_preflight import (
+        MODES as WORKFLOW_MODES,
+        WorkflowPreflightError,
+        observe_camera_state,
+        run_workflow_preflight,
+    )
+else:
+    WORKFLOW_MODES = ()
+
+    class WorkflowPreflightError(ValueError):
+        """The legacy workflow preflight is not part of the public export."""
+
+    def observe_camera_state(*args, **kwargs):
+        raise WorkflowPreflightError(
+            "the legacy workflow preflight is not part of this export"
+        )
+
+    def run_workflow_preflight(*args, **kwargs):
+        raise WorkflowPreflightError(
+            "the legacy workflow preflight is not part of this export"
+        )
 from .universal_install import (
     UniversalInstallError,
     handoff_camera_bound_universal_install,
@@ -696,22 +734,6 @@ def _local_build_build(arguments: argparse.Namespace) -> dict[str, object]:
         error_type=UserInstallerError,
         load_local_build_settings=load_local_build_settings,
         build_local_install_set=build_local_install_set,
-    )
-
-
-def _local_build_raptor(arguments: argparse.Namespace) -> dict[str, object]:
-    from .raptor_build import build_raptor_component
-    from .user_cli_project import progress_callback
-
-    build_root = resolve_local_build_workspace(
-        build_root=arguments.build_root, work_dir=arguments.work_dir,
-    )
-    result = build_raptor_component(
-        build_root=build_root, progress=progress_callback(arguments),
-    )
-    return _document(
-        "local-build build-raptor", ok=True, phase="raptor-component-validated",
-        next_command="thingino-dlink local-build build-universal", result=result,
     )
 
 

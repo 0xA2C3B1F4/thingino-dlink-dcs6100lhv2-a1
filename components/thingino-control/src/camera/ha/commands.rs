@@ -1,7 +1,7 @@
 use super::config::HaConfig;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(in crate::camera) enum Command {
+pub(crate) enum Command {
     MotionGuard(bool),
     IrCut(bool),
     DayNight(DayNightCommand),
@@ -13,7 +13,7 @@ pub(in crate::camera) enum Command {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(in crate::camera) enum DayNightCommand {
+pub(crate) enum DayNightCommand {
     Auto,
     Day,
     Night,

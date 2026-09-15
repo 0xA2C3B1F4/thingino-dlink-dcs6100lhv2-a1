@@ -14,7 +14,24 @@ import {
   decodeSensorIdentity,
 } from "../src/api/decode";
 import { routes } from "../src/api/routes";
-import { formatTimestamp } from "../src/pages/tools";
+import { formatTimestamp, mediaStatusSummary } from "../src/pages/tools";
+
+test("system status uses backend-neutral media availability for both streams", () => {
+  const ready = { enabled: true, available: true, snapshot_url: null };
+  const unavailable = { ...ready, available: false };
+  const disabled = { ...unavailable, enabled: false };
+  assert.deepEqual(mediaStatusSummary({ stream0: ready, stream1: ready }), [
+    ["Media", "Ready"], ["Stream 0", "Ready"], ["Stream 1", "Ready"],
+  ]);
+  assert.deepEqual(mediaStatusSummary({ stream0: ready, stream1: disabled }), [
+    ["Media", "Ready"], ["Stream 0", "Ready"], ["Stream 1", "Disabled"],
+  ]);
+  assert.deepEqual(mediaStatusSummary({ stream0: ready, stream1: unavailable }), [
+    ["Media", "Partially available"], ["Stream 0", "Ready"], ["Stream 1", "Unavailable"],
+  ]);
+  assert.equal(mediaStatusSummary({ stream0: unavailable, stream1: unavailable })[0]?.[1], "Unavailable");
+  assert.equal(mediaStatusSummary({ stream0: disabled, stream1: disabled })[0]?.[1], "Disabled");
+});
 
 const heartbeat = {
   time_now: 1787248800, uptime: 100, daynight_brightness: 42.5, total_gain: 1.5,
@@ -67,6 +84,10 @@ test("runtime day/night history is decoded as a direct heartbeat array", () => {
   assert.equal(decodeDaynightHistory([heartbeat])[0]?.daynight_mode, "day");
   assert.deepEqual(decodeDaynightSensors({ night_threshold_pct: 28, day_threshold_pct: 42, current: { brightness: 42.5 } }).current, { brightness: 42.5 });
   assert.throws(() => decodeDaynightHistory({ entries: [heartbeat] }), /array/);
+  assert.deepEqual(
+    decodeDaynightSensors({ source: "raptor", night_threshold_pct: null, day_threshold_pct: null, thresholds: { trigger: "gain", supported: true, available: true, values: { day_threshold: 25000, night_threshold: 40000 } }, current: null }),
+    { source: "raptor", night_threshold_pct: null, day_threshold_pct: null, thresholds: { trigger: "gain", supported: true, available: true, values: { day_threshold: 25000, night_threshold: 40000 } }, current: null },
+  );
 });
 
 test("file, overlay and sensor decoders preserve bounded tool metadata", () => {

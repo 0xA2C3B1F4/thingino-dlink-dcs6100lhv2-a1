@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import argparse
+
 
 def build_parser(facade: object) -> argparse.ArgumentParser:
     FAULT_CLASSES = getattr(facade, 'FAULT_CLASSES')
@@ -247,8 +249,8 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
     workflow.add_argument("--station-ipv4")
     workflow.set_defaults(handler=_workflow_preflight)
 
-    local_build = commands.add_parser("local-build", help="prepare, configure and build validated local artifacts",
-        description="Start with prepare to check the host and external workspace. Bootstrap and acquire fetch locked public inputs. Recovery-assets prepares capture artifacts. Configure selects camera-private inputs; build or build-universal produces an inspected install set. These commands write the selected host workspace, not camera NOR.")
+    local_build = commands.add_parser("local-build", help="prepare and build validated universal artifacts",
+        description="Start with prepare to check the host and external workspace. Bootstrap and acquire fetch locked public inputs. Recovery-assets prepares capture artifacts. Build-universal produces an inspected full-Raptor install set. These commands write the selected host workspace, not camera NOR.")
     local_build_commands = local_build.add_subparsers(
         dest="local_build_command", required=True
     )
@@ -303,11 +305,6 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
         help="private recovery session bound to this camera workflow",
     )
     local_build_configure.add_argument(
-        "--raptor-rwd-artifact",
-        type=Path,
-        help="reviewed source-built Raptor RWD artifact",
-    )
-    local_build_configure.add_argument(
         "--data-mode",
         choices=("initialize", "preserve", "factory-reset"),
         help="explicit mtd3 data action recorded in the install set",
@@ -353,23 +350,12 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
         "--session-dir", type=Path, help="advanced: bound private recovery session"
     )
     local_build_build.add_argument(
-        "--raptor-rwd-artifact",
-        type=Path,
-        help="advanced: reviewed source-built Raptor RWD archive",
-    )
-    local_build_build.add_argument(
         "--data-mode",
         choices=("initialize", "preserve", "factory-reset"),
         default=None,
         help="advanced override; must match a saved plan when one is used",
     )
     local_build_build.set_defaults(handler=_local_build_build)
-    raptor_build = local_build_commands.add_parser(
-        "build-raptor", help="acquire locked public sources and build the WebRTC component offline"
-    )
-    _add_common(raptor_build, inherited=True)
-    raptor_build.add_argument("--build-root", type=Path)
-    raptor_build.set_defaults(handler=getattr(facade, '_local_build_raptor'))
     local_build_universal = local_build_commands.add_parser("build-universal")
     _add_common(local_build_universal, inherited=True)
     local_build_universal.add_argument("--build-root", type=Path)
@@ -381,20 +367,13 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
         help="run one clean build, or two for reproducibility evidence",
     )
     local_build_universal.add_argument(
-        "--vendor-bundle-dir", type=Path, required=True
+        "--data-mode",
+        choices=("initialize", "preserve"),
+        default="initialize",
+        help="initialize first-install data, or preserve the complete existing data region during an update",
     )
     local_build_universal.add_argument(
-        "--media-closure-dir",
-        type=Path,
-        help="advanced: accepted legacy C1 closure instead of the public matched-media profile",
-    )
-    raptor_selection = local_build_universal.add_mutually_exclusive_group()
-    raptor_selection.add_argument("--webrtc", action="store_true",
-        help="build and include the locked Raptor WebRTC component from public sources")
-    raptor_selection.add_argument(
-        "--raptor-rwd-artifact",
-        type=Path,
-        help="advanced: add the optional reviewed WebRTC component",
+        "--vendor-bundle-dir", type=Path, required=True
     )
     local_build_universal.add_argument(
         "--signing-key",
@@ -497,7 +476,7 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
     universal_authorize.add_argument("--signing-key", type=Path, required=True)
     universal_authorize.add_argument("--output-dir", type=Path, required=True)
     universal_authorize.add_argument(
-        "--data-action", choices=("initialize",), default="initialize"
+        "--data-action", choices=("initialize", "preserve"), default="initialize"
     )
     universal_authorize.set_defaults(handler=_universal_authorize)
 
@@ -668,6 +647,38 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
     from .user_cli_parser_stock_recovery import register_stock_recovery_commands
 
     register_stock_recovery_commands(facade, commands)
+
+    if not getattr(facade, "LEGACY_INSTALLER_AVAILABLE", False):
+        legacy_commands = {
+            "preflight",
+            "prepare-card",
+            "stage-install-set",
+            "install",
+            "status",
+            "verify",
+            "verify-media",
+            "build-personal-mtd3",
+            "workflow-preflight",
+        }
+        for name in legacy_commands:
+            commands.choices.pop(name, None)
+        commands._choices_actions[:] = [
+            action
+            for action in commands._choices_actions
+            if action.dest not in legacy_commands
+        ]
+        local_build_subparsers = next(
+            action
+            for action in local_build._actions
+            if isinstance(action, argparse._SubParsersAction)
+        )
+        for name in ("configure", "build"):
+            local_build_subparsers.choices.pop(name, None)
+        local_build_subparsers._choices_actions[:] = [
+            action
+            for action in local_build_subparsers._choices_actions
+            if action.dest not in {"configure", "build"}
+        ]
     _installation_help(parser)
     return parser
 
@@ -676,7 +687,6 @@ def _installation_help(parser):
     """Command-specific guidance beside the existing argument contracts."""
     import argparse
     descriptions = {
-        "local-build build-raptor": "Acquire locked public Raptor sources and compile the static-TLS component offline. Requires prepare. Writes host build/cache data and links the validated artifact to the selected project. Next: build-universal.",
         "local-build prepare": "Check host prerequisites and reserve the selected external build workspace. Writes host workspace metadata. Next: bootstrap.",
         "local-build status": "Inspect the selected build workspace and missing prerequisites without building. Use before choosing the next explicit command.",
         "local-build bootstrap": "Prepare public source/build inputs in the selected workspace. Requires prepare. Next: acquire.",

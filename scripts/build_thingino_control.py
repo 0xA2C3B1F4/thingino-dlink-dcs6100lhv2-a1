@@ -69,6 +69,7 @@ class BuildInputs:
     data_volume_root: Path
     mips_toolchain_root: Path | None = None
     repository_root: Path | None = None
+    raptor_backend: bool = False
 
 
 def _path_within(path: Path, root: Path) -> bool:
@@ -97,13 +98,14 @@ def _open_regular(path: Path, label: str, *, limit: int) -> tuple[int, os.stat_r
     except OSError as error:
         raise ControlBuildError(f"cannot open {label}") from error
     metadata = os.fstat(descriptor)
-    if (
-        not stat.S_ISREG(metadata.st_mode)
-        or metadata.st_size <= 0
-        or metadata.st_size > limit
-    ):
+    if not stat.S_ISREG(metadata.st_mode) or metadata.st_size <= 0:
         os.close(descriptor)
         raise ControlBuildError(f"{label} must be a bounded non-symlink regular file")
+    if metadata.st_size > limit:
+        os.close(descriptor)
+        raise ControlBuildError(
+            f"{label} exceeds size limit: {metadata.st_size} bytes; maximum {limit} bytes"
+        )
     return descriptor, metadata
 
 
@@ -422,6 +424,8 @@ def _build_environment(
         (
             "-Ctarget-cpu=mips32r2",
             "-Cpanic=abort",
+            # This executable aborts on panic; it does not use stack unwinding.
+            "-Cforce-unwind-tables=no",
             f"--remap-path-prefix={source}=/control-source",
             f"--remap-path-prefix={workspace}=/build",
         )
@@ -431,6 +435,7 @@ def _build_environment(
             "AR_mipsel_unknown_linux_gnu": str(ar),
             "CARGO_HOME": str(cargo_home),
             "CARGO_INCREMENTAL": "0",
+            "CARGO_BUILD_JOBS": "2",
             "CARGO_NET_OFFLINE": "true",
             "CARGO_TERM_COLOR": "never",
             "CARGO_TARGET_DIR": str(target),
@@ -556,6 +561,13 @@ def build(inputs: BuildInputs) -> dict[str, object]:
         ingenic_root, inputs.mips_toolchain_root
     )
     binary_name = _load_manifest(inputs.manifest)
+    feature_arguments: list[str] = []
+    if inputs.raptor_backend:
+        document = tomllib.loads(_read_regular(inputs.manifest, "Cargo manifest").decode())
+        features = document.get("features", {})
+        if features.get("default") != [] or features.get("raptor-backend") != []:
+            raise ControlBuildError("experimental Raptor requires an explicit dependency-free, default-off feature")
+        feature_arguments = ["--no-default-features", "--features", "raptor-backend"]
 
     workspace = Path(
         tempfile.mkdtemp(prefix=".thingino-control-build-", dir=inputs.scratch_root)
@@ -590,6 +602,7 @@ def build(inputs: BuildInputs) -> dict[str, object]:
                 "--offline",
                 "-Z",
                 "build-std=std,panic_abort",
+                *feature_arguments,
             ],
             label="offline Rust Control build",
             environment=environment,
@@ -607,6 +620,8 @@ def build(inputs: BuildInputs) -> dict[str, object]:
         "target": "DCS-6100LHV2-A1",
         "rust_release": EXPECTED_RUST_RELEASE,
         "compile_network": "cargo-offline",
+        "features": ["raptor-backend"] if inputs.raptor_backend else [],
+        "cargo_lock_sha256": hashlib.sha256(_read_regular(inputs.manifest.with_name("Cargo.lock"), "Cargo lock file")).hexdigest(),
         "output": str(inputs.output),
         **evidence,
     }
@@ -624,6 +639,8 @@ def parser() -> argparse.ArgumentParser:
     argument_parser.add_argument("--scratch-root", type=Path, required=True)
     argument_parser.add_argument("--data-volume-root", type=Path, required=True)
     argument_parser.add_argument("--repository-root", type=Path)
+    argument_parser.add_argument("--raptor-backend", action="store_true",
+                                 help="build the experimental default-off Raptor adapter")
     return argument_parser
 
 

@@ -121,11 +121,8 @@ class RecoveryApRootTests(unittest.TestCase):
             activate.index(": >/run/transition.activate"),
         )
 
-        failure = control.split("\nthingino-failure)\n", 1)[1].split("\n\t;;", 1)[0]
-        self.assertIn('cat /run/recovery.state', failure)
-        self.assertIn('/run/thingino-cleanup.failed', failure)
-        self.assertIn('tail -c 32768 /run/prudynt.log', failure)
-        self.assertNotIn('/dev/mtd', failure)
+        self.assertNotIn("thingino-failure", control)
+        self.assertNotIn("/run/prudynt.log", control)
 
     def test_ap_station_fallback_and_reset_paths_are_explicit(self) -> None:
         init = INIT.read_text(encoding="utf-8")

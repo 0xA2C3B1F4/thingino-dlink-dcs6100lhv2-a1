@@ -2,14 +2,12 @@
 
 case "$1" in
 	start | restart)
-		# Prudynt's private HTTP backend starts before the normal S40 network
-		# service.  Bring up loopback here so its 127.0.0.1 bind cannot race
-		# the later interface pass.
+		# Raptor's local HTTP and Control checks use loopback before the
+		# normal S40 network pass.
 		/sbin/ifconfig lo 127.0.0.1 netmask 255.0.0.0 up
 		;;
 	stop)
-		# Loopback is shared process infrastructure; do not tear it down with
-		# the media service.
+		# Loopback is shared process infrastructure; do not tear it down here.
 		;;
 	*)
 		echo "Usage: $0 {start|stop|restart}"
@@ -18,3 +16,4 @@ case "$1" in
 esac
 
 exit 0
+

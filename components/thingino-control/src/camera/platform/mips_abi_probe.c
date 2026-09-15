@@ -36,6 +36,10 @@ _Static_assert(SOCK_CLOEXEC == 0x80000, "SOCK_CLOEXEC");
 _Static_assert(MSG_DONTWAIT == 0x40, "MSG_DONTWAIT");
 _Static_assert(O_NONBLOCK == 0x80, "O_NONBLOCK");
 _Static_assert(O_NOFOLLOW == 0x20000, "O_NOFOLLOW");
+_Static_assert(O_DIRECTORY == 0x10000, "O_DIRECTORY");
+_Static_assert(O_CLOEXEC == 0x80000, "O_CLOEXEC");
+_Static_assert(O_CREAT == 0x100, "O_CREAT");
+_Static_assert(O_EXCL == 0x400, "O_EXCL");
 static int (*const checked_semtimedop)(int, struct sembuf *, size_t,
                                       const struct timespec *) = semtimedop;
 int probe(void) { return checked_semtimedop != 0; }

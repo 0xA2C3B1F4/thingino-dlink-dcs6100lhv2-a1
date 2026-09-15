@@ -111,6 +111,10 @@ class Stage1BuildTests(unittest.TestCase):
             },
         )
 
+    @unittest.skipUnless(
+        (Path(build.__file__).with_name("final_root_validation.py")).is_file(),
+        "legacy final-root validator is not exported",
+    )
     def test_final_root_policy_requires_private_credentials_and_clean_paths(self) -> None:
         paths = set(build.FINAL_REQUIRED_PATHS)
         algorithm = b"ssh-ed25519"
@@ -256,8 +260,10 @@ class Stage1BuildTests(unittest.TestCase):
         self.assertIn("rmem=22M@0x2a00000", installer)
         self.assertIn("1792k(kernel)ro,", final)
         self.assertIn("6464k(system)ro,", final)
-        self.assertIn("mem=39M@0x0", final)
-        self.assertIn("rmem=25M@0x2700000", final)
+        self.assertIn("mem=42M@0x0", final)
+        self.assertIn("rmem=22M@0x2a00000", final)
+        self.assertNotIn("mem=39M", final)
+        self.assertNotIn("rmem=25M", final)
         self.assertIn("ipv6.disable=1", installer)
         self.assertNotIn("ipv6.disable=1", final)
         for command_line in (installer, final):
@@ -358,27 +364,38 @@ class Stage1BuildTests(unittest.TestCase):
         self.assertIn("provisioning_buffer[DATA_FLASH_SPAN]", source)
         self.assertIn("STAGE1 provisioning_data_written_and_verified", source)
 
-    def test_universal_contract_rejects_noninitializing_data_action(self) -> None:
+    def test_universal_contract_accepts_preserve_and_rejects_factory_reset(self) -> None:
         system = test_squashfs()
         final_kernel = test_uimage(
             final_kernel_command_line(derive_final_layout(len(system))).encode()
         )
-        for mode in ("preserve", "factory-reset"):
-            stage2 = build_stage2(
+        preserve = build_stage2(
+            final_kernel=final_kernel,
+            system_rootfs=system,
+            data_mode="preserve",
+        )
+        contract = build.render_contract(
+            stage2=preserve,
+            final_kernel=final_kernel,
+            system=system,
+            mmc_module=b"module",
+            require_camera_authorization=True,
+        ).decode("ascii")
+        self.assertIn("#define DATA_ACTION 1U", contract)
+
+        factory_reset = build_stage2(
+            final_kernel=final_kernel,
+            system_rootfs=system,
+            data_mode="factory-reset",
+        )
+        with self.assertRaisesRegex(Stage1BuildError, "initialize or preserve"):
+            build.render_contract(
+                stage2=factory_reset,
                 final_kernel=final_kernel,
-                system_rootfs=system,
-                data_mode=mode,
+                system=system,
+                mmc_module=b"module",
+                require_camera_authorization=True,
             )
-            with self.subTest(mode=mode), self.assertRaisesRegex(
-                Stage1BuildError, "requires initialize"
-            ):
-                build.render_contract(
-                    stage2=stage2,
-                    final_kernel=final_kernel,
-                    system=system,
-                    mmc_module=b"module",
-                    require_camera_authorization=True,
-                )
 
     def test_final_writes_use_prevalidated_ram_snapshots_not_reopened_card_paths(self) -> None:
         source = build.SOURCE.read_text(encoding="utf-8")
@@ -498,6 +515,36 @@ class Stage1BuildTests(unittest.TestCase):
                 }
                 & set(values)
             )
+
+    def test_universal_install_set_forwards_preserve_mode(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            with mock.patch.object(
+                build,
+                "_build_install_set",
+                return_value={"artifact_scope": "model-universal"},
+            ) as inner:
+                build.build_universal_install_set(
+                    installer_kernel=b"",
+                    final_kernel=b"",
+                    final_linux_config=b"",
+                    system=b"",
+                    universal_root_manifest={
+                        "artifact_scope": "model-universal",
+                        "contains_device_secrets": False,
+                        "provisioning_required": True,
+                        "system": {"sha256": "0" * 64, "size": 0},
+                    },
+                    signing_key=parent / "signing-key.pem",
+                    mmc_module=b"",
+                    output_dir=parent / "install-set",
+                    clang=parent / "clang",
+                    lld=parent / "lld",
+                    mksquashfs=parent / "mksquashfs",
+                    unsquashfs=parent / "unsquashfs",
+                    data_mode="preserve",
+                )
+            self.assertEqual(inner.call_args.kwargs["data_mode"], "preserve")
 
     def test_source_exports_backup_before_first_final_erase(self) -> None:
         source = build.SOURCE.read_text(encoding="utf-8")

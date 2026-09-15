@@ -31,20 +31,17 @@ class ReleaseGateTests(unittest.TestCase):
         summaries = GATES.validate()
         self.assertTrue(summaries["source-publication"]["ready"])
         self.assertEqual(summaries["source-publication"]["blocked"], [])
-        self.assertEqual(summaries["source-publication"]["closed"], 4)
+        self.assertEqual(summaries["source-publication"]["closed"], 3)
         self.assertFalse(summaries["firmware-release"]["ready"])
         self.assertIn(
-            "prudynt-license-grant",
-            summaries["firmware-release"]["blocked"],
-        )
-        self.assertNotIn(
             "raptor-corresponding-source",
             summaries["firmware-release"]["blocked"],
         )
-        self.assertEqual(
-            summaries["optional-webrtc-profile-release"]["blocked"],
-            ["raptor-corresponding-source"],
+        self.assertNotIn(
+            "prudynt-license-grant",
+            summaries["firmware-release"]["blocked"],
         )
+        self.assertNotIn("optional-webrtc-profile-release", summaries)
 
     def test_rtl_license_copies_match_the_reviewed_primary_sources(self) -> None:
         expected = {

@@ -4,7 +4,6 @@ export type PageId =
   | "usage"
   | "crontab"
   | "onvif-info"
-  | "prudynt-info"
   | "thingino-info"
   | "kernel-log"
   | "streamer-log"
@@ -49,7 +48,6 @@ export const pages: PageDefinition[] = [
   { id: "usage", label: "System usage", group: "Information" },
   { id: "crontab", label: "Scheduled tasks", group: "Information" },
   { id: "onvif-info", label: "ONVIF", group: "Information" },
-  { id: "prudynt-info", label: "Prudynt", group: "Information" },
   { id: "thingino-info", label: "Thingino", group: "Information" },
   { id: "kernel-log", label: "Kernel log", group: "Information" },
   { id: "streamer-log", label: "Streamer log", group: "Information" },
@@ -93,7 +91,7 @@ export interface SectionNavigationGroup {
 export const sectionNavigation: Partial<Record<string, readonly SectionNavigationGroup[]>> = {
   Information: [
     { label: "Overview", pages: ["status", "usage"] },
-    { label: "Configuration", pages: ["crontab", "onvif-info", "prudynt-info", "thingino-info"] },
+    { label: "Configuration", pages: ["crontab", "onvif-info", "thingino-info"] },
     { label: "Logs", pages: ["kernel-log", "streamer-log", "system-log"] },
     { label: "Runtime", pages: ["processes", "network-sockets", "kernel-modules", "os-release"] },
     { label: "Storage", pages: ["overlay"] },

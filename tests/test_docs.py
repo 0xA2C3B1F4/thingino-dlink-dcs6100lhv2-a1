@@ -75,7 +75,14 @@ def project_example_arguments(args):
     from installer.install_project import default_selections, ROLE_COMMANDS, link_inputs, Project
     path = Path("/documented camera/project.json")
     project = Project(path, "documented", default_selections(path, path.parent / "build"), {})
-    link_inputs(project, {role: str(path.parent / role) for role in ROLE_COMMANDS if role != "recovery-dir"})
+    # Keep this fixture limited to roles that the documented project commands
+    # can currently accept.  The full-Raptor public path no longer exposes a
+    # separate media-closure input for ``local-build build-universal``.
+    link_inputs(project, {
+        role: str(path.parent / role)
+        for role in ROLE_COMMANDS
+        if role not in {"recovery-dir", "media-closure-dir"}
+    })
     command = " ".join(args[:2])
     present = {value.split("=", 1)[0] for value in args if value.startswith("--")}
     return args + [part for key, value in project.selections.get(command, {}).items()
@@ -147,12 +154,12 @@ class DocumentationTests(unittest.TestCase):
             self.assertIn("thingino-dlink local-build build-universal", source)
             self.assertIn("thingino-dlink universal init-session", source)
             self.assertIn("thingino-dlink universal configure", source)
-            self.assertIn("thingino-dlink universal handoff", source)
             self.assertNotIn(
                 '--expected-wpa-config "${DCS6100_BUILD_ROOT}-private/expected-wpa.conf"',
                 source,
             )
             self.assertNotIn("/path/to/external", source)
+        self.assertIn("thingino-dlink universal handoff", readme)
         self.assertIn("Windows PowerShell", readme)
         self.assertIn("Linux uses a whole-disk node", readme)
         self.assertIn("macOS example:", readme)
@@ -346,9 +353,16 @@ python3 -m installer.user_cli universal configure \\
         self.assertIn("STOCK-MTD1-MTD2-THEN-FINAL-MTD1-MTD3", stage)
         self.assertIn("MTD1-MTD2-WRITTEN", handoff)
         self.assertFalse(any(tokens[1:2] == ["stage-install-set"] for tokens in commands))
-        self.assertIn("--raptor-rwd-artifact", readme)
-        self.assertIn("local-build build-universal --webrtc", readme)
+        self.assertNotIn("--raptor-rwd-artifact", readme)
+        builds = [
+            tokens for tokens in commands
+            if tokens[1:3] == ["local-build", "build-universal"]
+        ]
+        self.assertTrue(builds)
+        self.assertTrue(all("--webrtc" not in tokens for tokens in builds))
+        self.assertTrue(all("--raptor-rwd-artifact" not in tokens for tokens in builds))
         self.assertIn("No separately prepared Raptor archive is required", readme)
+        self.assertNotIn("Prudynt", readme)
 
     def test_agent_skill_removed_without_removing_low_level_cli(self) -> None:
         readme = (DOCS_ROOT / "README.md").read_text(encoding="utf-8")
@@ -364,6 +378,95 @@ python3 -m installer.user_cli universal configure \\
         else:
             self.assertNotIn('"skills/', policy)
         self.assertIn("dcs6100-thingino", readme)
+
+    def test_raptor_daynight_contract_binds_current_sun_schema(self) -> None:
+        contract = json.loads(
+            (ROOT / "contracts/thingino-control-api-v1.json").read_text(encoding="utf-8")
+        )
+        route = next(item for item in contract["routes"] if item["id"] == "config.domain")
+        request = route["request_schema"]["semantics"]["raptor.daynight_sun"]
+        request_fields = {
+            "enabled": "boolean",
+            "latitude": "finite number -90..90",
+            "longitude": "finite number -180..180",
+            "sunrise_offset": "integer -1440..1440",
+            "sunset_offset": "integer -1440..1440",
+        }
+        self.assertEqual(request, {
+            "additionalProperties": False,
+            "fields": request_fields,
+            "required": list(request_fields),
+            "type": "object",
+        })
+        daynight_get = next(
+            item for item in route["response_schema"]["oneOf"]
+            if item.get("method") == "GET" and item.get("domain") == "daynight"
+        )
+        response_fields = {
+            "active": "boolean",
+            "application_ok": "boolean",
+            "available": "boolean",
+            "condition": "normal|polar_day|polar_night|null",
+            "matches_saved": "boolean",
+            "saved_values": "raptor-daynight-sun-values|null",
+            "supported": "boolean",
+            "target": "day|night|null",
+            "values": "raptor-daynight-sun-values",
+        }
+        self.assertEqual(daynight_get["sun"], {
+            "fields": response_fields,
+            "required": [
+                "supported", "available", "values", "active", "target", "condition",
+                "application_ok", "saved_values", "matches_saved",
+            ],
+            "type": "object",
+        })
+
+        control = (ROOT / "components/thingino-control/src/raptor_backend/daynight.rs").read_text()
+        self.assertIn("if !disk && object.len() != 5", control)
+        self.assertIn("if object.len() != 7", control)
+        for field in request_fields:
+            self.assertIn(f'"{field}"', control)
+        for field in ("saved_values", "matches_saved"):
+            self.assertIn(f'fields.insert("{field}"', control)
+
+        features = (DOCS_ROOT / "docs/features.md").read_text()
+        self.assertIn("Sunrise/sunset schedules", features)
+        self.assertIn("polar-day/night behavior", features)
+        if DOCS_ROOT != ROOT:
+            design = (ROOT / "docs/design/thingino-control-api.md").read_text()
+            self.assertIn("### Raptor sunrise/sunset day/night schedule", design)
+            for field in request_fields:
+                self.assertIn(f"`{field}`", design)
+
+    def test_raptor_imaging_contract_binds_antiflicker_evidence(self) -> None:
+        contract = json.loads(
+            (ROOT / "contracts/thingino-control-api-v1.json").read_text(encoding="utf-8")
+        )
+        route = next(item for item in contract["routes"] if item["id"] == "imaging")
+        semantics = route["response_schema"]["semantics"]["raptor"]
+        for value in (
+            "anti_flicker 0..2",
+            "native sensor.antiflicker key",
+            "observed_value",
+            "configured_value",
+            "saved_value",
+            "matches_saved",
+        ):
+            self.assertIn(value, semantics)
+
+        control = (ROOT / "components/thingino-control/src/raptor_backend/imaging.rs").read_text()
+        native_patch = (ROOT / "patches/raptor-full-source/raptor.patch").read_text()
+        for value in ("anti_flicker", "antiflicker"):
+            self.assertIn(value, control)
+            self.assertIn(value, native_patch)
+        for value in ("saved_value", "matches_saved"):
+            self.assertIn(value, control)
+        features = (DOCS_ROOT / "docs/features.md").read_text()
+        self.assertIn("Anti-flicker exposes Off, 50 Hz and 60 Hz", features)
+        if DOCS_ROOT != ROOT:
+            design = (ROOT / "docs/design/thingino-control-api.md").read_text()
+            self.assertIn("`anti_flicker`", design)
 
     def test_rejects_missing_local_link(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

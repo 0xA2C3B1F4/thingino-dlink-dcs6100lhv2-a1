@@ -43,30 +43,6 @@ class RecoveryApHostError(ValueError):
     """The private session or authenticated recovery-AP exchange failed."""
 
 
-RUNTIME_CANDIDATE_DIR = "/run/thingino-runtime-candidate"
-RUNTIME_RECEIVE_COMMAND = (
-    "awk '$2 == \"/run\" && $3 == \"tmpfs\" { found = 1 } "
-    "END { exit !found }' /proc/mounts || exit 1; "
-    f"umask 077; /usr/bin/rm -rf {RUNTIME_CANDIDATE_DIR}; "
-    f"/usr/bin/mkdir -p {RUNTIME_CANDIDATE_DIR}/usr/bin "
-    f"{RUNTIME_CANDIDATE_DIR}/usr/sbin; "
-    f"/usr/bin/tar -xf - -C {RUNTIME_CANDIDATE_DIR}; "
-    f"/usr/bin/chmod 0700 {RUNTIME_CANDIDATE_DIR}/activate.sh; "
-    "printf 'received\\n'"
-)
-RUNTIME_ACTIVATE_COMMAND = f"/bin/sh {RUNTIME_CANDIDATE_DIR}/activate.sh activate"
-RUNTIME_STATUS_COMMAND = (
-    f"if [ -x {RUNTIME_CANDIDATE_DIR}/activate.sh ]; then "
-    f"/bin/sh {RUNTIME_CANDIDATE_DIR}/activate.sh status; "
-    "else printf 'schema=1\\nstate=absent\\n'; fi"
-)
-RUNTIME_ROLLBACK_COMMAND = (
-    f"if [ -x {RUNTIME_CANDIDATE_DIR}/activate.sh ]; then "
-    f"/bin/sh {RUNTIME_CANDIDATE_DIR}/activate.sh rollback; "
-    "else printf 'schema=1\\nstate=absent\\n'; fi"
-)
-
-
 @dataclass(frozen=True, slots=True)
 class RecoveryApHostSession:
     identity: Path
@@ -136,6 +112,7 @@ def ssh_arguments(
     host: str,
     command: str,
     allow_uartless_station_health: bool = False,
+    allow_uartless_raptor_runtime: bool = False,
 ) -> list[str]:
     from .transport import ssh_arguments as _impl
 
@@ -145,6 +122,7 @@ def ssh_arguments(
         host=host,
         command=command,
         allow_uartless_station_health=allow_uartless_station_health,
+        allow_uartless_raptor_runtime=allow_uartless_raptor_runtime,
     )
 
 
@@ -156,6 +134,7 @@ def _exchange(
     payload: bytes = b"",
     timeout: float = 30.0,
     allow_uartless_station_health: bool = False,
+    allow_uartless_raptor_runtime: bool = False,
 ) -> bytes:
     from .transport import _exchange as _impl
 
@@ -167,6 +146,7 @@ def _exchange(
         payload=payload,
         timeout=timeout,
         allow_uartless_station_health=allow_uartless_station_health,
+        allow_uartless_raptor_runtime=allow_uartless_raptor_runtime,
     )
 
 
@@ -198,43 +178,14 @@ def inspect_recovery_ap_nor(*, session_dir: Path, host: str) -> RecoveryNorState
 def diagnose_thingino_failure(
     *, session_dir: Path, host: str
 ) -> dict[str, object]:
-    """Read the bounded volatile failure report after recovery returned to AP."""
+    """Reject the retired pre-Raptor failure-report protocol."""
 
-    session = load_host_session(session_dir)
-    raw = _exchange(session, host=host, command="thingino-failure")
-    if len(raw) > 40 * 1024:
-        raise RecoveryApHostError("camera Thingino failure report exceeds its cap")
-    pattern = re.compile(
-        rb"schema=1\n"
-        rb"thingino_mounts=(present|absent)\n"
-        rb"cleanup=(failed|complete)\n"
-        rb"prudynt_log_size=([0-9]+)\n"
-        rb"prudynt_log_sha256=(-|[0-9a-f]{64})\n"
-        rb"(?:prudynt_log_tail_begin\n(.*)\nprudynt_log_tail_end\n)?",
-        re.DOTALL,
+    # Keep the public Python façade import-compatible for older callers, but
+    # do not send a command which the recovery image no longer implements.
+    del session_dir, host
+    raise RecoveryApHostError(
+        "the legacy failure report is retired; collect a Raptor runtime snapshot"
     )
-    match = pattern.fullmatch(raw)
-    if match is None:
-        raise RecoveryApHostError("camera Thingino failure report framing is invalid")
-    log_size = int(match.group(3))
-    log_sha256 = match.group(4).decode("ascii")
-    log_tail = match.group(5)
-    if log_size == 0:
-        if log_sha256 != "-" or log_tail is not None:
-            raise RecoveryApHostError("camera empty Prudynt log identity is invalid")
-        decoded_tail = ""
-    else:
-        if log_sha256 == "-" or log_tail is None or len(log_tail) > 32768:
-            raise RecoveryApHostError("camera Prudynt log identity is invalid")
-        decoded_tail = log_tail.decode("utf-8", errors="replace")
-    return {
-        "cleanup": match.group(2).decode("ascii"),
-        "nor_writes": False,
-        "prudynt_log_sha256": None if log_sha256 == "-" else log_sha256,
-        "prudynt_log_size": log_size,
-        "prudynt_log_tail": decoded_tail,
-        "thingino_mounts": match.group(1).decode("ascii"),
-    }
 
 
 def _validate_image_vendor_binding(
@@ -347,10 +298,13 @@ def _reconcile_validated_image(
 
 
 def probe_recovery_ap(
-    *, session_dir: Path, host: str, expected_state: str
+    *, session_dir: Path, host: str, expected_state: str,
+    allow_uartless_station: bool = False,
 ) -> dict[str, object]:
     if expected_state not in {"ap", "station"}:
         raise RecoveryApHostError("expected recovery state is invalid")
+    if allow_uartless_station and expected_state != "station":
+        raise RecoveryApHostError("UARTless probe requires station state")
     session = load_host_session(session_dir)
     if expected_state == "station":
         payload = secrets.token_bytes(4096)
@@ -361,6 +315,7 @@ def probe_recovery_ap(
             command="thingino-health; sha256sum /dev/mtd3",
             payload=payload,
             timeout=20.0,
+            allow_uartless_station_health=allow_uartless_station,
         )
         prefix = f"healthy {session.station_mdns_name}\n".encode("ascii")
         if not response.startswith(prefix + payload):
@@ -764,6 +719,46 @@ def prove_thingino_health(
         time.sleep(1.0)
 
 
+def prove_thingino_application(*, session_dir: Path, station_ipv4: str) -> dict[str, object]:
+    """Require live application readiness on the already authenticated station."""
+    session = load_host_session(session_dir)
+    deadline = time.monotonic() + 60.0
+    while True:
+        try:
+            raw = _exchange(
+                session,
+                host=_host(station_ipv4),
+                command="dlink-application-verify",
+                timeout=30.0,
+                allow_uartless_station_health=(
+                    session.session_kind == "uartless-functional-provisioning"
+                ),
+            )
+            if len(raw) > 2048:
+                raise ValueError("application response exceeds its limit")
+            result = json.loads(raw)
+            if (
+                not isinstance(result, dict)
+                or result.get("schema_version") != 1
+                or not isinstance(result.get("backend"), str)
+                or result.get("backend") != "raptor"
+                or any(result.get(key) != "passed" for key in (
+                    "application_gate", "webui_gate", "control_gate", "media_gate"
+                ))
+            ):
+                raise ValueError("application acceptance did not pass")
+            return {key: result[key] for key in (
+                "application_gate", "backend", "webui_gate", "control_gate", "media_gate"
+            )}
+        except (RecoveryApHostError, ValueError, UnicodeDecodeError) as exc:
+            if time.monotonic() >= deadline:
+                raise RecoveryApHostError(
+                    "Thingino application verification failed; management is reachable "
+                    "but WebUI, Control or media is not ready"
+                ) from exc
+            time.sleep(1.0)
+
+
 def prove_thingino_media(
     *, session_dir: Path, station_ipv4: str | None = None
 ) -> dict[str, object]:
@@ -804,8 +799,14 @@ def collect_runtime_snapshot(
     """Collect the installed bounded diagnostic JSON without restarting services."""
 
     session = load_host_session(session_dir)
+    uartless_station = (
+        session.session_kind == "uartless-functional-provisioning"
+        and not session.transport_enabled
+    )
     if station_ipv4 is None:
-        _, host = resolve_recovery_ap_station(session_dir)
+        _, host = resolve_recovery_ap_station(
+            session_dir, allow_uartless_station=uartless_station
+        )
     else:
         host = _host(station_ipv4)
     raw = _exchange(
@@ -813,6 +814,7 @@ def collect_runtime_snapshot(
         host=host,
         command="dlink-runtime-snapshot",
         timeout=90.0,
+        allow_uartless_station_health=uartless_station,
     )
     if len(raw) > 64 * 1024:
         raise RecoveryApHostError("runtime snapshot exceeds its fixed cap")

@@ -47,7 +47,7 @@ def replace_passive_bootstrap(
 ) -> dict[str, str]:
     """Replace one verified passive bootstrap with rollback until readback."""
     validate_stage2 = stage2_validators.current
-    validate_retired_stage2_v2_42_22 = stage2_validators.retired_memory
+    validate_retired_stage2_v2_39_25 = stage2_validators.retired_memory
     validate_retired_stage2_v2_ipv6_disabled = stage2_validators.retired_ipv6
     validate_legacy_stage2_v1 = stage2_validators.legacy
 
@@ -62,7 +62,7 @@ def replace_passive_bootstrap(
     except (Stage2Error, ValueError):
         try:
             try:
-                validate_retired_stage2_v2_42_22(old_stage2_bytes)
+                validate_retired_stage2_v2_39_25(old_stage2_bytes)
             except (Stage2Error, ValueError):
                 validate_retired_stage2_v2_ipv6_disabled(old_stage2_bytes)
         except (Stage2Error, ValueError):

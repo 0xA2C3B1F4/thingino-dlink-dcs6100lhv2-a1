@@ -76,8 +76,21 @@ count_pattern() {
 	fi
 }
 
-control_pid=$(pid_value /run/thingino-controld.pid /var/run/thingino-controld.pid)
-prudynt_pid=$(pid_value /run/prudynt.pid /var/run/prudynt.pid)
+raptor_pid() {
+	pid_value "/run/raptor-boot/$1.pid"
+}
+
+rvd_pid=$(raptor_pid rvd)
+rhd_pid=$(raptor_pid rhd)
+rod_pid=$(raptor_pid rod)
+rsd_pid=$(raptor_pid rsd)
+ric_pid=$(raptor_pid ric)
+rad_pid=$(raptor_pid rad)
+rmr0_pid=$(raptor_pid rmr0)
+rmr1_pid=$(raptor_pid rmr1)
+rwd_pid=$(raptor_pid rwd)
+storage_pid=$(raptor_pid storage)
+control_pid=$(raptor_pid control)
 uhttpd_pid=$(pid_value /run/uhttpd.pid /var/run/uhttpd.pid)
 messages=/var/log/messages
 observed_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || printf 'unknown')
@@ -87,8 +100,8 @@ tcp_listen=$(awk 'NR>1 && $4 == "0A" {count++} END {print count+0}' /proc/net/tc
 tcp_time_wait=$(awk 'NR>1 && $4 == "06" {count++} END {print count+0}' /proc/net/tcp 2>/dev/null || printf '0')
 udp_entries=$(awk 'NR>1 {count++} END {print count+0}' /proc/net/udp 2>/dev/null || printf '0')
 media_ready=false
-[ "$(cat /run/prudynt-dlink-media.ready 2>/dev/null || true)" = 1080p-started ] && media_ready=true
-prudynt_errors=$(count_pattern "$messages" 'prudynt.*(error|fail|timeout)|jpeg.*(error|fail|timeout)|rtsp.*(error|fail|timeout)')
+[ "$(cat /run/raptor-boot/ready 2>/dev/null || true)" = started ] && media_ready=true
+raptor_errors=$(count_pattern "$messages" '(Raptor|raptorctl|rvd|rhd|rod|rsd|ric|rad|rmr|rwd).*(error|fail|timeout)|jpeg.*(error|fail|timeout)|rtsp.*(error|fail|timeout)')
 isp_errors=$(count_pattern "$messages" 'IMP_|TISP|tx-isp|private_kmalloc|page allocation failure|encoder.*(error|fail)')
 m_total=0
 m_free=0
@@ -153,8 +166,24 @@ if [ "$(wc -l </proc/mtd 2>/dev/null || printf '0')" -eq 8 ] &&
 fi
 
 printf '{'
-printf '"binary_identity":{"mtd3_sha256":%s,"prudynt_sha256":' "$mtd3_json"
-exe_sha "$prudynt_pid"
+printf '"binary_identity":{"mtd3_sha256":%s,"rad_sha256":' "$mtd3_json"
+exe_sha "$rad_pid"
+printf ',"rhd_sha256":'
+exe_sha "$rhd_pid"
+printf ',"ric_sha256":'
+exe_sha "$ric_pid"
+printf ',"rod_sha256":'
+exe_sha "$rod_pid"
+printf ',"rmr0_sha256":'
+exe_sha "$rmr0_pid"
+printf ',"rmr1_sha256":'
+exe_sha "$rmr1_pid"
+printf ',"rsd_sha256":'
+exe_sha "$rsd_pid"
+printf ',"rvd_sha256":'
+exe_sha "$rvd_pid"
+printf ',"rwd_sha256":'
+exe_sha "$rwd_pid"
 printf ',"source_commit":null,"thingino_control_sha256":'
 exe_sha "$control_pid"
 printf ',"uhttpd_sha256":'
@@ -168,14 +197,32 @@ printf '"memory":{"available_proxy_kib":%s,"buffers_kib":%s,"cached_kib":%s,"fre
 printf '"network":{"tcp_entries":%s,"tcp_established":%s,"tcp_listen":%s,"tcp_time_wait":%s,"udp_entries":%s},' \
 	"$tcp_entries" "$tcp_established" "$tcp_listen" "$tcp_time_wait" "$udp_entries"
 printf '"observed_at":"%s",' "$observed_at"
-printf '"processes":{"prudynt":'
-process_json "$prudynt_pid"
+printf '"processes":{"rvd":'
+process_json "$rvd_pid"
+printf ',"rhd":'
+process_json "$rhd_pid"
+printf ',"rod":'
+process_json "$rod_pid"
+printf ',"rsd":'
+process_json "$rsd_pid"
+printf ',"ric":'
+process_json "$ric_pid"
+printf ',"rad":'
+process_json "$rad_pid"
+printf ',"rmr0":'
+process_json "$rmr0_pid"
+printf ',"rmr1":'
+process_json "$rmr1_pid"
+printf ',"rwd":'
+process_json "$rwd_pid"
+printf ',"storage":'
+process_json "$storage_pid"
 printf ',"thingino_control":'
 process_json "$control_pid"
 printf ',"uhttpd":'
 process_json "$uhttpd_pid"
 printf '},'
-printf '"prudynt":{"error_count":%s,"media_ready":%s},' "$prudynt_errors" "$media_ready"
+printf '"raptor":{"error_count":%s,"media_ready":%s},' "$raptor_errors" "$media_ready"
 printf '"schema_version":1,'
 printf '"storage":{"data_jffs2_mounted":%s,"data_sha256":%s,"overlay_reset_pending":%s,"root_overlay_mounted":%s,"split_layout":%s,"system_sha256":%s},' \
 	"$data_jffs2_mounted" "$data_sha_json" "$overlay_reset_pending" "$root_overlay_mounted" "$split_layout" "$mtd3_json"

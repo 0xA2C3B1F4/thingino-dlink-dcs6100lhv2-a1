@@ -178,6 +178,12 @@ class SessionWorkflowTests(unittest.TestCase):
             self.assertTrue(kwargs["allow_uartless_station_health"])
             if mutation:
                 mutation()
+            if kwargs["command"] == "dlink-application-verify":
+                return json.dumps({
+                    "schema_version": 1, "backend": "raptor",
+                    "application_gate": "passed", "webui_gate": "passed",
+                    "control_gate": "passed", "media_gate": "passed",
+                }).encode()
             return b"healthy " + name.encode() + b"\n" + kwargs["payload"] + b"b" * 64 + b"  /dev/mtd3\n"
         # These are the only mocked verify boundaries; real key inspection,
         # pin creation, health parsing and identity checks all execute.
@@ -507,9 +513,16 @@ class SignedInstallationTests(unittest.TestCase):
                     session_dir = Path(paths["session-dir"])
                     (session_dir / "host/station_known_hosts").unlink()
                     name = load_host_session(session_dir).station_mdns_name
+                    def exchange(session, **kwargs):
+                        if kwargs["command"] == "dlink-application-verify":
+                            return json.dumps({
+                                "schema_version": 1, "backend": "raptor",
+                                "application_gate": "passed", "webui_gate": "passed",
+                                "control_gate": "passed", "media_gate": "passed",
+                            }).encode()
+                        return b"healthy " + name.encode() + b"\n" + kwargs["payload"] + b"b" * 64 + b"  /dev/mtd3\n"
                     with mock.patch("installer.recovery_ap.host.resolve_recovery_ap_station", return_value=(name, "192.0.2.10")), \
-                         mock.patch("installer.recovery_ap.host._exchange", side_effect=lambda session, **kw:
-                             b"healthy " + name.encode() + b"\n" + kw["payload"] + b"b" * 64 + b"  /dev/mtd3\n"):
+                         mock.patch("installer.recovery_ap.host._exchange", side_effect=exchange):
                         result = self.cli(args)
                 else:
                     result = self.cli(args, secrets_path=wifi if operation == "configure" else None)

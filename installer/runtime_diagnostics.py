@@ -19,7 +19,7 @@ class RuntimeDiagnosticsError(ValueError):
 FAULT_CLASSES = {
     "uhttpd_event_loop",
     "control_workers",
-    "prudynt",
+    "raptor",
     "isp_rmem",
     "network",
     "browser",
@@ -43,7 +43,7 @@ def validate_runtime_snapshot(document: dict[str, object]) -> dict[str, object]:
         "network",
         "observed_at",
         "processes",
-        "prudynt",
+        "raptor",
         "schema_version",
         "uhttpd",
     }
@@ -56,7 +56,7 @@ def validate_runtime_snapshot(document: dict[str, object]) -> dict[str, object]:
         raise RuntimeDiagnosticsError("runtime snapshot has the wrong schema")
     if not isinstance(document.get("observed_at"), str) or not document["observed_at"]:
         raise RuntimeDiagnosticsError("runtime snapshot lacks observed_at")
-    for name in ("binary_identity", "control", "kernel_media", "network", "processes", "prudynt", "uhttpd"):
+    for name in ("binary_identity", "control", "kernel_media", "network", "processes", "raptor", "uhttpd"):
         if not isinstance(document.get(name), dict):
             raise RuntimeDiagnosticsError(f"runtime snapshot {name} section is invalid")
     if "memory" in document and not isinstance(document["memory"], dict):

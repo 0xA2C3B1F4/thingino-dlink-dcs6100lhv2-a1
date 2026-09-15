@@ -25,15 +25,6 @@
       "tree": "88314e07175ad8f5d398d684a5263b15bc2345d0",
       "url": "https://github.com/Dafang-Hacks/mips-gcc472-glibc216-64bit.git"
     },
-    "prudynt": {
-      "acquisition": "buildroot-package",
-      "recipe": "package/prudynt-t/prudynt-t.mk",
-      "revision": "c630ae797a86b29e83999fe324323932ec33460c",
-      "site_variable": "PRUDYNT_T_SITE",
-      "tree": "d2262cebd653298b2b51893e680866d7be3fa9ad",
-      "url": "https://github.com/themactep/prudynt-t.git",
-      "version_variable": "PRUDYNT_T_VERSION"
-    },
     "realtek_hostapd": {
       "acquisition": "buildroot-package",
       "recipe": "package/wifi-rtw-hostapd/wifi-rtw-hostapd.mk",

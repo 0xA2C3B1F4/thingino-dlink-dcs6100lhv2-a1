@@ -1,0 +1,1142 @@
+diff --git a/include/rss_ipc.h b/include/rss_ipc.h
+index e6065f119b492aece1936a483cca98d12064538c..c308fb2c30cf38cab3b51f5c8c55fcd7697784c6 100644
+--- a/include/rss_ipc.h
++++ b/include/rss_ipc.h
+@@ -13,6 +13,7 @@
+ #define RSS_IPC_H
+ 
+ #include <stdbool.h>
++#include <stddef.h>
+ #include <stdint.h>
+ #include <stdatomic.h>
+ 
+@@ -51,7 +52,7 @@ void rss_ipc_log(int level, const char *file, int line, const char *fmt, ...)
+ /* ------------------------------------------------------------------ */
+ 
+ #define RSS_RING_MAGIC 0x52535352 /* "RSSR" */
+-#define RSS_RING_VERSION 4
++#define RSS_RING_VERSION 5
+ #define RSS_RING_MAX_SLOTS 64
+ #define RSS_RING_SHM_PREFIX "/rss_ring_"
+ 
+@@ -80,7 +81,11 @@ typedef struct __attribute__((aligned(64))) {
+     uint32_t stream_id;         /* 0=main, 1=sub, 2=jpeg, 0x10=audio          */
+     uint32_t codec;             /* rss_codec_t value                           */
+     uint32_t width, height;
+-    uint32_t fps_num, fps_den;
++    /* v5: only fps_num may change at runtime. All other stream metadata,
++     * including fps_den, is initialized before readers attach and immutable
++     * until exclusive ring reinitialization. Audio uses num as sample rate. */
++    _Atomic uint32_t fps_num;
++    uint32_t fps_den;
+     uint8_t profile; /* H.264 profile_idc (66=Base,77=Main,100=High) */
+     uint8_t level;   /* H.264 level_idc (30,31,40,51...)            */
+     uint16_t _reserved;
+@@ -115,6 +120,16 @@ typedef struct __attribute__((aligned(64))) {
+ #define RSS_UTC_STATUS_UNLOCKED 0x9F /* lock unknown (not NTP-disciplined)   */
+ 
+ _Static_assert(sizeof(rss_ring_header_t) <= 192, "ring header must fit in header page");
++_Static_assert(sizeof(_Atomic uint32_t) == sizeof(uint32_t), "FPS atomic width");
++_Static_assert(_Generic((uint32_t)0, unsigned int: ATOMIC_INT_LOCK_FREE,
++                        unsigned long: ATOMIC_LONG_LOCK_FREE, default: 0) == 2,
++               "shared FPS requires always lock-free uint32 atomics");
++_Static_assert(_Alignof(_Atomic uint32_t) == _Alignof(uint32_t), "FPS atomic alignment");
++_Static_assert(offsetof(rss_ring_header_t, fps_num) == 40, "v5 FPS numerator offset");
++_Static_assert(offsetof(rss_ring_header_t, fps_den) == 44, "v5 FPS denominator offset");
++_Static_assert(offsetof(rss_ring_header_t, profile) == 48, "v5 following metadata offset");
++_Static_assert(offsetof(rss_ring_header_t, fps_num) % _Alignof(_Atomic uint32_t) == 0,
++               "FPS atomic naturally aligned");
+ 
+ typedef struct {
+     _Atomic uint64_t seq; /* sequence number when written         */
+@@ -142,10 +157,24 @@ int rss_ring_publish(rss_ring_t *ring, const uint8_t *data, uint32_t length, int
+                      uint16_t nal_type, uint8_t is_key);
+ int rss_ring_publish_iov(rss_ring_t *ring, const rss_iov_t *iov, uint32_t iov_count,
+                          int64_t timestamp, uint16_t nal_type, uint8_t is_key);
++/* Initialization only, with readers excluded. Denominator and all non-num
++ * metadata remain immutable while the ring is shared. */
+ void rss_ring_set_stream_info(rss_ring_t *ring, uint32_t stream_id, uint32_t codec, uint32_t width,
+                               uint32_t height, uint32_t fps_num, uint32_t fps_den, uint8_t profile,
+                               uint8_t level);
+ 
++/* Single producer, after exclusive metadata initialization. Only main/sub
++ * integer video rates (stream IDs 0..5, codecs H264/H265) may change; existing
++ * denominator must be 1. No lifecycle action or other header write occurs.
++ * All processes must use the matched v5 IPC headers/library. */
++int rss_ring_set_video_fps(rss_ring_t *ring, uint32_t fps_num);
++/* Same eligibility predicate as setter, without writes. Snapshot only:
++ * exclusive producer configuration and immutable metadata remain required. */
++int rss_ring_check_video_fps(rss_ring_t *ring, uint32_t fps_num);
++/* Reads any static positive ratio, including fractional video and audio sample
++ * rate. Output is unchanged on error. Requires immutable non-num metadata. */
++int rss_ring_get_fps(rss_ring_t *ring, uint32_t *fps_num, uint32_t *fps_den);
++
+ /* Reference mode: frame data in external /dev/rmem instead of ring data region.
+  * Eliminates the publish-side memcpy. Consumers transparently mmap /dev/rmem
+  * and read from it via the standard rss_ring_read API. */
+@@ -295,7 +324,9 @@ int rss_ctrl_accept_and_handle(rss_ctrl_t *ctrl,
+                                               int resp_buf_size, void *userdata),
+                                void *userdata);
+ 
+-/* Client API (raptorctl side) */
++/* Client API (raptorctl side).
++ * timeout_ms bounds the complete connect, request write, and response read.
++ * A zero timeout selects the 5000 ms default. */
+ int rss_ctrl_send_command(const char *sock_path, const char *cmd_json, char *resp_buf,
+                           int resp_buf_size, uint32_t timeout_ms);
+ 
+diff --git a/src/rss_ctrl.c b/src/rss_ctrl.c
+index 80c7ea854130ba9d629b2de9a3c08e3b9e81a66e..ede7eb3f33ac1dbe300a05e98be14007b20603da 100644
+--- a/src/rss_ctrl.c
++++ b/src/rss_ctrl.c
+@@ -16,19 +16,23 @@
+ 
+ #include <errno.h>
+ #include <fcntl.h>
++#include <limits.h>
+ #include <poll.h>
+ #include <stdbool.h>
++#include <stdint.h>
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <string.h>
+ #include <sys/socket.h>
+ #include <sys/stat.h>
+-#include <sys/time.h>
+ #include <sys/un.h>
++#include <time.h>
+ #include <unistd.h>
+ 
+ #define RSS_CTRL_MAX_MSG 65535 /* maximum JSON body size */
+ #define RSS_CTRL_BACKLOG 5
++#define RSS_CTRL_DEFAULT_TIMEOUT_MS 5000
++#define RSS_CTRL_SERVER_TIMEOUT_MS 1000
+ 
+ struct rss_ctrl {
+     int listen_fd;
+@@ -39,80 +43,167 @@ struct rss_ctrl {
+ /*  Helpers                                                           */
+ /* ------------------------------------------------------------------ */
+ 
+-/*
+- * Read exactly `count` bytes from fd into buf.
+- * Returns 0 on success, -errno on error, -ECONNRESET on EOF.
+- */
+-static int read_exact(int fd, void *buf, size_t count, uint32_t timeout_ms)
++/* ------------------------------------------------------------------ */
++/*  Deadline-bounded transport helpers                                */
++/* ------------------------------------------------------------------ */
++
++static int64_t monotonic_ms(void)
+ {
+-    uint8_t *p = buf;
+-    size_t remaining = count;
++    struct timespec now;
++    if (clock_gettime(CLOCK_MONOTONIC, &now) < 0)
++        return -errno;
++    return (int64_t)now.tv_sec * 1000 + now.tv_nsec / 1000000;
++}
+ 
+-    while (remaining > 0) {
+-        if (timeout_ms > 0) {
+-            struct pollfd pfd = {.fd = fd, .events = POLLIN};
+-            int pr;
+-            do {
+-                pr = poll(&pfd, 1, (int)timeout_ms);
+-            } while (pr < 0 && errno == EINTR);
+-
+-            if (pr < 0)
++static int remaining_ms(int64_t deadline_ms)
++{
++    int64_t now_ms = monotonic_ms();
++    if (now_ms < 0)
++        return (int)now_ms;
++    if (now_ms >= deadline_ms)
++        return -ETIMEDOUT;
++
++    int64_t remaining = deadline_ms - now_ms;
++    return remaining > INT_MAX ? INT_MAX : (int)remaining;
++}
++
++static int wait_fd(int fd, short events, int64_t deadline_ms)
++{
++    for (;;) {
++        int timeout = remaining_ms(deadline_ms);
++        if (timeout < 0)
++            return timeout;
++
++        struct pollfd pfd = {.fd = fd, .events = events};
++        int ret = poll(&pfd, 1, timeout);
++        if (ret > 0)
++            return 0;
++        if (ret == 0)
++            return -ETIMEDOUT;
++        if (errno != EINTR)
++            return -errno;
++    }
++}
++
++static int connect_deadline(int fd, const struct sockaddr_un *addr, int64_t deadline_ms)
++{
++    int flags = fcntl(fd, F_GETFL, 0);
++    if (flags < 0)
++        return -errno;
++    if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0)
++        return -errno;
++
++    for (;;) {
++        int ret = connect(fd, (const struct sockaddr *)addr, sizeof(*addr));
++        if (ret == 0 || errno == EISCONN)
++            return 0;
++
++        int connect_error = errno;
++        if (connect_error == EINTR)
++            continue;
++        if (connect_error == EAGAIN) {
++            /* Linux AF_UNIX reports a full accept queue as EAGAIN. POLLOUT
++             * may remain asserted for that state, so use a short bounded
++             * retry delay instead of spinning. */
++            int timeout = remaining_ms(deadline_ms);
++            if (timeout < 0)
++                return timeout;
++            if (timeout > 10)
++                timeout = 10;
++            ret = poll(NULL, 0, timeout);
++            if (ret < 0 && errno != EINTR)
+                 return -errno;
+-            if (pr == 0)
+-                return -ETIMEDOUT;
++            continue;
+         }
++        if (connect_error != EINPROGRESS && connect_error != EALREADY)
++            return -connect_error;
+ 
+-        ssize_t n;
+-        do {
+-            n = read(fd, p, remaining);
+-        } while (n < 0 && errno == EINTR);
++        ret = wait_fd(fd, POLLOUT, deadline_ms);
++        if (ret < 0)
++            return ret;
+ 
+-        if (n < 0)
++        int socket_error = 0;
++        socklen_t error_len = sizeof(socket_error);
++        if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &socket_error, &error_len) < 0)
+             return -errno;
+-        if (n == 0)
+-            return -ECONNRESET;
++        if (socket_error != 0)
++            return -socket_error;
++
++        struct sockaddr_un peer;
++        socklen_t peer_len = sizeof(peer);
++        if (getpeername(fd, (struct sockaddr *)&peer, &peer_len) == 0)
++            return 0;
++        if (errno != ENOTCONN)
++            return -errno;
++    }
++}
+ 
+-        p += n;
+-        remaining -= (size_t)n;
++static int write_exact_deadline(int fd, const void *buf, size_t count, int64_t deadline_ms)
++{
++    const uint8_t *p = buf;
++    size_t remaining = count;
++
++    while (remaining > 0) {
++        int ret = wait_fd(fd, POLLOUT, deadline_ms);
++        if (ret < 0)
++            return ret;
++
++        ssize_t n = write(fd, p, remaining);
++        if (n > 0) {
++            p += n;
++            remaining -= (size_t)n;
++            continue;
++        }
++        if (n == 0)
++            return -EPIPE;
++        if (errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK)
++            return -errno;
+     }
+ 
+     return 0;
+ }
+ 
+-/*
+- * Write exactly `count` bytes from buf to fd.
+- * Returns 0 on success, -errno on error.
+- */
+-static int write_exact(int fd, const void *buf, size_t count)
++static int read_exact_deadline(int fd, void *buf, size_t count, int64_t deadline_ms)
+ {
+-    const uint8_t *p = buf;
++    uint8_t *p = buf;
+     size_t remaining = count;
+ 
+     while (remaining > 0) {
+-        ssize_t n;
+-        do {
+-            n = write(fd, p, remaining);
+-        } while (n < 0 && errno == EINTR);
+-
+-        if (n < 0)
++        int ret = wait_fd(fd, POLLIN, deadline_ms);
++        if (ret < 0)
++            return ret;
++
++        ssize_t n = read(fd, p, remaining);
++        if (n > 0) {
++            p += n;
++            remaining -= (size_t)n;
++            continue;
++        }
++        if (n == 0)
++            return -ECONNRESET;
++        if (errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK)
+             return -errno;
+-
+-        p += n;
+-        remaining -= (size_t)n;
+     }
+ 
+     return 0;
+ }
+ 
+-/*
+- * Read a length-prefixed message from fd.
+- * Allocates the message buffer; caller must free().
+- * Returns message length on success, -errno on error.
+- */
+-static int read_message(int fd, char **out_buf, uint32_t timeout_ms)
++static int write_message_deadline(int fd, const char *buf, size_t len, int64_t deadline_ms)
++{
++    if (len > RSS_CTRL_MAX_MSG)
++        return -EMSGSIZE;
++
++    uint8_t len_buf[2] = {(uint8_t)(len >> 8), (uint8_t)(len & 0xFF)};
++    int ret = write_exact_deadline(fd, len_buf, sizeof(len_buf), deadline_ms);
++    if (ret < 0)
++        return ret;
++    return write_exact_deadline(fd, buf, len, deadline_ms);
++}
++
++static int read_message_deadline(int fd, char **out_buf, int64_t deadline_ms)
+ {
+     uint8_t len_buf[2];
+-    int ret = read_exact(fd, len_buf, 2, timeout_ms);
++    int ret = read_exact_deadline(fd, len_buf, sizeof(len_buf), deadline_ms);
+     if (ret < 0)
+         return ret;
+ 
+@@ -126,7 +217,7 @@ static int read_message(int fd, char **out_buf, uint32_t timeout_ms)
+     if (!buf)
+         return -ENOMEM;
+ 
+-    ret = read_exact(fd, buf, msg_len, timeout_ms);
++    ret = read_exact_deadline(fd, buf, msg_len, deadline_ms);
+     if (ret < 0) {
+         free(buf);
+         return ret;
+@@ -137,26 +228,6 @@ static int read_message(int fd, char **out_buf, uint32_t timeout_ms)
+     return msg_len;
+ }
+ 
+-/*
+- * Write a length-prefixed message to fd.
+- * Returns 0 on success, -errno on error.
+- */
+-static int write_message(int fd, const char *buf, size_t len)
+-{
+-    if (len > RSS_CTRL_MAX_MSG)
+-        return -EMSGSIZE;
+-
+-    uint8_t len_buf[2];
+-    len_buf[0] = (uint8_t)(len >> 8);
+-    len_buf[1] = (uint8_t)(len & 0xFF);
+-
+-    int ret = write_exact(fd, len_buf, 2);
+-    if (ret < 0)
+-        return ret;
+-
+-    return write_exact(fd, buf, len);
+-}
+-
+ /* ------------------------------------------------------------------ */
+ /*  Server API (daemon side)                                          */
+ /* ------------------------------------------------------------------ */
+@@ -203,6 +274,13 @@ rss_ctrl_t *rss_ctrl_listen(const char *sock_path)
+         goto fail;
+     }
+ 
++    /* Non-blocking listener: accept() must never park a daemon. An
++     * event loop can dispatch a read handler spuriously (live555's
++     * select path falls through with stale fd_sets on EINTR), and a
++     * blocking accept() with no pending connection then sleeps
++     * forever — immune to further signals via its EINTR retry. */
++    fcntl(ctrl->listen_fd, F_SETFL, fcntl(ctrl->listen_fd, F_GETFL, 0) | O_NONBLOCK);
++
+     return ctrl;
+ 
+ fail:
+@@ -245,19 +323,26 @@ int rss_ctrl_accept_and_handle(rss_ctrl_t *ctrl,
+     if (client_fd < 0)
+         return -errno;
+ 
+-    /* Set write timeout so a slow/stalled client can't block the daemon
+-     * indefinitely. Read side is already covered by poll() in read_exact. */
+-    struct timeval snd_tv = {.tv_sec = 5, .tv_usec = 0};
+-    (void)setsockopt(client_fd, SOL_SOCKET, SO_SNDTIMEO, &snd_tv, sizeof(snd_tv));
++    int flags = fcntl(client_fd, F_GETFL, 0);
++    if (flags < 0 || fcntl(client_fd, F_SETFL, flags | O_NONBLOCK) < 0) {
++        int error = errno;
++        close(client_fd);
++        return -error;
++    }
++
++    int64_t started_ms = monotonic_ms();
++    if (started_ms < 0) {
++        close(client_fd);
++        return (int)started_ms;
++    }
++    int64_t deadline_ms = started_ms + RSS_CTRL_SERVER_TIMEOUT_MS;
+ 
+     int ret = -1;
+     char *cmd = NULL;
+     char *resp_buf = NULL;
+ 
+-    /* Read the request (5s timeout per poll — a client trickling one byte
+-     * every 4.9s could hold the handler longer, but on a root-only local
+-     * Unix socket this is not a practical attack vector). */
+-    int msg_len = read_message(client_fd, &cmd, 5000);
++    /* One shared deadline bounds the complete accepted-client exchange. */
++    int msg_len = read_message_deadline(client_fd, &cmd, deadline_ms);
+     if (msg_len < 0) {
+         ret = msg_len;
+         goto done;
+@@ -286,7 +371,7 @@ int rss_ctrl_accept_and_handle(rss_ctrl_t *ctrl,
+     }
+ 
+     /* Write the response. */
+-    ret = write_message(client_fd, resp_buf, (size_t)resp_len);
++    ret = write_message_deadline(client_fd, resp_buf, (size_t)resp_len, deadline_ms);
+ 
+ done:
+     free(resp_buf);
+@@ -314,14 +399,22 @@ int rss_ctrl_send_command(const char *sock_path, const char *cmd_json, char *res
+     addr.sun_family = AF_UNIX;
+     snprintf(addr.sun_path, sizeof(addr.sun_path), "%s", sock_path);
+ 
+-    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+-        int err = errno;
++    int64_t start_ms = monotonic_ms();
++    if (start_ms < 0) {
+         close(fd);
+-        return -err;
++        return (int)start_ms;
++    }
++    uint32_t budget_ms = timeout_ms ? timeout_ms : RSS_CTRL_DEFAULT_TIMEOUT_MS;
++    int64_t deadline_ms = start_ms + budget_ms;
++
++    int ret = connect_deadline(fd, &addr, deadline_ms);
++    if (ret < 0) {
++        close(fd);
++        return ret;
+     }
+ 
+     size_t cmd_len = strlen(cmd_json);
+-    int ret = write_message(fd, cmd_json, cmd_len);
++    ret = write_message_deadline(fd, cmd_json, cmd_len, deadline_ms);
+     if (ret < 0) {
+         close(fd);
+         return ret;
+@@ -332,7 +425,7 @@ int rss_ctrl_send_command(const char *sock_path, const char *cmd_json, char *res
+ 
+     /* Read the response. */
+     char *resp = NULL;
+-    int rlen = read_message(fd, &resp, timeout_ms ? timeout_ms : 5000);
++    int rlen = read_message_deadline(fd, &resp, deadline_ms);
+     close(fd);
+ 
+     if (rlen < 0)
+diff --git a/src/rss_ring.c b/src/rss_ring.c
+index 9ebe8324414007d79249b5dc129e8ec46fb66b2c..f2695ac23c0641b217a458a6cb7c2855d5e0334c 100644
+--- a/src/rss_ring.c
++++ b/src/rss_ring.c
+@@ -377,6 +377,50 @@ void rss_ring_set_stream_info(rss_ring_t *ring, uint32_t stream_id, uint32_t cod
+     ring->header->level = level;
+ }
+ 
++int rss_ring_check_video_fps(rss_ring_t *ring, uint32_t fps_num)
++{
++    if (!ring || !ring->header || !ring->is_producer)
++        return -EINVAL;
++    rss_ring_header_t *h = ring->header;
++    if (h->version != RSS_RING_VERSION)
++        return -EPROTO;
++    if (!atomic_is_lock_free(&h->fps_num))
++        return -ENOTSUP;
++    if (h->stream_id > 5 || h->codec > 1 || !h->width || !h->height || h->fps_den != 1)
++        return -ENOTSUP;
++    if (fps_num < 1 || fps_num > 30)
++        return -ERANGE;
++    return 0;
++}
++
++int rss_ring_set_video_fps(rss_ring_t *ring, uint32_t fps_num)
++{
++    int ret = rss_ring_check_video_fps(ring, fps_num);
++    if (ret != 0)
++        return ret;
++    /* No dependent data is published with this value. Denominator is immutable. */
++    atomic_store_explicit(&ring->header->fps_num, fps_num, memory_order_relaxed);
++    return 0;
++}
++
++int rss_ring_get_fps(rss_ring_t *ring, uint32_t *fps_num, uint32_t *fps_den)
++{
++    if (!ring || !ring->header || !fps_num || !fps_den || fps_num == fps_den)
++        return -EINVAL;
++    const rss_ring_header_t *h = ring->header;
++    if (h->version != RSS_RING_VERSION)
++        return -EPROTO;
++    if (!atomic_is_lock_free(&h->fps_num))
++        return -ENOTSUP;
++    uint32_t num = atomic_load_explicit(&h->fps_num, memory_order_relaxed);
++    uint32_t den = h->fps_den;
++    if (!num || !den)
++        return -ERANGE;
++    *fps_num = num;
++    *fps_den = den;
++    return 0;
++}
++
+ void rss_ring_set_utc(rss_ring_t *ring, int64_t offset_us, uint8_t status)
+ {
+     if (!ring || !ring->is_producer)
+@@ -574,7 +618,11 @@ int rss_ring_read(rss_ring_t *ring, uint64_t *read_seq, uint8_t *dest, uint32_t
+      * store, ensuring all slot and data writes are visible. */
+     uint64_t wseq = atomic_load_explicit(&hdr->write_seq, memory_order_acquire);
+ 
+-    if (*read_seq >= wseq)
++    /* Sequences are 1-based and write_seq is release-stored after the
++     * slot is fully written, so seq == write_seq is complete and safe
++     * to read. Excluding it made every consumer run one frame behind
++     * and lose the final frame of a finite stream. */
++    if (wseq == 0 || *read_seq > wseq)
+         return -EAGAIN;
+ 
+     /* Check for overflow: consumer fell behind by >= slot_count frames. */
+@@ -666,7 +714,11 @@ int rss_ring_peek(rss_ring_t *ring, uint64_t *read_seq, const uint8_t **data_ptr
+     uint32_t slot_count = hdr->slot_count;
+     uint64_t wseq = atomic_load_explicit(&hdr->write_seq, memory_order_acquire);
+ 
+-    if (*read_seq >= wseq)
++    /* Sequences are 1-based and write_seq is release-stored after the
++     * slot is fully written, so seq == write_seq is complete and safe
++     * to read. Excluding it made every consumer run one frame behind
++     * and lose the final frame of a finite stream. */
++    if (wseq == 0 || *read_seq > wseq)
+         return -EAGAIN;
+ 
+     if (wseq - *read_seq >= slot_count) {
+diff --git a/tests/native-fps/linux/futex.h b/tests/native-fps/linux/futex.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..5a5b4a08c723df65fa3fa3b80ff3a1ff1c54e07a
+--- /dev/null
++++ b/tests/native-fps/linux/futex.h
+@@ -0,0 +1,3 @@
++/* Host metadata test only. Any syscall use aborts in the test double. */
++#define FUTEX_WAIT 0
++#define FUTEX_WAKE 1
+diff --git a/tests/test_ctrl.c b/tests/test_ctrl.c
+index 439c1f1a857225f1ba400174d78a5078be1b794c..83ae1a4566d52846f4abe2279a7c1e0ff24a17c6 100644
+--- a/tests/test_ctrl.c
++++ b/tests/test_ctrl.c
+@@ -1,128 +1,310 @@
+ #include "greatest.h"
+ #include "rss_ipc.h"
+ 
++#include <errno.h>
++#include <fcntl.h>
++#include <poll.h>
+ #include <pthread.h>
++#include <stdlib.h>
+ #include <string.h>
++#include <time.h>
+ #include <unistd.h>
+ #include <sys/socket.h>
+ #include <sys/un.h>
+ 
+-#define CTRL_SOCK "/tmp/rss_test_ctrl.sock"
++static int ctrl_sock_path(char *path, size_t path_size, const char *name)
++{
++	const char *tmpdir = getenv("TMPDIR");
++	if (!tmpdir || !tmpdir[0])
++		return -1;
++	int length = snprintf(path, path_size, "%s/%s", tmpdir, name);
++	return length > 0 && (size_t)length < path_size ? 0 : -1;
++}
++
++static int64_t test_monotonic_ms(void)
++{
++	struct timespec now;
++	if (clock_gettime(CLOCK_MONOTONIC, &now) < 0)
++		return -1;
++	return (int64_t)now.tv_sec * 1000 + now.tv_nsec / 1000000;
++}
+ 
+ static int echo_handler(const char *cmd_json, char *resp_buf, int resp_buf_size, void *userdata)
+ {
+-	(void)userdata;
+-	return snprintf(resp_buf, resp_buf_size, "{\"echo\":\"%s\"}", cmd_json);
++    (void)userdata;
++    return snprintf(resp_buf, resp_buf_size, "{\"echo\":\"%s\"}", cmd_json);
++}
++
++/* The listener is non-blocking by contract (a blocking accept() can
++ * park a daemon on a spurious event-loop dispatch), so a server calls
++ * accept_and_handle only when poll/select reports readability. */
++static void serve_one(rss_ctrl_t *ctrl, int (*handler)(const char *, char *, int, void *))
++{
++    struct pollfd pfd = {.fd = rss_ctrl_get_fd(ctrl), .events = POLLIN};
++    if (poll(&pfd, 1, 2000) > 0)
++        rss_ctrl_accept_and_handle(ctrl, handler, NULL);
+ }
+ 
+ static void *server_thread(void *arg)
+ {
+-	rss_ctrl_t *ctrl = arg;
+-	rss_ctrl_accept_and_handle(ctrl, echo_handler, NULL);
+-	return NULL;
++    serve_one(arg, echo_handler);
++    return NULL;
++}
++
++static void *two_request_server_thread(void *arg)
++{
++    serve_one(arg, echo_handler);
++    serve_one(arg, echo_handler);
++    return NULL;
++}
++
++static int connect_raw_client(const char *path)
++{
++    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
++    if (fd < 0)
++        return -1;
++
++    struct sockaddr_un addr;
++    memset(&addr, 0, sizeof(addr));
++    addr.sun_family = AF_UNIX;
++    snprintf(addr.sun_path, sizeof(addr.sun_path), "%s", path);
++    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
++        close(fd);
++        return -1;
++    }
++    return fd;
+ }
+ 
+ TEST ctrl_roundtrip(void)
+ {
+-	rss_ctrl_t *srv = rss_ctrl_listen(CTRL_SOCK);
++	char sock[sizeof(((struct sockaddr_un *)0)->sun_path)];
++	ASSERT_EQ(0, ctrl_sock_path(sock, sizeof(sock), "rss_test_ctrl.sock"));
++	rss_ctrl_t *srv = rss_ctrl_listen(sock);
+ 	ASSERT(srv);
+ 
+-	pthread_t tid;
+-	pthread_create(&tid, NULL, server_thread, srv);
++    pthread_t tid;
++    pthread_create(&tid, NULL, server_thread, srv);
+ 
+-	/* Brief pause to let server thread reach accept() */
+-	usleep(10000);
++    /* Brief pause to let server thread reach accept() */
++    usleep(10000);
+ 
+ 	char resp[512];
+-	int ret = rss_ctrl_send_command(CTRL_SOCK, "ping", resp, sizeof(resp), 2000);
++	int ret = rss_ctrl_send_command(sock, "ping", resp, sizeof(resp), 2000);
+ 	ASSERT(ret > 0);
+ 	ASSERT(strstr(resp, "ping")); /* echoed back */
+ 
+-	pthread_join(tid, NULL);
+-	rss_ctrl_destroy(srv);
+-	PASS();
++    pthread_join(tid, NULL);
++    rss_ctrl_destroy(srv);
++    PASS();
+ }
+ 
+ static int error_handler(const char *cmd_json, char *resp_buf, int resp_buf_size, void *userdata)
+ {
+-	(void)cmd_json;
+-	(void)resp_buf;
+-	(void)resp_buf_size;
+-	(void)userdata;
+-	return -42; /* negative = error */
++    (void)cmd_json;
++    (void)resp_buf;
++    (void)resp_buf_size;
++    (void)userdata;
++    return -42; /* negative = error */
+ }
+ 
+ static void *error_server_thread(void *arg)
+ {
+-	rss_ctrl_t *ctrl = arg;
+-	rss_ctrl_accept_and_handle(ctrl, error_handler, NULL);
+-	return NULL;
++    serve_one(arg, error_handler);
++    return NULL;
+ }
+ 
+ TEST ctrl_handler_error(void)
+ {
+-	const char *sock = "/tmp/rss_test_ctrl_err.sock";
++	char sock[sizeof(((struct sockaddr_un *)0)->sun_path)];
++	ASSERT_EQ(0, ctrl_sock_path(sock, sizeof(sock), "rss_test_ctrl_err.sock"));
+ 	rss_ctrl_t *srv = rss_ctrl_listen(sock);
+ 	ASSERT(srv);
+ 
+-	pthread_t tid;
+-	pthread_create(&tid, NULL, error_server_thread, srv);
+-	usleep(10000);
++    pthread_t tid;
++    pthread_create(&tid, NULL, error_server_thread, srv);
++    usleep(10000);
+ 
+-	char resp[512];
+-	int ret = rss_ctrl_send_command(sock, "fail", resp, sizeof(resp), 2000);
+-	ASSERT(ret > 0);
+-	ASSERT(strstr(resp, "error"));
++    char resp[512];
++    int ret = rss_ctrl_send_command(sock, "fail", resp, sizeof(resp), 2000);
++    ASSERT(ret > 0);
++    ASSERT(strstr(resp, "error"));
+ 
+-	pthread_join(tid, NULL);
+-	rss_ctrl_destroy(srv);
+-	PASS();
++    pthread_join(tid, NULL);
++    rss_ctrl_destroy(srv);
++    PASS();
++}
++
++TEST ctrl_partial_prefix_does_not_park_server(void)
++{
++    char sock[sizeof(((struct sockaddr_un *)0)->sun_path)];
++    ASSERT_EQ(0, ctrl_sock_path(sock, sizeof(sock), "rss_test_ctrl_partial_prefix.sock"));
++    rss_ctrl_t *srv = rss_ctrl_listen(sock);
++    ASSERT(srv);
++
++    int stalled = connect_raw_client(sock);
++    ASSERT(stalled >= 0);
++    const uint8_t partial_prefix = 0;
++    ASSERT_EQ(1, write(stalled, &partial_prefix, sizeof(partial_prefix)));
++
++    pthread_t tid;
++    pthread_create(&tid, NULL, two_request_server_thread, srv);
++    usleep(10000);
++
++    char resp[512];
++    int64_t started_ms = test_monotonic_ms();
++    ASSERT(started_ms >= 0);
++    int ret = rss_ctrl_send_command(sock, "next", resp, sizeof(resp), 2500);
++    int64_t elapsed_ms = test_monotonic_ms() - started_ms;
++    ASSERT(ret > 0);
++    ASSERT(strstr(resp, "next"));
++    ASSERT(elapsed_ms >= 700);
++    ASSERT(elapsed_ms < 1800);
++
++    pthread_join(tid, NULL);
++    close(stalled);
++    rss_ctrl_destroy(srv);
++    PASS();
++}
++
++TEST ctrl_partial_body_does_not_park_server(void)
++{
++    char sock[sizeof(((struct sockaddr_un *)0)->sun_path)];
++    ASSERT_EQ(0, ctrl_sock_path(sock, sizeof(sock), "rss_test_ctrl_partial_body.sock"));
++    rss_ctrl_t *srv = rss_ctrl_listen(sock);
++    ASSERT(srv);
++
++    int stalled = connect_raw_client(sock);
++    ASSERT(stalled >= 0);
++    const uint8_t partial_body[] = {0, 4, '{'};
++    ASSERT_EQ((int)sizeof(partial_body), write(stalled, partial_body, sizeof(partial_body)));
++
++    pthread_t tid;
++    pthread_create(&tid, NULL, two_request_server_thread, srv);
++    usleep(10000);
++
++    char resp[512];
++    int64_t started_ms = test_monotonic_ms();
++    ASSERT(started_ms >= 0);
++    int ret = rss_ctrl_send_command(sock, "next", resp, sizeof(resp), 2500);
++    int64_t elapsed_ms = test_monotonic_ms() - started_ms;
++    ASSERT(ret > 0);
++    ASSERT(strstr(resp, "next"));
++    ASSERT(elapsed_ms >= 700);
++    ASSERT(elapsed_ms < 1800);
++
++    pthread_join(tid, NULL);
++    close(stalled);
++    rss_ctrl_destroy(srv);
++    PASS();
+ }
+ 
+ static void *stall_thread(void *arg)
+ {
+-	int *listen_fd = arg;
+-	int client = accept(*listen_fd, NULL, NULL);
+-	if (client >= 0) {
+-		/* Accept but never respond — just sleep and close */
+-		usleep(500000);
+-		close(client);
+-	}
+-	return NULL;
++    int *listen_fd = arg;
++    int client = accept(*listen_fd, NULL, NULL);
++    if (client >= 0) {
++        /* Accept but never respond — just sleep and close */
++        usleep(500000);
++        close(client);
++    }
++    return NULL;
+ }
+ 
+ TEST ctrl_timeout(void)
+ {
+-	const char *sock = "/tmp/rss_test_ctrl_to.sock";
++	char sock[sizeof(((struct sockaddr_un *)0)->sun_path)];
++	ASSERT_EQ(0, ctrl_sock_path(sock, sizeof(sock), "rss_test_ctrl_to.sock"));
+ 	unlink(sock);
+ 
+-	int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+-	ASSERT(fd >= 0);
++    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
++    ASSERT(fd >= 0);
++    struct sockaddr_un addr;
++    memset(&addr, 0, sizeof(addr));
++    addr.sun_family = AF_UNIX;
++    snprintf(addr.sun_path, sizeof(addr.sun_path), "%s", sock);
++    ASSERT_EQ(0, bind(fd, (struct sockaddr *)&addr, sizeof(addr)));
++    ASSERT_EQ(0, listen(fd, 1));
++
++    pthread_t tid;
++    pthread_create(&tid, NULL, stall_thread, &fd);
++    usleep(10000);
++
++	char resp[64];
++	int64_t started_ms = test_monotonic_ms();
++	ASSERT(started_ms >= 0);
++	int ret = rss_ctrl_send_command(sock, "{}", resp, sizeof(resp), 100);
++	int64_t elapsed_ms = test_monotonic_ms() - started_ms;
++	ASSERT_EQ(-ETIMEDOUT, ret);
++	ASSERT(elapsed_ms >= 50);
++	ASSERT(elapsed_ms < 300);
++
++    pthread_join(tid, NULL);
++    close(fd);
++    unlink(sock);
++    PASS();
++}
++
++TEST ctrl_connect_timeout(void)
++{
++	char sock[sizeof(((struct sockaddr_un *)0)->sun_path)];
++	ASSERT_EQ(0, ctrl_sock_path(sock, sizeof(sock), "rss_test_ctrl_connect_to.sock"));
++	unlink(sock);
++
++	int listen_fd = socket(AF_UNIX, SOCK_STREAM, 0);
++	ASSERT(listen_fd >= 0);
+ 	struct sockaddr_un addr;
+ 	memset(&addr, 0, sizeof(addr));
+ 	addr.sun_family = AF_UNIX;
+ 	snprintf(addr.sun_path, sizeof(addr.sun_path), "%s", sock);
+-	ASSERT_EQ(0, bind(fd, (struct sockaddr *)&addr, sizeof(addr)));
+-	ASSERT_EQ(0, listen(fd, 1));
++	ASSERT_EQ(0, bind(listen_fd, (struct sockaddr *)&addr, sizeof(addr)));
++	ASSERT_EQ(0, listen(listen_fd, 1));
+ 
+-	pthread_t tid;
+-	pthread_create(&tid, NULL, stall_thread, &fd);
+-	usleep(10000);
++	int fillers[64];
++	int filler_count = 0;
++	bool saturated = false;
++	for (size_t i = 0; i < sizeof(fillers) / sizeof(fillers[0]); i++) {
++		int client = socket(AF_UNIX, SOCK_STREAM, 0);
++		ASSERT(client >= 0);
++		int flags = fcntl(client, F_GETFL, 0);
++		ASSERT(flags >= 0);
++		ASSERT_EQ(0, fcntl(client, F_SETFL, flags | O_NONBLOCK));
++		if (connect(client, (struct sockaddr *)&addr, sizeof(addr)) == 0 ||
++		    errno == EINPROGRESS) {
++			fillers[filler_count++] = client;
++			continue;
++		}
++		if (errno == EAGAIN) {
++			saturated = true;
++			close(client);
++			break;
++		}
++		close(client);
++		FAILm("unexpected backlog-filling connect error");
++	}
++	ASSERT(saturated);
+ 
+ 	char resp[64];
++	int64_t started_ms = test_monotonic_ms();
++	ASSERT(started_ms >= 0);
+ 	int ret = rss_ctrl_send_command(sock, "{}", resp, sizeof(resp), 100);
+-	/* Should timeout or get connection reset */
+-	ASSERT(ret < 0);
++	int64_t elapsed_ms = test_monotonic_ms() - started_ms;
++	ASSERT_EQ(-ETIMEDOUT, ret);
++	ASSERT(elapsed_ms >= 50);
++	ASSERT(elapsed_ms < 1000);
+ 
+-	pthread_join(tid, NULL);
+-	close(fd);
++	for (int i = 0; i < filler_count; i++)
++		close(fillers[i]);
++	close(listen_fd);
+ 	unlink(sock);
+ 	PASS();
+ }
+ 
+ SUITE(ctrl_suite)
+ {
+-	RUN_TEST(ctrl_roundtrip);
+-	RUN_TEST(ctrl_handler_error);
+-	RUN_TEST(ctrl_timeout);
++    RUN_TEST(ctrl_roundtrip);
++    RUN_TEST(ctrl_handler_error);
++    RUN_TEST(ctrl_partial_prefix_does_not_park_server);
++    RUN_TEST(ctrl_partial_body_does_not_park_server);
++    RUN_TEST(ctrl_timeout);
++	RUN_TEST(ctrl_connect_timeout);
+ }
+diff --git a/tests/test_fps.c b/tests/test_fps.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..96fe439f3a954517afdddea8bdac4756ef46e177
+--- /dev/null
++++ b/tests/test_fps.c
+@@ -0,0 +1,164 @@
++#include <assert.h>
++#include <stdarg.h>
++#include <stdlib.h>
++#include <unistd.h>
++#include <pthread.h>
++#include <stdatomic.h>
++#include <stdbool.h>
++static bool force_non_lock_free;
++#undef atomic_is_lock_free
++#define atomic_is_lock_free(p) (!force_non_lock_free && __atomic_is_lock_free(sizeof(*(p)), (p)))
++
++/* No futex, mapping, device or SHM operation is needed by the actual metadata
++ * API. Compile the complete ring TU and fail if it reaches a syscall. */
++static long test_syscall(long number, ...)
++{
++    (void)number;
++    abort();
++}
++#define syscall test_syscall
++#ifndef SYS_futex
++#define SYS_futex 202
++#endif
++#include "../src/rss_ring.c"
++#undef syscall
++
++static rss_ring_header_t header;
++static rss_ring_t producer;
++static rss_ring_t consumer;
++
++static void reset(void)
++{
++    header = (rss_ring_header_t){0};
++    header.version = RSS_RING_VERSION;
++    producer = (rss_ring_t){.header = &header, .is_producer = true};
++    consumer = (rss_ring_t){.header = &header};
++    rss_ring_set_stream_info(&producer, 0, 0, 1920, 1080, 25, 1, 100, 40);
++}
++
++static void expect_rate(uint32_t num, uint32_t den)
++{
++    uint32_t n = 99;
++    uint32_t d = 99;
++    assert(rss_ring_get_fps(&consumer, &n, &d) == 0);
++    assert(n == num);
++    assert(d == den);
++}
++
++static void unchanged_failure(int result)
++{
++    unsigned char before[sizeof(header)];
++    memcpy(before, &header, sizeof(header));
++    assert(rss_ring_check_video_fps(&producer, 15) == result);
++    assert(memcmp(before, &header, sizeof(header)) == 0);
++    assert(rss_ring_set_video_fps(&producer, 15) == result);
++    assert(memcmp(before, &header, sizeof(header)) == 0);
++}
++
++static void *writer(void *unused)
++{
++    (void)unused;
++    for (unsigned i = 0; i < 100000; i++)
++        assert(rss_ring_set_video_fps(&producer, i % 30 + 1) == 0);
++    return NULL;
++}
++
++int main(void)
++{
++    reset();
++    assert(atomic_is_lock_free(&header.fps_num));
++    assert(sizeof(header) == 192);
++    unsigned char before[sizeof(header)];
++    memcpy(before, &header, sizeof(header));
++    for (uint32_t n = 1; n <= 30; n++) {
++        unsigned char snapshot[sizeof(header)];
++        memcpy(snapshot, &header, sizeof(header));
++        assert(rss_ring_check_video_fps(&producer, n) == 0);
++        assert(memcmp(snapshot, &header, sizeof(header)) == 0);
++        assert(rss_ring_set_video_fps(&producer, n) == 0);
++        expect_rate(n, 1);
++        /* All bytes outside the sole mutable atomic remain untouched.
++         * This byte comparison runs without concurrent accesses. */
++        size_t offset = offsetof(rss_ring_header_t, fps_num);
++        size_t end = offset + sizeof(header.fps_num);
++        assert(memcmp(before, &header, offset) == 0);
++        assert(memcmp(before + end, (unsigned char *)&header + end,
++                      sizeof(header) - end) == 0);
++    }
++    const uint32_t invalid[] = {0, 31, UINT32_MAX};
++    for (size_t i = 0; i < sizeof(invalid) / sizeof(invalid[0]); i++) {
++        memcpy(before, &header, sizeof(header));
++        assert(rss_ring_check_video_fps(&producer, invalid[i]) == -ERANGE);
++        assert(memcmp(before, &header, sizeof(header)) == 0);
++        assert(rss_ring_set_video_fps(&producer, invalid[i]) == -ERANGE);
++        assert(memcmp(before, &header, sizeof(header)) == 0);
++    }
++    assert(rss_ring_set_video_fps(NULL, 15) == -EINVAL);
++    assert(rss_ring_check_video_fps(NULL, 15) == -EINVAL);
++    assert(rss_ring_check_video_fps(&consumer, 15) == -EINVAL);
++    assert(rss_ring_set_video_fps(&consumer, 15) == -EINVAL);
++    expect_rate(30, 1);
++    producer.header = NULL;
++    unchanged_failure(-EINVAL);
++    producer.header = &header;
++    force_non_lock_free = true;
++    unchanged_failure(-ENOTSUP);
++    force_non_lock_free = false;
++    header.version--;
++    unchanged_failure(-EPROTO);
++    uint32_t n = 111;
++    uint32_t d = 222;
++    assert(rss_ring_get_fps(&consumer, &n, &d) == -EPROTO);
++    assert(n == 111 && d == 222);
++    reset();
++    header.width = 0;
++    unchanged_failure(-ENOTSUP);
++    reset();
++    header.height = 0;
++    unchanged_failure(-ENOTSUP);
++    reset();
++    header.codec = 2;
++    unchanged_failure(-ENOTSUP);
++    reset();
++    header.stream_id = 6;
++    unchanged_failure(-ENOTSUP);
++    reset();
++    header.stream_id = 5;
++    header.codec = 1;
++    assert(rss_ring_set_video_fps(&producer, 12) == 0);
++    expect_rate(12, 1);
++    reset();
++    rss_ring_set_stream_info(&producer, 1, 1, 1280, 720, 30000, 1001, 0, 0);
++    expect_rate(30000, 1001);
++    unchanged_failure(-ENOTSUP);
++    rss_ring_set_stream_info(&producer, 1, 0, 1280, 720, 1, 2, 0, 0);
++    expect_rate(1, 2);
++    unchanged_failure(-ENOTSUP);
++    rss_ring_set_stream_info(&producer, 0x10, 0, 0, 0, 48000, 1, 5, 0);
++    expect_rate(48000, 1);
++    unchanged_failure(-ENOTSUP);
++    assert(header.fps_num == 48000); /* Existing direct audio load semantics. */
++    assert(rss_ring_get_fps(NULL, &n, &d) == -EINVAL);
++    assert(rss_ring_get_fps(&consumer, NULL, &d) == -EINVAL);
++    assert(rss_ring_get_fps(&consumer, &n, NULL) == -EINVAL);
++    assert(rss_ring_get_fps(&consumer, &n, &n) == -EINVAL);
++    assert(n == 111 && d == 222);
++    header.fps_den = 0;
++    unchanged_failure(-ENOTSUP);
++    assert(rss_ring_get_fps(&consumer, &n, &d) == -ERANGE);
++    assert(n == 111 && d == 222);
++    header.fps_den = 1;
++    atomic_store(&header.fps_num, 0);
++    assert(rss_ring_get_fps(&consumer, &n, &d) == -ERANGE);
++    assert(n == 111 && d == 222);
++    reset();
++    pthread_t thread;
++    assert(pthread_create(&thread, NULL, writer, NULL) == 0);
++    for (unsigned i = 0; i < 100000; i++) {
++        assert(rss_ring_get_fps(&consumer, &n, &d) == 0);
++        assert(n >= 1 && n <= 30 && d == 1);
++    }
++    assert(pthread_join(thread, NULL) == 0);
++    puts("Actual IPC FPS setter/getter, layout and concurrent reads passed");
++    return 0;
++}
+diff --git a/tests/test_fps_layout.c b/tests/test_fps_layout.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..a6f3a02687707ed4501471073d87a5a4ae570dd1
+--- /dev/null
++++ b/tests/test_fps_layout.c
+@@ -0,0 +1,41 @@
++#include <rss_ipc.h>
++#include <stddef.h>
++#include <stdio.h>
++
++#define FIELD(name) printf(#name " %zu %zu\n", offsetof(rss_ring_header_t, name), \
++                           sizeof(((rss_ring_header_t *)0)->name))
++int main(void)
++{
++    printf("header %zu %zu\n", sizeof(rss_ring_header_t), _Alignof(rss_ring_header_t));
++    FIELD(write_seq);
++    FIELD(futex_seq);
++    FIELD(slot_count);
++    FIELD(data_size);
++    FIELD(data_head);
++    FIELD(stream_id);
++    FIELD(codec);
++    FIELD(width);
++    FIELD(height);
++    FIELD(fps_num);
++    FIELD(fps_den);
++    FIELD(profile);
++    FIELD(level);
++    FIELD(_reserved);
++    FIELD(magic);
++    FIELD(version);
++    FIELD(incarnation);
++    FIELD(idr_request);
++    FIELD(reader_count);
++    FIELD(reader_pids);
++    FIELD(flags);
++    FIELD(ref_buf_count);
++    FIELD(ref_rmem_size);
++    FIELD(ref_rmem_offset);
++    FIELD(ref_buf_stride);
++    FIELD(ref_buf_gen);
++    FIELD(utc_gen);
++    FIELD(utc_status);
++    FIELD(_pad_utc);
++    FIELD(utc_offset_us);
++    return 0;
++}

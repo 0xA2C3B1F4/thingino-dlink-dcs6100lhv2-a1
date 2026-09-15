@@ -555,41 +555,46 @@ class MediaTests(unittest.TestCase):
             self.assertEqual((root / bootstrap_name).read_bytes(), bootstrap)
 
     def test_universal_install_set_accepts_camera_authorized_data_policy(self) -> None:
-        bootstrap_name = "DCS6100LHV2Ax_FW000B00_THINGINO_SD.bin"
-        bootstrap = generate_bootstrap(b"kernel", b"rootfs")
-        system = test_squashfs(64)
-        command_line = final_kernel_command_line(derive_final_layout(len(system)))
-        stage2 = build_stage2(
-            final_kernel=test_uimage(command_line.encode("ascii")),
-            system_rootfs=system,
-        )
-        document = json.loads(
-            self._split_install_manifest(bootstrap_name, bootstrap, stage2)
-        )
-        document.update(
-            {
-                "artifact_scope": "model-universal",
-                "physical_write_policy": media.universal_physical_write_policy(),
-                "provisioning": "separate-per-camera-audit-and-jffs2",
-                "universal_firmware_sha256": "a" * 64,
-            }
-        )
-        document["artifacts"]["thingino-universal.tgb"] = {
-            "sha256": "a" * 64,
-            "size": 1,
-        }
-        document["region_policy"]["data"]["initialize"] = (
-            "camera-authorized-jffs2-erase-write-readback"
-        )
+        for data_mode in ("initialize", "preserve"):
+            with self.subTest(data_mode=data_mode):
+                bootstrap_name = "DCS6100LHV2Ax_FW000B00_THINGINO_SD.bin"
+                bootstrap = generate_bootstrap(b"kernel", b"rootfs")
+                system = test_squashfs(64)
+                command_line = final_kernel_command_line(derive_final_layout(len(system)))
+                stage2 = build_stage2(
+                    final_kernel=test_uimage(command_line.encode("ascii")),
+                    system_rootfs=system,
+                    data_mode=data_mode,
+                )
+                document = json.loads(
+                    self._split_install_manifest(bootstrap_name, bootstrap, stage2)
+                )
+                document.update(
+                    {
+                        "artifact_scope": "model-universal",
+                        "physical_write_policy": media.universal_physical_write_policy(
+                            data_mode
+                        ),
+                        "provisioning": "separate-per-camera-audit-and-jffs2",
+                        "universal_firmware_sha256": "a" * 64,
+                    }
+                )
+                document["artifacts"]["thingino-universal.tgb"] = {
+                    "sha256": "a" * 64,
+                    "size": 1,
+                }
+                document["region_policy"]["data"]["initialize"] = (
+                    "camera-authorized-jffs2-erase-write-readback"
+                )
 
-        validated = media.validate_install_set(
-            bootstrap_bytes=bootstrap,
-            stage2_bytes=stage2,
-            manifest_bytes=json.dumps(document).encode(),
-            bootstrap_name=bootstrap_name,
-        )
+                validated = media.validate_install_set(
+                    bootstrap_bytes=bootstrap,
+                    stage2_bytes=stage2,
+                    manifest_bytes=json.dumps(document).encode(),
+                    bootstrap_name=bootstrap_name,
+                )
 
-        self.assertEqual(validated.data_mode, "initialize")
+                self.assertEqual(validated.data_mode, data_mode)
 
     def test_split_install_set_rejects_manifest_layout_mismatch(self) -> None:
         with tempfile.TemporaryDirectory() as directory_name:
@@ -1081,7 +1086,7 @@ class MediaTests(unittest.TestCase):
             with (
                 mock.patch("installer.media.validate_stage2", side_effect=validate_current),
                 mock.patch(
-                    "installer.media.validate_retired_stage2_v2_42_22"
+                    "installer.media.validate_retired_stage2_v2_39_25"
                 ) as retired,
                 mock.patch("installer.media.validate_legacy_stage2_v1") as legacy,
             ):

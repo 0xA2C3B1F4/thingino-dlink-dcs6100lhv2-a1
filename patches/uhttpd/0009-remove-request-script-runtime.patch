@@ -13,7 +13,7 @@
  IF(TLS_SUPPORT)
  	SET(SOURCES ${SOURCES} tls.c)
  	ADD_DEFINITIONS(-DHAVE_TLS)
-@@ -41,12 +45,9 @@
+@@ -37,12 +41,9 @@
  ENDIF()
  
  FIND_LIBRARY(ubox NAMES ubox)

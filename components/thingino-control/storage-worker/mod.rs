@@ -404,6 +404,32 @@ mod tests {
         }
     }
 
+    struct FailedUnmountRunner {
+        events: Rc<RefCell<Vec<String>>>,
+    }
+
+    impl StorageCommandRunner for FailedUnmountRunner {
+        fn sync_filesystems(&mut self) {
+            self.events.borrow_mut().push("sync".to_owned());
+        }
+
+        fn command(
+            &mut self,
+            program: &str,
+            arguments: &[&str],
+            _timeout: Duration,
+        ) -> Result<(), &'static str> {
+            self.events
+                .borrow_mut()
+                .push(format!("{program} {}", arguments.join(" ")));
+            if program == "/bin/umount" {
+                Err("helper-exit-failed")
+            } else {
+                Ok(())
+            }
+        }
+    }
+
     fn identity(value: u64) -> BlockDeviceIdentity {
         BlockDeviceIdentity {
             filesystem_device: 10,
@@ -506,6 +532,28 @@ mod tests {
                 "/bin/mount -t vfat -o rw,sync,noatime,nosuid,nodev,noexec,fmask=0000,dmask=0000,shortname=mixed,errors=remount-ro /dev/mmcblk0p1 /mnt/mmcblk0p1",
             ]
         );
+    }
+
+    #[test]
+    fn busy_unmount_from_an_external_reader_stops_before_mkfs() {
+        let storage = TestStorage::new("deadbeef");
+        let events = Rc::new(RefCell::new(Vec::new()));
+        let mut runner = FailedUnmountRunner {
+            events: Rc::clone(&events),
+        };
+        let mut identity_reader = |_: &Path| Ok(identity(1));
+
+        assert_eq!(
+            format_card_with(
+                &request(),
+                storage.paths(),
+                &mut runner,
+                &mut identity_reader,
+            ),
+            Err("helper-exit-failed")
+        );
+        assert_eq!(*events.borrow(), ["sync", "/bin/umount /mnt/mmcblk0p1"]);
+        assert_no_mkfs(&events);
     }
 
     #[test]

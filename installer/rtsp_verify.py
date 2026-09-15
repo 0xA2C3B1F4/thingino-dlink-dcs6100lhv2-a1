@@ -7,9 +7,12 @@ import hashlib
 import ipaddress
 import math
 import re
+import secrets
 import socket
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
+from urllib.request import parse_http_list, parse_keqv_list
 
 from .rtsp_protocol import (
     RtspVerificationError,
@@ -20,11 +23,73 @@ from .rtsp_protocol import (
 )
 
 
+def _rtsp_authorization(
+    challenge: str, username: str, password: bytes
+) -> tuple[str | Callable[[str, str], str], str]:
+    """Honor the observed scheme; never retry by weakening authentication."""
+    if not challenge or len(challenge) > 4096 or any(
+        ord(char) < 32 or ord(char) > 126 for char in challenge
+    ):
+        raise RtspVerificationError("RTSP authentication challenge is invalid")
+    scheme, _, parameters = challenge.partition(" ")
+    if scheme.lower() == "basic":
+        token = base64.b64encode(username.encode("ascii") + b":" + password).decode("ascii")
+        return "Basic " + token, "basic"
+    if scheme.lower() != "digest":
+        raise RtspVerificationError("RTSP authentication scheme is unsupported")
+    entries = parse_http_list(parameters)
+    if any("=" not in entry for entry in entries):
+        raise RtspVerificationError("RTSP Digest challenge is malformed")
+    names = [entry.split("=", 1)[0].strip().lower() for entry in entries]
+    if len(names) != len(set(names)):
+        raise RtspVerificationError("RTSP Digest challenge has duplicate fields")
+    try:
+        fields = {key.strip().lower(): value for key, value in parse_keqv_list(entries).items()}
+    except (ValueError, IndexError) as exc:
+        raise RtspVerificationError("RTSP Digest challenge is malformed") from exc
+    realm, nonce = fields.get("realm"), fields.get("nonce")
+    if not realm or not nonce or fields.get("algorithm", "MD5").upper() != "MD5":
+        raise RtspVerificationError("RTSP Digest challenge lacks supported parameters")
+    qop = fields.get("qop")
+    if qop is not None and "auth" not in [item.strip() for item in qop.split(",")]:
+        raise RtspVerificationError("RTSP Digest protection is unsupported")
+
+    def md5(value: bytes) -> str:
+        return hashlib.md5(value).hexdigest()
+
+    def quoted(value: str) -> str:
+        return '"' + value.replace('\\', '\\\\').replace('"', '\\"') + '"'
+
+    ha1 = md5(username.encode("ascii") + b":" + realm.encode("ascii") + b":" + password)
+    cnonce = secrets.token_hex(16) if qop is not None else None
+    count = 0
+
+    def authorization(method: str, url: str) -> str:
+        nonlocal count
+        count += 1
+        nc = f"{count:08x}"
+        ha2 = md5(f"{method}:{url}".encode("ascii"))
+        middle = f"{nonce}:{nc}:{cnonce}:auth" if cnonce is not None else nonce
+        response = md5(f"{ha1}:{middle}:{ha2}".encode("ascii"))
+        result = [
+            "username=" + quoted(username), "realm=" + quoted(realm),
+            "nonce=" + quoted(nonce), "uri=" + quoted(url),
+            "response=" + quoted(response), "algorithm=MD5",
+        ]
+        if cnonce is not None:
+            result.extend(["qop=auth", "nc=" + nc, "cnonce=" + quoted(cnonce)])
+        if "opaque" in fields:
+            result.append("opaque=" + quoted(fields["opaque"]))
+        return "Digest " + ", ".join(result)
+
+    return authorization, "digest"
+
+
 @dataclass
 class _Rtsp:
     connection: socket.socket
     host: str
-    authorization: str | None
+    authorization: str | Callable[[str, str], str] | None
     sequence: int = 0
     buffer: bytes = b""
 
@@ -53,7 +118,10 @@ class _Rtsp:
         self.sequence += 1
         fields = {"CSeq": str(self.sequence), "User-Agent": "thingino-dlink/1"}
         if self.authorization is not None:
-            fields["Authorization"] = self.authorization
+            fields["Authorization"] = (
+                self.authorization(method, url)
+                if callable(self.authorization) else self.authorization
+            )
         fields.update(headers or {})
         raw = (
             f"{method} {url} RTSP/1.0\r\n"
@@ -105,7 +173,8 @@ class _Rtsp:
 
 
 def verify_rtsp_h264_1080p(
-    *, host: str, username: str, password: bytes, timeout: float = 20.0
+    *, host: str, username: str, password: bytes, timeout: float = 20.0,
+    stream_path: str = "/ch0",
 ) -> dict[str, object]:
     try:
         username_raw = username.encode("utf-8")
@@ -132,8 +201,9 @@ def verify_rtsp_h264_1080p(
         raise RtspVerificationError("RTSP host is not one private IPv4 address")
     if not math.isfinite(timeout) or not 5.0 <= timeout <= 60.0:
         raise RtspVerificationError("RTSP timeout is outside policy")
-    token = base64.b64encode(username.encode("ascii") + b":" + password.strip()).decode("ascii")
-    url = f"rtsp://{host}:554/ch0"
+    if re.fullmatch(r"/[A-Za-z0-9_.-]{1,64}", stream_path) is None:
+        raise RtspVerificationError("RTSP stream path is invalid")
+    url = f"rtsp://{host}:554{stream_path}"
 
     try:
         unauthenticated_connection = socket.create_connection((host, 554), timeout=5.0)
@@ -143,8 +213,7 @@ def verify_rtsp_h264_1080p(
             "OPTIONS", url, expected_status=401
         )
         challenge = unauthenticated_headers.get("www-authenticate", "")
-        if re.match(r'^Basic(?:\s|$)', challenge, re.IGNORECASE) is None:
-            raise RtspVerificationError("RTSP did not enforce Basic authentication")
+        authorization, auth_scheme = _rtsp_authorization(challenge, username, password.strip())
     except OSError as exc:
         raise RtspVerificationError("RTSP authentication control failed") from exc
     finally:
@@ -156,7 +225,7 @@ def verify_rtsp_h264_1080p(
         connection.settimeout(2.0)
     except OSError as exc:
         raise RtspVerificationError("RTSP endpoint is not reachable") from exc
-    client = _Rtsp(connection, host, "Basic " + token)
+    client = _Rtsp(connection, host, authorization)
     started = time.monotonic()
     sample = hashlib.sha256()
     timestamps: set[int] = set()
@@ -261,7 +330,7 @@ def verify_rtsp_h264_1080p(
         "rtp_packets": packets,
         "rtp_payload_sha256": sample.hexdigest(),
         "rtp_timestamps": len(timestamps),
-        "rtsp_authentication": "basic-hash-locked-closure-credential",
+        "rtsp_authentication": f"{auth_scheme}-hash-locked-closure-credential",
         "rtsp_transport": "interleaved-tcp",
         "width": width,
     }

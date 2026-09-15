@@ -1,6 +1,6 @@
 use super::*;
 
-impl PrudyntBackend {
+impl HostBackend {
     pub(super) fn diagnostics_info(&self, target: &str) -> Result<BackendResponse, BackendError> {
         let section = target
             .split_once('?')
@@ -9,48 +9,46 @@ impl PrudyntBackend {
             .filter(|value| !value.is_empty())
             .unwrap_or_else(|| "system".to_owned());
         let mut entries = Vec::new();
-        let mut add_output = |label: &str, output: Vec<u8>| {
-            entries.push(object([
-                ("command", Value::String(label.to_owned())),
-                ("output_base64", Value::String(base64_encode(&output))),
-            ]));
-        };
-        let mut add = |label: &str, path: &Path, redact_json: bool| {
-            let output = read_bounded(path, FILE_LIMIT)
-                .and_then(|bytes| {
-                    if !redact_json {
-                        return Ok(bytes);
-                    }
-                    let mut value = json::parse(&bytes).map_err(|_| BackendError::Protocol)?;
-                    mask_secret_fields(&mut value);
-                    let mut output = value.to_json().into_bytes();
-                    output.push(b'\n');
-                    Ok(output)
-                })
-                .unwrap_or_else(|_| format!("{label}: unavailable\n").into_bytes());
-            add_output(label, output);
-        };
         match section.as_str() {
-            "crontab" => add("cat /etc/cron/crontabs/root", &self.paths.crontab, false),
-            "onvif" => add("cat /etc/onvif.json", &self.paths.onvif_config, true),
-            "prudynt" => add("cat /etc/prudynt.json", &self.paths.prudynt_config, true),
-            "thingino" => add("cat /etc/thingino.json", &self.paths.thingino_config, true),
+            "crontab" => push_file_diagnostic(
+                &mut entries,
+                "cat /etc/cron/crontabs/root",
+                &self.paths.crontab,
+                false,
+            ),
+            "onvif" => push_file_diagnostic(
+                &mut entries,
+                "cat /etc/onvif.json",
+                &self.paths.onvif_config,
+                true,
+            ),
+            "thingino" => push_file_diagnostic(
+                &mut entries,
+                "cat /etc/thingino.json",
+                &self.paths.thingino_config,
+                true,
+            ),
             "logread" => {
                 let output = read_system_log(&self.paths.var_log_messages)
                     .unwrap_or_else(|_| b"system log: unavailable\n".to_vec());
-                add_output("system log", output);
+                push_diagnostic(&mut entries, "system log", output);
             }
             "dmesg" => {
                 let output =
                     read_kernel_log().unwrap_or_else(|_| b"kernel log: unavailable\n".to_vec());
-                add_output("kernel log", output);
+                push_diagnostic(&mut entries, "kernel log", output);
             }
-            "logcat" => {
-                let output = read_streamer_log(&self.paths.log_main)
-                    .unwrap_or_else(|_| b"streamer log: unavailable\n".to_vec());
-                add_output("streamer log", output);
-            }
-            "lsmod" => add("cat /proc/modules", &self.paths.proc_modules, false),
+            "logcat" => push_diagnostic(
+                &mut entries,
+                "streamer log",
+                b"streamer log: unavailable\n".to_vec(),
+            ),
+            "lsmod" => push_file_diagnostic(
+                &mut entries,
+                "cat /proc/modules",
+                &self.paths.proc_modules,
+                false,
+            ),
             "netstat" => {
                 let output = format_socket_tables(
                     &read_bounded(&self.paths.proc_tcp, FILE_LIMIT).unwrap_or_default(),
@@ -58,18 +56,33 @@ impl PrudyntBackend {
                     &read_bounded(&self.paths.proc_unix, FILE_LIMIT).unwrap_or_default(),
                 )
                 .unwrap_or_else(|_| b"network sockets: unavailable\n".to_vec());
-                add_output("network sockets", output);
+                push_diagnostic(&mut entries, "network sockets", output);
             }
-            "release" => add("cat /etc/os-release", &self.paths.os_release, false),
+            "release" => push_file_diagnostic(
+                &mut entries,
+                "cat /etc/os-release",
+                &self.paths.os_release,
+                false,
+            ),
             "top" => {
                 let output = process_snapshot(&self.paths.proc_root)
                     .unwrap_or_else(|_| b"process snapshot: unavailable\n".to_vec());
-                add_output("process snapshot", output);
+                push_diagnostic(&mut entries, "process snapshot", output);
             }
             "status" | "system" => {
-                add("cat /proc/uptime", &self.paths.uptime, false);
-                add("cat /proc/loadavg", &self.paths.loadavg, false);
-                add("cat /proc/meminfo", &self.paths.meminfo, false);
+                push_file_diagnostic(&mut entries, "cat /proc/uptime", &self.paths.uptime, false);
+                push_file_diagnostic(
+                    &mut entries,
+                    "cat /proc/loadavg",
+                    &self.paths.loadavg,
+                    false,
+                );
+                push_file_diagnostic(
+                    &mut entries,
+                    "cat /proc/meminfo",
+                    &self.paths.meminfo,
+                    false,
+                );
             }
             _ => return Err(BackendError::Protocol),
         }
@@ -154,6 +167,29 @@ impl PrudyntBackend {
             Value::String(base64_encode(&report)),
         )]))
     }
+}
+
+fn push_diagnostic(entries: &mut Vec<Value>, label: &str, output: Vec<u8>) {
+    entries.push(object([
+        ("command", Value::String(label.to_owned())),
+        ("output_base64", Value::String(base64_encode(&output))),
+    ]));
+}
+
+fn push_file_diagnostic(entries: &mut Vec<Value>, label: &str, path: &Path, redact_json: bool) {
+    let output = read_bounded(path, FILE_LIMIT)
+        .and_then(|bytes| {
+            if !redact_json {
+                return Ok(bytes);
+            }
+            let mut value = json::parse(&bytes).map_err(|_| BackendError::Protocol)?;
+            mask_secret_fields(&mut value);
+            let mut output = value.to_json().into_bytes();
+            output.push(b'\n');
+            Ok(output)
+        })
+        .unwrap_or_else(|_| format!("{label}: unavailable\n").into_bytes());
+    push_diagnostic(entries, label, output);
 }
 
 pub(super) fn process_snapshot(root: &Path) -> Result<Vec<u8>, BackendError> {

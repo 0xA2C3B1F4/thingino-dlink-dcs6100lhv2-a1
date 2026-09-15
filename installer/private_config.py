@@ -558,15 +558,33 @@ def inspect_private_config(
     if session_dir is not None:
         from .recovery_ap.host import load_host_session
 
-        load_host_session(session_dir)
-        session_files = {
-            "recovery_ap_psk": ("media/RECOVERY/AP.PSK", "recovery_ap_hostapd"),
-            "recovery_service_credential": (
-                "host/service.credential",
-                "recovery_ap_fixed_protocol",
-            ),
-            "recovery_ssh_host_key": ("media/RECOVERY/HOST.KEY", "recovery_ap_dropbear"),
-        }
+        session = load_host_session(session_dir)
+        load_private_config_for_session(output_dir=output_dir, session_dir=session_dir)
+        if session.session_kind == "uartless-functional-provisioning":
+            session_files = {
+                "provisioning_service_credential": (
+                    "host/service.credential",
+                    "uartless_functional_provisioning",
+                ),
+                "provisioning_ssh_host_key": (
+                    "host/dropbear_ed25519_host_key",
+                    "thingino_dropbear",
+                ),
+            }
+            session_storage = "private-uartless-provisioning-session"
+        else:
+            session_files = {
+                "recovery_ap_psk": ("media/RECOVERY/AP.PSK", "recovery_ap_hostapd"),
+                "recovery_service_credential": (
+                    "host/service.credential",
+                    "recovery_ap_fixed_protocol",
+                ),
+                "recovery_ssh_host_key": (
+                    "media/RECOVERY/HOST.KEY",
+                    "recovery_ap_dropbear",
+                ),
+            }
+            session_storage = "private-recovery-session"
         for role, (relative, consumer) in session_files.items():
             value = _read_private_file(
                 session_dir / relative,
@@ -578,7 +596,7 @@ def inspect_private_config(
                 "exists": True,
                 "fingerprint": _safe_fingerprint(key, role=role, value=value),
                 "rotation": "rebuild-recovery-session",
-                "storage": "private-recovery-session",
+                "storage": session_storage,
             }
     return {
         "credential_set_id": private.credential_set_id,

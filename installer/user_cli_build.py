@@ -9,7 +9,6 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
 
-from .development_install import build_personal_candidate
 from .local_build import default_local_build_private_root
 from .private_config import inspect_private_config, rotate_private_config_role
 from .runtime_candidate import (
@@ -49,7 +48,7 @@ class WorkspaceOperation(Protocol):
 class ValidateSettingInputs(Protocol):
     def __call__(
         self, *, build_root: Path, private_root: Path, vendor_bundle_dir: Path,
-        media_closure_dir: Path, session_dir: Path, raptor_rwd_artifact: Path,
+        media_closure_dir: Path, session_dir: Path,
     ) -> dict[str, object]: ...
 
 
@@ -61,7 +60,7 @@ class ConfigureSettings(Protocol):
     def __call__(
         self, *, build_root: Path, work_dir: Path, private_root: Path,
         vendor_bundle_dir: Path, media_closure_dir: Path, session_dir: Path,
-        raptor_rwd_artifact: Path, data_mode: str, ssid: str, passphrase: str,
+        data_mode: str, ssid: str, passphrase: str,
         confirmation_ssid: str, confirmation_passphrase: str,
     ) -> dict[str, object]: ...
 
@@ -77,15 +76,14 @@ class BuildInstallSet(Protocol):
         self, *, build_root: Path, vendor_bundle_dir: Path,
         media_closure_dir: Path, private_config_dir: Path,
         expected_wpa_config_path: Path, session_dir: Path,
-        raptor_rwd_artifact: Path, data_mode: str, build_count: int,
+        data_mode: str, build_count: int,
     ) -> dict[str, object]: ...
 
 
 class BuildUniversalInstallSet(Protocol):
     def __call__(
         self, *, build_root: Path, vendor_bundle_dir: Path,
-        media_closure_dir: Path | None, raptor_rwd_artifact: Path | None,
-        signing_key: Path, build_count: int, webrtc: bool = False,
+        signing_key: Path, build_count: int,
         progress: Callable[[dict[str, object]], None] | None = None,
     ) -> dict[str, object]: ...
 
@@ -273,7 +271,6 @@ def _local_build_configure(
         "vendor_bundle_dir": private_root / "vendor-bundle",
         "media_closure_dir": private_root / "media-closure",
         "session_dir": private_root / "recovery-session",
-        "raptor_rwd_artifact": private_root / "raptor-rwd.tar.gz",
     }
     prompts = {
         "vendor_bundle_dir": (
@@ -287,10 +284,6 @@ def _local_build_configure(
         "session_dir": (
             "Recovery session directory",
             "Private recovery session whose SSH identity and service credential bind this build.",
-        ),
-        "raptor_rwd_artifact": (
-            "Raptor RWD artifact",
-            "Reviewed source-built raptor-rwd.tar.gz matching this checkout's contract.",
         ),
     }
     selected: dict[str, Path] = {}
@@ -324,7 +317,6 @@ def _local_build_configure(
         vendor_bundle_dir=selected["vendor_bundle_dir"],
         media_closure_dir=selected["media_closure_dir"],
         session_dir=selected["session_dir"],
-        raptor_rwd_artifact=selected["raptor_rwd_artifact"],
     )
     ssid, passphrase, confirmation_ssid, confirmation_passphrase = (
         read_confirmed_private_input(secrets_fd=arguments.secrets_fd)
@@ -336,7 +328,6 @@ def _local_build_configure(
         vendor_bundle_dir=selected["vendor_bundle_dir"],
         media_closure_dir=selected["media_closure_dir"],
         session_dir=selected["session_dir"],
-        raptor_rwd_artifact=selected["raptor_rwd_artifact"],
         data_mode=data_mode,
         ssid=ssid,
         passphrase=passphrase,
@@ -360,6 +351,10 @@ def _local_build_build(
     load_local_build_settings: LoadSettings,
     build_local_install_set: BuildInstallSet,
 ) -> dict[str, object]:
+    raise error_type(
+        "local-build build is retired; use local-build build-universal"
+    )
+
     build_root = resolve_local_build_workspace(
         build_root=arguments.build_root,
         work_dir=arguments.work_dir,
@@ -370,7 +365,6 @@ def _local_build_build(
         "private_config_dir",
         "expected_wpa_config",
         "session_dir",
-        "raptor_rwd_artifact",
     )
     provided = {field: getattr(arguments, field) for field in fields}
     used = [field for field, value in provided.items() if value is not None]
@@ -413,7 +407,6 @@ def _local_build_build(
         private_config_dir=selected["private_config_dir"],
         expected_wpa_config_path=selected["expected_wpa_config"],
         session_dir=selected["session_dir"],
-        raptor_rwd_artifact=selected["raptor_rwd_artifact"],
         data_mode=data_mode,
         build_count=getattr(arguments, "build_count", 1),
     )
@@ -451,17 +444,13 @@ def _local_build_build_universal(
     )
     from .user_cli_project import progress_callback
 
-    build_options = {}
-    if getattr(arguments, "webrtc", False):
-        build_options = {"webrtc": True, "progress": progress_callback(arguments)}
     result = build_local_universal_install_set(
-        **build_options,
         build_root=build_root,
         vendor_bundle_dir=arguments.vendor_bundle_dir,
-        media_closure_dir=arguments.media_closure_dir,
-        raptor_rwd_artifact=arguments.raptor_rwd_artifact,
         signing_key=Path(str(keypair["private_key"])),
+        data_mode=getattr(arguments, "data_mode", "initialize"),
         build_count=getattr(arguments, "build_count", 1),
+        progress=progress_callback(arguments),
     )
     result = {**result, "model_signing": keypair}
     return _document(
@@ -480,6 +469,11 @@ def _build_personal_mtd3(
     _load_config: Callable[[Path], dict[str, object]],
     _validate_config: Callable[[dict[str, object]], dict[str, object]],
 ) -> dict[str, object]:
+    # This compatibility handler is intentionally lazy: the production export
+    # omits the personal installer module, while the development checkout may
+    # still use it for migration tests.
+    from .development_install import build_personal_candidate
+
     work_dir = arguments.work_dir.expanduser().resolve(strict=True)
     validated = _validate_config(_load_config(work_dir))
     session_dir = arguments.session_dir or validated["session_dir"]

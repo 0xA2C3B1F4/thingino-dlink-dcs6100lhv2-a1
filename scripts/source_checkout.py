@@ -26,7 +26,6 @@ DEFAULT_LOCK_PATH = ROOT / "sources.lock.json"
 REQUIRED_SOURCES = {
     "buildroot",
     "ingenic_glibc216_toolchain",
-    "prudynt",
     "realtek_hostapd",
     "rtl8188fu",
     "rust_builder_container_amd64",
@@ -377,11 +376,6 @@ def load_lock(path: Path = DEFAULT_LOCK_PATH) -> dict[str, Any]:
         raise SourceError("Thingino x86-64 toolchain support changed")
 
     package_contract = {
-        "prudynt": (
-            "package/prudynt-t/prudynt-t.mk",
-            "PRUDYNT_T_SITE",
-            "PRUDYNT_T_VERSION",
-        ),
         "thingino_ingenic_sdk": (
             "package/ingenic-sdk/ingenic-sdk.mk",
             "INGENIC_SDK_SITE",
@@ -624,7 +618,6 @@ def verify_checkout(
 
     packages: dict[str, dict[str, str]] = {}
     for name in (
-        "prudynt",
         "realtek_hostapd",
         "thingino_ingenic_sdk",
         "rtl8188fu",

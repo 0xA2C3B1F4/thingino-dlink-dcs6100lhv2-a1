@@ -38,8 +38,13 @@ Browser POST, PUT, and DELETE requests carry
 always requires `Content-Type: application/json`, including for API-key and
 bearer callers. Successful password replacement requires 10 to 128 bytes and
 invalidates every existing session. It updates the WebUI/root and ONVIF
-management credential together. The RTSP `viewer` credential is changed only
-through `/api/v1/config/access`.
+management credential together. The RTSP credential is changed only through
+`/api/v1/config/access`.
+
+Control reads back the saved ONVIF credential before reporting success. Failed updates
+restore the previous credentials where possible. An unconfirmed rollback
+returns `partial_apply` and invalidates sessions instead of claiming that the
+previous password is intact.
 
 The bounded file editor retains `text/plain`, the network probe retains
 `application/x-www-form-urlencoded`, and WHIP retains `application/sdp`.
@@ -48,6 +53,21 @@ Other non-empty mutations use JSON.
 Credential mutations additionally require a browser login no more than 10
 minutes old; an older valid session must sign in again first.
 
+Raptor's Streams form changes RTSP paths through the same `/api/v1/config/access`
+route, with only `rtsp_ch0` and/or `rtsp_ch1` in its request. It does not send
+viewer credentials or the listener port. The route's recent-browser-login
+requirement still applies to path changes. Changing a path disconnects current
+RTSP viewers.
+
+Raptor access GET includes `saved_rtsp_ch0`, `saved_rtsp_ch1` and
+`rtsp_paths_match_saved`. Saved paths come from an independent configuration-file
+read; unknown or invalid values are null. Missing or empty saved aliases use
+RSD's canonical `stream0` and `stream1` defaults. The match flag requires both
+known saved paths to equal their live counterparts. These fields do not expose
+the saved password. A failed file read leaves live paths visible, with their
+saved state unknown. Streams keeps a failed save available for explicit retry,
+including after reloading a live path that was not saved successfully.
+
 ## Main route groups
 
 | Prefix | Purpose |
@@ -55,7 +75,7 @@ minutes old; an older valid session must sign in again first.
 | `/api/v1/auth` | Login, logout, session, password, and API-key rotation |
 | `/api/v1/runtime` | Health, heartbeat, system, media, Home Assistant, storage, and diagnostics |
 | `/api/v1/config` | Admin, network, time, access, GPIO, WebUI, logging, and Home Assistant settings |
-| `/api/v1/prudynt` | Audio, image, streams, OSD, Motion, privacy, and RTSP configuration |
+| `/api/v1/imaging` | Image quality, stream, OSD, Motion, privacy, and sensor configuration |
 | `/api/v1/actions` | Day/night, live controls, recording, restart, reset, and reboot |
 | `/api/v1/actions/snapshot` | Complete JPEG from stream0 or stream1 |
 | `/api/v1/media/webrtc/whip` | Same-origin WHIP POST and session DELETE |
@@ -99,11 +119,11 @@ always attempts unlock and detach, including error paths.
 `POST /api/v1/media/webrtc/whip?stream=0|1` accepts a bounded
 `application/sdp` offer. Control returns HTTP 201, an SDP answer, and a
 same-origin `Location`. It forwards neither the browser cookie nor the API key
-to loopback rwd.
+to the loopback Raptor WebRTC service.
 
-`DELETE /api/v1/media/webrtc/whip/{session_id}` returns HTTP 204 after rwd
-releases the WebRTC, DTLS, and SRTP state. ICE consent expiry is the fallback
-for a client that disappears without DELETE.
+`DELETE /api/v1/media/webrtc/whip/{session_id}` returns HTTP 204 after the
+Raptor WebRTC service releases the WebRTC, DTLS, and SRTP state. ICE consent
+expiry is the fallback for a client that disappears without DELETE.
 
 ## Secret updates
 
@@ -121,3 +141,15 @@ not part of the contract. The storage route provides one explicitly confirmed
 FAT32 format operation for the existing `/dev/mmcblk0p1` partition. Its
 persistent worker revalidates the CID-backed card identity, device, and mount
 immediately before `mkfs`; any change fails before formatting.
+
+For Raptor, formatting first pauses Timelapse, drains Control's file reader,
+closes both RMR writers and waits for both RMR probe/retention workers to pause.
+It restores prior recording intent after the worker returns a terminal result.
+A lost or timed-out worker response leaves storage paused and requires an
+explicit normal reboot before recovery. The UI reports this instead of offering
+another format. A busy mount, including an active download, prevents `mkfs`.
+Neither warm media restart nor automatic reboot is used for formatting.
+
+Raptor's day/night history retains at most 300 observations and 63 KiB of
+encoded samples. Its sensor route reports checked RVD exposure and RIC policy;
+missing measurements remain null rather than zero.

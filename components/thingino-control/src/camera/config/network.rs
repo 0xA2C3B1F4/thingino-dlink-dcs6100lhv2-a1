@@ -1,6 +1,6 @@
 use super::super::*;
 
-impl PrudyntBackend {
+impl HostBackend {
     pub(in crate::camera) fn network_config(&self) -> Result<BackendResponse, BackendError> {
         let hostname = read_text_value(&self.paths.hostname, 255).unwrap_or_default();
         let resolver = read_text_value(&self.paths.resolv_config, 4096).unwrap_or_default();

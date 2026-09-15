@@ -222,7 +222,7 @@ class UniversalArtifactTests(unittest.TestCase):
                 self.assertEqual(len(validated.binary), 256)
                 self.assertEqual(
                     validated.document["write_policy"],
-                    universal_physical_write_policy(),
+                    universal_physical_write_policy("initialize"),
                 )
                 self.assertEqual(validated.binary[24:56], bytes.fromhex(camera))
                 self.assertEqual(validated.binary[88:120], bytes.fromhex("f" * 64))
@@ -293,6 +293,50 @@ class UniversalArtifactTests(unittest.TestCase):
                     expected_recovery_session_sha256=session_a,
                     expected_data_action="initialize",
                 )
+
+    def test_preserve_action_round_trips_through_camera_authorization(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            root = Path(directory_name)
+            private_key, public_key = self._keys(root / "keys")
+            camera = "a" * 64
+            bundle = self._bundle()
+            created = create_camera_authorization(
+                recovery=self._recovery(camera),
+                universal_bundle=bundle,
+                universal_stage2_sha256="f" * 64,
+                provisioning_sidecar_sha256="b" * 64,
+                provisioning_data_sha256="c" * 64,
+                provisioning_data_size=DATA_FLASH_SPAN,
+                provisioning_id="d" * 64,
+                recovery_session_sha256="e" * 64,
+                data_action="preserve",
+                signing_key=private_key,
+                output_dir=root / "authorization",
+            )
+            validated = validate_camera_authorization(
+                root / "authorization",
+                public_key=public_key,
+                expected_camera_identity_sha256=camera,
+                expected_camera_authorization_key_sha256=(
+                    self._recovery(camera).camera_authorization_key_sha256
+                ),
+                expected_universal_firmware_sha256=bundle.sha256,
+                expected_universal_stage2_sha256="f" * 64,
+                expected_provisioning_sidecar_sha256="b" * 64,
+                expected_provisioning_data_sha256="c" * 64,
+                expected_provisioning_data_size=DATA_FLASH_SPAN,
+                expected_provisioning_id="d" * 64,
+                expected_recovery_session_sha256="e" * 64,
+                expected_data_action="preserve",
+            )
+            self.assertEqual(
+                validated.authorization_sha256, created.authorization_sha256
+            )
+            self.assertEqual(validated.document["data_action"], "preserve")
+            self.assertEqual(
+                validated.document["write_policy"],
+                universal_physical_write_policy("preserve"),
+            )
 
     def test_universal_sidecars_are_read_back_before_bootstrap_activation(self) -> None:
         with tempfile.TemporaryDirectory() as directory_name:
@@ -495,6 +539,64 @@ class UniversalArtifactTests(unittest.TestCase):
             activate_mock.assert_called_once()
             stage_mock.assert_not_called()
             self.assertEqual(result["bootstrap"], "reactivated")
+
+    def test_universal_staging_rejects_checkpoint_before_replacing_passive_set(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            root = Path(directory_name)
+            authorization = SimpleNamespace(
+                raw_manifest=b"authorization",
+                signature=b"signature",
+                binary=b"new-binary-authorization",
+            )
+            validated = SimpleNamespace(
+                authorization=authorization,
+                provisioning_data=b"new-private-provisioning-data",
+                bootstrap=b"new-bootstrap",
+                stage2=SimpleNamespace(raw=b"new-stage2"),
+                manifest=b"new-manifest",
+            )
+            passive = root / "STAGE1.PKG"
+            stage2_path = root / "THINGINO2.BIN"
+            checkpoint = root / "STOCKM3.OK"
+            passive.write_bytes(b"old-bootstrap")
+            stage2_path.write_bytes(b"old-stage2")
+            checkpoint.write_bytes(b"old-checkpoint")
+            preflight = SimpleNamespace(
+                physical_device="/dev/test-media",
+                mount_root=root.resolve(),
+            )
+
+            with (
+                mock.patch("installer.universal_install.media.validate_sd_root"),
+                mock.patch(
+                    "installer.universal_install.media._validate_recovery_checkpoint",
+                    side_effect=ValueError("checkpoint mismatch"),
+                ) as validate_checkpoint,
+                mock.patch(
+                    "installer.universal_install.media._write_verified_temporary"
+                ) as write_temporary,
+                mock.patch(
+                    "installer.universal_install.media.replace_passive_bootstrap"
+                ) as replace_mock,
+                self.assertRaisesRegex(ValueError, "checkpoint mismatch"),
+            ):
+                stage_camera_bound_universal_install(
+                    validated,
+                    root=root,
+                    preflight=preflight,
+                    confirmed_physical_device="/dev/test-media",
+                )
+
+            validate_checkpoint.assert_called_once_with(
+                root,
+                validated.stage2.raw,
+                authorization_bytes=authorization.binary,
+                provisioning_bytes=validated.provisioning_data,
+            )
+            write_temporary.assert_not_called()
+            replace_mock.assert_not_called()
+            self.assertEqual(passive.read_bytes(), b"old-bootstrap")
+            self.assertEqual(stage2_path.read_bytes(), b"old-stage2")
 
     def test_universal_staging_rejects_incomplete_passive_install_set(self) -> None:
         with tempfile.TemporaryDirectory() as directory_name:

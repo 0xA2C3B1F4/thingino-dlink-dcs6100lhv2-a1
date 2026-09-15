@@ -26,7 +26,7 @@ new file mode 100644
 +	  The loopback-only thingino-controld process owns authentication,
 +	  sessions, configuration, and camera actions. uhttpd remains a static
 +	  file server and bounded nonblocking ingress. Media endpoints may be
-+	  relayed directly to Prudynt when passing them through Rust would add
++	  relayed directly to the selected media backend when passing them through Rust would add
 +	  avoidable copies.
 +
 +	  DCS6100_RUST_TOOLCHAIN_DIR, DCS6100_RUST_SOURCE_DIR, and
@@ -36,7 +36,7 @@ diff --git a/package/thingino-control/thingino-control.mk b/package/thingino-con
 new file mode 100644
 --- /dev/null
 +++ b/package/thingino-control/thingino-control.mk
-@@ -0,0 +1,28 @@
+@@ -0,0 +1,29 @@
 +THINGINO_CONTROL_SITE_METHOD = local
 +THINGINO_CONTROL_SITE = $(THINGINO_CONTROL_PKGDIR)
 +THINGINO_CONTROL_LICENSE = Unknown
@@ -51,6 +51,7 @@ new file mode 100644
 +		--ingenic-toolchain-root "$(DCS6100_INGENIC_TOOLCHAIN_DIR)" \
 +		--mips-toolchain-root "$(HOST_DIR)/opt/ext-toolchain" \
 +		--manifest $(@D)/rust/Cargo.toml \
++		--raptor-backend \
 +		--scratch-root $(@D)/rust-target \
 +		--data-volume-root /workspace \
 +		--repository-root /workspace/source \

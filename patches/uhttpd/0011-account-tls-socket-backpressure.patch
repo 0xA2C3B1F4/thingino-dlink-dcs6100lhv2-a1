@@ -20,7 +20,7 @@ index a783deb..ca4f384 100644
  static void control_proxy_schedule(struct client *cl, unsigned int action)
  {
  	struct dispatch_control_proxy *proxy = &cl->dispatch.control_proxy;
-@@ -391,7 +402,7 @@ static void control_proxy_read(struct ustream *stream, int bytes)
+@@ -411,7 +422,7 @@ static void control_proxy_read(struct ustream *stream, int bytes)
  
  		if (!budget)
  			break;
@@ -29,7 +29,7 @@ index a783deb..ca4f384 100644
  			ustream_set_read_blocked(stream, true);
  			return;
  		}
-@@ -485,7 +496,7 @@ static void control_proxy_client_write(struct client *cl)
+@@ -505,7 +516,7 @@ static void control_proxy_client_write(struct client *cl)
  	struct ustream *backend = &proxy->backend.stream;
  
  	if (!proxy->initialized || proxy->finishing ||

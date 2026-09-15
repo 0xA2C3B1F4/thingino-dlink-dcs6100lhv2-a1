@@ -5,7 +5,7 @@ Each result proves only its own level.
 | Evidence | Proves | Does not prove |
 | --- | --- | --- |
 | Static contract | Source, schema, route, profile, and policy consistency | Running code or hardware behavior |
-| Host unit or fixture | Deterministic logic and simulated failure handling | Firmware integration or real Prudynt behavior |
+| Host unit or fixture | Deterministic logic and simulated failure handling | Firmware integration or real media-daemon behavior |
 | Built artifact | Exact binary and image bytes, size, and provenance | Boot, media, browser, or physical controls |
 | Real browser | Rendered UI and WebRTC or MJPEG lifecycle | Camera-side physical effect unless observed separately |
 | Live device | The named action on the exact candidate and camera | Another build, board, or unfinished matrix row |
@@ -66,6 +66,16 @@ gate is closed. Private local-build acceptance is tracked separately.
 
 ## Candidate acceptance
 
+For full Raptor, `candidate create` takes a specification with
+`"schema_version": 2` and `"media_backend": "raptor"`. Its content-addressed
+identity binds the Raptor checklist, including `runtime.raptor_restart`, all
+three WebRTC checks and `config.field_matrix`. Historical schema-1 records keep
+their original checklist and do not establish full-Raptor acceptance. Run
+documents supplied to `candidate record` use schema 1 for either profile.
+Use an actual UTC `observed_at` timestamp ending in `Z` or `+00:00`; future
+times and conflicting results for the same check at the same time are rejected.
+The latest observation determines status, regardless of import order.
+
 A content-addressed firmware candidate must record all of these groups before
 acceptance:
 
@@ -75,12 +85,37 @@ acceptance:
 - every Preview control, with the physical effect observed where applicable;
 - audio, Motion, privacy, LED, IR, configuration, and recorder actions;
 - RTSP and ONVIF;
-- Prudynt restart;
+- restart of the selected media backend and recovery of its dependent services;
 - slow clients, disconnects, and concurrent API requests;
 - CPU, RSS, PSS, threads, file descriptors, sockets, shared memory, and
   available-memory proxy;
 - kernel, ISP, encoder, and media errors; and
 - one real Safari or Chromium session.
+
+For every settings page, record each field and action separately. An enabled
+control or a successful GET is not evidence that saving has an effect. Test a
+changed value, the POST result, a fresh backend read, the running service's
+effect and persistence after restart where applicable. Restore the previous
+value and verify the restoration. Cover Image quality, Streams, OSD, Motion,
+Day/night, Audio, RTSP/ONVIF, Home Assistant, Recorder, Timelapse, network,
+time, credentials, system settings and Tools. A Preview toggle does not cover
+the corresponding settings page.
+
+Keep configured values distinct from hardware observations. For example, the
+T31 noise-reduction setter can acknowledge a value but its SDK cannot read it
+back; recording the configuration alone does not prove its visual effect.
+Mark each remaining field as read-only, fixed by the device profile,
+temporarily unavailable, unimplemented, or unsupported with its reason.
+Disabled or hidden fields are not automatically complete.
+
+Attach that field-level evidence to `config.field_matrix`. The ledger requires
+`device_effect_observed: true` for a passed or manually observed field matrix,
+Raptor restart, WebRTC or control check. This records an observation claim;
+reviewing its evidence is still required before accepting the candidate.
+
+Credential changes, settings initialization and SD formatting require explicit
+authorization for that test. If permission or a physical step is missing,
+leave the affected acceptance row open. Do not infer it from a host fixture.
 
 The release also needs two byte-identical clean builds, removable-media
 readback, physical interruption and recovery tests, and the licensing closure

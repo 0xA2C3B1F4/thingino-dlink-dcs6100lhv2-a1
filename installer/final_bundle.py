@@ -114,9 +114,8 @@ def render_final_kernel_fragment(system_rootfs_size: int) -> bytes:
             "CONFIG_MTD_JZ_SFC=y",
             "CONFIG_MTD_JZ_SFC_NOR=y",
             "CONFIG_SQUASHFS=y",
-            # The system image uses 1 MiB blocks. Linux 3.10 allocates every
-            # fragment-cache buffer at mount time, so three entries pin 3 MiB.
-            # Keep one supported entry and leave the saved 2 MiB for page cache.
+            # Linux 3.10 allocates each fragment-cache buffer at mount time.
+            # Use one entry with the 256 KiB system blocks to limit pinned RAM.
             "CONFIG_SQUASHFS_EMBEDDED=y",
             "CONFIG_SQUASHFS_FRAGMENT_CACHE_SIZE=1",
             "CONFIG_JFFS2_FS=y",

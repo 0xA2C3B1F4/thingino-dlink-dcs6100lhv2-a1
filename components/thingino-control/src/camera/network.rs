@@ -443,28 +443,6 @@ pub(super) fn safe_access_name(value: &str) -> bool {
             .all(|byte| byte.is_ascii_graphic() && !matches!(byte, b':' | b'/' | b'\\'))
 }
 
-pub(super) fn safe_rtsp_endpoint(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= 64
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'~' | b'-'))
-}
-
-pub(super) fn update_url_endpoint(
-    document: &mut Value,
-    path: &str,
-    endpoint: &str,
-) -> Result<(), BackendError> {
-    let Some(current) = document.get_path(path).and_then(Value::as_str) else {
-        return Ok(());
-    };
-    let (prefix, _) = current.rsplit_once('/').ok_or(BackendError::Protocol)?;
-    document
-        .set_path(path, Value::String(format!("{prefix}/{endpoint}")))
-        .map_err(|_| BackendError::Protocol)
-}
-
 #[cfg(all(test, target_os = "linux"))]
 mod tests {
     use super::*;

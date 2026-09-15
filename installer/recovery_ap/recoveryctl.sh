@@ -106,31 +106,6 @@ case "${1:-}" in
 status)
 	cat /run/recovery.state
 	;;
-thingino-failure)
-	[ "$(cat /run/recovery.state)" = ap ] || exit 2
-	printf 'schema=1\n'
-	if grep -q ' /mnt/thingino' /proc/mounts; then
-		printf 'thingino_mounts=present\n'
-	else
-		printf 'thingino_mounts=absent\n'
-	fi
-	if [ -f /run/thingino-cleanup.failed ]; then
-		printf 'cleanup=failed\n'
-	else
-		printf 'cleanup=complete\n'
-	fi
-	if [ -f /run/prudynt.log ]; then
-		log_size=$(wc -c </run/prudynt.log)
-		log_sha256=$(sha256sum /run/prudynt.log)
-		log_sha256=${log_sha256%% *}
-		printf 'prudynt_log_size=%s\nprudynt_log_sha256=%s\n' "$log_size" "$log_sha256"
-		printf '%s\n' prudynt_log_tail_begin
-		tail -c 32768 /run/prudynt.log
-		printf '\n%s\n' prudynt_log_tail_end
-	else
-		printf 'prudynt_log_size=0\nprudynt_log_sha256=-\n'
-	fi
-	;;
 inspect-nor)
 	printf 'schema=1\n'
 	if ! exact_layout; then
@@ -384,7 +359,7 @@ EOF
 	printf '%s\n' accepted
 	;;
 *)
-echo "usage: recoveryctl status | thingino-failure | inspect-nor | receive SIZE SHA256 | send SHA256 | vendor-export | install-mtd3 SHA256 | activate-mtd3 SHA256 | install-recovery SHA256 | reboot | provision < credentials" >&2
+echo "usage: recoveryctl status | inspect-nor | receive SIZE SHA256 | send SHA256 | vendor-export | install-mtd3 SHA256 | activate-mtd3 SHA256 | install-recovery SHA256 | reboot | provision < credentials" >&2
 	exit 2
 	;;
 esac

@@ -107,10 +107,6 @@ class SourceCheckoutTests(unittest.TestCase):
         self.assertEqual(self.lock["schema_version"], 2)
         self.assertEqual(self.lock["source_date_epoch"], 1_786_006_608)
         self.assertEqual(
-            self.lock["sources"]["prudynt"]["tree"],
-            "d2262cebd653298b2b51893e680866d7be3fa9ad",
-        )
-        self.assertEqual(
             self.lock["sources"]["rust_source"],
             {
                 "acquisition": "archive",
@@ -310,19 +306,12 @@ class SourceCheckoutTests(unittest.TestCase):
         checkout.mkdir()
         git(checkout, "init", "-q")
         (checkout / "package/ingenic-sdk").mkdir(parents=True)
-        (checkout / "package/prudynt-t").mkdir(parents=True)
         (checkout / "package/wifi-rtw-hostapd").mkdir(parents=True)
         (checkout / "package/wifi-rtl8188fu").mkdir(parents=True)
         (checkout / "package/ingenic-sdk/ingenic-sdk.mk").write_text(
             "INGENIC_SDK_SITE_METHOD = git\n"
             "INGENIC_SDK_SITE = https://github.com/themactep/ingenic-sdk\n"
             f"INGENIC_SDK_VERSION = {self.lock['sources']['thingino_ingenic_sdk']['revision']}\n",
-            encoding="utf-8",
-        )
-        (checkout / "package/prudynt-t/prudynt-t.mk").write_text(
-            "PRUDYNT_T_SITE_METHOD = git\n"
-            "PRUDYNT_T_SITE = https://github.com/themactep/prudynt-t\n"
-            f"PRUDYNT_T_VERSION = {self.lock['sources']['prudynt']['revision']}\n",
             encoding="utf-8",
         )
         (checkout / "package/wifi-rtl8188fu/wifi-rtl8188fu.mk").write_text(

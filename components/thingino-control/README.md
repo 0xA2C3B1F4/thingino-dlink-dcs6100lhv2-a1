@@ -6,8 +6,8 @@ floor.
 
 Control owns browser sessions, API keys, configuration validation, hardware
 actions, diagnostics, recorder control, Home Assistant MQTT state, and bounded
-communication with Prudynt. It does not run a shell, `curl`, `jct`, or another
-helper for each request.
+communication with the Raptor media services. It does not run a shell, `curl`,
+`jct`, or another helper for each request.
 
 ## Boundaries
 
@@ -29,7 +29,7 @@ helper for each request.
 - `camera/ha/service.rs` owns HA request/status state. Its `service/` modules
   separate worker ownership, MQTT sessions and publication. Other `camera/ha/`
   modules own configuration, MQTT framing, discovery and Motion handoff.
-- `camera/prudynt.rs` owns the framed Unix-socket boundary to Prudynt.
+- `camera/raptor.rs` owns the bounded media-service boundary to Raptor.
 - `protocol.rs` defines the shared routes, responses, and error model.
 
 `camera.rs` is the composition root for paths, shared camera types, the backend,
@@ -48,8 +48,8 @@ password replacement atomically updates credentials and invalidates all
 sessions.
 
 Snapshots and large media bodies do not pass through a Rust worker. uhttpd
-asks Control to authorize the request, then relays bytes directly from Prudynt
-or the owning file service.
+asks Control to authorize the request, then relays bytes directly from the
+Raptor media service or the owning file service.
 
 The complete v1 contract is in [`docs/api.md`](../../docs/api.md).
 

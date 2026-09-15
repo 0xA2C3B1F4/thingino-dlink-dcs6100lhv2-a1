@@ -5,66 +5,66 @@ use super::config::HaConfig;
 
 pub(super) type States = BTreeMap<String, Vec<u8>>;
 
-pub(super) fn collect(backend: &PrudyntBackend, config: &HaConfig) -> Result<States, BackendError> {
-    let heartbeat = json::parse(&backend.heartbeat()?.body).map_err(|_| BackendError::Protocol)?;
-    let release = os_release(&backend.paths);
+#[cfg(all(test, feature = "raptor-backend"))]
+#[test]
+fn raptor_unknown_states_are_empty_and_privacy_invalidates_cached_images() {
+    let config = super::discovery::test_config();
+    for raw in [
+        b"{}".as_slice(),
+        br#"{"motion_active":null,"motion_enabled":null,"privacy_enabled":null,"color_mode":null}"#,
+    ] {
+        let mut states = States::new();
+        raptor_states(&mut states, &json::parse(raw).unwrap(), &config);
+        for entity in [
+            "motion",
+            "motion_guard",
+            "privacy",
+            "ircut",
+            "ir850",
+            "color",
+            "gain",
+            "daynight",
+            "snapshot",
+            "live_view",
+        ] {
+            assert_eq!(states.get(entity), Some(&Vec::new()), "{entity}");
+        }
+    }
+    let mut states = States::new();
+    raptor_states(&mut states, &json::parse(br#"{"motion_active":false,"motion_enabled":true,"privacy_enabled":false,"color_mode":0,"ircut_state":1,"ir850_state":0}"#).unwrap(), &config);
+    for (entity, expected) in [
+        ("motion", "OFF"),
+        ("motion_guard", "ON"),
+        ("privacy", "OFF"),
+        ("color", "ON"),
+        ("ircut", "ON"),
+        ("ir850", "OFF"),
+        ("snapshot", "ready"),
+    ] {
+        assert_eq!(states[entity], expected.as_bytes());
+    }
+    assert!(!states.contains_key("live_view"));
+    raptor_states(
+        &mut states,
+        &json::parse(br#"{"privacy_enabled":true,"color_mode":1}"#).unwrap(),
+        &config,
+    );
+    assert!(states["live_view"].is_empty());
+    assert!(states["snapshot"].is_empty());
+    assert_eq!(states["color"], b"OFF");
+}
+
+fn collect_host(paths: &CameraPaths, config: &HaConfig) -> States {
     let mut states = States::new();
     let flags = config.entities;
-    if flags.motion {
-        insert_switch(&mut states, "motion", backend.paths.motion_alarm.is_file());
-    }
-    if flags.motion_guard {
-        insert_switch(
-            &mut states,
-            "motion_guard",
-            bool_path(&heartbeat, "motion_enabled"),
-        );
-    }
-    if flags.ircut {
-        insert_optional_switch(
-            &mut states,
-            "ircut",
-            integer_path(&heartbeat, "ircut_state"),
-        );
-    }
-    if flags.daynight {
-        insert_optional_state(&mut states, "daynight", daynight_state(&heartbeat));
-    }
-    if flags.privacy {
-        insert_switch(
-            &mut states,
-            "privacy",
-            bool_path(&heartbeat, "privacy_enabled"),
-        );
-    }
-    if flags.color {
-        let running_mode = read_bounded(&backend.paths.prudynt_config, FILE_LIMIT)
-            .ok()
-            .and_then(|raw| json::parse(&raw).ok())
-            .and_then(|prudynt| integer_path(&prudynt, "image.running_mode"));
-        insert_optional_switch(
-            &mut states,
-            "color",
-            running_mode.map(|value| u64::from(value == 0)),
-        );
-    }
-    if flags.ir850 {
-        insert_optional_switch(
-            &mut states,
-            "ir850",
-            integer_path(&heartbeat, "ir850_state"),
-        );
-    }
-    if flags.gain {
-        insert_optional_state(&mut states, "gain", scalar_path(&heartbeat, "total_gain"));
-    }
+    let release = os_release(paths);
     if flags.rssi {
         let value = super::super::network::wpa_signal_rssi(
-            &backend.paths.wpa_control,
+            &paths.wpa_control,
             Instant::now() + Duration::from_millis(250),
         )
         .ok()
-        .or_else(|| wifi_rssi(&backend.paths.proc_net_wireless))
+        .or_else(|| wifi_rssi(&paths.proc_net_wireless))
         .map(|value| value.to_string().into_bytes());
         insert_optional_state(&mut states, "rssi", value);
     }
@@ -99,7 +99,90 @@ pub(super) fn collect(backend: &PrudyntBackend, config: &HaConfig) -> Result<Sta
             }),
         );
     }
+    states
+}
+
+#[cfg(feature = "raptor-backend")]
+pub(super) fn collect_raptor(
+    backend: &crate::RaptorBackend,
+    config: &HaConfig,
+) -> Result<States, BackendError> {
+    let heartbeat = backend.ha_heartbeat()?;
+    let mut states = collect_host(backend.ha_paths(), config);
+    raptor_states(&mut states, &heartbeat, config);
+    if (config.entities.snapshot || config.entities.live_view) && !backend.ha_jpeg_available() {
+        if config.entities.snapshot {
+            states.insert("snapshot".to_owned(), Vec::new());
+        }
+        if config.entities.live_view {
+            states.insert("live_view".to_owned(), Vec::new());
+        }
+    }
     Ok(states)
+}
+
+#[cfg(feature = "raptor-backend")]
+fn raptor_states(states: &mut States, heartbeat: &Value, config: &HaConfig) {
+    let flags = config.entities;
+    for (enabled, entity, field) in [
+        (flags.motion, "motion", "motion_active"),
+        (flags.motion_guard, "motion_guard", "motion_enabled"),
+        (flags.privacy, "privacy", "privacy_enabled"),
+    ] {
+        if enabled {
+            insert_optional_switch(
+                states,
+                entity,
+                heartbeat
+                    .get_path(field)
+                    .and_then(Value::as_bool)
+                    .map(u64::from),
+            );
+        }
+    }
+    for (enabled, entity, field) in [
+        (flags.ircut, "ircut", "ircut_state"),
+        (flags.ir850, "ir850", "ir850_state"),
+    ] {
+        if enabled {
+            insert_optional_switch(states, entity, integer_path(heartbeat, field));
+        }
+    }
+    if flags.color {
+        insert_optional_switch(
+            states,
+            "color",
+            integer_path(heartbeat, "color_mode").map(|v| u64::from(v == 0)),
+        );
+    }
+    if flags.daynight {
+        insert_optional_state(states, "daynight", daynight_state(heartbeat));
+    }
+    if flags.gain {
+        insert_optional_state(states, "gain", scalar_path(heartbeat, "total_gain"));
+    }
+    if flags.snapshot {
+        insert_optional_state(
+            states,
+            "snapshot",
+            (heartbeat
+                .get_path("privacy_enabled")
+                .and_then(Value::as_bool)
+                == Some(false))
+            .then(|| b"ready".to_vec()),
+        );
+    }
+    if flags.live_view
+        && heartbeat
+            .get_path("privacy_enabled")
+            .and_then(Value::as_bool)
+            != Some(false)
+    {
+        states.insert("live_view".to_owned(), Vec::new());
+    }
+    if flags.reboot {
+        states.insert("reboot".to_owned(), b"ready".to_vec());
+    }
 }
 
 pub(super) fn os_release(paths: &CameraPaths) -> Value {

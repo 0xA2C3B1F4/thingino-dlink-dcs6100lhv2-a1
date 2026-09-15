@@ -138,24 +138,6 @@ index 819ca4427..564fa4328 100644
  	ISP_DAY_NIGHT_SWITCH_DROP_FRAME_NUM := isp_day_night_switch_drop_frame_num=$(BR2_ISP_DAY_NIGHT_SWITCH_DROP_FRAME_NUM_VALUE)
  else
  	ISP_DAY_NIGHT_SWITCH_DROP_FRAME_NUM :=
-diff --git a/package/prudynt-t/prudynt-t.mk b/package/prudynt-t/prudynt-t.mk
-index 38ce300fd..80824f81d 100644
---- a/package/prudynt-t/prudynt-t.mk
-+++ b/package/prudynt-t/prudynt-t.mk
-@@ -94,5 +94,13 @@ endif
- 
- PRUDYNT_CFLAGS += -DPLATFORM_$(shell echo $(SOC_FAMILY) | tr a-z A-Z)
-+ifeq ($(CAMERA),dlink_dcs6100lhv2_a1_t31n_os02g10_rtl8188fu)
-+PRUDYNT_CFLAGS += \
-+	-DDCS_DLINK_ALLOW_UNSYNCED_STARTUP \
-+	-DDCS_DLINK_OS02G10_IQ \
-+	-DDCS_DLINK_MEDIA_READY \
-+	-DDCS_DLINK_SKIP_ISP_BYPASS
-+endif
-+
- ifeq ($(KERNEL_VERSION),4.4.94)
- 	PRUDYNT_CFLAGS += -DKERNEL_VERSION_4
- endif
 diff --git a/package/thingino-kopt/thingino-kopt.mk b/package/thingino-kopt/thingino-kopt.mk
 index d2c074907..1ea4f5d70 100644
 --- a/package/thingino-kopt/thingino-kopt.mk

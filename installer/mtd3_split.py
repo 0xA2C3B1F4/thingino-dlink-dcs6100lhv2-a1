@@ -54,8 +54,8 @@ def final_kernel_command_line(layout: FinalLayout) -> str:
     return " ".join(
         (
             "console=ttyS1,115200n8",
-            "mem=39M@0x0",
-            "rmem=25M@0x2700000",
+            "mem=42M@0x0",
+            "rmem=22M@0x2a00000",
             "init=/sbin/init",
             "root=/dev/mtdblock2",
             "rootfstype=squashfs",

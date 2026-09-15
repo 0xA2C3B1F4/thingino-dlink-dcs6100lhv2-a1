@@ -16,7 +16,20 @@ from installer import user_cli, user_cli_build
 
 
 class BuildCommandTests(unittest.TestCase):
+    _LEGACY_TESTS = {
+        "test_local_build_build_reports_migration_error_for_explicit_inputs",
+        "test_explicit_path_conflicts_stop_before_loading_or_building",
+        "test_saved_workspace_and_data_mode_must_match",
+        "test_configure_eof_retains_error_and_does_not_read_secrets",
+        "test_configure_forwards_confirmed_input_only_after_validation",
+    }
+
     def setUp(self) -> None:
+        if (
+            not user_cli.LEGACY_INSTALLER_AVAILABLE
+            and self._testMethodName in self._LEGACY_TESTS
+        ):
+            self.skipTest("legacy personal installer is not exported")
         self.root = Path("/external/build")
         self.resolve = self.enterContext(mock.patch.object(
             user_cli, "resolve_local_build_workspace", return_value=self.root
@@ -82,41 +95,33 @@ class BuildCommandTests(unittest.TestCase):
                     next_command=next_command, result={"evidence": "host-only"},
                 ))
 
-    def test_explicit_build_paths_and_count_are_forwarded(self) -> None:
-        fields = (
-            "vendor-bundle-dir", "media-closure-dir", "private-config-dir",
-            "expected-wpa-config", "session-dir", "raptor-rwd-artifact",
+    def test_local_build_build_reports_migration_error_for_explicit_inputs(self) -> None:
+        arguments = self.build_arguments(
+            "--vendor-bundle-dir", "/inputs/vendor-bundle",
+            "--media-closure-dir", "/inputs/media-closure",
+            "--private-config-dir", "/inputs/private-config",
+            "--expected-wpa-config", "/inputs/expected-wpa",
+            "--session-dir", "/inputs/session",
+            "--build-count", "2",
         )
-        argv = [part for field in fields for part in (f"--{field}", f"/inputs/{field}")]
-        arguments = self.build_arguments(*argv, "--build-count", "2")
         with (
             mock.patch.object(user_cli, "load_local_build_settings") as load,
             mock.patch.object(
                 user_cli, "build_local_install_set", return_value={"verified": True}
             ) as build,
         ):
-            document = arguments.handler(arguments)
+            with self.assertRaisesRegex(
+                user_cli.UserInstallerError,
+                "local-build build is retired; use local-build build-universal",
+            ):
+                arguments.handler(arguments)
         load.assert_not_called()
-        expected = {
-            field.replace("-", "_"): Path(f"/inputs/{field}") for field in fields
-        }
-        expected["expected_wpa_config_path"] = expected.pop("expected_wpa_config")
-        build.assert_called_once_with(
-            build_root=self.root, data_mode="initialize", build_count=2, **expected
-        )
-        self.assertEqual(document, user_cli._document(
-            "local-build build", ok=True, phase="local-build-install-set-inspected",
-            result={"verified": True},
-        ))
+        build.assert_not_called()
 
     def test_explicit_path_conflicts_stop_before_loading_or_building(self) -> None:
-        for argv, message in (
-            (["--settings", "/settings", "--vendor-bundle-dir", "/vendor"],
-             "--settings cannot be combined with explicit private input paths"),
-            (["--vendor-bundle-dir", "/vendor"],
-             "explicit build mode requires all private input paths; missing "
-             "--media-closure-dir, --private-config-dir, --expected-wpa-config, "
-             "--session-dir, --raptor-rwd-artifact"),
+        for argv in (
+            ["--settings", "/settings", "--vendor-bundle-dir", "/vendor"],
+            ["--vendor-bundle-dir", "/vendor"],
         ):
             with (
                 self.subTest(argv=argv),
@@ -124,26 +129,22 @@ class BuildCommandTests(unittest.TestCase):
                 mock.patch.object(user_cli, "build_local_install_set") as build,
             ):
                 arguments = self.build_arguments(*argv)
-                with self.assertRaises(user_cli.UserInstallerError) as raised:
+                with self.assertRaisesRegex(
+                    user_cli.UserInstallerError,
+                    "local-build build is retired; use local-build build-universal",
+                ):
                     arguments.handler(arguments)
-                self.assertEqual(str(raised.exception), message)
                 load.assert_not_called()
                 build.assert_not_called()
 
     def test_saved_workspace_and_data_mode_must_match(self) -> None:
         settings = {field: f"/inputs/{field}" for field in (
             "vendor_bundle_dir", "media_closure_dir", "private_config_dir",
-            "expected_wpa_config", "session_dir", "raptor_rwd_artifact",
+            "expected_wpa_config", "session_dir",
         )}
-        for root, argv, message in (
-            (
-                "/different", [],
-                "saved settings belong to a different local build workspace",
-            ),
-            (
-                str(self.root), ["--data-mode", "factory-reset"],
-                "--data-mode differs from the configured data action",
-            ),
+        for root, argv in (
+            ("/different", []),
+            (str(self.root), ["--data-mode", "preserve"]),
         ):
             with (
                 self.subTest(root=root),
@@ -154,9 +155,11 @@ class BuildCommandTests(unittest.TestCase):
                 mock.patch.object(user_cli, "build_local_install_set") as build,
             ):
                 arguments = self.build_arguments(*argv)
-                with self.assertRaises(user_cli.UserInstallerError) as raised:
+                with self.assertRaisesRegex(
+                    user_cli.UserInstallerError,
+                    "local-build build is retired; use local-build build-universal",
+                ):
                     arguments.handler(arguments)
-                self.assertEqual(str(raised.exception), message)
                 build.assert_not_called()
 
     def test_configure_eof_retains_error_and_does_not_read_secrets(self) -> None:
@@ -193,7 +196,7 @@ class BuildCommandTests(unittest.TestCase):
     def test_configure_forwards_confirmed_input_only_after_validation(self) -> None:
         fields = (
             "private-root", "vendor-bundle-dir", "media-closure-dir",
-            "session-dir", "raptor-rwd-artifact",
+            "session-dir",
         )
         argv = [part for field in fields for part in (f"--{field}", f"/inputs/{field}")]
         arguments = user_cli.build_parser().parse_args([
@@ -239,6 +242,37 @@ class BuildCommandTests(unittest.TestCase):
                 arguments.handler(arguments)
         signer.assert_called_once_with(Path("/model/key"), Path("/model/public"))
         build.assert_not_called()
+
+    def test_universal_default_noninteractive_json_selects_full_raptor(self) -> None:
+        keypair = {
+            "created": False,
+            "key_id": "a" * 64,
+            "private_key": "/model/release.pem",
+            "public_key": "/model/release.pub",
+        }
+        with (
+            mock.patch.object(user_cli, "ensure_ed25519_keypair", return_value=keypair),
+            mock.patch.object(
+                user_cli,
+                "build_local_universal_install_set",
+                return_value={"raptor_full_source_build": True},
+            ) as build,
+            contextlib.redirect_stdout(io.StringIO()) as stdout,
+            contextlib.redirect_stderr(io.StringIO()) as stderr,
+        ):
+            code = user_cli.main([
+                "local-build", "build-universal",
+                "--vendor-bundle-dir", "/vendor",
+                "--non-interactive", "--json", "--events-jsonl",
+            ])
+        self.assertEqual(code, 0)
+        self.assertTrue(json.loads(stdout.getvalue())["result"]["raptor_full_source_build"])
+        self.assertNotIn("webrtc", build.call_args.kwargs)
+        self.assertNotIn("raptor_rwd_artifact", build.call_args.kwargs)
+        self.assertEqual(build.call_args.kwargs["data_mode"], "initialize")
+        self.assertTrue(callable(build.call_args.kwargs["progress"]))
+        events = [json.loads(line)["event"] for line in stderr.getvalue().splitlines()]
+        self.assertEqual(events, ["started", "completed"])
 
     def test_runtime_stage_preserves_quoted_rollback_command(self) -> None:
         arguments = SimpleNamespace(

@@ -7,12 +7,14 @@ import type {
   JsonObject,
   OverlayStatus,
   RuntimeHeartbeat,
+  RuntimeMedia,
   RuntimeSystem,
   SdStatus,
   SensorIdentity,
   UsageSection,
 } from "../api/contracts";
 import { ApiClient } from "../api/client";
+import { ControlApi } from "../api/control";
 import {
   decodeDaynightHistory,
   decodeDaynightSensors,
@@ -123,6 +125,22 @@ function renderInterfaceTable(system: RuntimeSystem): HTMLElement {
   table.append(body); card.append(table); return card;
 }
 
+export function mediaStatusSummary(media: RuntimeMedia): Array<[string, string]> {
+  const streams = [media.stream0, media.stream1];
+  const enabled = streams.filter((stream) => stream.enabled);
+  const state = enabled.length === 0 ? "Disabled"
+    : enabled.every((stream) => stream.available) ? "Ready"
+    : enabled.some((stream) => stream.available) ? "Partially available"
+    : "Unavailable";
+  return [
+    ["Media", state],
+    ...streams.map((stream, index): [string, string] => [
+      `Stream ${index}`,
+      !stream.enabled ? "Disabled" : stream.available ? "Ready" : "Unavailable",
+    ]),
+  ];
+}
+
 function renderStatus(client: ApiClient): RenderedPage {
   const section = element("section", { className: "page" }); const message = statusMessage(); const reload = button("Refresh", "button secondary");
   const summary = element("div", { className: "metric-grid" }); const detail = element("div", { className: "tools-detail-grid" });
@@ -131,10 +149,22 @@ function renderStatus(client: ApiClient): RenderedPage {
   async function load(): Promise<void> {
     setMessage(message, "Loading system status…");
     try {
-      const [system, heartbeat] = await Promise.all([decoded(client, routes.runtime.system, decodeRuntimeSystem), decoded(client, routes.runtime.heartbeat, decodeHeartbeat)]);
+      const [system, heartbeat, media] = await Promise.all([
+        decoded(client, routes.runtime.system, decodeRuntimeSystem),
+        decoded(client, routes.runtime.heartbeat, decodeHeartbeat),
+        new ControlApi(client).media(),
+      ]);
       if (cancelled) return; summary.replaceChildren();
       const values: Array<[string, string]> = [
-        ["Timestamp", formatTimestamp(system.timestamp)], ["Uptime", formatDuration(heartbeat.uptime)], ["Media", system.media.media_ready ? "Ready" : "Starting"], ["Prudynt", system.media.prudynt_running ? "Running" : "Stopped"], ["Network", system.network.online ? system.network.ip || "Connected" : "Disconnected"], ["Stream 0", system.media.stream0_enabled ? "Enabled" : "Disabled"], ["Stream 1", system.media.stream1_enabled ? "Enabled" : "Disabled"], ["Day / night", heartbeat.daynight_mode], ["Motion", heartbeat.motion_active ? "Active" : heartbeat.motion_enabled ? "Monitoring" : "Disabled"], ["Privacy", heartbeat.privacy_enabled ? "Enabled" : "Disabled"], ["Recorder", heartbeat.rec_ch0 || heartbeat.rec_ch1 ? `ch${heartbeat.rec_ch0 ? "0" : "1"}` : "Idle"], ["Timelapse", heartbeat.timelapse_enabled ? "Enabled" : "Disabled"],
+        ["Timestamp", formatTimestamp(system.timestamp)],
+        ["Uptime", formatDuration(heartbeat.uptime)],
+        ...mediaStatusSummary(media),
+        ["Network", system.network.online ? system.network.ip || "Connected" : "Disconnected"],
+        ["Day / night", heartbeat.daynight_mode],
+        ["Motion", heartbeat.motion_enabled === null ? "Unavailable" : heartbeat.motion_active ? "Active" : heartbeat.motion_enabled ? "Monitoring" : "Disabled"],
+        ["Privacy", heartbeat.privacy_enabled === null ? "Unavailable" : heartbeat.privacy_enabled ? "Enabled" : "Disabled"],
+        ["Recorder", heartbeat.rec_ch0 === null && heartbeat.rec_ch1 === null ? "Unavailable" : heartbeat.rec_ch0 || heartbeat.rec_ch1 ? `ch${heartbeat.rec_ch0 ? "0" : "1"}` : "Idle"],
+        ["Timelapse", heartbeat.timelapse_enabled === null ? "Unavailable" : heartbeat.timelapse_enabled ? "Enabled" : "Disabled"],
       ];
       for (const [label, value] of values) { const card = element("div", { className: "card metric-card" }); card.append(element("span", { text: label }), element("strong", { text: value })); summary.append(card); }
       detail.replaceChildren(usageCard("Memory", system.memory), usageCard("Overlay", system.overlay), usageCard("Extra storage", system.extras));
@@ -196,7 +226,6 @@ function diagnosticText(value: DiagnosticInfoResponse): string { return value.co
 
 const INFORMATION_SOURCES: Partial<Record<PageId, { query: string; title: string; description: string }>> = {
   "onvif-info": { query: "onvif", title: "ONVIF", description: "Secret-redacted /etc/onvif.json snapshot." },
-  "prudynt-info": { query: "prudynt", title: "Prudynt", description: "Secret-redacted /etc/prudynt.json snapshot." },
   "thingino-info": { query: "thingino", title: "Thingino", description: "Secret-redacted /etc/thingino.json snapshot." },
   "kernel-log": { query: "dmesg", title: "Kernel log", description: "Bounded, non-destructive kernel ring snapshot read directly by Control." },
   "streamer-log": { query: "logcat", title: "Streamer log", description: "Streamer log source exposed directly by Control when supported." },
@@ -300,7 +329,7 @@ function mediaKind(path: string): "image" | "video" | null { const extension = p
 function renderFiles(client: ApiClient): RenderedPage {
   const section = element("section", { className: "page" }); const message = statusMessage(); const toolbar = element("form", { className: "file-toolbar" }); const pathInput = element("input", { className: "input", attrs: { value: "/", "aria-label": "Folder path" } }); const open = element("button", { className: "button primary", text: "Open folder", attrs: { type: "submit" } }); toolbar.append(pathInput, open);
   const breadcrumbs = element("nav", { className: "file-breadcrumbs", attrs: { "aria-label": "Path" } }); const table = element("div", { className: "card file-list" }); const editorCard = element("section", { className: "card tools-panel file-editor", attrs: { hidden: "" } }); const editorTitle = element("h2", { text: "Text editor" }); const editorStatus = element("small", { className: "tools-muted", text: "No file selected." }); const editor = element("textarea", { className: "input code-editor", attrs: { "aria-label": "Text file contents", spellcheck: "false" } }); const wrap = element("input", { className: "switch-input", attrs: { type: "checkbox", checked: "" } }); const save = button("Save", "button primary"); const reload = button("Reload", "button secondary"); const backup = button("Download backup", "button quiet"); const closeEditor = button("Close editor", "button quiet"); const editorActions = element("div", { className: "form-actions" }); editorActions.append(save, reload, backup, closeEditor); editorCard.append(editorTitle, editorStatus, editor, element("label", { text: "Wrap lines" }), wrap, editorActions);
-  section.append(heading("Tools", "Files", "Browse /mnt and /media roots, preview media, edit allowlisted text files and remove regular files with confirmation."), message, toolbar, breadcrumbs, table, editorCard); let cancelled = false; let currentPath: string | null = null; let originalContent = ""; let dirty = false; let currentWritable = false;
+  section.append(heading("Tools", "Files", "Browse available media folders and preview or download files. Editing and deletion are shown where supported."), message, toolbar, breadcrumbs, table, editorCard); let cancelled = false; let currentPath: string | null = null; let originalContent = ""; let dirty = false; let currentWritable = false; let listingGeneration = 0;
   const beforeUnload = (event: BeforeUnloadEvent): void => { if (!dirty) return; event.preventDefault(); event.returnValue = ""; };
   const beforeRouteChange = (event: Event): void => {
     if (dirty && !window.confirm("Discard the unsaved file changes?")) event.preventDefault();
@@ -310,10 +339,11 @@ function renderFiles(client: ApiClient): RenderedPage {
   function setDirty(value: boolean): void { dirty = value; save.disabled = !dirty || !currentWritable; }
   function backupCurrent(): void { if (!currentPath) return; const fileName = currentPath.split("/").pop() || "backup.txt"; downloadText(`${fileName}.backup-${new Date().toISOString().replace(/[:.]/g, "-")}`, originalContent); }
   async function editText(path: string): Promise<void> { try { setMessage(message, "Loading text file…"); const value = await decoded(client, routes.files.text(path), decodeFileText); if (cancelled) return; currentPath = path; originalContent = decodeBase64(value.content); editor.value = originalContent; currentWritable = value.writable; editor.disabled = !value.writable; editorTitle.textContent = `Text editor · ${path}`; editorStatus.textContent = value.writable ? `${value.size} bytes · ${value.lines} lines · ready` : `${value.size} bytes · read-only`; editorCard.hidden = false; setDirty(false); setMessage(message); editor.focus(); } catch (error) { setMessage(message, error instanceof Error ? error.message : "Unable to open text file.", "error"); } }
-  async function load(path: string): Promise<void> {
+  async function load(path: string, cursor?: string): Promise<void> {
+    const generation = ++listingGeneration;
     setMessage(message, "Loading folder…");
     try {
-      const value: FileListResponse = await decoded(client, routes.files.list(path), decodeFileList); if (cancelled) return; pathInput.value = value.directory; breadcrumbs.replaceChildren();
+      const value: FileListResponse = await decoded(client, routes.files.list(path, cursor), decodeFileList); if (cancelled || generation !== listingGeneration) return; pathInput.value = value.directory; breadcrumbs.replaceChildren();
       for (const crumb of value.breadcrumbs) { const link = button(crumb.label, "file-name"); link.addEventListener("click", () => void load(crumb.path)); breadcrumbs.append(link); if (crumb.path !== value.directory) breadcrumbs.append(element("span", { className: "tools-muted", text: "/" })); }
       table.replaceChildren(); if (value.parent !== value.directory) { const up = button("Parent folder", "file-row file-parent"); up.addEventListener("click", () => void load(value.parent)); table.append(up); }
       for (const entry of value.entries) {
@@ -325,8 +355,13 @@ function renderFiles(client: ApiClient): RenderedPage {
         }
         if (entry.is_link) meta.textContent += ` · link to ${entry.link_target}`; row.append(name, meta, actions); table.append(row);
       }
-      setMessage(message);
-    } catch (error) { if (!cancelled) setMessage(message, error instanceof Error ? error.message : "Unable to list files.", "error"); }
+      if (value.next_cursor) {
+        const next = button("Next page", "button secondary");
+        next.addEventListener("click", () => { next.disabled = true; void load(value.directory, value.next_cursor!); });
+        table.append(next);
+      }
+      setMessage(message, value.next_cursor ? "More files may be available on the next page." : value.truncated ? "This folder listing is incomplete." : undefined);
+    } catch (error) { if (!cancelled && generation === listingGeneration) setMessage(message, cursor ? "This page is no longer available. Use Open folder to restart the listing." : error instanceof Error ? error.message : "Unable to list files.", "error"); }
   }
   toolbar.addEventListener("submit", (event) => { event.preventDefault(); void load(pathInput.value); }); editor.addEventListener("input", () => setDirty(editor.value !== originalContent)); wrap.addEventListener("change", () => { editor.classList.toggle("file-editor-nowrap", !wrap.checked); });
   async function saveText(): Promise<void> { if (!currentPath || !dirty || !currentWritable) return; try { setMessage(message, "Saving text file…"); const result = decodeFileTextWrite(await client.postText<unknown>(routes.files.text(currentPath), editor.value)); originalContent = editor.value; setDirty(false); editorStatus.textContent = `${result.size} bytes · ${result.lines} lines · saved`; setMessage(message, "Text file saved.", "success"); } catch (error) { setMessage(message, error instanceof Error ? error.message : "Unable to save text file.", "error"); } }
@@ -345,16 +380,16 @@ function renderStorage(client: ApiClient): RenderedPage {
       const data = value.data; summary.replaceChildren();
       const status = element("section", { className: "card tools-panel" }); status.append(element("h2", { text: data.has_sdcard ? "SD card detected" : "SD card not detected" }));
       if (data.device) {
-        addKeyValue(status, "Device", data.device.node); addKeyValue(status, "Capacity", formatFileSize(String(data.device.size_bytes)));
+        addKeyValue(status, "Device", data.device.node); addKeyValue(status, "Capacity", data.device.size_bytes === null ? "Unknown" : formatFileSize(String(data.device.size_bytes)));
         if (data.device.model || data.device.vendor) addKeyValue(status, "Card", [data.device.vendor, data.device.model].filter(Boolean).join(" "));
       } else status.append(element("p", { className: "tools-muted", text: data.messages.not_present }));
-      status.append(element("p", { className: "tools-muted", text: data.has_sdcard ? `Detected from ${data.debug.detection === "sysfs" ? "the MMC device tree" : "the active mount table"}.` : "No MMC device or mount is currently visible." }));
+      status.append(element("p", { className: "tools-muted", text: data.has_sdcard ? `Detected from ${data.debug.detection === "sysfs" ? "the MMC device tree" : data.debug.detection === "device-node" ? "the block device node" : "the active mount table"}.` : "No MMC device or mount is currently visible." }));
       const filesystems = element("section", { className: "card tools-panel" }); filesystems.append(element("h2", { text: "Mounted filesystems" }));
       if (!data.filesystems.length) filesystems.append(element("p", { className: "tools-muted", text: "The card is present but no SD filesystem is mounted." }));
       for (const filesystem of data.filesystems) {
         const item = element("div", { className: "tools-usage" });
         addKeyValue(item, "Partition", filesystem.device); addKeyValue(item, "Mount point", filesystem.mountpoint); addKeyValue(item, "Filesystem", filesystem.filesystem); addKeyValue(item, "Access", filesystem.writable ? "Read and write" : "Read only");
-        if (filesystem.total_kib > 0) { addKeyValue(item, "Used", formatKiB(filesystem.used_kib)); addKeyValue(item, "Free", formatKiB(filesystem.free_kib)); const meter = element("progress", { className: "tools-meter", attrs: { max: "100", "aria-label": `${filesystem.mountpoint} used` } }); meter.value = Math.max(0, Math.min(100, filesystem.used_kib * 100 / filesystem.total_kib)); item.append(meter); }
+        if (filesystem.total_kib !== null && filesystem.used_kib !== null && filesystem.free_kib !== null && filesystem.total_kib > 0) { addKeyValue(item, "Used", formatKiB(filesystem.used_kib)); addKeyValue(item, "Free", formatKiB(filesystem.free_kib)); const meter = element("progress", { className: "tools-meter", attrs: { max: "100", "aria-label": `${filesystem.mountpoint} used` } }); meter.value = Math.max(0, Math.min(100, filesystem.used_kib * 100 / filesystem.total_kib)); item.append(meter); } else addKeyValue(item, "Capacity", "Usage unavailable");
         filesystems.append(item);
       }
       const formatCard = element("section", { className: "card tools-panel" }); formatCard.append(element("h2", { text: "Format SD partition" }), element("p", { className: "tools-warning", text: data.messages.format_warning }));
@@ -427,18 +462,18 @@ function renderNetworkProbe(client: ApiClient): RenderedPage {
   return { node: section, cleanup: () => { cancelled = true; } };
 }
 
-function renderSensorChart(container: HTMLElement, samples: RuntimeHeartbeat[], night: number, day: number): void {
+function renderSensorChart(container: HTMLElement, samples: RuntimeHeartbeat[], night: number | null, day: number | null): void {
   container.replaceChildren(); const values = samples.filter((sample) => sample.daynight_brightness !== null); if (!values.length) { container.append(element("p", { className: "tools-muted", text: "No brightness samples reported." })); return; }
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"); svg.setAttribute("viewBox", "0 0 720 220"); svg.setAttribute("role", "img"); svg.setAttribute("aria-label", "Day/night brightness history"); const axes = document.createElementNS("http://www.w3.org/2000/svg", "path"); axes.setAttribute("d", "M 42 12 V 190 H 708"); axes.setAttribute("fill", "none"); axes.setAttribute("stroke", "currentColor"); axes.setAttribute("stroke-opacity", "0.35"); svg.append(axes);
   const threshold = (value: number, color: string, label: string) => { const y = 190 - Math.max(0, Math.min(100, value)) * 1.7; const line = document.createElementNS("http://www.w3.org/2000/svg", "line"); line.setAttribute("x1", "42"); line.setAttribute("x2", "708"); line.setAttribute("y1", String(y)); line.setAttribute("y2", String(y)); line.setAttribute("stroke", color); line.setAttribute("stroke-dasharray", "5 4"); const text = document.createElementNS("http://www.w3.org/2000/svg", "text"); text.setAttribute("class", "sensor-chart-label"); text.setAttribute("x", "48"); text.setAttribute("y", String(y - 4)); text.setAttribute("fill", color); text.textContent = `${label} ${value}%`; svg.append(line, text); };
-  threshold(night, "#a13b35", "Night"); threshold(day, "#176b4b", "Day"); const points = values.map((sample, index) => `${42 + index * (666 / Math.max(1, values.length - 1))},${190 - Math.max(0, Math.min(100, sample.daynight_brightness ?? 0)) * 1.7}`).join(" "); const polyline = document.createElementNS("http://www.w3.org/2000/svg", "polyline"); polyline.setAttribute("points", points); polyline.setAttribute("fill", "none"); polyline.setAttribute("stroke", "#7fcba8"); polyline.setAttribute("stroke-width", "3"); svg.append(polyline); container.append(svg);
+  if (night !== null) threshold(night, "#a13b35", "Night"); if (day !== null) threshold(day, "#176b4b", "Day"); const points = values.map((sample, index) => `${42 + index * (666 / Math.max(1, values.length - 1))},${190 - Math.max(0, Math.min(100, sample.daynight_brightness ?? 0)) * 1.7}`).join(" "); const polyline = document.createElementNS("http://www.w3.org/2000/svg", "polyline"); polyline.setAttribute("points", points); polyline.setAttribute("fill", "none"); polyline.setAttribute("stroke", "#7fcba8"); polyline.setAttribute("stroke-width", "3"); svg.append(polyline); container.append(svg);
 }
 
 function renderSensor(client: ApiClient): RenderedPage {
   const section = element("section", { className: "page" }); const message = statusMessage(); const controls = element("div", { className: "tools-toolbar" }); const refresh = button("Refresh", "button secondary"); const pause = button("Pause", "button secondary"); const clear = button("Clear samples", "button quiet"); const windowSelect = element("select", { className: "input compact", attrs: { "aria-label": "Sample window" } }); for (const points of [100, 300, 600, 1200]) windowSelect.append(element("option", { text: `${points} samples`, attrs: { value: String(points) } })); windowSelect.value = "300"; const exportJson = button("Export JSON", "button quiet"); const exportCsv = button("Export CSV", "button quiet"); controls.append(refresh, pause, clear, windowSelect, exportJson, exportCsv);
-  const summary = element("div", { className: "metric-grid" }); const chart = element("div", { className: "sensor-chart card" }); const detail = element("div", { className: "tools-detail-grid" }); const samplesTable = element("table", { className: "tools-table" }); section.append(heading("Streamer", "Sensor data", "Current sensor identity, thresholds and a bounded day/night history. Control retains at most 300 history samples; larger windows include samples collected while this page is open."), message, controls, summary, chart, detail, samplesTable); let cancelled = false; let paused = false; let sampleWindow = 300; let samples: RuntimeHeartbeat[] = []; let thresholds: DayNightSensors = { night_threshold_pct: 0, day_threshold_pct: 100, current: null }; let identity: SensorIdentity | null = null;
+  const summary = element("div", { className: "metric-grid" }); const chart = element("div", { className: "sensor-chart card" }); const detail = element("div", { className: "tools-detail-grid" }); const samplesTable = element("table", { className: "tools-table" }); section.append(heading("Streamer", "Sensor data", "Current sensor identity, thresholds and a bounded day/night history. Control retains at most 300 history samples; larger windows include samples collected while this page is open."), message, controls, summary, chart, detail, samplesTable); let cancelled = false; let paused = false; let sampleWindow = 300; let samples: RuntimeHeartbeat[] = []; let thresholds: DayNightSensors = { night_threshold_pct: null, day_threshold_pct: null, current: null }; let identity: SensorIdentity | null = null;
   function trim(): void { if (samples.length > sampleWindow) samples = samples.slice(-sampleWindow); }
-  function render(): void { summary.replaceChildren(); const latest = samples.at(-1); const values: Array<[string, string]> = [["Brightness", latest?.daynight_brightness === null || latest?.daynight_brightness === undefined ? "Not reported" : String(latest.daynight_brightness)], ["Total gain", latest?.total_gain === null || latest?.total_gain === undefined ? "Not reported" : String(latest.total_gain)], ["Mode", latest?.daynight_mode ?? "Not reported"], ["Night threshold", `${thresholds.night_threshold_pct}%`], ["Day threshold", `${thresholds.day_threshold_pct}%`], ["Samples", String(samples.length)]]; for (const [label, value] of values) { const card = element("div", { className: "card metric-card" }); card.append(element("span", { text: label }), element("strong", { text: value })); summary.append(card); } renderSensorChart(chart, samples, thresholds.night_threshold_pct, thresholds.day_threshold_pct); detail.replaceChildren(); const identityCard = element("section", { className: "card tools-panel" }); identityCard.append(element("h2", { text: "Sensor identity" })); if (identity) { addKeyValue(identityCard, "Sensor", identity.sensor_model); addKeyValue(identityCard, "SoC", identity.soc_model); addKeyValue(identityCard, "Family", identity.soc_family); addKeyValue(identityCard, "IQ file", identity.file_path); addKeyValue(identityCard, "MD5", identity.md5); } else identityCard.append(element("p", { className: "tools-muted", text: "Not reported." })); const current = element("section", { className: "card tools-panel" }); current.append(element("h2", { text: "Current sensor state" }), element("pre", { className: "output", text: thresholds.current ? JSON.stringify(thresholds.current, null, 2) : "No current state reported." })); detail.append(identityCard, current); samplesTable.replaceChildren(); const head = element("tr"); for (const title of ["Time", "Brightness", "Gain", "Mode"]) head.append(element("th", { text: title, attrs: { scope: "col" } })); const thead = element("thead"); thead.append(head); samplesTable.append(thead); const body = element("tbody"); for (const sample of samples.slice(-12).reverse()) { const row = element("tr"); for (const value of [formatTimestamp(sample.time_now), sample.daynight_brightness === null ? "—" : String(sample.daynight_brightness), sample.total_gain === null ? "—" : String(sample.total_gain), sample.daynight_mode]) row.append(element("td", { text: value })); body.append(row); } samplesTable.append(body); }
+  function render(): void { summary.replaceChildren(); const latest = samples.at(-1); const pct = (value: number | null) => value === null ? "Not reported" : `${value}%`; const values: Array<[string, string]> = [["Brightness", latest?.daynight_brightness === null || latest?.daynight_brightness === undefined ? "Not reported" : String(latest.daynight_brightness)], ["Total gain", latest?.total_gain === null || latest?.total_gain === undefined ? "Not reported" : String(latest.total_gain)], ["Mode", latest?.daynight_mode ?? "Not reported"], ["Night threshold", pct(thresholds.night_threshold_pct)], ["Day threshold", pct(thresholds.day_threshold_pct)], ["Samples", String(samples.length)]]; for (const [label, value] of values) { const card = element("div", { className: "card metric-card" }); card.append(element("span", { text: label }), element("strong", { text: value })); summary.append(card); } renderSensorChart(chart, samples, thresholds.night_threshold_pct, thresholds.day_threshold_pct); detail.replaceChildren(); const identityCard = element("section", { className: "card tools-panel" }); identityCard.append(element("h2", { text: "Sensor identity" })); if (identity) { addKeyValue(identityCard, "Sensor", identity.sensor_model); addKeyValue(identityCard, "SoC", identity.soc_model); addKeyValue(identityCard, "Family", identity.soc_family); addKeyValue(identityCard, "IQ file", identity.file_path); addKeyValue(identityCard, "MD5", identity.md5); } else identityCard.append(element("p", { className: "tools-muted", text: "Not reported." })); const current = element("section", { className: "card tools-panel" }); current.append(element("h2", { text: "Current sensor state" }), element("pre", { className: "output", text: thresholds.current ? JSON.stringify(thresholds.current, null, 2) : "No current state reported." })); detail.append(identityCard, current); samplesTable.replaceChildren(); const head = element("tr"); for (const title of ["Time", "Brightness", "Gain", "Mode"]) head.append(element("th", { text: title, attrs: { scope: "col" } })); const thead = element("thead"); thead.append(head); samplesTable.append(thead); const body = element("tbody"); for (const sample of samples.slice(-12).reverse()) { const row = element("tr"); for (const value of [formatTimestamp(sample.time_now), sample.daynight_brightness === null ? "—" : String(sample.daynight_brightness), sample.total_gain === null ? "—" : String(sample.total_gain), sample.daynight_mode]) row.append(element("td", { text: value })); body.append(row); } samplesTable.append(body); }
   let polling = false;
   async function loadInitial(): Promise<void> {
     if (polling) return;
@@ -479,9 +514,10 @@ function renderSensor(client: ApiClient): RenderedPage {
 }
 
 function renderReset(client: ApiClient): RenderedPage {
-  const section = element("section", { className: "page" }); const message = statusMessage(); const card = element("section", { className: "card danger-card" }); const restartMedia = button("Restart media service", "button secondary"); const reboot = button("Reboot camera", "button danger"); const wipeOverlay = button("Reset writable overlay", "button danger"); card.append(element("h2", { text: "Service and device actions" }), element("p", { text: "These operations can interrupt the connection. Reset writable overlay removes resettable configuration, then reboots. The bootloader environment and protected device partitions are preserved." }), restartMedia, reboot, wipeOverlay); section.append(heading("Tools", "Restart and reset", "Administrative actions provided by Thingino Control."), message, card); let cancelled = false;
+  const section = element("section", { className: "page" }); const message = statusMessage(); const card = element("section", { className: "card danger-card" }); const restartMedia = button("Checking media restart…", "button secondary"); restartMedia.disabled = true; const reboot = button("Reboot camera", "button danger"); const wipeOverlay = button("Reset writable overlay", "button danger"); const restartExplanation = element("p", { className: "tools-muted", text: "Checking the selected media backend." }); card.append(element("h2", { text: "Service and device actions" }), element("p", { text: "These operations can interrupt the connection. Reset writable overlay removes resettable configuration, then reboots. The bootloader environment and protected device partitions are preserved." }), restartExplanation, restartMedia, reboot, wipeOverlay); section.append(heading("Tools", "Restart and reset", "Administrative actions provided by Thingino Control."), message, card); let cancelled = false; let restartRequiresReboot: boolean | null = null;
   async function invoke(path: string, body: JsonObject | null, confirmation: string): Promise<void> { if (!window.confirm(confirmation)) return; try { if (body) await client.postJson<JsonObject>(path, body); else await client.empty(path, { method: "POST" }); if (!cancelled) setMessage(message, "Action accepted. The connection may close while the camera restarts.", "success"); } catch (error) { if (!cancelled) setMessage(message, error instanceof Error ? error.message : "Action failed.", "error"); } }
-  restartMedia.addEventListener("click", () => void invoke(routes.actions.restartPrudynt, null, "Restart the media service now?")); reboot.addEventListener("click", () => void invoke(routes.actions.reboot, null, "Reboot the camera now?")); wipeOverlay.addEventListener("click", () => void invoke(routes.actions.factoryReset, { action: "wipeoverlay" }, "Remove the writable overlay contents and reboot? Protected flash partitions remain unchanged.")); return { node: section, cleanup: () => { cancelled = true; } };
+  decoded(client, routes.health, decodeHealth).then((health) => { if (cancelled) return; restartRequiresReboot = health.backend.name === "raptor"; restartMedia.disabled = false; restartMedia.textContent = restartRequiresReboot ? "Reboot to restart media" : "Restart media service"; restartExplanation.textContent = restartRequiresReboot ? "Raptor cannot safely reacquire this sensor after a warm stop. A normal confirmed reboot is the supported media restart." : "The selected media backend supports a warm media-service restart."; }).catch(() => { if (!cancelled) { restartMedia.textContent = "Media restart unavailable"; restartExplanation.textContent = "The media backend could not be identified safely."; } });
+  restartMedia.addEventListener("click", () => { if (restartRequiresReboot === true) void invoke(routes.actions.reboot, null, "Raptor requires a normal camera reboot to restart media. Reboot now?"); else if (restartRequiresReboot === false) void invoke(routes.actions.restartPrudynt, null, "Restart the media service now?"); }); reboot.addEventListener("click", () => void invoke(routes.actions.reboot, null, "Reboot the camera now?")); wipeOverlay.addEventListener("click", () => void invoke(routes.actions.factoryReset, { action: "wipeoverlay" }, "Remove the writable overlay contents and reboot? Protected flash partitions remain unchanged.")); return { node: section, cleanup: () => { cancelled = true; } };
 }
 
 function renderHelp(client: ApiClient): RenderedPage {

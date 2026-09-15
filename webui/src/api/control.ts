@@ -11,6 +11,7 @@ import type {
   LoginResponse,
   NetworkConfig,
   MotionRuntime,
+  RaptorMotionRuntime,
   RecorderConfig,
   RecorderResponse,
   RecorderUpdate,
@@ -24,7 +25,7 @@ import type {
   WifiScanResponse,
 } from "./contracts";
 import { ApiClient } from "./client";
-import { decodeAccess, decodeHeartbeat, decodeHomeAssistant, decodeHomeAssistantRuntime, decodeMotionRuntime, decodeNetwork, decodeRecorder, decodeRuntimeMedia, decodeRuntimeSystem, decodeSession, decodeStream, decodeTime, decodeWebui, decodeWifiScan } from "./decode";
+import { decodeAccess, decodeHeartbeat, decodeHomeAssistant, decodeHomeAssistantRuntime, decodeMotionRuntime, decodeNetwork, decodeRecorder, decodeRuntimeMedia, decodeRuntimeSystem, decodeSession, decodeTime, decodeWebui, decodeWifiScan } from "./decode";
 import { routes } from "./routes";
 
 export class ControlApi {
@@ -46,32 +47,17 @@ export class ControlApi {
     return decodeHeartbeat(await this.http.json<unknown>(routes.runtime.heartbeat));
   }
 
-  async motionRuntime(): Promise<MotionRuntime> {
+  async motionRuntime(): Promise<MotionRuntime | RaptorMotionRuntime> {
     return decodeMotionRuntime(await this.http.json<unknown>(routes.runtime.motion));
   }
 
   async media(): Promise<RuntimeMedia> {
-    // The camera has a deliberately small bounded worker pool. Keep the
-    // initial WebUI load below that limit instead of queuing a request burst.
     const runtime = decodeRuntimeMedia(await this.http.json<unknown>(routes.runtime.media));
-    const readStream = async (stream: "ch0" | "ch1"): Promise<RuntimeMedia["stream0"]> => {
-      const state = runtime.streams[stream];
-      if (!state.available || !state.enabled) return state;
-      const domain = stream === "ch0" ? "stream0" : "stream1";
-      const config = decodeStream(await this.http.json<unknown>(routes.prudynt.domain(domain)), domain);
-      return { ...config, ...state };
+    return {
+      stream0: runtime.streams.ch0,
+      stream1: runtime.streams.ch1,
+      ...(runtime.rtsp ? { rtsp: runtime.rtsp } : {}),
     };
-    const stream0 = await readStream("ch0");
-    const stream1 = await readStream("ch1");
-    const result: RuntimeMedia = { stream0, stream1 };
-    if ((runtime.streams.ch0.available && runtime.streams.ch0.enabled) || (runtime.streams.ch1.available && runtime.streams.ch1.enabled)) {
-      const access = await this.access();
-      result.rtsp = {
-        ...(access.username !== null ? { username: access.username } : {}),
-        ...(access.rtsp_port !== null ? { port: access.rtsp_port } : {}),
-      };
-    }
-    return result;
   }
 
   async system(): Promise<RuntimeSystem> {

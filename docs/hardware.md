@@ -7,8 +7,8 @@ The only supported target is D-Link `DCS-6100LHV2`, hardware revision `A1`.
 | SoC | Ingenic T31N, MIPS32, 64 MiB physical RAM |
 | Sensor | OS02G10, 1920x1080 |
 | Wi-Fi | RTL8188FU, GPIO57 power |
-| Linux memory | `mem=39M@0x0` |
-| ISP reserved memory | `rmem=25M@0x2700000` |
+| Linux memory | `mem=42M@0x0` |
+| ISP reserved memory | `rmem=22M@0x2a00000` |
 | IR-cut | GPIO50 then GPIO49, 100 ms latching pulse |
 | Status LEDs | GPIO52 green and GPIO54 red, active low |
 | Reset input | GPIO60 |

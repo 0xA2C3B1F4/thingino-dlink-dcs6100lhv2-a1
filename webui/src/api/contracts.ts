@@ -40,26 +40,43 @@ export interface LoginResponse {
 }
 
 export interface RuntimeHeartbeat {
+  controls_supported?: Partial<Record<"daynight" | "motion" | "privacy", boolean>>;
   time_now: number;
   uptime: number;
   daynight_brightness: number | null;
   total_gain: number | null;
   daynight_mode: "day" | "night" | "unknown";
-  rec_ch0: boolean;
-  rec_ch1: boolean;
-  timelapse_enabled: boolean;
-  motion_enabled: boolean;
-  motion_active: boolean;
-  motion_ingress_ready: boolean;
-  privacy_enabled: boolean;
+  rec_ch0_file_closed?: boolean;
+  rec_ch1_file_closed?: boolean;
+  rec_ch0_available?: boolean;
+  rec_ch1_available?: boolean;
+  rec_ch0_reason?: "no_sd" | "storage_unknown" | "no_space" | "video_unavailable" | "writer_error" | "starting" | "stopping" | null;
+  rec_ch1_reason?: "no_sd" | "storage_unknown" | "no_space" | "video_unavailable" | "writer_error" | "starting" | "stopping" | null;
+  rec_ch0: boolean | null;
+  rec_ch1: boolean | null;
+  timelapse_enabled: boolean | null;
+  motion_enabled: boolean | null;
+  motion_active: boolean | null;
+  motion_ingress_ready: boolean | null;
+  privacy_enabled: boolean | null;
   color_mode: 0 | 1 | null;
-  mic_enabled: boolean;
-  spk_enabled: boolean;
-  daynight_enabled: boolean;
+  mic_enabled: boolean | null;
+  spk_enabled: boolean | null;
+  daynight_enabled: boolean | null;
   ircut_state: 0 | 1 | null;
   ir850_state: 0 | 1 | null;
   ir940_state: 0 | 1 | null;
   white_state: 0 | 1 | null;
+}
+
+export interface RaptorMotionRuntime {
+  version: 1;
+  source: "raptor";
+  available: boolean;
+  supported: boolean;
+  monitoring: boolean;
+  active: boolean;
+  receiving: boolean;
 }
 
 export interface MotionRuntime {
@@ -119,9 +136,10 @@ export interface RuntimeStreamState {
 export type RuntimeStream = Partial<StreamConfig> & RuntimeStreamState;
 
 export interface RuntimeMediaResponse {
+  rtsp?: RuntimeMedia["rtsp"];
   streams: {
-    ch0: RuntimeStreamState;
-    ch1: RuntimeStreamState;
+    ch0: RuntimeStream;
+    ch1: RuntimeStream;
   };
 }
 
@@ -204,6 +222,8 @@ export interface AdminConfig {
 }
 
 export interface AccessConfig {
+  source?: "raptor";
+  auth_enabled?: boolean;
   username: string | null;
   password: null;
   password_set: boolean;
@@ -211,9 +231,9 @@ export interface AccessConfig {
   rtsp_ch0: string | null;
   rtsp_ch1: string | null;
   rtsp_mic: string | null;
-  onvif_port: 80;
-  onvif_enabled: true;
-  onvif_ingress: "same-origin";
+  onvif_port: 80 | null;
+  onvif_enabled: true | null;
+  onvif_ingress: "same-origin" | null;
 }
 
 export interface AccessUpdate {
@@ -239,6 +259,41 @@ export interface WebuiConfig {
   paranoid: boolean;
   track_focus: boolean;
   focus_timeout: number;
+}
+
+export interface RaptorAudioConfig {
+  source: "raptor";
+  mic_enabled: boolean | null;
+  spk_enabled: boolean | null;
+  mic_muted: boolean | null;
+  mic_format: string | null;
+  mic_sample_rate: number | null;
+  input_readback: "owner";
+  processing_readback: "owner";
+  codecs_built: Record<string, boolean>;
+  effects_built: boolean;
+  processing_available: boolean;
+  mic_vol: number | null;
+  mic_gain: number | null;
+  mic_alc_gain: number | null;
+  mic_noise_suppression: number | null;
+  mic_agc_enabled: boolean | null;
+  mic_high_pass_filter: boolean | null;
+  mic_agc_target_level_dbfs: number | null;
+  mic_agc_compression_gain_db: number | null;
+  mic_is_digital: false;
+  mic_input_basis: "dlink-a1-profile-amic";
+  force_stereo: false;
+  channel_basis: "rad-fixed-mono";
+  buffer_warn_frames: null;
+  buffer_cap_frames: null;
+  buffer_control: "unsupported-prudynt-queue-policy";
+  tap_enabled: null;
+  tap_path: null;
+  tap_control: "unsupported";
+  spk_vol: number | null;
+  spk_gain: number | null;
+  levels: Record<string, { supported: boolean; available: boolean; value: number | null; min: number; max: number }>;
 }
 
 export interface AudioConfig {
@@ -284,21 +339,51 @@ export interface ImagingConfig {
 }
 
 export interface ImagingRuntimeField {
+  available?: boolean;
   supported: boolean;
   min?: number;
   max?: number;
   value?: number;
   default?: number;
+  verification?: "unsupported" | "sdk-readback" | "sdk-setter-config";
+  observed_value?: number | null;
+  configured_value?: number | null;
+  saved_value?: number | null;
+  matches_saved?: boolean;
+}
+
+export interface ImagingWhiteBalanceRuntime {
+  supported: boolean;
+  available: boolean;
+  verification: "unsupported" | "sdk-readback";
+  modes: number[];
+  gain_min: number;
+  gain_max: number;
+  mode: number | null;
+  gains_effective: boolean;
+  rgain: number | null;
+  bgain: number | null;
+  configured_mode: number | null;
+  configured_rgain: number | null;
+  configured_bgain: number | null;
+  saved_mode: number | null;
+  saved_rgain: number | null;
+  saved_bgain: number | null;
+  matches_saved: boolean;
 }
 
 export interface ImagingRuntimeState {
+  source: "raptor";
+  persistent: boolean;
   fields: Record<string, ImagingRuntimeField>;
+  white_balance?: ImagingWhiteBalanceRuntime;
 }
 
 export interface MotionConfig {
   enabled: boolean;
   sensitivity: number;
   playonspeaker?: boolean;
+  speaker_repeats?: number;
   cooldown_time?: number;
   debounce_time?: number;
   init_time?: number;
@@ -383,7 +468,7 @@ export type RecorderUpdate =
   | { video: Partial<RecorderConfig["video"]> }
   | { timelapse: Partial<RecorderConfig["timelapse"]> };
 
-export interface RecorderResponse {
+export interface PrudyntRecorderResponse {
   ok: true;
   data: RecorderConfig & {
     mounts: JsonValue[];
@@ -391,6 +476,53 @@ export interface RecorderResponse {
     debug: JsonObject;
   };
 }
+
+export interface RaptorRecorderResponse {
+  ok: true;
+  data: {
+    source: "raptor";
+    persistent: true;
+    video: RecorderConfig["video"];
+    saved_video: RecorderConfig["video"] | null;
+    matches_saved: boolean;
+    runtime: JsonObject | null;
+    storage_available: boolean;
+    free_mb: number | null;
+    boot_pending: boolean;
+    cleanup_ok: boolean;
+    timelapse: RaptorTimelapsePolicy | null;
+    timelapse_supported: boolean;
+    mounts: string[];
+  };
+}
+
+export type RaptorTimelapsePolicy = Omit<RecorderConfig["timelapse"], "presets"> & {
+  presets: Pick<RecorderConfig["timelapse"]["presets"], "ircut" | "ir850" | "color">;
+};
+export interface RaptorTimelapseResponse {
+  ok: true;
+  data: {
+    source: "raptor";
+    domain: "timelapse";
+    persistent: true;
+    available: boolean;
+    timelapse: RaptorTimelapsePolicy;
+    saved_timelapse: RaptorTimelapsePolicy | null;
+    matches_saved: boolean;
+    mounts: string[];
+    runtime: {
+      phase: string;
+      last_error: string | null;
+      preset_restore: "not_used" | "restored" | "conflict";
+      successes: number;
+      last_success: number | null;
+      next_due: number | null;
+      cleanup_blocked: boolean;
+    };
+  };
+}
+
+export type RecorderResponse = PrudyntRecorderResponse | RaptorRecorderResponse;
 
 export interface HomeAssistantConfig {
   enabled: boolean;
@@ -491,6 +623,32 @@ export interface OsdConfig {
   sei: { enabled: boolean; entries: Record<string, OsdEntry> };
 }
 
+export interface RaptorOsdMetadataEntry extends OsdEntry {
+  name: string;
+  available: boolean;
+  unavailable_reason?: "gain producer missing";
+}
+
+export interface RaptorOsdMetadataConfig {
+  source: "raptor";
+  persistent: true;
+  supported: true;
+  confirmed: boolean;
+  saved: {
+    available: boolean;
+    id: string;
+    enabled: boolean | null;
+    entries: RaptorOsdMetadataEntry[];
+  };
+  published: {
+    id: string;
+    generation: number;
+    status: number;
+    fresh: boolean;
+    matches_saved: boolean;
+  };
+}
+
 export interface SensorIdentity {
   sensor_model: string;
   soc_model: string;
@@ -500,8 +658,10 @@ export interface SensorIdentity {
 }
 
 export interface DayNightSensors {
-  night_threshold_pct: number;
-  day_threshold_pct: number;
+  source?: "raptor";
+  night_threshold_pct: number | null;
+  day_threshold_pct: number | null;
+  thresholds?: JsonObject | null;
   current: JsonObject | null;
 }
 
@@ -519,7 +679,7 @@ export interface RuntimeSystem {
   memory: UsageSection;
   overlay: UsageSection;
   extras: UsageSection;
-  media: { prudynt_running: boolean; media_ready: boolean; stream0_enabled: boolean; stream1_enabled: boolean };
+  media: { prudynt_running: boolean | null; media_ready: boolean | null; stream0_enabled: boolean | null; stream1_enabled: boolean | null };
   timestamp: number;
 }
 
@@ -539,7 +699,7 @@ export interface SdStatus {
   ok: true;
   data: {
     has_sdcard: boolean;
-    device: null | { name: string; node: string; vendor: string; model: string; size_bytes: number };
+    device: null | { name: string; node: string; vendor: string; model: string; size_bytes: number | null };
     reports: { partitions_b64: string; mounts_b64: string };
     format: {
       supported: boolean;
@@ -547,9 +707,9 @@ export interface SdStatus {
       status: "idle" | "queued" | "running" | "succeeded" | "failed";
       last_output_b64: string;
     };
-    filesystems: Array<{ device: string; mountpoint: string; filesystem: string; writable: boolean; total_kib: number; used_kib: number; free_kib: number }>;
+    filesystems: Array<{ device: string; mountpoint: string; filesystem: string; writable: boolean; total_kib: number | null; used_kib: number | null; free_kib: number | null }>;
     messages: { format_warning: string; not_present: string };
-    debug: { detection: "sysfs" | "mount-table" | "none" };
+    debug: { detection: "sysfs" | "mount-table" | "device-node" | "none" };
   };
 }
 
@@ -576,6 +736,8 @@ export interface FileEntry {
 }
 
 export interface FileListResponse {
+  next_cursor?: string | null;
+  truncated?: boolean;
   directory: string;
   parent: string;
   breadcrumbs: FileBreadcrumb[];
@@ -636,8 +798,10 @@ export interface DaynightSensorState {
 }
 
 export interface DaynightSensorsResponse {
-  night_threshold_pct: number;
-  day_threshold_pct: number;
+  source?: "raptor";
+  night_threshold_pct: number | null;
+  day_threshold_pct: number | null;
+  thresholds?: DaynightSensorState | null;
   current: DaynightSensorState | null;
 }
 

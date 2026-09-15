@@ -35,6 +35,37 @@ REQUIRED_CHECKS = (
     "kernel.media_errors",
     "browser.real_safari_or_chromium",
 )
+RAPTOR_REQUIRED_CHECKS = tuple(
+    "runtime.raptor_restart" if check == "runtime.prudynt_restart" else check
+    for check in REQUIRED_CHECKS
+) + (
+    "preview.webrtc_stream0",
+    "preview.webrtc_stream1",
+    "preview.webrtc_disconnect_reconnect",
+    "config.field_matrix",
+)
+RAPTOR_EFFECT_CHECKS = {
+    "runtime.raptor_restart",
+    "preview.webrtc_stream0",
+    "preview.webrtc_stream1",
+    "preview.webrtc_disconnect_reconnect",
+    "config.field_matrix",
+}
+
+
+def _required_checks(identity: dict[str, object]) -> tuple[str, ...]:
+    version = identity.get("schema_version")
+    if type(version) is int and version == 1 and "media_backend" not in identity:
+        return REQUIRED_CHECKS
+    if type(version) is int and version == 2 and identity.get("media_backend") == "raptor":
+        return RAPTOR_REQUIRED_CHECKS
+    raise CandidateLogError("candidate specification has an unsupported schema or media backend")
+
+
+def _candidate_id(identity: dict[str, object]) -> str:
+    _required_checks(identity)
+    prefix = f"dcs6100-candidate-v{identity['schema_version']}\0".encode("ascii")
+    return hashlib.sha256(prefix + _canonical(identity)).hexdigest()
 
 
 def _now() -> str:
@@ -68,7 +99,10 @@ def _identity(spec: dict[str, object]) -> dict[str, object]:
         "source_commits",
         "stop_conditions",
     }
-    if set(spec) != required or spec.get("schema_version") != 1:
+    _required_checks(spec)
+    if spec["schema_version"] == 2:
+        required.add("media_backend")
+    if set(spec) != required:
         raise CandidateLogError("candidate specification has the wrong schema")
     for name in ("acceptance_conditions", "changes", "source_commits", "stop_conditions"):
         value = spec[name]
@@ -102,17 +136,18 @@ def _identity(spec: dict[str, object]) -> dict[str, object]:
 
 def create_candidate(*, store_root: Path, specification: Path) -> dict[str, object]:
     identity = _identity(_load(specification, "candidate specification"))
-    candidate_id = hashlib.sha256(b"dcs6100-candidate-v1\0" + _canonical(identity)).hexdigest()
+    candidate_id = _candidate_id(identity)
     root = store_root / candidate_id
     candidate_path = root / "candidate.json"
     document = {
         "candidate_id": candidate_id,
         "created_at": _now(),
         "identity": identity,
-        "required_checks": list(REQUIRED_CHECKS),
-        "schema_version": 1,
+        "required_checks": list(_required_checks(identity)),
+        "schema_version": identity["schema_version"],
     }
     if candidate_path.exists():
+        _load_candidate(store_root, candidate_id)
         existing = _load(candidate_path, "candidate record")
         if existing.get("identity") != identity or existing.get("candidate_id") != candidate_id:
             raise CandidateLogError("candidate ID collision or changed record")
@@ -125,43 +160,92 @@ def create_candidate(*, store_root: Path, specification: Path) -> dict[str, obje
     return {"candidate_id": candidate_id, "created": True, "path": str(root)}
 
 
-def _candidate_root(store_root: Path, candidate_id: str) -> Path:
+def _load_candidate(store_root: Path, candidate_id: str) -> tuple[Path, tuple[str, ...]]:
     if re.fullmatch(r"[0-9a-f]{64}", candidate_id) is None:
         raise CandidateLogError("candidate ID is invalid")
     root = store_root / candidate_id
     document = _load(root / "candidate.json", "candidate record")
     if document.get("candidate_id") != candidate_id:
         raise CandidateLogError("candidate record ID does not match its directory")
-    return root
+    identity = document.get("identity")
+    if not isinstance(identity, dict) or _candidate_id(identity) != candidate_id:
+        raise CandidateLogError("candidate content identity changed")
+    required_checks = _required_checks(identity)
+    if (document.get("schema_version") != identity["schema_version"]
+            or document.get("required_checks") != list(required_checks)):
+        raise CandidateLogError("candidate required checks do not match its content identity")
+    return root, required_checks
+
+
+def _validate_checks(checks: object, required_checks: tuple[str, ...]) -> None:
+    if not isinstance(checks, dict) or not checks:
+        raise CandidateLogError("candidate run must record at least one check")
+    for check_id, result in checks.items():
+        if check_id not in required_checks or not isinstance(result, dict):
+            raise CandidateLogError("candidate run contains an unknown check")
+        status = result.get("status")
+        if not isinstance(status, str) or status not in STATUSES:
+            raise CandidateLogError("candidate check status is invalid")
+        if set(result) - {"status", "evidence", "note", "device_effect_observed"}:
+            raise CandidateLogError("candidate check result contains unknown fields")
+        needs_effect = check_id.startswith("controls.") or check_id in RAPTOR_EFFECT_CHECKS
+        if needs_effect and status in {"passed", "manual_observation"}:
+            if result.get("device_effect_observed") is not True:
+                raise CandidateLogError("control acceptance requires an observed device effect")
+
+
+def _observed_at(run: dict[str, object]) -> datetime:
+    value = run.get("observed_at")
+    if not isinstance(value, str) or re.fullmatch(
+        r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|\+00:00)", value
+    ) is None:
+        raise CandidateLogError("candidate observed_at must be an explicit UTC timestamp")
+    try:
+        observed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise CandidateLogError("candidate observed_at is invalid") from exc
+    if observed > datetime.now(UTC):
+        raise CandidateLogError("candidate observed_at cannot be in the future")
+    return observed
+
+
+def _latest_checks(
+    runs: list[dict[str, object]], candidate_id: str, required_checks: tuple[str, ...]
+) -> dict[str, dict[str, object]]:
+    latest: dict[str, dict[str, object]] = {}
+    observations: dict[tuple[datetime, str], dict[str, object]] = {}
+    for run in sorted(runs, key=_observed_at):
+        if run.get("schema_version") != 1 or run.get("candidate_id") != candidate_id:
+            raise CandidateLogError("candidate run belongs to another candidate or schema")
+        checks = run.get("checks")
+        _validate_checks(checks, required_checks)
+        assert isinstance(checks, dict)
+        observed = _observed_at(run)
+        for check_id, result in checks.items():
+            key = (observed, check_id)
+            if key in observations and observations[key] != result:
+                raise CandidateLogError("candidate check has conflicting results at the same time")
+            observations[key] = result
+            latest[check_id] = result
+    return latest
 
 
 def record_candidate_run(
     *, store_root: Path, candidate_id: str, run_path: Path
 ) -> dict[str, object]:
-    root = _candidate_root(store_root, candidate_id)
+    root, required_checks = _load_candidate(store_root, candidate_id)
     run = _load(run_path, "candidate run")
     if set(run) - {"checks", "metrics", "notes", "observed_at", "schema_version"}:
         raise CandidateLogError("candidate run contains unknown fields")
     if run.get("schema_version") != 1 or not isinstance(run.get("checks"), dict):
         raise CandidateLogError("candidate run has the wrong schema")
     checks = run["checks"]
-    assert isinstance(checks, dict)
-    if not checks:
-        raise CandidateLogError("candidate run must record at least one check")
-    for check_id, result in checks.items():
-        if check_id not in REQUIRED_CHECKS or not isinstance(result, dict):
-            raise CandidateLogError("candidate run contains an unknown check")
-        if result.get("status") not in STATUSES:
-            raise CandidateLogError("candidate check status is invalid")
-        if set(result) - {"status", "evidence", "note", "device_effect_observed"}:
-            raise CandidateLogError("candidate check result contains unknown fields")
-        if check_id.startswith("controls.") and result.get("status") in {"passed", "manual_observation"}:
-            if result.get("device_effect_observed") is not True:
-                raise CandidateLogError("control acceptance requires an observed device effect")
-    observed_at = run.get("observed_at")
-    if not isinstance(observed_at, str) or not observed_at:
-        raise CandidateLogError("candidate run observed_at is required")
+    _validate_checks(checks, required_checks)
+    _observed_at(run)
+    observed_at = str(run["observed_at"])
     document = {**run, "candidate_id": candidate_id}
+    previous = [_load(path, "candidate run") for path in (root / "runs").glob("*.json")]
+    _latest_checks([*previous, document], candidate_id, required_checks)
     digest = hashlib.sha256(_canonical(document)).hexdigest()
     safe_time = re.sub(r"[^0-9A-Za-z]+", "", observed_at)[:20] or "run"
     destination = root / "runs" / f"{safe_time}-{digest[:12]}.json"
@@ -175,17 +259,10 @@ def record_candidate_run(
 
 
 def candidate_status(*, store_root: Path, candidate_id: str) -> dict[str, object]:
-    root = _candidate_root(store_root, candidate_id)
-    latest: dict[str, dict[str, object]] = {}
-    runs = sorted((root / "runs").glob("*.json"))
-    for path in runs:
-        run = _load(path, "candidate run")
-        checks = run.get("checks")
-        if isinstance(checks, dict):
-            for check_id, result in checks.items():
-                if check_id in REQUIRED_CHECKS and isinstance(result, dict):
-                    latest[check_id] = result
-    missing = [check for check in REQUIRED_CHECKS if check not in latest]
+    root, required_checks = _load_candidate(store_root, candidate_id)
+    runs = [_load(path, "candidate run") for path in (root / "runs").glob("*.json")]
+    latest = _latest_checks(runs, candidate_id, required_checks)
+    missing = [check for check in required_checks if check not in latest]
     failing = [
         check
         for check, result in latest.items()
@@ -208,7 +285,7 @@ def decide_candidate(
 ) -> dict[str, object]:
     if decision not in {"accepted", "rejected"} or not reason:
         raise CandidateLogError("candidate decision or reason is invalid")
-    root = _candidate_root(store_root, candidate_id)
+    root, _ = _load_candidate(store_root, candidate_id)
     status = candidate_status(store_root=store_root, candidate_id=candidate_id)
     if decision == "accepted" and status["complete"] is not True:
         raise CandidateLogError("candidate cannot be accepted before every required check passes")

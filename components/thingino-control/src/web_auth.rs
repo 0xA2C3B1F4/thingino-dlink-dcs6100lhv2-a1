@@ -532,7 +532,13 @@ impl WebAuth {
         if original.is_empty() || original.len() as u64 > MAX_SHADOW_BYTES {
             return Err(AuthError::Unavailable);
         }
-        write_existing(&self.paths.shadow, original).map_err(|_| AuthError::Unavailable)
+        write_existing(&self.paths.shadow, original).map_err(|_| AuthError::Unavailable)?;
+        if read_regular(&self.paths.shadow, MAX_SHADOW_BYTES).map_err(|_| AuthError::Unavailable)?
+            != original
+        {
+            return Err(AuthError::Unavailable);
+        }
+        Ok(())
     }
 
     pub fn invalidate_sessions(&self) {

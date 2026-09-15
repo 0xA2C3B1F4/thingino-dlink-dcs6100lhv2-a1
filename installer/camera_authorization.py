@@ -34,7 +34,6 @@ AUTHORIZATION_BINARY = "authorization.bin"
 AUTHORIZATION_KIND = "dcs6100-per-camera-install-authorization-v1"
 AUTHORIZATION_BINARY_MAGIC = b"DCS6AUTHV1\0\0\0\0\0\0"
 AUTHORIZATION_BINARY_SIZE = 256
-DATA_ACTIONS = {"initialize", "preserve", "factory-reset"}
 _DIGEST = re.compile(r"[0-9a-f]{64}")
 _MAX_DOCUMENT = 16 * 1024
 
@@ -173,8 +172,10 @@ def _document(
         raise CameraAuthorizationError("recovery decision lacks a camera identity")
     if not recovery.camera_authorization_key_sha256:
         raise CameraAuthorizationError("recovery decision lacks an authorization key")
-    if data_action not in DATA_ACTIONS:
-        raise CameraAuthorizationError("camera authorization data action is invalid")
+    if data_action not in {"initialize", "preserve"}:
+        raise CameraAuthorizationError(
+            "universal camera authorization requires initialize or preserve data action"
+        )
     return {
         "artifact_kind": AUTHORIZATION_KIND,
         "camera_identity_sha256": _require_digest(
@@ -215,7 +216,7 @@ def _document(
         "universal_stage2_sha256": _require_digest(
             universal_stage2_sha256, "universal stage-2 identity"
         ),
-        "write_policy": universal_physical_write_policy(),
+        "write_policy": universal_physical_write_policy(data_action),
     }
 
 
@@ -360,7 +361,13 @@ def validate_camera_authorization(
         "nor_size": TARGET.nor_size,
     }:
         raise CameraAuthorizationError("camera authorization targets the wrong device")
-    if document.get("write_policy") != universal_physical_write_policy():
+    if expected_data_action not in {"initialize", "preserve"}:
+        raise CameraAuthorizationError(
+            "universal camera authorization requires initialize or preserve data action"
+        )
+    if document.get("write_policy") != universal_physical_write_policy(
+        expected_data_action
+    ):
         raise CameraAuthorizationError("camera authorization write policy changed")
     if document.get("signing_key_sha256") != _public_key_id(public_key):
         raise CameraAuthorizationError("camera authorization signer differs")
@@ -380,8 +387,6 @@ def validate_camera_authorization(
             _require_digest(value, field)
         if document.get(field) != value:
             raise CameraAuthorizationError(f"camera authorization {field} differs")
-    if expected_data_action not in DATA_ACTIONS:
-        raise CameraAuthorizationError("camera authorization data action is invalid")
     recovery = document.get("recovery")
     if not isinstance(recovery, dict) or set(recovery) != {
         "functional_recovery_accepted",

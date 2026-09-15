@@ -1,10 +1,40 @@
 # Release status
 
-Validation date: 2026-09-06. Documentation updated: 2026-09-07.
+Runtime baseline validated: 2026-09-06. Documentation updated: 2026-09-15.
 
 This repository provides source and host tools. There is no supported firmware
 download yet. The validated platform is DCS-6100LHV2 A1 with Apple Silicon macOS.
 Physical test coverage includes one camera.
+
+The tables below describe named evidence, not blanket acceptance of later source
+changes. The full-Raptor source path has passed host composition checks and a
+source-built camera exercise. A new release candidate still needs its own image,
+installation, browser, and physical checks.
+
+The September 12 full-Raptor check included ROD and its font in the installed
+image. Main and substream WebRTC decoded at approximately 15 fps. OSD format
+changes were saved, read back and restored. Motion, Day/Night and Privacy
+controls completed in 138–704 ms, and twelve Motion configuration reads
+returned HTTP 200. These checks do not establish that every setting on every
+WebUI page is implemented or has been tested.
+
+The newer source has host coverage for OSD size, text visibility and RGBA
+fill/outline/background colors, Motion timing, event storage and its bounded
+built-in speaker alert, fourteen image-quality controls, white balance,
+speaker settings, fixed-time and sunrise/sunset Day/Night schedules. Streams have checked FPS,
+GOP, codec, H.264 profile, bitrate-mode, target-bitrate and RTSP-path operations,
+plus saved resolution changes that take effect after a full camera restart.
+Browser tests cover saving and reloading these settings, preserving simultaneous
+edits, and reporting incomplete application or persistence without success.
+
+The September 13 checkpoint completed a clean full-Raptor universal build.
+Independent checks verified the signed bundle, packed components and the final
+kernel's 42/22 memory split. Later OSD RGBA, solar schedule, resolution, Home
+Assistant interval and speaker-alert changes still require a matching build.
+Those settings also need checks of their actual effects and reboot persistence.
+Long-running full-Raptor stability remains open. The [feature table](features.md)
+separates source results from device acceptance. A passing page-load test does
+not establish that every field on that page works.
 
 ## Tested installation
 
@@ -57,10 +87,12 @@ The full acceptance scope is in [testing](testing.md#candidate-acceptance).
 - The UARTless capture route replaces original physical mtd1/mtd2 before
   collection. It provides functional recovery, not an exact original full-flash
   backup or a promise of stock restoration. See [recovery](recovery.md).
-- The base profile provides RTSP/MJPEG. WebRTC requires a separately reviewed
-  source-built Raptor archive; the guided CLI does not build it automatically.
-- The universal installation path initializes camera settings; it is not a
-  preserve-settings firmware update.
+- `local-build build-universal` builds the full Raptor stack from locked
+  sources. It needs no separately prepared media archive.
+- The universal installer has host-tested `initialize` and `preserve` build,
+  authorization, Stage-1 contract and manifest paths. The preserve path has not
+  yet passed a matching full-Raptor physical camera update; universal
+  `factory-reset` install sets remain rejected.
 - Linux and Windows staging adapters have host coverage, not equivalent physical
   installation acceptance. The full guided build targets Apple Silicon macOS.
 
@@ -83,7 +115,7 @@ file inventory and per-file hashes. Subsequent changes are recorded in Git.
 publication separately from firmware distribution. Remaining firmware
 requirements include:
 
-- Prudynt distribution terms and RTL8188FU license-file provenance;
+- Raptor corresponding-source review and RTL8188FU license-file provenance;
 - two byte-identical clean builds from documented source and camera-acquired inputs;
 - the complete candidate acceptance checklist;
 - physical interrupted-write, corrupt-data, reset, reinstall and final-layout
@@ -93,7 +125,7 @@ requirements include:
   and distinct camera artifacts; and
 - physical removable-media acceptance on each claimed host platform.
 
-The optional WebRTC profile also requires its Raptor corresponding-source and
+The default full-Raptor profile also requires its corresponding-source and
 notice review before distribution. See the [third-party notices](../third_party/NOTICE.md)
 and [license review](../third_party/LICENSE_REVIEW.md).
 

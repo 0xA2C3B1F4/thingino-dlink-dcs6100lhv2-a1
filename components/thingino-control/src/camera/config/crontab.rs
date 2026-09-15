@@ -3,7 +3,7 @@ use super::super::*;
 const MAX_CRONTAB_BYTES: usize = 16 * 1024;
 const MAX_CRONTAB_LINE_BYTES: usize = 1_024;
 
-impl PrudyntBackend {
+impl HostBackend {
     /// Return the root user's crontab as a bounded, editable text document.
     ///
     /// The file is read directly.  In particular, this route does not invoke
@@ -246,7 +246,7 @@ mod tests {
         let crontab = root.join("root");
         let initial = b"# initial\n*/10 * * * * /bin/echo initial\n";
         fs::write(&crontab, initial).unwrap();
-        let backend = PrudyntBackend::new(CameraPaths {
+        let backend = HostBackend::new(CameraPaths {
             crontab: crontab.clone(),
             ..CameraPaths::default()
         });

@@ -8,8 +8,13 @@ publish = false
 [[bin]]
 name = "thingino-controld"
 path = "src/main.rs"
+required-features = ["raptor-backend"]
 
 [dependencies]
+
+[features]
+default = ["raptor-backend"]
+raptor-backend = []
 
 [profile.release]
 codegen-units = 1

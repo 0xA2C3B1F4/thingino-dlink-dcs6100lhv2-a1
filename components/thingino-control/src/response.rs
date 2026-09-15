@@ -172,6 +172,21 @@ pub(crate) fn send_backend_result(
                 "backend timed out",
             );
         }
+        Err(BackendError::Unsupported(reason)) => {
+            let _ = send_error(stream, deadline, 503, "service_unavailable", reason);
+        }
+        Err(BackendError::PartialApply(reason)) => {
+            let _ = send_error(stream, deadline, 503, "partial_apply", reason);
+        }
+        Err(BackendError::Busy) => {
+            let _ = send_error(
+                stream,
+                deadline,
+                503,
+                "backend_busy",
+                "The backend is busy. Retry shortly.",
+            );
+        }
         Err(BackendError::Unavailable) => {
             let _ = send_error(
                 stream,

@@ -527,7 +527,6 @@ def _settings_document(
     private_config_dir: Path,
     expected_wpa_config: Path,
     session_dir: Path,
-    raptor_rwd_artifact: Path,
     data_mode: str,
 ) -> dict[str, object]:
     return {
@@ -537,7 +536,6 @@ def _settings_document(
         "media_closure_dir": str(media_closure_dir),
         "private_config_dir": str(private_config_dir),
         "project": PROJECT_ID,
-        "raptor_rwd_artifact": str(raptor_rwd_artifact),
         "schema_version": SCHEMA_VERSION,
         "session_dir": str(session_dir),
         "vendor_bundle_dir": str(vendor_bundle_dir),
@@ -552,7 +550,6 @@ def _validated_settings_document(document: object) -> dict[str, object]:
         "media_closure_dir",
         "private_config_dir",
         "project",
-        "raptor_rwd_artifact",
         "schema_version",
         "session_dir",
         "vendor_bundle_dir",
@@ -666,11 +663,8 @@ def validate_local_build_setting_inputs(
     vendor_bundle_dir: Path,
     media_closure_dir: Path,
     session_dir: Path,
-    raptor_rwd_artifact: Path,
 ) -> dict[str, object]:
     """Validate every non-secret guided input before asking for Wi-Fi."""
-
-    from scripts.raptor_rwd_runtime import RaptorRwdRuntimeError, validate_artifact
 
     from .media_closure import MediaClosureError, load_media_closure
     from .recovery_ap.host import (
@@ -692,11 +686,6 @@ def validate_local_build_setting_inputs(
     vendor = _input_directory(vendor_bundle_dir, "private vendor bundle")
     media = _input_directory(media_closure_dir, "private media closure")
     session = _input_directory(session_dir, "private recovery session")
-    artifact = _input_file(
-        raptor_rwd_artifact,
-        "Raptor RWD artifact",
-        limit=128 * 1024 * 1024,
-    )
     try:
         load_vendor_bundle(vendor)
         closure = load_media_closure(media)
@@ -704,16 +693,10 @@ def validate_local_build_setting_inputs(
             raise LocalBuildError("private media closure lacks libaudioProcess.so")
         load_host_session(session)
         credential = load_service_credential(session) + b"\n"
-        validate_artifact(
-            artifact,
-            expected_sha256=_sha256(artifact),
-            supervisor=_project_root() / "components/raptor-rwd/S13prudynt-rwd",
-        )
     except (
         VendorBundleError,
         MediaClosureError,
         RecoveryApHostError,
-        RaptorRwdRuntimeError,
     ) as exc:
         raise LocalBuildError(str(exc)) from exc
     return {
@@ -721,7 +704,6 @@ def validate_local_build_setting_inputs(
         "credential": credential,
         "media_closure_dir": media,
         "private_root": root,
-        "raptor_rwd_artifact": artifact,
         "session_dir": session,
         "vendor_bundle_dir": vendor,
     }
@@ -735,7 +717,6 @@ def configure_local_build_settings(
     vendor_bundle_dir: Path,
     media_closure_dir: Path,
     session_dir: Path,
-    raptor_rwd_artifact: Path,
     data_mode: str,
     ssid: str,
     passphrase: str,
@@ -759,14 +740,12 @@ def configure_local_build_settings(
         vendor_bundle_dir=vendor_bundle_dir,
         media_closure_dir=media_closure_dir,
         session_dir=session_dir,
-        raptor_rwd_artifact=raptor_rwd_artifact,
     )
     canonical_build_root = Path(str(validated["build_root"]))
     root = Path(str(validated["private_root"]))
     vendor = Path(str(validated["vendor_bundle_dir"]))
     media = Path(str(validated["media_closure_dir"]))
     session = Path(str(validated["session_dir"]))
-    artifact = Path(str(validated["raptor_rwd_artifact"]))
     credential = validated["credential"]
     if not isinstance(credential, bytes):
         raise LocalBuildError("private recovery credential is invalid")
@@ -813,7 +792,6 @@ def configure_local_build_settings(
             private_config_dir=private_config,
             expected_wpa_config=expected_wpa,
             session_dir=session,
-            raptor_rwd_artifact=artifact,
             data_mode=data_mode,
         )
         staged_settings = staging / SETTINGS_NAME

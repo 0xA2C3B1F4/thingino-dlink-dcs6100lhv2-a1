@@ -1,13 +1,17 @@
 //! Bounded Thingino management daemon.
 //!
 //! The crate deliberately uses only Rust's standard library. The public HTTP
-//! backend trait keeps camera-specific Prudynt integration out of the HTTP
+//! backend trait keeps camera-specific media integration out of the HTTP
 //! server and makes the contract testable on a host.
 
 mod camera;
 mod decode;
 mod json;
 mod protocol;
+#[cfg(feature = "raptor-backend")]
+mod raptor;
+#[cfg(feature = "raptor-backend")]
+mod raptor_backend;
 mod request;
 mod request_parse;
 mod response;
@@ -22,8 +26,15 @@ use router::handle_client;
 use server::SharedState;
 pub use server::{serve, serve_with_web_auth, serve_with_web_auth_and_whip};
 
-pub use camera::{CameraPaths, PrudyntBackend};
-pub use protocol::{Backend, BackendError, BackendResponse, BackendRoute, DayNightMode};
+pub use camera::CameraPaths;
+pub use protocol::{
+    Backend, BackendError, BackendResponse, BackendRoute, DayNightMode, MediaFileIdentity,
+};
+#[cfg(feature = "raptor-backend")]
+#[doc(hidden)]
+pub use raptor::connect_deadline as connect_raptor_unix_deadline;
+#[cfg(feature = "raptor-backend")]
+pub use raptor_backend::RaptorBackend;
 pub use web_auth::{
     AuthError, LoginResult, PasswordHasher, PasswordVerifier, SessionStatus, WebAuth, WebAuthPaths,
 };

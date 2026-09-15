@@ -21,9 +21,9 @@ HEAD, remotes, and competing writers. Preserve unrelated changes. Use an
 isolated worktree if another process is changing the same source.
 
 The README is the shared installation guide for people and automation.
-Keep its command examples consistent with the current parsers and distinguish
-model-universal from legacy personalized commands. Update the focused reference
-page with implementation changes. Keep one shared installation procedure.
+Keep its command examples consistent with the current parsers and the
+model-universal full-Raptor path. Update the focused reference page with
+implementation changes. Keep one shared installation procedure.
 A stopped operation permits read-only diagnosis, not bypassing the
 identity, recovery, signature, or media gate.
 

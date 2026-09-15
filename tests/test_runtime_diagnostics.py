@@ -17,7 +17,7 @@ def snapshot() -> dict[str, object]:
     return {
         "binary_identity": {
             "mtd3_sha256": "a" * 64,
-            "prudynt_sha256": "b" * 64,
+            "rvd_sha256": "b" * 64,
             "source_commit": "c" * 40,
             "thingino_control_sha256": "d" * 64,
             "uhttpd_sha256": "e" * 64,
@@ -36,7 +36,7 @@ def snapshot() -> dict[str, object]:
         "network": {"tcp_entries": 4, "udp_entries": 2},
         "observed_at": "2026-08-22T20:00:00Z",
         "processes": {},
-        "prudynt": {"media_ready": True},
+        "raptor": {"media_ready": True},
         "schema_version": 1,
         "storage": {
             "data_jffs2_mounted": True,
@@ -56,7 +56,7 @@ class RuntimeDiagnosticsTests(unittest.TestCase):
         subprocess.run(["sh", "-n", str(script)], check=True)
         source = script.read_text(encoding="utf-8")
         for required in (
-            "/run/prudynt-dlink-media.ready",
+            "/run/raptor-boot/ready",
             '"cpu_ticks":%s',
             '"private_kib":%s',
             '"pss_kib":%s',
@@ -72,6 +72,7 @@ class RuntimeDiagnosticsTests(unittest.TestCase):
         ):
             self.assertIn(required, source)
         self.assertNotIn("/run/dlink-media.ready", source)
+        self.assertNotIn("prudynt", source.lower())
 
     def test_snapshot_is_read_only_and_hypothesis_is_bound_to_it(self) -> None:
         with tempfile.TemporaryDirectory() as name:

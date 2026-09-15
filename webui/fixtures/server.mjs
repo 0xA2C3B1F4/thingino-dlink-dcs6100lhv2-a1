@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { readFile, stat } from "node:fs/promises";
+import { readFile, stat, writeFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 
 const host = process.env.WEBUI_HOST || "127.0.0.1";
@@ -221,12 +221,23 @@ const server = createServer(async (request, response) => {
       return json(response, 200, { scenario: state.scenario });
     }
     if (url.pathname === "/__fixture__/stats") return json(response, 200, { ...state.stats, last_mutation: state.lastMutation });
+    if (url.pathname === "/__fixture__/native-media" && process.env.RAPTOR_BROWSER_ROOT) {
+      const { kind } = await body(request);
+      if (!["main-only", "failed-sub", "missing-main-jpeg", "missing-sub-jpeg", "both"].includes(kind)) return error(response, 400, "invalid_request", "unknown native media case");
+      await writeFile(join(process.env.RAPTOR_BROWSER_ROOT, "media-case"), kind);
+      return json(response, 200, { status: "ok" });
+    }
     if (url.pathname === "/__fixture__/reset" && request.method === "POST") {
       state.scenario = "normal";
       state.sessions.clear();
       state.heartbeat = initialHeartbeat();
       state.stats = { mjpeg_started: 0, mjpeg_closed: 0, mjpeg_active: 0, mjpeg_max_active: 0, api_requests: 0 };
       state.lastMutation = null;
+      delete state.raptorStreams;
+      delete state.motionEmail;
+      delete state.motionFtp;
+      delete state.motionGotify;
+      delete state.motionTelegram;
       state.configs = structuredClone(initialConfigs);
       state.recorder = structuredClone(initialRecorder);
       state.crontab = initialCrontab;
@@ -266,6 +277,413 @@ const server = createServer(async (request, response) => {
       return json(response, 200, { status: "ok" });
     }
 
+    if (state.scenario === "raptor-native" && process.env.RAPTOR_BROWSER_ROOT && [
+      "/api/v1/actions/control", "/api/v1/runtime/heartbeat", "/api/v1/runtime/motion",
+      "/api/v1/runtime/media", "/api/v1/prudynt/stream0", "/api/v1/prudynt/stream1", "/api/v1/prudynt/audio", "/api/v1/prudynt", "/api/v1/imaging", "/api/v1/prudynt/motion", "/api/v1/prudynt/privacy", "/api/v1/prudynt/osd", "/api/v1/config/daynight", "/api/v1/config/time",
+      "/api/v1/config/motion-webhook", "/api/v1/runtime/motion-webhook",
+    ].includes(url.pathname)) {
+      const address = (await readFile(join(process.env.RAPTOR_BROWSER_ROOT, "address"), "utf8")).trim();
+      if (!/^127\.0\.0\.1:[0-9]+$/.test(address)) throw new Error("invalid host bridge address");
+      const reply = await fetch(`http://${address}${url.pathname}`, {
+        method: request.method,
+        headers: { Authorization: "Bearer host-fixture-token", "Content-Type": "application/json" },
+        ...(request.method === "POST" ? { body: await rawBody(request) } : {}),
+        signal: AbortSignal.timeout(3000),
+      });
+      return json(response, reply.status, await reply.json());
+    }
+    if (state.scenario.startsWith("raptor")) {
+      const path = url.pathname;
+      state.raptorStreams ??= [
+        { format: "H264", profile: 2, gop: 40, gop_mode: "DEFAULT", gop_saved_mode: "DEFAULT", fps: 20, mode: "CBR", bitrate: 2_400_000, rc_saved_mode: "CBR", rc_saved_qp: 35 },
+        { format: "H264", profile: 1, gop: 30, gop_mode: "DEFAULT", gop_saved_mode: "DEFAULT", fps: 15, mode: "CBR", bitrate: 640_000, rc_saved_mode: "CBR", rc_saved_qp: 35 },
+      ];
+      if (path === "/api/v1/config/access") {
+        state.raptorAccess ??= { source: "raptor", auth_enabled: true, username: "viewer", password: null, password_set: true, rtsp_port: 8554, rtsp_ch0: "stream0", rtsp_ch1: "stream1", rtsp_mic: "audio", onvif_port: null, onvif_enabled: null, onvif_ingress: null };
+        if (request.method === "GET") return json(response, 200, state.raptorAccess);
+        const update = await body(request);
+        for (const key of ["username", "rtsp_port", "rtsp_ch0", "rtsp_ch1"]) {
+          if (update[key] !== undefined) state.raptorAccess[key] = update[key];
+        }
+        if (state.scenario === "raptor-access-retry" && !state.raptorAccessRetried) {
+          state.raptorAccessRetried = true;
+          return error(response, 503, "partial_apply", "RTSP access may have changed, but save was incomplete. Reload and explicitly retry saving.");
+        }
+        return json(response, 200, { status: "accepted", persistent: true });
+      }
+      if (path === "/api/v1/prudynt/motion" && request.method === "GET") {
+        state.raptorMotionSaved ??= false;
+        const enabled = state.heartbeat.motion_enabled;
+        return json(response, 200, { source: "raptor", persistent: true, supported: true, available: true,
+          enabled, saved_enabled: state.raptorMotionSaved, matches_saved: enabled === state.raptorMotionSaved });
+      }
+      if (path === "/api/v1/config/motion-email") {
+        state.motionEmail ??= {
+          saved_enabled: false, enabled: false,
+          host: "", live_host: "", port: 587, live_port: 587,
+          tls_mode: "starttls", live_tls_mode: "starttls",
+          username: "", live_username: "",
+          password: null, password_set: false, live_password_set: false,
+          from_address: "", live_from_address: "",
+          to_address: "", live_to_address: "",
+          matches_saved: true,
+          transport_available: state.scenario !== "raptor-email-unavailable",
+        };
+        if (state.scenario === "raptor-email-mismatch") {
+          Object.assign(state.motionEmail, {
+            saved_enabled: true, enabled: false,
+            host: "saved.smtp.example.test", live_host: "live.smtp.example.test",
+            from_address: "camera@example.test", live_from_address: "camera@example.test",
+            to_address: "owner@example.test", live_to_address: "owner@example.test",
+            matches_saved: false,
+          });
+        }
+        if (request.method === "GET") return json(response, 200, state.motionEmail);
+        const update = await body(request);
+        if (typeof update.enabled !== "boolean" || Object.keys(update).some((name) => !["enabled", "host", "port", "tls_mode", "username", "password", "clear_password", "from_address", "to_address"].includes(name)) ||
+            (update.host !== undefined && typeof update.host !== "string") ||
+            (update.port !== undefined && (!Number.isInteger(update.port) || update.port < 1 || update.port > 65535)) ||
+            (update.tls_mode !== undefined && !["starttls", "implicit"].includes(update.tls_mode)) ||
+            (update.username !== undefined && typeof update.username !== "string") ||
+            (update.password !== undefined && typeof update.password !== "string") ||
+            (update.clear_password !== undefined && typeof update.clear_password !== "boolean") ||
+            (update.from_address !== undefined && typeof update.from_address !== "string") ||
+            (update.to_address !== undefined && typeof update.to_address !== "string")) {
+          return error(response, 400, "invalid_request", "invalid Motion Email update");
+        }
+        state.lastMutation = { method: request.method, path, body: structuredClone(update) };
+        if (state.scenario === "raptor-email-failure") {
+          return error(response, 503, "partial_apply", "Email settings were not applied. Other Motion controls remain available.");
+        }
+        for (const name of ["host", "port", "tls_mode", "username", "from_address", "to_address"]) {
+          if (update[name] !== undefined) {
+            state.motionEmail[name] = update[name];
+            state.motionEmail[`live_${name}`] = update[name];
+          }
+        }
+        if (typeof update.password === "string" && update.password.length > 0) {
+          state.motionEmail.password_set = true;
+          state.motionEmail.live_password_set = true;
+        }
+        if (update.clear_password === true) {
+          state.motionEmail.password_set = false;
+          state.motionEmail.live_password_set = false;
+        }
+        state.motionEmail.enabled = update.enabled;
+        state.motionEmail.saved_enabled = update.enabled;
+        state.motionEmail.matches_saved = true;
+        return json(response, 200, { status: "applied", persistent: true });
+      }
+      if (path === "/api/v1/runtime/motion-email" && request.method === "GET") {
+        return json(response, 200, {
+          running: true, enabled: state.motionEmail?.enabled ?? false,
+          transport_available: state.scenario !== "raptor-email-unavailable",
+          queue_capacity: 2, queue_depth: 0, queue_dropped: 0,
+          requests: 0, successes: 0, failures: 0,
+          last_result: "idle", last_smtp_status: null,
+        });
+      }
+      if (path === "/api/v1/config/motion-ftp") {
+        state.motionFtp ??= {
+          saved_enabled: false, enabled: false,
+          host: "", live_host: "", port: 21, live_port: 21,
+          tls_mode: "explicit", live_tls_mode: "explicit",
+          username: "", live_username: "",
+          password: null, password_set: false, live_password_set: false,
+          path: "", live_path: "",
+          matches_saved: true,
+          transport_available: state.scenario !== "raptor-ftp-unavailable",
+        };
+        if (state.scenario === "raptor-ftp-mismatch") {
+          Object.assign(state.motionFtp, {
+            saved_enabled: true, enabled: false,
+            host: "saved.ftp.example.test", live_host: "live.ftp.example.test",
+            username: "fixture-camera", live_username: "fixture-camera",
+            path: "saved/events", live_path: "live/events",
+            matches_saved: false,
+          });
+        }
+        if (request.method === "GET") return json(response, 200, state.motionFtp);
+        const update = await body(request);
+        if (typeof update.enabled !== "boolean" || Object.keys(update).some((name) => !["enabled", "host", "port", "tls_mode", "username", "password", "clear_password", "path"].includes(name)) ||
+            (update.host !== undefined && typeof update.host !== "string") ||
+            (update.port !== undefined && (!Number.isInteger(update.port) || update.port < 1 || update.port > 65535)) ||
+            (update.tls_mode !== undefined && update.tls_mode !== "explicit") ||
+            (update.username !== undefined && typeof update.username !== "string") ||
+            (update.password !== undefined && typeof update.password !== "string") ||
+            (update.clear_password !== undefined && typeof update.clear_password !== "boolean") ||
+            (update.path !== undefined && typeof update.path !== "string")) {
+          return error(response, 400, "invalid_request", "invalid Motion FTP update");
+        }
+        state.lastMutation = { method: request.method, path, body: structuredClone(update) };
+        if (state.scenario === "raptor-ftp-failure") {
+          return error(response, 503, "partial_apply", "FTP settings were not applied. Other Motion controls remain available.");
+        }
+        for (const name of ["host", "port", "tls_mode", "username", "path"]) {
+          if (update[name] !== undefined) {
+            state.motionFtp[name] = update[name];
+            state.motionFtp[`live_${name}`] = update[name];
+          }
+        }
+        if (typeof update.password === "string" && update.password.length > 0) {
+          state.motionFtp.password_set = true;
+          state.motionFtp.live_password_set = true;
+        }
+        if (update.clear_password === true) {
+          state.motionFtp.password_set = false;
+          state.motionFtp.live_password_set = false;
+        }
+        state.motionFtp.enabled = update.enabled;
+        state.motionFtp.saved_enabled = update.enabled;
+        state.motionFtp.matches_saved = true;
+        return json(response, 200, { status: "applied", persistent: true });
+      }
+      if (path === "/api/v1/runtime/motion-ftp" && request.method === "GET") {
+        return json(response, 200, {
+          running: true, enabled: state.motionFtp?.enabled ?? false,
+          transport_available: state.scenario !== "raptor-ftp-unavailable",
+          queue_capacity: 2, queue_depth: 0, queue_dropped: 0,
+          captures: 0, requests: 0, successes: 0, failures: 0, cancellations: 0,
+          last_result: "idle", last_ftp_status: null,
+        });
+      }
+      if (path === "/api/v1/config/motion-gotify") {
+        state.motionGotify ??= { saved_enabled: false, enabled: false, endpoint: null, endpoint_set: false, live_endpoint_set: false, token: null, token_set: false, live_token_set: false, matches_saved: true, transport_available: true };
+        if (request.method === "GET") return json(response, 200, state.motionGotify);
+        const update = await body(request);
+        if (typeof update.enabled !== "boolean" || Object.keys(update).some((name) => !["enabled", "endpoint", "token", "clear_endpoint", "clear_token"].includes(name)) ||
+            (update.endpoint !== undefined && (typeof update.endpoint !== "string" || !/^https?:\/\//.test(update.endpoint))) ||
+            (update.token !== undefined && typeof update.token !== "string") ||
+            (update.clear_endpoint !== undefined && typeof update.clear_endpoint !== "boolean") ||
+            (update.clear_token !== undefined && typeof update.clear_token !== "boolean")) {
+          return error(response, 400, "invalid_request", "invalid Motion Gotify update");
+        }
+        if (update.endpoint) state.motionGotify.endpoint_set = state.motionGotify.live_endpoint_set = true;
+        if (update.token) state.motionGotify.token_set = state.motionGotify.live_token_set = true;
+        if (update.clear_endpoint) state.motionGotify.endpoint_set = state.motionGotify.live_endpoint_set = false;
+        if (update.clear_token) state.motionGotify.token_set = state.motionGotify.live_token_set = false;
+        state.motionGotify.enabled = update.enabled;
+        state.motionGotify.saved_enabled = update.enabled;
+        state.motionGotify.matches_saved = true;
+        state.lastMutation = { method: request.method, path, body: structuredClone(update) };
+        return json(response, 200, { status: "applied", persistent: true });
+      }
+      if (path === "/api/v1/runtime/motion-gotify" && request.method === "GET") {
+        return json(response, 200, { running: true, enabled: state.motionGotify?.enabled ?? false, transport_available: true,
+          queue_capacity: 2, queue_depth: 0, queue_dropped: 0, requests: 0, successes: 0, failures: 0,
+          last_result: "idle", last_http_status: null });
+      }
+      if (path === "/api/v1/config/motion-telegram") {
+        state.motionTelegram ??= { saved_enabled: false, enabled: false, bot_token: null, bot_token_set: false, live_bot_token_set: false, chat_id: null, chat_id_set: false, live_chat_id_set: false, matches_saved: true, transport_available: true };
+        if (request.method === "GET") return json(response, 200, state.motionTelegram);
+        const update = await body(request);
+        if (typeof update.enabled !== "boolean" || Object.keys(update).some((name) => !["enabled", "bot_token", "chat_id", "clear_bot_token", "clear_chat_id"].includes(name)) ||
+            (update.bot_token !== undefined && typeof update.bot_token !== "string") ||
+            (update.chat_id !== undefined && typeof update.chat_id !== "string") ||
+            (update.clear_bot_token !== undefined && typeof update.clear_bot_token !== "boolean") ||
+            (update.clear_chat_id !== undefined && typeof update.clear_chat_id !== "boolean")) {
+          return error(response, 400, "invalid_request", "invalid Motion Telegram update");
+        }
+        if (update.bot_token) state.motionTelegram.bot_token_set = state.motionTelegram.live_bot_token_set = true;
+        if (update.chat_id) state.motionTelegram.chat_id_set = state.motionTelegram.live_chat_id_set = true;
+        if (update.clear_bot_token) state.motionTelegram.bot_token_set = state.motionTelegram.live_bot_token_set = false;
+        if (update.clear_chat_id) state.motionTelegram.chat_id_set = state.motionTelegram.live_chat_id_set = false;
+        state.motionTelegram.enabled = update.enabled;
+        state.motionTelegram.saved_enabled = update.enabled;
+        state.motionTelegram.matches_saved = true;
+        state.lastMutation = { method: request.method, path, body: structuredClone(update) };
+        return json(response, 200, { status: "applied", persistent: true });
+      }
+      if (path === "/api/v1/runtime/motion-telegram" && request.method === "GET") {
+        return json(response, 200, { running: true, enabled: state.motionTelegram?.enabled ?? false, transport_available: true,
+          queue_capacity: 2, queue_depth: 0, queue_dropped: 0, requests: 0, successes: 0, failures: 0,
+          last_result: "idle", last_http_status: null });
+      }
+      if (path === "/api/v1/config/motion-ntfy") {
+        state.motionNtfy ??= { saved_enabled: false, enabled: false, url: null, url_set: false, live_url_set: false, token: null, token_set: false, live_token_set: false, matches_saved: true, transport_available: true };
+        if (request.method === "GET") return json(response, 200, state.motionNtfy);
+        const update = await body(request);
+        if (typeof update.enabled !== "boolean" || Object.keys(update).some((name) => !["enabled", "url", "token", "clear_token"].includes(name)) ||
+            (update.url !== undefined && (typeof update.url !== "string" || !/^https?:\/\//.test(update.url))) ||
+            (update.token !== undefined && typeof update.token !== "string") ||
+            (update.clear_token !== undefined && typeof update.clear_token !== "boolean")) {
+          return error(response, 400, "invalid_request", "invalid Motion ntfy update");
+        }
+        if (update.url) state.motionNtfy.url_set = state.motionNtfy.live_url_set = true;
+        if (update.token) state.motionNtfy.token_set = state.motionNtfy.live_token_set = true;
+        if (update.clear_token) state.motionNtfy.token_set = state.motionNtfy.live_token_set = false;
+        state.motionNtfy.enabled = update.enabled;
+        state.motionNtfy.saved_enabled = update.enabled;
+        state.motionNtfy.matches_saved = true;
+        state.lastMutation = { method: request.method, path, body: structuredClone(update) };
+        return json(response, 200, { status: "applied", persistent: true });
+      }
+      if (path === "/api/v1/runtime/motion-ntfy" && request.method === "GET") {
+        return json(response, 200, { running: true, enabled: state.motionNtfy?.enabled ?? false, transport_available: true,
+          queue_capacity: 2, queue_depth: 0, queue_dropped: 0, requests: 0, successes: 0, failures: 0,
+          last_result: "idle", last_http_status: null });
+      }
+      if (path === "/api/v1/config/motion-webhook") {
+        state.motionWebhook ??= { saved_enabled: false, enabled: false, url: null, url_set: false, live_url_set: false, matches_saved: true, transport_available: true };
+        if (request.method === "GET") return json(response, 200, state.motionWebhook);
+        const update = await body(request);
+        if (typeof update.enabled !== "boolean" || Object.keys(update).some((name) => !["enabled", "url"].includes(name)) ||
+            (update.url !== undefined && (typeof update.url !== "string" || !/^https?:\/\//.test(update.url)))) {
+          return error(response, 400, "invalid_request", "invalid Motion webhook update");
+        }
+        if (update.url) state.motionWebhook.url_set = state.motionWebhook.live_url_set = true;
+        state.motionWebhook.enabled = update.enabled;
+        state.motionWebhook.saved_enabled = update.enabled;
+        state.motionWebhook.matches_saved = true;
+        state.lastMutation = { method: request.method, path, body: structuredClone(update) };
+        return json(response, 200, { status: "applied", persistent: true });
+      }
+      if (path === "/api/v1/runtime/motion-webhook" && request.method === "GET") {
+        return json(response, 200, { running: true, enabled: state.motionWebhook?.enabled ?? false, transport_available: true,
+          queue_depth: 0, queue_dropped: 0, requests: 0, successes: 0, failures: 0,
+          last_result: "idle", last_http_status: null, last_event_sequence: null });
+      }
+      const raptorStreamMatch = path.match(/^\/api\/v1\/prudynt\/stream([01])$/);
+      if (raptorStreamMatch && request.method === "GET") {
+        const id = Number(raptorStreamMatch[1]);
+        const stream = state.raptorStreams[id];
+        const profile = stream.format === "H264"
+          ? { supported: true, available: true, recovery_required: false, profile: stream.profile, saved_profile: stream.profile, matches_saved: true, profiles: [0, 1, 2] }
+          : { supported: false, available: false };
+        return json(response, 200, { source: "raptor", persistent: true, stream_id: id, supported: true, available: true,
+          gop: stream.gop, saved_gop: stream.gop, matches_saved: true,
+          gop_mode_control: { supported: true, available: true, active_mode: stream.gop_mode,
+            saved_available: true, saved_mode: stream.gop_saved_mode, matches_saved: stream.gop_mode === stream.gop_saved_mode,
+            pending_restart: stream.gop_mode !== stream.gop_saved_mode, modes: ["DEFAULT", "PYRAMIDAL", "SMARTP"] },
+          fps_control: { supported: true, available: true, status: "ok", stream_id: id, recovery_required: false, persistence_pending: false,
+            live_applied: true, persisted: true, fps: stream.fps, monitoring: { related: true, active: true, paused: false, receiving: true, thread_owned: true } },
+          encoding_control: { supported: true, available: true, rc_mode: stream.mode, bitrate: stream.bitrate, saved_rc_mode: stream.mode,
+            saved_bitrate: stream.bitrate, matches_saved: true, bitrate_min: 1_000, bitrate_max: 100_000_000, bitrate_step: 1_000,
+            modes: ["CBR", "VBR", "CAPPED_VBR", "CAPPED_QUALITY"] },
+          rc_config_control: { supported: true, available: true, active_mode: stream.mode,
+            active_qp: stream.mode === "FIXQP" ? stream.rc_active_qp : null, saved_available: true,
+            saved_mode: stream.rc_saved_mode, saved_qp: stream.rc_saved_qp,
+            matches_saved: stream.mode === stream.rc_saved_mode && (stream.mode !== "FIXQP" || stream.rc_active_qp === stream.rc_saved_qp),
+            pending_restart: stream.mode !== stream.rc_saved_mode || (stream.mode === "FIXQP" && stream.rc_active_qp !== stream.rc_saved_qp),
+            qp_min: 0, qp_max: 51, qp_default: 35, modes: ["CBR", "VBR", "CAPPED_VBR", "CAPPED_QUALITY", "FIXQP"] },
+          codec_control: { supported: true, available: true, recovery_required: false, codec: stream.format, saved_codec: stream.format,
+            matches_saved: true, codecs: ["H264", "H265"] }, profile_control: profile });
+      }
+      if (path === "/api/v1/prudynt/audio" && request.method === "GET") {
+        const audio = state.configs.prudynt.audio;
+        const effects = state.scenario === "raptor-audio-effects";
+        const processing = effects && audio.mic_enabled;
+        const names = ["mic_vol", "mic_gain", "mic_alc_gain", "spk_vol", "spk_gain"];
+        const levels = Object.fromEntries(names.map((name) => {
+          const gain = name.endsWith("gain");
+          const available = state.scenario !== "raptor-audio-unavailable" && (name.startsWith("mic") ? audio.mic_enabled : audio.spk_enabled);
+          return [name, { supported: true, available, value: available ? audio[name] : null, min: gain ? 0 : -30, max: name === "mic_alc_gain" ? 7 : gain ? 31 : 120 }];
+        }));
+        return json(response, 200, { source: "raptor", mic_enabled: state.scenario === "raptor-audio-unavailable" ? null : audio.mic_enabled, spk_enabled: state.scenario === "raptor-audio-unavailable" ? null : audio.spk_enabled,
+          mic_muted: false, mic_format: state.scenario !== "raptor-audio-unavailable" && audio.mic_enabled ? (["PCM", "G711A", "G711U"].includes(audio.mic_format) ? audio.mic_format : "PCM") : null,
+          mic_sample_rate: state.scenario !== "raptor-audio-unavailable" && audio.mic_enabled ? 8000 : null, input_readback: "owner", processing_readback: "owner",
+          codecs_built: { PCM: true, G711A: true, G711U: true, AAC: false, OPUS: false }, effects_built: effects, processing_available: processing,
+          mic_noise_suppression: processing ? audio.mic_noise_suppression : null,
+          mic_agc_enabled: processing ? audio.mic_agc_enabled : null, mic_high_pass_filter: processing ? audio.mic_high_pass_filter : null,
+          mic_agc_target_level_dbfs: processing ? audio.mic_agc_target_level_dbfs : null,
+          mic_agc_compression_gain_db: processing ? audio.mic_agc_compression_gain_db : null,
+          mic_is_digital: false, mic_input_basis: "dlink-a1-profile-amic", force_stereo: false, channel_basis: "rad-fixed-mono",
+          buffer_warn_frames: null, buffer_cap_frames: null, buffer_control: "unsupported-prudynt-queue-policy",
+          tap_enabled: null, tap_path: null, tap_control: "unsupported",
+          levels, ...Object.fromEntries(names.map((name) => [name, levels[name].value])) });
+      }
+      if (path === "/api/v1/prudynt" && request.method === "POST") {
+        const update = await body(request);
+        if (update.motion) {
+          if (Object.keys(update).length !== 1 || Object.keys(update.motion).length !== 1 || typeof update.motion.enabled !== "boolean") return error(response, 400, "invalid_request", "invalid motion update");
+          state.heartbeat.motion_enabled = update.motion.enabled;
+          state.raptorMotionSaved = update.motion.enabled;
+          return json(response, 200, { status: "accepted", persistent: true });
+        }
+        const streamNames = Object.keys(update).filter((name) => /^stream[01]$/.test(name));
+        if (streamNames.length > 0 && streamNames.length === Object.keys(update).length) {
+          for (const name of streamNames) {
+            const id = Number(name.slice(-1));
+            const fields = update[name];
+            const allowed = ["fps", "format", "profile", "mode", "bitrate", "qp_init", "gop", "gop_mode"];
+            if (!fields || typeof fields !== "object" || Array.isArray(fields) || Object.keys(fields).some((field) => !allowed.includes(field))) return error(response, 400, "invalid_request", "invalid stream update");
+            if (fields.qp_init !== undefined) {
+              state.raptorStreams[id].rc_saved_mode = fields.mode;
+              state.raptorStreams[id].rc_saved_qp = fields.qp_init;
+            } else {
+              const liveFields = { ...fields };
+              delete liveFields.gop_mode;
+              Object.assign(state.raptorStreams[id], liveFields);
+              if (fields.mode !== undefined) state.raptorStreams[id].rc_saved_mode = fields.mode;
+            }
+            if (fields.gop_mode !== undefined) {
+              state.raptorStreams[id].gop_mode = state.raptorStreams[id].gop_mode ?? "DEFAULT";
+              state.raptorStreams[id].gop_saved_mode = fields.gop_mode;
+            }
+            if (fields.format === "H265") state.raptorStreams[id].profile = null;
+            if (fields.format === "H264" && state.raptorStreams[id].profile === null) state.raptorStreams[id].profile = 1;
+          }
+          state.lastMutation = { method: request.method, path, body: structuredClone(update) };
+          if (streamNames.length === 1 && update[streamNames[0]].fps !== undefined) {
+            const name = streamNames[0];
+            const id = Number(name.slice(-1));
+            return json(response, 200, { status: "accepted", persistent: true,
+              fps_result: { supported: true, available: true, status: "ok", stream_id: id, recovery_required: false, persistence_pending: false,
+                live_applied: true, persisted: true, fps: state.raptorStreams[id].fps,
+                monitoring: { related: true, active: true, paused: false, receiving: true, thread_owned: true } } });
+          }
+          const pendingRestart = streamNames.some(name =>
+            (update[name].qp_init !== undefined &&
+             (state.raptorStreams[Number(name.slice(-1))].mode !== update[name].mode ||
+              (update[name].mode === "FIXQP" && state.raptorStreams[Number(name.slice(-1))].rc_active_qp !== update[name].qp_init))) ||
+            (update[name].gop_mode !== undefined && state.raptorStreams[Number(name.slice(-1))].gop_mode !== update[name].gop_mode));
+          return json(response, 200, { status: "accepted", persistent: true,
+            ...(streamNames.some(name => update[name].qp_init !== undefined || update[name].gop_mode !== undefined) ? { pending_restart: pendingRestart } : {}) });
+        }
+        if (!update.audio || Object.keys(update.audio).some((name) => !["mic_vol", "mic_gain", "mic_alc_gain", "spk_vol", "spk_gain", "mic_enabled", "spk_enabled", "mic_format", ...(state.scenario === "raptor-audio-effects" ? ["mic_noise_suppression", "mic_agc_enabled", "mic_high_pass_filter", "mic_agc_target_level_dbfs", "mic_agc_compression_gain_db"] : [])].includes(name))) return error(response, 503, "service_unavailable", "Audio setting not mapped");
+        Object.assign(state.configs.prudynt.audio, update.audio);
+        return json(response, 200, { status: "accepted", persistent: true });
+      }
+      const unavailable = path.startsWith("/api/v1/prudynt") || [
+        "/api/v1/config/daynight", "/api/v1/config/ha",
+        "/api/v1/runtime/ha", "/api/v1/actions/ha", "/api/v1/recorder",
+        "/api/v1/runtime/daynight/history", "/api/v1/runtime/daynight/sensors",
+        "/api/v1/runtime/media/metrics", "/api/v1/actions/reset", "/api/v1/actions/factory-reset",
+        "/api/v1/services/send/config",
+      ].includes(path);
+      if (unavailable) return error(response, 503, "service_unavailable", "This media configuration operation is not implemented by the Raptor adapter");
+      if (path === "/api/v1/runtime/heartbeat") return json(response, 200, {
+        ...state.heartbeat, rec_ch0: null, rec_ch1: null, timelapse_enabled: null,
+        mic_enabled: null, spk_enabled: null, motion_ingress_ready: null,
+        motion_enabled: state.scenario === "raptor-failure" ? null : state.heartbeat.motion_enabled,
+        privacy_enabled: state.scenario === "raptor-failure" ? null : state.heartbeat.privacy_enabled,
+        ircut_state: null, ir850_state: null, ir940_state: null, white_state: null,
+        controls_supported: { daynight: true, motion: state.scenario !== "raptor-missing-motion", privacy: true },
+      });
+      if (path === "/api/v1/runtime/media") return json(response, 200, {
+        streams: Object.fromEntries([0, 1].map((id) => [`ch${id}`, {
+          available: true, enabled: true, snapshot_url: `/api/v1/actions/snapshot?stream_id=${id}`,
+          width: id === 0 ? 1920 : 640, height: id === 0 ? 1080 : 360,
+          fps: 15, format: "H264", rtsp_endpoint: `stream${id}`,
+        }])),
+        ...(state.scenario === "raptor-failure" ? {} : { rtsp: { port: 8554 } }),
+      });
+      if (path === "/api/v1/runtime/motion") return json(response, 200, {
+        version: 1, source: "raptor", supported: state.scenario !== "raptor-missing-motion",
+        available: true, monitoring: state.heartbeat.motion_enabled,
+        active: state.heartbeat.motion_active, receiving: state.heartbeat.motion_enabled,
+      });
+      if (path === "/api/v1/imaging") {
+        const names = ["brightness", "contrast", "saturation", "sharpness"];
+        if (request.method === "POST") {
+          const update = await body(request);
+          if (Object.entries(update).some(([name, value]) => !names.includes(name) || !Number.isInteger(value) || value < 0 || value > 255)) return error(response, 400, "invalid_request", "invalid imaging field");
+          Object.assign(state.configs.prudynt.image, update);
+        }
+        return json(response, 200, { code: 200, result: "success", source: "raptor", persistent: true, message: { fields: Object.fromEntries(names.map((name) => [name, { supported: true, available: true, min: 0, max: 255, value: state.configs.prudynt.image[name] }])) } });
+      }
+    }
+
     if (url.pathname === "/api/v1/runtime/heartbeat") {
       if (consumeScenario("heartbeat_unavailable_once")) return error(response, 503, "service_unavailable", "backend is unavailable");
       return json(response, 200, state.heartbeat);
@@ -299,14 +717,14 @@ const server = createServer(async (request, response) => {
       dropped_messages: 0,
     });
     if (url.pathname === "/api/v1/runtime/media") return json(response, 200, { streams: {
-      ch0: { available: true, enabled: true, snapshot_url: "/api/v1/actions/snapshot?stream_id=0" },
-      ch1: { available: true, enabled: true, snapshot_url: "/api/v1/actions/snapshot?stream_id=1" },
+      ch0: { ...state.configs.prudynt.stream0, available: true, enabled: true, snapshot_url: "/api/v1/actions/snapshot?stream_id=0" },
+      ch1: { ...state.configs.prudynt.stream1, available: true, enabled: true, snapshot_url: "/api/v1/actions/snapshot?stream_id=1" },
     } });
     if (url.pathname === "/api/v1/runtime/system") return json(response, 200, { code: 200, result: "success", data: {
       network: { online: true, ip: "192.0.2.54", interfaces: state.configs.network.interfaces },
       memory: { total: 65536, free: 24576, active: 24576, buffers: 4096, cached: 12288, used: 40960 },
       overlay: { total: 8192, free: 3584, used: 4608 }, extras: { total: 31166976, free: 24576000, used: 6590976 },
-      media: { prudynt_running: true, media_ready: true, stream0_enabled: true, stream1_enabled: true }, timestamp: 1787248800,
+      media: state.scenario.startsWith("raptor") ? null : { prudynt_running: true, media_ready: true, stream0_enabled: true, stream1_enabled: true }, timestamp: 1787248800,
     } });
     if (url.pathname === "/api/v1/runtime/sensor" || url.pathname === "/api/v1/sensor/iq") {
       if (request.method === "GET" && !hasRequestBody(request)) return json(response, 200, { sensor_model: "os02g10", soc_model: "t31n", soc_family: "t", file_path: "/usr/share/sensor/os02g10-t31n.bin", md5: "not computed in request path" });
@@ -425,7 +843,7 @@ const server = createServer(async (request, response) => {
       if (command.audio?.spk_enabled !== undefined) state.heartbeat.spk_enabled = Boolean(command.audio.spk_enabled);
       if (command.mp4?.start) state.heartbeat[`rec_ch${command.mp4.start.channel}`] = true;
       if (command.mp4?.stop) state.heartbeat[`rec_ch${command.mp4.stop.channel}`] = false;
-      if (command.cmd === "color") state.heartbeat.color_mode = Number(command.val) ? 1 : 0;
+      if (command.cmd === "color") state.heartbeat.color_mode = Number(command.val) ? 0 : 1;
       if (command.cmd === "ircut") state.heartbeat.ircut_state = Number(command.val) ? 1 : 0;
       if (command.cmd === "ir850") state.heartbeat.ir850_state = Number(command.val) ? 1 : 0;
       return json(response, 200, { status: "ok" });
@@ -518,7 +936,7 @@ const server = createServer(async (request, response) => {
       return error(response, 400, "invalid_request", "reboot requires an empty POST");
     }
     if (url.pathname === "/api/v1/actions/factory-reset") { const value = await body(request); return json(response, 200, { status: "accepted", action: value.action, reboot: true }); }
-    if (url.pathname === "/api/v1/health") return json(response, 200, { status: "ok", healthy: true, control_api: { name: "Thingino Control", version: 1 }, backend: { name: "Prudynt", available: true }, checks: { media: "ready" } });
+    if (url.pathname === "/api/v1/health") return json(response, 200, { status: "ok", healthy: true, control_api: { name: "Thingino Control", version: 1 }, backend: { name: state.scenario.startsWith("raptor") ? "raptor" : "Prudynt", available: true }, checks: { media: "ready" } });
     if (url.pathname.startsWith("/api/v1/") || url.pathname.startsWith("/media/v1/")) return error(response, 404, "not_found", "fixture route not found");
     return serveStatic(response, url.pathname);
   } catch (failure) {

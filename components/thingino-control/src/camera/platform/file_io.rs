@@ -4,54 +4,8 @@ use std::os::unix::fs::{FileTypeExt, MetadataExt, OpenOptionsExt};
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-#[cfg(target_os = "linux")]
-use super::abi::O_NONBLOCK;
 use super::abi::{FILE_LIMIT, O_NOFOLLOW};
 use crate::BackendError;
-
-pub(in crate::camera) fn write_fifo(path: &Path, content: &[u8]) -> Result<(), BackendError> {
-    let metadata = path
-        .symlink_metadata()
-        .map_err(|_| BackendError::Unavailable)?;
-    if !metadata.file_type().is_fifo() {
-        return Err(BackendError::Protocol);
-    }
-    #[cfg(target_os = "linux")]
-    let flags = O_NOFOLLOW | O_NONBLOCK;
-    #[cfg(not(target_os = "linux"))]
-    let flags = O_NOFOLLOW;
-    let mut file = OpenOptions::new()
-        .write(true)
-        .custom_flags(flags)
-        .open(path)
-        .map_err(|_| BackendError::Unavailable)?;
-    file.write_all(content)
-        .map_err(|_| BackendError::Unavailable)
-}
-
-pub(in crate::camera) fn write_gpio(
-    root: &Path,
-    pin: u64,
-    enabled: bool,
-) -> Result<(), BackendError> {
-    let path = root.join(format!("gpio{pin}/value"));
-    let metadata = path
-        .symlink_metadata()
-        .map_err(|_| BackendError::Unavailable)?;
-    if !metadata.is_file() {
-        return Err(BackendError::Protocol);
-    }
-    // GPIO value attributes are sysfs control files. They accept a bounded
-    // write but reject fsync, so the durable configuration writer cannot be
-    // used here.
-    let mut file = OpenOptions::new()
-        .write(true)
-        .custom_flags(O_NOFOLLOW)
-        .open(path)
-        .map_err(|_| BackendError::Unavailable)?;
-    file.write_all(if enabled { b"1\n" } else { b"0\n" })
-        .map_err(|_| BackendError::Unavailable)
-}
 
 pub(in crate::camera) fn read_bounded(path: &Path, limit: u64) -> Result<Vec<u8>, BackendError> {
     let file = File::open(path).map_err(|_| BackendError::Unavailable)?;
@@ -172,29 +126,6 @@ pub(in crate::camera) fn write_config_file(
         .map_err(|_| BackendError::Unavailable)
 }
 
-pub(in crate::camera) fn read_pid(path: &Path) -> Option<i32> {
-    let text = String::from_utf8(read_bounded(path, 32).ok()?).ok()?;
-    let pid = text.trim().parse::<i32>().ok()?;
-    (pid > 1).then_some(pid)
-}
-
-pub(in crate::camera) fn process_matches(pid_path: &Path, executable: &Path) -> bool {
-    let Some(pid) = read_pid(pid_path) else {
-        return false;
-    };
-    fs::read_link(format!("/proc/{pid}/exe"))
-        .map(|path| path == executable)
-        .unwrap_or(false)
-}
-
-pub(in crate::camera) fn read_exact_line(path: &Path, expected: &str) -> bool {
-    read_bounded(path, 64)
-        .ok()
-        .and_then(|bytes| String::from_utf8(bytes).ok())
-        .map(|line| line.trim_end_matches(['\r', '\n']) == expected)
-        .unwrap_or(false)
-}
-
 pub(in crate::camera) fn first_number(path: &Path) -> Option<f64> {
     read_numbers(path, 1).into_iter().next()
 }
@@ -204,29 +135,6 @@ pub(in crate::camera) fn read_text_value(path: &Path, limit: u64) -> Option<Stri
         .ok()
         .map(|value| value.trim().to_owned())
         .filter(|value| !value.is_empty())
-}
-
-pub(in crate::camera) fn read_attribute_text(path: &Path, limit: u64) -> Option<String> {
-    let file = OpenOptions::new()
-        .read(true)
-        .custom_flags(O_NOFOLLOW)
-        .open(path)
-        .ok()?;
-    let mut bytes = Vec::with_capacity(limit.min(64) as usize);
-    file.take(limit + 1).read_to_end(&mut bytes).ok()?;
-    if bytes.len() as u64 > limit {
-        return None;
-    }
-    String::from_utf8(bytes)
-        .ok()
-        .map(|value| value.trim().to_owned())
-        .filter(|value| !value.is_empty())
-}
-
-pub(in crate::camera) fn read_number_value(path: &Path) -> Option<String> {
-    let value = read_text_value(path, 64)?;
-    value.parse::<f64>().ok()?;
-    Some(value)
 }
 
 pub(in crate::camera) fn read_numbers(path: &Path, count: usize) -> Vec<f64> {

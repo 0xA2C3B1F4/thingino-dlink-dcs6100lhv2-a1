@@ -1,17 +1,15 @@
-use super::super::{motion::MotionUpdate, mqtt};
+use super::super::motion::MotionUpdate;
 use super::lifecycle::{WorkerState, enqueue_to};
 use super::session::{SessionEnd, SessionRequests, reconnect_delay, session_control, wait_backoff};
 use super::*;
+use crate::camera::CameraPaths;
 use crate::camera::motion_events::{
     MOTION_EVENT_VERSION, MediaArtifact, MediaArtifactKind, MotionEvent, MotionEventDisposition,
     MotionEventSink, MotionState,
 };
-use crate::camera::{CameraPaths, value_u64};
-use std::collections::BTreeMap;
 use std::fs;
-use std::io::{self, Read, Write};
+use std::io;
 use std::os::unix::fs::PermissionsExt;
-use std::os::unix::net::UnixListener;
 use std::path::{Path, PathBuf};
 use std::process;
 use std::sync::atomic::AtomicUsize;
@@ -54,48 +52,44 @@ fn lifecycle_backend(
     name: &str,
     enabled: bool,
     host: &str,
-) -> (PathBuf, PathBuf, Arc<PrudyntBackend>) {
+) -> (PathBuf, PathBuf, Arc<crate::RaptorBackend>) {
     let root = task_temp(name);
     let config = root.join("thingino.json");
     let hostname = root.join("hostname");
     write_ha_config(&config, enabled, host);
     fs::write(&hostname, "camera\n").unwrap();
-    let backend = Arc::new(PrudyntBackend::new(CameraPaths {
-        thingino_config: config.clone(),
-        hostname,
-        ..CameraPaths::default()
-    }));
+    let backend = Arc::new(crate::RaptorBackend::ha_fixture(
+        &root,
+        "127.0.0.1:9".parse().unwrap(),
+    ));
     (root, config, backend)
 }
 
-fn snapshot_fixture(socket: &Path) -> (Arc<AtomicBool>, thread::JoinHandle<()>) {
-    let listener = UnixListener::bind(socket).unwrap();
-    listener.set_nonblocking(true).unwrap();
-    let running = Arc::new(AtomicBool::new(true));
-    let server_running = Arc::clone(&running);
-    let server = thread::spawn(move || {
-        while server_running.load(Ordering::Acquire) {
-            let (mut stream, _) = match listener.accept() {
-                Ok(connection) => connection,
-                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
-                    thread::sleep(Duration::from_millis(5));
-                    continue;
-                }
-                Err(error) => panic!("snapshot fixture accept failed: {error}"),
-            };
-            let mut request = Vec::new();
-            stream.read_to_end(&mut request).unwrap();
-            let channel = match request.as_slice() {
-                b"SNAPSHOT ch=0\n" => 0,
-                b"SNAPSHOT ch=1\n" => 1,
-                other => panic!("unexpected Prudynt request: {other:?}"),
-            };
-            let jpeg = [0xff, 0xd8, channel, 0xff, 0xd9];
-            writeln!(stream, "OK {}", jpeg.len()).unwrap();
-            stream.write_all(&jpeg).unwrap();
-        }
-    });
-    (running, server)
+#[test]
+fn disabled_integration_rejects_actions_without_starting_a_worker() {
+    let (root, config, backend) = lifecycle_backend("disabled-actions", false, "127.0.0.1");
+    backend.start_ha();
+    for action in ["reconnect", "republish_discovery", "publish_state"] {
+        let body = format!(r#"{{"action":"{action}"}}"#);
+        assert_eq!(
+            backend.ha_service().action(body.as_bytes()),
+            Err(BackendError::Unsupported(
+                "Home Assistant integration is disabled"
+            ))
+        );
+    }
+    assert!(backend.ha_service().worker.lock().unwrap().is_none());
+    assert_eq!(backend.ha_service().queue_depth.load(Ordering::Acquire), 0);
+    assert!(
+        !super::super::config::HaConfig::load(&CameraPaths {
+            thingino_config: config,
+            ..CameraPaths::default()
+        })
+        .unwrap()
+        .enabled
+    );
+    backend.shutdown_ha().unwrap();
+    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -297,14 +291,14 @@ fn disconnected_motion_does_not_end_backoff_until_a_publish_wakeup() {
 #[test]
 fn concurrent_shutdown_rejects_a_second_join_without_holding_the_worker_lock() {
     let (root, _config, backend) = lifecycle_backend("double-shutdown", true, "127.0.0.1");
-    let (started, release_start) = install_barrier(&backend.ha.test_hooks.start_barrier);
+    let (started, release_start) = install_barrier(&backend.ha_service().test_hooks.start_barrier);
     backend.start_ha();
     started.recv_timeout(Duration::from_secs(1)).unwrap();
     let joining = Arc::clone(&backend);
     let first_shutdown = thread::spawn(move || joining.shutdown_ha());
     let deadline = Instant::now() + Duration::from_secs(1);
     loop {
-        let joining = backend.ha.worker.try_lock().is_ok_and(|worker| {
+        let joining = backend.ha_service().worker.try_lock().is_ok_and(|worker| {
             worker.as_ref().is_some_and(|active| {
                 active.state == WorkerState::Stopping
                     && active.handle.is_none()
@@ -325,13 +319,15 @@ fn concurrent_shutdown_rejects_a_second_join_without_holding_the_worker_lock() {
         io::ErrorKind::WouldBlock
     );
     assert!(matches!(
-        backend.ha.action(br#"{"action":"publish_state"}"#),
+        backend
+            .ha_service()
+            .action(br#"{"action":"publish_state"}"#),
         Err(BackendError::Unavailable)
     ));
     release_start.send(()).unwrap();
     first_shutdown.join().unwrap().unwrap();
-    assert!(backend.ha.worker.lock().unwrap().is_none());
-    assert_eq!(backend.ha.queue_depth.load(Ordering::Acquire), 0);
+    assert!(backend.ha_service().worker.lock().unwrap().is_none());
+    assert_eq!(backend.ha_service().queue_depth.load(Ordering::Acquire), 0);
     fs::remove_dir_all(root).unwrap();
 }
 
@@ -523,28 +519,28 @@ fn adapter_discards_artifact_path_without_opening_it() {
 fn worker_spawn_failure_is_a_restartable_runtime_error() {
     let (root, _config, backend) = lifecycle_backend("spawn-failure", true, "127.0.0.1");
     backend
-        .ha
+        .ha_service()
         .test_hooks
         .fail_next_spawn
         .store(true, Ordering::Release);
 
     backend.start_ha();
 
-    assert!(backend.ha.worker.lock().unwrap().is_none());
-    assert!(!backend.ha.accept_motion.load(Ordering::Acquire));
-    assert_eq!(backend.ha.queue_depth.load(Ordering::Acquire), 0);
-    let runtime = backend.ha.runtime.lock().unwrap().clone();
+    assert!(backend.ha_service().worker.lock().unwrap().is_none());
+    assert!(!backend.ha_service().accept_motion.load(Ordering::Acquire));
+    assert_eq!(backend.ha_service().queue_depth.load(Ordering::Acquire), 0);
+    let runtime = backend.ha_service().runtime.lock().unwrap().clone();
     assert_eq!(runtime.state, "error");
     assert_eq!(runtime.last_error, Some("HA worker spawn failed"));
 
-    let (started, release) = install_barrier(&backend.ha.test_hooks.start_barrier);
-    backend.ha.reconfigure();
+    let (started, release) = install_barrier(&backend.ha_service().test_hooks.start_barrier);
+    backend.ha_service().reconfigure();
     started
         .recv_timeout(Duration::from_secs(1))
         .expect("HA worker did not restart after the injected spawn failure");
     assert!(
         backend
-            .ha
+            .ha_service()
             .worker
             .lock()
             .unwrap()
@@ -559,13 +555,13 @@ fn worker_spawn_failure_is_a_restartable_runtime_error() {
 #[test]
 fn worker_exit_serializes_before_enqueue_can_observe_the_dead_receiver() {
     let (root, _config, backend) = lifecycle_backend("exit-enqueue", true, "");
-    let (exiting, release_exit) = install_barrier(&backend.ha.test_hooks.exit_barrier);
+    let (exiting, release_exit) = install_barrier(&backend.ha_service().test_hooks.exit_barrier);
     backend.start_ha();
     exiting
         .recv_timeout(Duration::from_secs(1))
         .expect("HA worker did not reach the exit transition");
 
-    let service = Arc::clone(&backend.ha);
+    let service = Arc::clone(&backend.ha_service());
     let (result_sender, result_receiver) = mpsc::channel();
     let enqueue = thread::spawn(move || {
         result_sender
@@ -585,38 +581,52 @@ fn worker_exit_serializes_before_enqueue_can_observe_the_dead_receiver() {
     );
     enqueue.join().unwrap();
     backend.shutdown_ha().unwrap();
-    assert_eq!(backend.ha.queue_depth.load(Ordering::Acquire), 0);
+    assert_eq!(backend.ha_service().queue_depth.load(Ordering::Acquire), 0);
     fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
 fn reconfigure_wins_the_generation_exit_race() {
     let (root, config, backend) = lifecycle_backend("generation-exit", true, "");
-    let (pre_exit, release_exit) = install_barrier(&backend.ha.test_hooks.pre_exit_barrier);
+    let (pre_exit, release_exit) =
+        install_barrier(&backend.ha_service().test_hooks.pre_exit_barrier);
     backend.start_ha();
     pre_exit
         .recv_timeout(Duration::from_secs(1))
         .expect("HA worker did not reach its pre-exit barrier");
 
-    let depth_before_action = backend.ha.queue_depth.load(Ordering::Acquire);
-    backend.ha.action(br#"{"action":"publish_state"}"#).unwrap();
+    let depth_before_action = backend.ha_service().queue_depth.load(Ordering::Acquire);
+    backend
+        .ha_service()
+        .action(br#"{"action":"publish_state"}"#)
+        .unwrap();
     assert_eq!(
-        backend.ha.queue_depth.load(Ordering::Acquire),
+        backend.ha_service().queue_depth.load(Ordering::Acquire),
         depth_before_action + 1
     );
-    let previous_generation = backend.ha.config_generation.load(Ordering::Acquire);
+    let previous_generation = backend
+        .ha_service()
+        .config_generation
+        .load(Ordering::Acquire);
     write_ha_config(&config, true, "127.0.0.1");
-    let (continued, release_continue) = install_barrier(&backend.ha.test_hooks.start_barrier);
-    backend.ha.reconfigure();
-    assert!(backend.ha.config_generation.load(Ordering::Acquire) > previous_generation);
+    let (continued, release_continue) =
+        install_barrier(&backend.ha_service().test_hooks.start_barrier);
+    backend.ha_service().reconfigure();
+    assert!(
+        backend
+            .ha_service()
+            .config_generation
+            .load(Ordering::Acquire)
+            > previous_generation
+    );
     release_exit.send(()).unwrap();
     continued
         .recv_timeout(Duration::from_secs(1))
         .expect("HA worker exited instead of observing the newer generation");
-    assert_eq!(backend.ha.queue_depth.load(Ordering::Acquire), 0);
+    assert_eq!(backend.ha_service().queue_depth.load(Ordering::Acquire), 0);
     assert!(
         backend
-            .ha
+            .ha_service()
             .worker
             .lock()
             .unwrap()
@@ -632,53 +642,68 @@ fn reconfigure_wins_the_generation_exit_race() {
 #[test]
 fn reconfigure_generation_drains_depth_before_joined_stop() {
     let (root, config, backend) = lifecycle_backend("generation-drain", true, "127.0.0.1");
-    let (started, release_start) = install_barrier(&backend.ha.test_hooks.start_barrier);
-    let (exiting, release_exit) = install_barrier(&backend.ha.test_hooks.exit_barrier);
+    let (started, release_start) = install_barrier(&backend.ha_service().test_hooks.start_barrier);
+    let (exiting, release_exit) = install_barrier(&backend.ha_service().test_hooks.exit_barrier);
     backend.start_ha();
     started
         .recv_timeout(Duration::from_secs(1))
         .expect("HA worker did not reach its start barrier");
 
-    let initial_depth = backend.ha.queue_depth.load(Ordering::Acquire);
+    let initial_depth = backend.ha_service().queue_depth.load(Ordering::Acquire);
     for _ in 0..3 {
-        backend.ha.action(br#"{"action":"publish_state"}"#).unwrap();
+        backend
+            .ha_service()
+            .action(br#"{"action":"publish_state"}"#)
+            .unwrap();
     }
     assert_eq!(
-        backend.ha.queue_depth.load(Ordering::Acquire),
+        backend.ha_service().queue_depth.load(Ordering::Acquire),
         initial_depth + 3
     );
-    let previous_generation = backend.ha.config_generation.load(Ordering::Acquire);
+    let previous_generation = backend
+        .ha_service()
+        .config_generation
+        .load(Ordering::Acquire);
     write_ha_config(&config, false, "127.0.0.1");
-    backend.ha.reconfigure();
-    assert!(backend.ha.config_generation.load(Ordering::Acquire) > previous_generation);
+    backend.ha_service().reconfigure();
+    assert!(
+        backend
+            .ha_service()
+            .config_generation
+            .load(Ordering::Acquire)
+            > previous_generation
+    );
     release_start.send(()).unwrap();
     exiting
         .recv_timeout(Duration::from_secs(1))
         .expect("reconfigured HA worker did not reach its exit transition");
     assert_eq!(
-        backend.ha.queue_depth.load(Ordering::Acquire),
+        backend.ha_service().queue_depth.load(Ordering::Acquire),
         initial_depth + 3
     );
 
     release_exit.send(()).unwrap();
     backend.shutdown_ha().unwrap();
-    assert_eq!(backend.ha.queue_depth.load(Ordering::Acquire), 0);
-    assert!(backend.ha.worker.lock().unwrap().is_none());
-    assert_eq!(backend.ha.runtime.lock().unwrap().state, "disabled");
+    assert_eq!(backend.ha_service().queue_depth.load(Ordering::Acquire), 0);
+    assert!(backend.ha_service().worker.lock().unwrap().is_none());
+    assert_eq!(
+        backend.ha_service().runtime.lock().unwrap().state,
+        "disabled"
+    );
     fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
 fn clean_shutdown_joins_before_publishing_stopped() {
     let (root, _config, backend) = lifecycle_backend("clean-shutdown", true, "127.0.0.1");
-    let (started, release_start) = install_barrier(&backend.ha.test_hooks.start_barrier);
+    let (started, release_start) = install_barrier(&backend.ha_service().test_hooks.start_barrier);
     backend.start_ha();
     started
         .recv_timeout(Duration::from_secs(1))
         .expect("HA worker did not reach its start barrier");
     assert!(
         backend
-            .ha
+            .ha_service()
             .worker
             .lock()
             .unwrap()
@@ -697,36 +722,36 @@ fn clean_shutdown_joins_before_publishing_stopped() {
         .expect("HA shutdown did not complete by its test deadline")
         .unwrap();
     shutdown.join().unwrap();
-    assert!(backend.ha.worker.lock().unwrap().is_none());
-    assert_eq!(backend.ha.queue_depth.load(Ordering::Acquire), 0);
+    assert!(backend.ha_service().worker.lock().unwrap().is_none());
+    assert_eq!(backend.ha_service().queue_depth.load(Ordering::Acquire), 0);
     fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
 fn naturally_exited_worker_is_joined_before_restart() {
     let (root, config, backend) = lifecycle_backend("natural-restart", true, "");
-    let (exiting, release_exit) = install_barrier(&backend.ha.test_hooks.exit_barrier);
+    let (exiting, release_exit) = install_barrier(&backend.ha_service().test_hooks.exit_barrier);
     backend.start_ha();
     exiting
         .recv_timeout(Duration::from_secs(1))
         .expect("HA worker did not reach its natural exit transition");
     release_exit.send(()).unwrap();
     {
-        let worker = backend.ha.worker.lock().unwrap();
+        let worker = backend.ha_service().worker.lock().unwrap();
         let worker = worker.as_ref().expect("exited worker lost its JoinHandle");
         assert_eq!(worker.state, WorkerState::Stopping);
         assert!(worker.handle.is_some());
     }
 
     write_ha_config(&config, true, "127.0.0.1");
-    let (started, release_start) = install_barrier(&backend.ha.test_hooks.start_barrier);
-    backend.ha.reconfigure();
+    let (started, release_start) = install_barrier(&backend.ha_service().test_hooks.start_barrier);
+    backend.ha_service().reconfigure();
     started
         .recv_timeout(Duration::from_secs(1))
         .expect("HA worker did not restart after its prior JoinHandle was reaped");
     assert!(
         backend
-            .ha
+            .ha_service()
             .worker
             .lock()
             .unwrap()
@@ -747,23 +772,22 @@ fn worker_thread_tracks_enabled_configuration() {
         br#"{"ha":{"enabled":false,"mqtt":{"host":"127.0.0.1","port":1}}}"#,
     )
     .unwrap();
-    let backend = Arc::new(PrudyntBackend::new(CameraPaths {
-        thingino_config: config.clone(),
-        hostname: root.join("hostname"),
-        ..CameraPaths::default()
-    }));
+    let backend = Arc::new(crate::RaptorBackend::ha_fixture(
+        &root,
+        "127.0.0.1:9".parse().unwrap(),
+    ));
     backend.start_ha();
-    assert!(backend.ha.worker.lock().unwrap().is_none());
+    assert!(backend.ha_service().worker.lock().unwrap().is_none());
 
     fs::write(
         &config,
         br#"{"ha":{"enabled":true,"mqtt":{"host":"127.0.0.1","port":1}}}"#,
     )
     .unwrap();
-    backend.ha.reconfigure();
+    backend.ha_service().reconfigure();
     assert!(
         backend
-            .ha
+            .ha_service()
             .worker
             .lock()
             .unwrap()
@@ -776,271 +800,8 @@ fn worker_thread_tracks_enabled_configuration() {
         br#"{"ha":{"enabled":false,"mqtt":{"host":"127.0.0.1","port":1}}}"#,
     )
     .unwrap();
-    backend.ha.reconfigure();
+    backend.ha_service().reconfigure();
     backend.shutdown_ha().unwrap();
-    assert!(backend.ha.worker.lock().unwrap().is_none());
-    fs::remove_dir_all(root).unwrap();
-}
-
-#[test]
-fn native_worker_publishes_and_reconfigures_against_local_broker() {
-    let Some(port) = std::env::var("THINGINO_HA_TEST_BROKER_PORT")
-        .ok()
-        .and_then(|value| value.parse::<u16>().ok())
-    else {
-        return;
-    };
-    let root = task_temp("native-worker");
-    let config = root.join("thingino.json");
-    let prudynt = root.join("prudynt.json");
-    let hostname = root.join("hostname");
-    let release = root.join("os-release");
-    let motion_socket = root.join("run/control/motion.sock");
-    let motion_alarm = root.join("run/motion/motion_alarm");
-    let motion_detected = root.join("run/prudynt/motion_detected.active");
-    let proc_net_wireless = root.join("proc-net-wireless");
-    let prudynt_socket = root.join("prudynt.sock");
-    let (snapshot_server_running, snapshot_server) = snapshot_fixture(&prudynt_socket);
-    fs::write(
-        &prudynt,
-        br#"{"image":{"running_mode":0},"motion":{"debounce_time":0,"cooldown_time":1,"init_time":0,"min_time":0,"post_time":0,"playonspeaker":false}}"#,
-    )
-    .unwrap();
-    fs::write(&hostname, "camera\n").unwrap();
-    fs::write(&release, "IMAGE_ID=a1\nCOMMIT_ID=r5\n").unwrap();
-    fs::write(
-        &proc_net_wireless,
-        "Inter-| sta\n face | quality\nwlan0: 0000   70.  -41.  -256        0      0\n",
-    )
-    .unwrap();
-
-    let document = |enabled: bool, name: &str| {
-        format!(
-            "{{\"ha\":{{\"enabled\":{enabled},\"device_name\":\"{name}\",\"discovery_prefix\":\"homeassistant\",\"camera_interval\":5,\"mqtt\":{{\"host\":\"127.0.0.1\",\"port\":{port},\"client_id_prefix\":\"thingino-ha\"}}}},\"daynight\":{{\"enabled\":false}},\"gpio\":{{}}}}"
-        )
-    };
-    fs::write(&config, document(true, "Initial camera")).unwrap();
-
-    let api = mqtt::Api::load().unwrap();
-    let mut observer = mqtt::Client::new(api, "thingino-ha-worker-observer").unwrap();
-    observer.set_test_inbound_payload_limit(mqtt::MAX_PAYLOAD_BYTES);
-    observer.connect("127.0.0.1", port, 5).unwrap();
-    let connect_deadline = Instant::now() + Duration::from_secs(3);
-    while observer.take_connect_result() != Some(0) {
-        assert!(Instant::now() < connect_deadline);
-        observer.loop_once(20).unwrap();
-    }
-    let discovery_topic = "homeassistant/switch/thingino_camera/ircut/config";
-    let availability_topic = "cameras/camera/status";
-    let state_topic = "cameras/camera/camera_config/state";
-    let motion_topic = "cameras/camera/motion/state";
-    let rssi_topic = "cameras/camera/rssi/state";
-    let camera_topic = "cameras/camera/live_view/image";
-    for topic in [
-        discovery_topic,
-        availability_topic,
-        state_topic,
-        motion_topic,
-        rssi_topic,
-        camera_topic,
-    ] {
-        observer.subscribe(topic).unwrap();
-    }
-    observer.loop_once(20).unwrap();
-
-    let backend = Arc::new(PrudyntBackend::new(CameraPaths {
-        thingino_config: config.clone(),
-        prudynt_config: prudynt,
-        prudynt_socket,
-        hostname,
-        os_release: release,
-        motion_event_socket: motion_socket.clone(),
-        motion_alarm: motion_alarm.clone(),
-        motion_detected: motion_detected.clone(),
-        proc_net_wireless: proc_net_wireless.clone(),
-        wpa_control: root.join("missing-wpa-control"),
-        ..CameraPaths::default()
-    }));
-    backend.start_ha();
-    backend.motion.start().unwrap();
-
-    let deadline = Instant::now() + Duration::from_secs(5);
-    let mut retained = BTreeMap::new();
-    while retained.len() < 6 && Instant::now() < deadline {
-        observer.loop_once(20).unwrap();
-        while let Some(message) = observer.take_message() {
-            if [
-                discovery_topic,
-                availability_topic,
-                state_topic,
-                motion_topic,
-                rssi_topic,
-                camera_topic,
-            ]
-            .contains(&message.topic.as_str())
-            {
-                retained.insert(message.topic, message.payload);
-            }
-        }
-    }
-    assert_eq!(retained.get(availability_topic), Some(&b"online".to_vec()));
-    assert_eq!(retained.get(state_topic), Some(&b"a1".to_vec()));
-    assert_eq!(retained.get(motion_topic), Some(&b"OFF".to_vec()));
-    assert_eq!(retained.get(rssi_topic), Some(&b"-41".to_vec()));
-    assert_eq!(
-        retained.get(camera_topic),
-        Some(&vec![0xff, 0xd8, 1, 0xff, 0xd9])
-    );
-    assert!(
-        retained
-            .get(discovery_topic)
-            .is_some_and(|payload| payload.windows(14).any(|part| part == b"Initial camera"))
-    );
-
-    observer
-        .publish("cameras/camera/snapshot/set", b"1", false)
-        .unwrap();
-    let deadline = Instant::now() + Duration::from_secs(3);
-    let mut snapshot_received = false;
-    while !snapshot_received && Instant::now() < deadline {
-        observer.loop_once(20).unwrap();
-        while let Some(message) = observer.take_message() {
-            snapshot_received |=
-                message.topic == camera_topic && message.payload == [0xff, 0xd8, 0, 0xff, 0xd9];
-        }
-    }
-    assert!(
-        snapshot_received,
-        "HA Snapshot did not publish stream 0 JPEG"
-    );
-
-    fs::write(&proc_net_wireless, "unavailable\n").unwrap();
-    backend.ha.action(br#"{"action":"publish_state"}"#).unwrap();
-    let deadline = Instant::now() + Duration::from_secs(3);
-    let mut rssi_cleared = false;
-    while !rssi_cleared && Instant::now() < deadline {
-        observer.loop_once(20).unwrap();
-        while let Some(message) = observer.take_message() {
-            rssi_cleared |= message.topic == rssi_topic && message.payload.is_empty();
-        }
-    }
-    assert!(
-        rssi_cleared,
-        "missing RSSI did not clear its retained state"
-    );
-
-    let producer = std::os::unix::net::UnixDatagram::unbound().unwrap();
-    producer.connect(&motion_socket).unwrap();
-    for observation in [
-        br#"{"version":1,"event":"motion","state":"monitoring","channel":0,"monotonic_ms":100,"monitoring_since_ms":100,"sequence":1,"producer_pid":42,"roi_mask":0,"initial_grace":false}"#.as_slice(),
-        br#"{"version":1,"event":"motion","state":"detected","channel":0,"monotonic_ms":101,"monitoring_since_ms":100,"sequence":2,"producer_pid":42,"roi_mask":1,"initial_grace":false}"#.as_slice(),
-    ] {
-        producer.send(observation).unwrap();
-    }
-    let deadline = Instant::now() + Duration::from_secs(3);
-    let mut motion_active = false;
-    while !motion_active && Instant::now() < deadline {
-        observer.loop_once(20).unwrap();
-        while let Some(message) = observer.take_message() {
-            motion_active |= message.topic == motion_topic && message.payload == b"ON";
-        }
-    }
-    assert!(motion_active, "native Motion event was not published");
-    assert!(backend.motion.snapshot().active);
-    assert!(motion_alarm.is_file());
-    assert!(motion_detected.is_file());
-
-    producer
-        .send(br#"{"version":1,"event":"motion","state":"clear","channel":0,"monotonic_ms":102,"monitoring_since_ms":100,"sequence":3,"producer_pid":42,"roi_mask":0,"initial_grace":false}"#)
-        .unwrap();
-    let deadline = Instant::now() + Duration::from_secs(3);
-    let mut motion_inactive = false;
-    while !motion_inactive && Instant::now() < deadline {
-        observer.loop_once(20).unwrap();
-        while let Some(message) = observer.take_message() {
-            motion_inactive |= message.topic == motion_topic && message.payload == b"OFF";
-        }
-    }
-    assert!(motion_inactive, "native Motion clear was not published");
-    assert!(!backend.motion.snapshot().active);
-    assert!(!motion_alarm.exists());
-    assert!(!motion_detected.exists());
-
-    fs::write(&config, document(true, "Changed camera")).unwrap();
-    backend.ha.reconfigure();
-    let deadline = Instant::now() + Duration::from_secs(5);
-    let mut changed = false;
-    while !changed && Instant::now() < deadline {
-        observer.loop_once(20).unwrap();
-        while let Some(message) = observer.take_message() {
-            changed |= message.topic == discovery_topic
-                && message
-                    .payload
-                    .windows(14)
-                    .any(|part| part == b"Changed camera");
-        }
-    }
-    assert!(changed, "live HA reconfigure did not republish discovery");
-
-    let mut late_observer = mqtt::Client::new(
-        mqtt::Api::load().unwrap(),
-        "thingino-ha-retained-discovery-observer",
-    )
-    .unwrap();
-    late_observer.set_test_inbound_payload_limit(mqtt::MAX_PAYLOAD_BYTES);
-    late_observer.connect("127.0.0.1", port, 5).unwrap();
-    let deadline = Instant::now() + Duration::from_secs(3);
-    while late_observer.take_connect_result() != Some(0) {
-        assert!(Instant::now() < deadline);
-        late_observer.loop_once(20).unwrap();
-    }
-    late_observer.subscribe(discovery_topic).unwrap();
-    let deadline = Instant::now() + Duration::from_secs(3);
-    let mut retained_discovery = false;
-    while !retained_discovery && Instant::now() < deadline {
-        late_observer.loop_once(20).unwrap();
-        while let Some(message) = late_observer.take_message() {
-            retained_discovery |= message.topic == discovery_topic
-                && message.retained
-                && message
-                    .payload
-                    .windows(14)
-                    .any(|part| part == b"Changed camera");
-        }
-    }
-    assert!(
-        retained_discovery,
-        "reconfigured discovery was not retained for a new subscriber"
-    );
-    drop(late_observer);
-
-    observer
-        .publish("cameras/camera/ircut/set", b"invalid", false)
-        .unwrap();
-    let deadline = Instant::now() + Duration::from_secs(3);
-    loop {
-        observer.loop_once(20).unwrap();
-        let runtime = backend.ha.runtime().unwrap();
-        let runtime = json::parse(&runtime.body).unwrap();
-        if runtime
-            .get_path("rejected_commands")
-            .and_then(value_u64)
-            .unwrap_or(0)
-            > 0
-        {
-            break;
-        }
-        assert!(
-            Instant::now() < deadline,
-            "worker did not reject MQTT payload"
-        );
-    }
-
-    fs::write(&config, document(false, "Changed camera")).unwrap();
-    backend.ha.reconfigure();
-    backend.shutdown_ha().unwrap();
-    snapshot_server_running.store(false, Ordering::Release);
-    snapshot_server.join().unwrap();
-    drop(observer);
+    assert!(backend.ha_service().worker.lock().unwrap().is_none());
     fs::remove_dir_all(root).unwrap();
 }

@@ -221,7 +221,7 @@ test("every navigation destination renders without a page error or horizontal ov
   await page.setViewportSize({ width: 1440, height: 1000 });
   await login(page);
   const destinations = [
-    "preview", "status", "crontab", "onvif-info", "prudynt-info", "thingino-info", "kernel-log", "streamer-log", "system-log", "kernel-modules", "network-sockets", "os-release", "processes", "overlay", "network", "time", "audio", "access", "webui", "admin", "logging", "daynight", "gpio",
+    "preview", "status", "crontab", "onvif-info", "thingino-info", "kernel-log", "streamer-log", "system-log", "kernel-modules", "network-sockets", "os-release", "processes", "overlay", "network", "time", "audio", "access", "webui", "admin", "logging", "daynight", "gpio",
     "imaging", "streams", "osd", "motion-privacy", "sensor", "home-assistant", "recorder", "timelapse", "files", "storage", "network-probe", "reset", "help",
   ];
   for (const destination of destinations) {
@@ -309,10 +309,31 @@ test("form load, validation, save and backend error", async ({ page }) => {
   expect(stats.last_mutation.body.interfaces.wlan0.ipv6).toBe(false);
   expect(stats.last_mutation.body.wifi_ap.enabled).toBe(false);
   expect(stats.last_mutation.body.wifi).not.toHaveProperty("password");
+  await expect(page.getByRole("status")).toContainText("Restart the camera");
+  await expect(page.getByRole("status")).toContainText("has not been reconfigured");
   await setScenario(page, "save_error_once");
   await page.getByLabel("Hostname").fill("rejected-camera");
   await page.getByRole("button", { name: "Save settings" }).click();
   await expect(page.getByRole("status")).toContainText("fixture rejected");
+});
+
+test("logging save explains deferred application and keeps the local log setting", async ({ page }) => {
+  await login(page);
+  await page.goto("/#/logging");
+  await expect(page.locator("main")).toContainText("held in memory");
+  const local = page.getByLabel("Keep local logs while forwarding", { exact: true });
+  for (const enabled of [true, false]) {
+    await local.setChecked(enabled);
+    await page.getByRole("button", { name: "Save settings", exact: true }).click();
+    await expect(page.getByRole("status")).toContainText("Restart the camera");
+    await expect(page.getByRole("status")).toContainText("does not restart the logging service");
+    const stats = await (await page.request.get("/__fixture__/stats")).json();
+    expect(stats.last_mutation).toMatchObject({
+      method: "POST", path: "/api/v1/config/rsyslog", body: { file: enabled },
+    });
+    await page.reload();
+    await expect(local).toBeChecked({ checked: enabled });
+  }
 });
 
 test("image save stops before persistence when the live ISP update fails", async ({ page }) => {
@@ -333,6 +354,7 @@ test("image save stops before persistence when the live ISP update fails", async
   await page.goto("/#/imaging");
   const save = page.getByRole("button", { name: "Save settings", exact: true });
   await expect(save).toBeEnabled();
+  await expect(page.getByLabel("Hue", { exact: true })).toBeEnabled();
   await page.getByRole("spinbutton", { name: "Brightness", exact: true }).fill("140");
   await save.click();
   await expect(page.getByText("Fixture ISP update failed", { exact: true })).toBeVisible();
@@ -362,10 +384,12 @@ test("audio and stream controls enforce enums, ranges and disabled-stream sentin
   await expect(page.getByText("1920 × 1080 · H.264 · 20 fps", { exact: true })).toBeVisible();
   await expect(page.getByText("640 × 360 · H.264 · Disabled", { exact: true })).toBeVisible();
   await expect(page.locator(".stream-card").nth(1).locator(".stream-card-state")).toHaveText("Disabled");
-  await expect(page.getByLabel("Width").nth(0)).toHaveValue("1920");
-  await expect(page.getByLabel("Height").nth(0)).toHaveValue("1080");
-  await expect(page.getByLabel("Width").nth(1)).toHaveValue("640");
-  await expect(page.getByLabel("Height").nth(1)).toHaveValue("360");
+  await expect(page.getByLabel("Width", { exact: true }).nth(0)).toHaveValue("1920");
+  await expect(page.getByLabel("Height", { exact: true }).nth(0)).toHaveValue("1080");
+  await expect(page.getByLabel("Width", { exact: true }).nth(1)).toHaveValue("640");
+  await expect(page.getByLabel("Height", { exact: true }).nth(1)).toHaveValue("360");
+  await expect(page.getByLabel("Active width", { exact: true }).nth(0)).toBeHidden();
+  await expect(page.getByLabel("Active width", { exact: true }).nth(1)).toBeHidden();
 
   await page.setViewportSize({ width: 1000, height: 1000 });
   let mainCard = await page.locator(".stream-card").nth(0).boundingBox();
@@ -677,4 +701,87 @@ test("unavailable streams never open a media request", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Take snapshot" })).toBeDisabled();
   await expect(page.getByLabel("Preview stream").locator("option:disabled")).toHaveCount(2);
   expect(mediaRequests).toHaveLength(0);
+});
+
+test("Prudynt motion settings keep Raptor status fields hidden", async ({ page }) => {
+  await login(page);
+  await page.goto("/#/motion-privacy");
+  await expect(page.getByLabel("Enable motion detection", { exact: true })).toBeEnabled();
+  await expect(page.getByLabel("Motion sensitivity", { exact: true })).toBeEnabled();
+  await expect(page.getByLabel("Saved motion setting", { exact: true })).toBeHidden();
+  await expect(page.getByLabel("Runtime matches saved setting", { exact: true })).toBeHidden();
+  const write = page.waitForRequest((request) => request.method() === "POST" && request.url().endsWith("/api/v1/prudynt"));
+  await page.getByRole("button", { name: "Save settings", exact: true }).click();
+  expect(Object.keys((await write).postDataJSON()).sort()).toEqual(["motion", "privacy"]);
+  await expect(page.getByText("Settings saved.", { exact: true })).toBeVisible();
+});
+
+test("failed heartbeat clears a confirmed motion event until a fresh observation", async ({ page }) => {
+  let failed = false;
+  await page.route("**/api/v1/runtime/heartbeat", async (route) => {
+    if (failed) {
+      await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ status: "error", error: { code: "unavailable", message: "runtime disconnected" } }) });
+    } else {
+      const response = await route.fetch();
+      await route.fulfill({ response, json: { ...await response.json(), motion_enabled: true, motion_active: true } });
+    }
+  });
+  await login(page);
+  const motion = page.getByRole("button", { name: "Motion detection", exact: true });
+  await expect(motion).toHaveText("Active");
+  failed = true;
+  await page.getByRole("button", { name: "Reload", exact: true }).click();
+  await expect(motion).toHaveText("Unavailable");
+  await expect(motion).toHaveAttribute("aria-pressed", "mixed");
+  await expect(motion).toBeDisabled();
+  failed = false;
+  await page.getByRole("button", { name: "Reload", exact: true }).click();
+  await expect(motion).toHaveText("Active");
+});
+
+test("slow heartbeat uses one in-flight request across reload and the existing five-second tick", async ({ page }) => {
+  await page.clock.install();
+  await login(page);
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  let calls = 0;
+  await page.route("**/api/v1/runtime/heartbeat", async (route) => {
+    calls++;
+    await held;
+    const response = await route.fetch();
+    await route.fulfill({ response, json: { ...await response.json(), motion_enabled: true, motion_active: false } });
+  });
+  await page.getByRole("button", { name: "Reload", exact: true }).click();
+  await expect.poll(() => calls).toBe(1);
+  await page.getByRole("button", { name: "Reload", exact: true }).click();
+  await page.clock.runFor(5_100);
+  expect(calls).toBe(1);
+  release();
+  await expect(page.getByRole("button", { name: "Motion detection", exact: true })).toHaveText("On");
+});
+
+
+test("control confirmation makes a fresh heartbeat request after an older background read", async ({ page }) => {
+  await page.clock.install();
+  await login(page);
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  let captured = false;
+  let calls = 0;
+  await page.route("**/api/v1/runtime/heartbeat", async (route) => {
+    const call = ++calls;
+    const response = await route.fetch();
+    const body = await response.json();
+    if (call === 1) { captured = true; await held; }
+    await route.fulfill({ response, json: body });
+  });
+  await page.getByRole("button", { name: "Reload", exact: true }).click();
+  await expect.poll(() => captured).toBe(true);
+  const privacy = page.getByRole("button", { name: "Privacy mode", exact: true });
+  const applied = page.waitForResponse((response) => response.url().endsWith("/api/v1/actions/control") && response.request().method() === "POST");
+  await privacy.click();
+  expect((await applied).ok()).toBe(true);
+  release();
+  await expect(privacy).toHaveAttribute("aria-pressed", "true", { timeout: 1_500 });
+  expect(calls).toBe(2);
 });

@@ -21,6 +21,19 @@ test("canonical paths are centralized and encode untrusted parameters", () => {
   assert.equal(routes.media.whip(0), "/api/v1/media/webrtc/whip?stream=0");
   assert.equal(routes.media.whip(1), "/api/v1/media/webrtc/whip?stream=1");
   assert.equal(routes.runtime.motion, "/api/v1/runtime/motion");
+  assert.equal(routes.config.motionWebhook, "/api/v1/config/motion-webhook");
+  assert.equal(routes.runtime.motionWebhook, "/api/v1/runtime/motion-webhook");
+  assert.equal(routes.config.motionNtfy, "/api/v1/config/motion-ntfy");
+  assert.equal(routes.runtime.motionNtfy, "/api/v1/runtime/motion-ntfy");
+  assert.equal(routes.config.motionEmail, "/api/v1/config/motion-email");
+  assert.equal(routes.config.osdMetadata, "/api/v1/config/osd-metadata");
+  assert.equal(routes.runtime.motionEmail, "/api/v1/runtime/motion-email");
+  assert.equal(routes.config.motionFtp, "/api/v1/config/motion-ftp");
+  assert.equal(routes.runtime.motionFtp, "/api/v1/runtime/motion-ftp");
+  assert.equal(routes.config.motionGotify, "/api/v1/config/motion-gotify");
+  assert.equal(routes.runtime.motionGotify, "/api/v1/runtime/motion-gotify");
+  assert.equal(routes.config.motionTelegram, "/api/v1/config/motion-telegram");
+  assert.equal(routes.runtime.motionTelegram, "/api/v1/runtime/motion-telegram");
 });
 
 test("sensor compatibility alias stays out of frontend routes", async () => {
@@ -164,14 +177,14 @@ test("multi-page sections use one route-aware desktop and mobile navigation", as
   assert.match(styles, /--main-top-space:\s*2\.25rem/);
   assert.match(styles, /main\.frame\s*\{[^}]*padding-block:\s*var\(--main-top-space\) 4rem/);
   assert.match(styles, /--main-top-space:\s*1\.375rem/);
-  const order = ["status", "usage", "crontab", "onvif-info", "prudynt-info", "thingino-info", "kernel-log", "streamer-log", "system-log", "processes", "network-sockets", "kernel-modules", "os-release", "overlay"];
+  const order = ["status", "usage", "crontab", "onvif-info", "thingino-info", "kernel-log", "streamer-log", "system-log", "processes", "network-sockets", "kernel-modules", "os-release", "overlay"];
   let previous = -1;
   for (const page of order) {
     const index = navigation.indexOf(`id: "${page}"`);
     assert.ok(index > previous, `${page} is out of order`);
     previous = index;
   }
-  for (const label of ["ONVIF", "Prudynt", "Thingino", "Network connections"]) assert.match(navigation, new RegExp(`label: "${label}"`));
+  for (const label of ["ONVIF", "Thingino", "Network connections"]) assert.match(navigation, new RegExp(`label: "${label}"`));
 });
 
 test("fullscreen controls reuse the existing preview media and never own media lifecycle", async () => {

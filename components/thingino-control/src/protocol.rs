@@ -90,6 +90,9 @@ pub enum BackendError {
     Timeout,
     Protocol,
     Unavailable,
+    Busy,
+    Unsupported(&'static str),
+    PartialApply(&'static str),
     Upstream(u16),
 }
 
@@ -100,8 +103,30 @@ impl fmt::Display for BackendError {
             Self::Timeout => formatter.write_str("backend timed out"),
             Self::Protocol => formatter.write_str("invalid backend response"),
             Self::Unavailable => formatter.write_str("backend is unavailable"),
+            Self::Busy => formatter
+                .write_str("another settings change is in progress; retry after it completes"),
+            Self::Unsupported(reason) => formatter.write_str(reason),
+            Self::PartialApply(reason) => formatter.write_str(reason),
             Self::Upstream(status) => write!(formatter, "backend returned HTTP {status}"),
         }
+    }
+}
+
+/// File checked by Control before the ingress opens it for streaming.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MediaFileIdentity {
+    pub device: u64,
+    pub inode: u64,
+    pub size: u64,
+    pub modified: i64,
+    pub modified_nanos: i64,
+}
+impl MediaFileIdentity {
+    pub(crate) fn header(&self) -> String {
+        format!(
+            "v1 {} {} {} {} {}",
+            self.device, self.inode, self.size, self.modified, self.modified_nanos
+        )
     }
 }
 
@@ -136,7 +161,21 @@ pub trait Backend: Send + Sync + 'static {
         None
     }
 
+    fn media_file_identity(
+        &self,
+        _target: &str,
+        _deadline: Instant,
+    ) -> Result<Option<MediaFileIdentity>, BackendError> {
+        Ok(None)
+    }
+
     fn authorize_media(&self, _target: &str) -> bool {
         false
+    }
+
+    /// Whether shared authentication routes may change persistent credentials.
+    /// Existing backends retain their behavior; volatile backends must opt out.
+    fn allows_persistent_auth_mutations(&self) -> bool {
+        true
     }
 }

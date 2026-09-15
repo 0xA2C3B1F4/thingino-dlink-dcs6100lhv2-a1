@@ -33,6 +33,61 @@ def ed25519_public_key(*, comment: str = "") -> bytes:
     return f"ssh-ed25519 {base64.b64encode(blob).decode()}{suffix}\n".encode()
 
 
+def write_private(path: Path, payload: bytes) -> None:
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    path.write_bytes(payload)
+    path.chmod(0o600)
+
+
+def private_session(
+    root: Path,
+    *,
+    private_config_dir: Path,
+    session_kind: str,
+    matching_binding: bool = True,
+) -> Path:
+    session = root / session_kind
+    host = session / "host"
+    host.mkdir(mode=0o700, parents=True)
+    authorized_key = (private_config_dir / "authorized_keys").read_bytes()
+    credential = (private_config_dir / "installer.credential").read_bytes()
+    if not matching_binding:
+        credential = b"f" * 64 + b"\n"
+    write_private(host / "identity", b"private identity fixture\n")
+    write_private(host / "identity.pub", authorized_key)
+    write_private(host / "known_hosts", b"192.168.88.1 " + ed25519_public_key())
+    write_private(host / "service.credential", credential)
+    manifest: dict[str, object] = {
+        "contains_secrets": True,
+        "schema_version": 1,
+        "setup_ssid": "DCS6100-01234567",
+        "station_mdns_name": "dcs6100-01234567.local",
+    }
+    if session_kind == "uartless-functional-provisioning":
+        manifest.update(
+            {
+                "camera_identity_sha256": "1" * 64,
+                "session_kind": session_kind,
+                "transport_enabled": False,
+            }
+        )
+        write_private(
+            host / "dropbear_ed25519_host_key",
+            b"uartless Dropbear private key fixture\n",
+        )
+    else:
+        write_private(session / "media/RECOVERY/AP.PSK", b"a" * 64 + b"\n")
+        write_private(
+            session / "media/RECOVERY/HOST.KEY",
+            b"recovery Dropbear private key fixture\n",
+        )
+    write_private(
+        host / "session.json",
+        (json.dumps(manifest, sort_keys=True) + "\n").encode("ascii"),
+    )
+    return session
+
+
 class PrivateConfigTests(unittest.TestCase):
     def test_rtsp_viewer_credential_is_stable_and_domain_separated(self) -> None:
         management = b"a" * 64 + b"\n"
@@ -179,6 +234,87 @@ class PrivateConfigTests(unittest.TestCase):
                 len(inspected["roles"]["management_credential"]["fingerprint"]),
                 16,
             )
+
+    def test_inspect_recovery_ap_session_reads_only_recovery_roles(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            root = Path(directory_name)
+            output = root / "private-bootstrap"
+            generate_private_config(
+                output_dir=output,
+                ssid="private-test-ssid",
+                passphrase="private-test-passphrase",
+                authorized_key=ed25519_public_key(),
+            )
+            session = private_session(
+                root,
+                private_config_dir=output,
+                session_kind="recovery-ap",
+            )
+
+            roles = inspect_private_config(
+                output_dir=output, session_dir=session
+            )["roles"]
+
+            self.assertIn("recovery_ap_psk", roles)
+            self.assertIn("recovery_service_credential", roles)
+            self.assertIn("recovery_ssh_host_key", roles)
+            self.assertNotIn("provisioning_ssh_host_key", roles)
+            self.assertEqual(
+                roles["recovery_ssh_host_key"]["storage"],
+                "private-recovery-session",
+            )
+
+    def test_inspect_uartless_session_reads_only_uartless_roles(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            root = Path(directory_name)
+            output = root / "private-bootstrap"
+            generate_private_config(
+                output_dir=output,
+                ssid="private-test-ssid",
+                passphrase="private-test-passphrase",
+                authorized_key=ed25519_public_key(),
+            )
+            session = private_session(
+                root,
+                private_config_dir=output,
+                session_kind="uartless-functional-provisioning",
+            )
+
+            roles = inspect_private_config(
+                output_dir=output, session_dir=session
+            )["roles"]
+
+            self.assertIn("provisioning_service_credential", roles)
+            self.assertIn("provisioning_ssh_host_key", roles)
+            self.assertNotIn("recovery_ap_psk", roles)
+            self.assertNotIn("recovery_ssh_host_key", roles)
+            self.assertEqual(
+                roles["provisioning_ssh_host_key"]["storage"],
+                "private-uartless-provisioning-session",
+            )
+
+    def test_inspect_rejects_session_bound_to_another_private_config(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            root = Path(directory_name)
+            output = root / "private-bootstrap"
+            generate_private_config(
+                output_dir=output,
+                ssid="private-test-ssid",
+                passphrase="private-test-passphrase",
+                authorized_key=ed25519_public_key(),
+            )
+            session = private_session(
+                root,
+                private_config_dir=output,
+                session_kind="uartless-functional-provisioning",
+                matching_binding=False,
+            )
+
+            with self.assertRaisesRegex(
+                PrivateConfigError,
+                "bound to a different recovery service credential",
+            ):
+                inspect_private_config(output_dir=output, session_dir=session)
 
     def test_rotation_is_explicit_and_reseals_without_build_regeneration(self) -> None:
         with tempfile.TemporaryDirectory() as directory_name:

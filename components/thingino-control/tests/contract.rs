@@ -69,6 +69,22 @@ impl FakeBackend {
 }
 
 impl Backend for FakeBackend {
+    fn media_file_identity(
+        &self,
+        target: &str,
+        _deadline: Instant,
+    ) -> Result<Option<thingino_control::MediaFileIdentity>, BackendError> {
+        Ok((target
+            == "/media/v1/file?path=/mnt/mmcblk0p1/raptor/stream1/2026-09-11/12-00-00.mp4&play=1")
+            .then_some(thingino_control::MediaFileIdentity {
+                device: 1,
+                inode: 2,
+                size: 16,
+                modified: 3,
+                modified_nanos: 4,
+            }))
+    }
+
     fn authorize_media(&self, target: &str) -> bool {
         matches!(
             target,
@@ -325,6 +341,10 @@ impl AuthFixture {
     }
 
     fn web_auth(&self) -> WebAuth {
+        self.web_auth_with_hasher(Arc::new(FixturePasswordHasher))
+    }
+
+    fn web_auth_with_hasher(&self, hasher: Arc<dyn PasswordHasher>) -> WebAuth {
         WebAuth::with_password_crypto(
             WebAuthPaths {
                 api_key: self.root.join("api.key"),
@@ -332,7 +352,7 @@ impl AuthFixture {
                 shadow: self.root.join("shadow"),
             },
             Arc::new(FixturePasswordVerifier),
-            Arc::new(FixturePasswordHasher),
+            hasher,
         )
     }
 
@@ -1051,6 +1071,125 @@ fn management_password_updates_access_credentials_and_rolls_back_on_failure() {
 }
 
 #[test]
+fn partial_management_rollback_is_reported_and_invalidates_sessions() {
+    let fixture = AuthFixture::new();
+    let original = fs::read(fixture.root.join("shadow")).unwrap();
+    let server = RunningServer::start_with_web_auth(
+        Arc::new(FakeBackend::new(Behavior::Error(
+            BackendError::PartialApply("private backend diagnostic must not be exposed"),
+        ))),
+        fixture.web_auth(),
+    );
+    let session = fixture.login(&server);
+    let body = r#"{"password":"__SET_LOCALLY__"}"#;
+    let response = raw_request(
+        &server,
+        format!(
+            "POST /api/v1/auth/password HTTP/1.1\r\nHost: fixture\r\nX-Thingino-Proxy: 1\r\nCookie: thingino_session={session}\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
+            body.len()
+        ).as_bytes(),
+    );
+    assert_eq!(response.0, 503);
+    let body = String::from_utf8(response.1).unwrap();
+    assert!(body.contains("partial_apply"));
+    assert!(!body.contains("private backend diagnostic"));
+    assert_eq!(fs::read(fixture.root.join("shadow")).unwrap(), original);
+    assert_eq!(raw_request(
+        &server,
+        format!(
+            "GET /api/v1/health HTTP/1.1\r\nHost: fixture\r\nX-Thingino-Proxy: 1\r\nCookie: thingino_session={session}\r\nContent-Length: 0\r\n\r\n"
+        ).as_bytes(),
+    ).0, 401);
+}
+
+#[test]
+fn default_backend_retains_persistent_api_key_mutations() {
+    let fixture = AuthFixture::new();
+    let backend = Arc::new(FakeBackend::new(Behavior::Success));
+    assert!(backend.allows_persistent_auth_mutations());
+    let server = RunningServer::start_with_web_auth(backend, fixture.web_auth());
+    let session = fixture.login(&server);
+    for (method, expected_status) in [("POST", 200), ("DELETE", 204)] {
+        let response = raw_request(
+            &server,
+            format!(
+                "{method} /api/v1/webui/api-key HTTP/1.1\r\nHost: fixture\r\nX-Thingino-Proxy: 1\r\nCookie: thingino_session={session}\r\nContent-Type: application/json\r\nContent-Length: 0\r\n\r\n"
+            )
+            .as_bytes(),
+        );
+        assert_eq!(response.0, expected_status);
+        assert_eq!(fixture.root.join("api.key").exists(), method == "POST");
+    }
+}
+
+#[cfg(feature = "raptor-backend")]
+#[test]
+fn raptor_allows_persistent_api_keys_and_fails_closed_when_onvif_storage_is_unavailable() {
+    struct CountingHasher(Arc<AtomicUsize>);
+    impl PasswordHasher for CountingHasher {
+        fn hash(&self, _password: &[u8], _salt: &str) -> Option<String> {
+            self.0.fetch_add(1, Ordering::SeqCst);
+            Some("$6$fixture$must-not-be-written".to_owned())
+        }
+    }
+
+    let fixture = AuthFixture::new();
+    let backend = thingino_control::RaptorBackend::new(
+        fixture.root.join("rss"),
+        "127.0.0.1:8088".parse().unwrap(),
+        fixture.root.join("absent-prudynt.sock"),
+        fixture.root.join("absent-prudynt.pid"),
+    )
+    .unwrap();
+    assert!(backend.allows_persistent_auth_mutations());
+    let hash_calls = Arc::new(AtomicUsize::new(0));
+    let server = RunningServer::start_with_web_auth(
+        Arc::new(backend),
+        fixture.web_auth_with_hasher(Arc::new(CountingHasher(Arc::clone(&hash_calls)))),
+    );
+    let before: Vec<_> = ["shadow", "api.key", "thingino.json"]
+        .into_iter()
+        .map(|name| {
+            let path = fixture.root.join(name);
+            (
+                path.clone(),
+                fs::read(&path).unwrap(),
+                fs::metadata(&path).unwrap().modified().unwrap(),
+            )
+        })
+        .collect();
+    let session = fixture.login(&server);
+    let exchange = |method: &str, target: &str, body: &str| {
+        raw_request(
+            &server,
+            format!(
+                "{method} {target} HTTP/1.1\r\nHost: fixture\r\nX-Thingino-Proxy: 1\r\nCookie: thingino_session={session}\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}", body.len()
+            )
+            .as_bytes(),
+        )
+    };
+    assert_eq!(exchange("POST", "/api/v1/webui/api-key", "").0, 200);
+    assert_eq!(exchange("GET", "/api/v1/webui/api-key", "").0, 200);
+    assert_eq!(exchange("DELETE", "/api/v1/webui/api-key", "").0, 204);
+    assert!(!fixture.root.join("api.key").exists());
+
+    let response = exchange(
+        "POST",
+        "/api/v1/auth/password",
+        r#"{"password":"__SET_LOCALLY__"}"#,
+    );
+    assert_eq!(response.0, 503);
+    assert!(
+        String::from_utf8(response.1)
+            .unwrap()
+            .contains("credential_update_failed")
+    );
+    assert_eq!(hash_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(fs::read(fixture.root.join("shadow")).unwrap(), before[0].1);
+    assert_eq!(exchange("GET", "/api/v1/webui/api-key", "").0, 200);
+}
+
+#[test]
 fn malformed_unknown_and_oversized_requests_are_bounded() {
     let server = RunningServer::start(Arc::new(FakeBackend::new(Behavior::Success)));
     assert_eq!(
@@ -1251,6 +1390,25 @@ fn canonical_camera_route_policy_maps_known_mistakes_to_400() {
 }
 
 #[test]
+fn busy_backend_has_a_distinct_retryable_code() {
+    let server = RunningServer::start(Arc::new(FakeBackend::new(Behavior::Error(
+        BackendError::Busy,
+    ))));
+    let (status, body) = request(&server, "GET", "/api/v1/health", Some(TOKEN), b"");
+    assert_eq!(status, 503);
+    assert!(
+        std::str::from_utf8(&body)
+            .unwrap()
+            .contains("\"code\":\"backend_busy\"")
+    );
+    assert!(
+        std::str::from_utf8(&body)
+            .unwrap()
+            .contains("Retry shortly")
+    );
+}
+
+#[test]
 fn backend_failures_map_to_gateway_statuses() {
     for error in [BackendError::Connection, BackendError::Upstream(500)] {
         let server = RunningServer::start(Arc::new(FakeBackend::new(Behavior::Error(error))));
@@ -1402,4 +1560,38 @@ fn one_thousand_sequential_media_requests_succeed() {
             200
         );
     }
+}
+
+#[test]
+fn recording_identity_preflight_keeps_session_and_api_key_authentication() {
+    let fixture = AuthFixture::new();
+    let server = RunningServer::start_with_web_auth(
+        Arc::new(FakeBackend::new(Behavior::Success)),
+        fixture.web_auth(),
+    );
+    let session = fixture.login(&server);
+    let target = "%2Fmedia%2Fv1%2Ffile%3Fpath%3D%2Fmnt%2Fmmcblk0p1%2Fraptor%2Fstream1%2F2026-09-11%2F12-00-00.mp4%26play%3D1";
+    for credentials in [
+        String::new(),
+        "X-API-Key: wrong\r\n".to_owned(),
+        "X-API-Key: fixture-api-key\r\n".to_owned(),
+        format!("Cookie: thingino_session={session}\r\n"),
+    ] {
+        let reply = raw_exchange(&server, format!("GET /api/v1/internal/media-authorize?target={target} HTTP/1.1\r\nHost: fixture\r\nX-Thingino-Proxy: 1\r\n{credentials}Content-Length: 0\r\n\r\n").as_bytes());
+        let reply = String::from_utf8(reply).unwrap();
+        if credentials.is_empty() || credentials.contains("wrong") {
+            assert!(reply.starts_with("HTTP/1.1 401 "));
+            assert!(!reply.contains("X-Thingino-File-Identity"));
+        } else {
+            assert!(reply.starts_with("HTTP/1.1 204 "));
+            assert!(reply.contains("X-Thingino-File-Identity: v1 1 2 16 3 4\r\n"));
+        }
+    }
+    let wrong_stream = target.replace("stream1", "stream0");
+    let reply = raw_exchange(&server, format!("GET /api/v1/internal/media-authorize?target={wrong_stream} HTTP/1.1\r\nHost: fixture\r\nX-Thingino-Proxy: 1\r\nX-API-Key: fixture-api-key\r\nContent-Length: 0\r\n\r\n").as_bytes());
+    assert!(
+        !String::from_utf8(reply)
+            .unwrap()
+            .contains("X-Thingino-File-Identity:")
+    );
 }

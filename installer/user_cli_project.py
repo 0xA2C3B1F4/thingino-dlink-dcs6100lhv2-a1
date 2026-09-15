@@ -92,7 +92,7 @@ def expand(raw: list[str]) -> list[str]:
     # appearing in a label or option value must never select a command.
     positionals = []
     index = 0
-    boolean_options = {"--json", "--non-interactive", "--events-jsonl", "--plan-only", "--webrtc", "--resume"}
+    boolean_options = {"--json", "--non-interactive", "--events-jsonl", "--plan-only", "--resume"}
     while index < len(raw):
         item = raw[index]
         if item.startswith("--"):
@@ -108,8 +108,6 @@ def expand(raw: list[str]) -> list[str]:
     command = " ".join(raw[family_index:family_index + 2])
     project = load_project(path)
     additions = selected_paths(project, command, explicit_paths)
-    if command == "local-build build-universal" and "--webrtc" in raw:
-        additions.pop("raptor-rwd-artifact", None)
     if "work-dir" not in explicit_paths and "work-dir" not in additions:
         additions["work-dir"] = str(path.parent / (path.stem + ".work"))
     if command.startswith("local-build ") and "build-root" not in explicit_paths and "build-root" not in additions:
@@ -123,7 +121,7 @@ def require_noninteractive_inputs(args) -> None:
     missing = []
     if args.command == "local-build" and args.local_build_command == "configure":
         for field in ("private_root", "vendor_bundle_dir", "media_closure_dir",
-                      "session_dir", "raptor_rwd_artifact", "data_mode", "secrets_fd"):
+                      "session_dir", "data_mode", "secrets_fd"):
             if getattr(args, field, None) is None:
                 missing.append("--" + field.replace("_", "-"))
     if args.command == "universal" and args.universal_command == "configure":
@@ -153,8 +151,6 @@ def begin(args):
         return None
     project = load_project(path)
     selected = dict(project.selections.get(command, {}))
-    if command == "local-build build-universal" and getattr(args, "webrtc", False):
-        selected.pop("raptor-rwd-artifact", None)
     for field in PATH_FIELDS:
         value = getattr(args, field.replace("-", "_"), None)
         if value is not None:
@@ -196,7 +192,7 @@ def missing_options(parser, raw: list[str]) -> list[str]:
                     current = children.choices[token]
                     break
                 if token.startswith("--") and "=" not in token and token not in {
-                        "--json", "--non-interactive", "--events-jsonl", "--plan-only", "--webrtc"}:
+                        "--json", "--non-interactive", "--events-jsonl", "--plan-only"}:
                     offset += 1
     return missing
 

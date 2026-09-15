@@ -195,6 +195,52 @@ pub(super) fn discovery_publications(config: &HaConfig, os_release: &Value) -> V
     publications
 }
 
+/// Raptor state availability is independent for each confirmed observation.
+pub(super) fn raptor_publications(config: &HaConfig, release: &Value) -> Vec<Publication> {
+    discovery_publications(config, release)
+        .into_iter()
+        .map(|mut publication| {
+            if publication.payload.is_empty() {
+                return publication;
+            }
+            let mut value = json::parse(&publication.payload).expect("generated discovery JSON");
+            let entity = publication
+                .topic
+                .rsplit('/')
+                .nth(1)
+                .expect("generated entity topic");
+            let global = value
+                .get_path("availability")
+                .expect("generated availability")
+                .clone();
+            value
+                .set_path(
+                    "availability",
+                    Value::Array(vec![
+                        global,
+                        object([
+                            (
+                                "topic",
+                                Value::String(format!(
+                                    "{}/{entity}/availability",
+                                    config.base_topic()
+                                )),
+                            ),
+                            ("payload_available", Value::String("online".to_owned())),
+                            ("payload_not_available", Value::String("offline".to_owned())),
+                        ]),
+                    ]),
+                )
+                .expect("generated discovery object");
+            value
+                .set_path("availability_mode", Value::String("all".to_owned()))
+                .expect("generated discovery object");
+            publication.payload = value.to_json().into_bytes();
+            publication
+        })
+        .collect()
+}
+
 fn publication(config: &HaConfig, os_release: &Value, entity: &Entity<'_>) -> Publication {
     let topic = discovery_topic(config, entity.component, entity.object_id);
     if !entity.enabled {
@@ -381,6 +427,40 @@ pub(super) fn test_config() -> HaConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn raptor_discovery_requires_global_and_entity_availability() {
+        let config = fixture();
+        let release = object([]);
+        let legacy = discovery_publications(&config, &release);
+        let raptor = raptor_publications(&config, &release);
+        for (old, new) in legacy.iter().zip(&raptor) {
+            assert_eq!(old.topic, new.topic);
+            assert!(new.retained);
+            if old.payload.is_empty() {
+                assert!(new.payload.is_empty());
+                continue;
+            }
+            let old = json::parse(&old.payload).unwrap();
+            let new = json::parse(&new.payload).unwrap();
+            assert!(old.get_path("availability").unwrap().as_object().is_some());
+            assert_eq!(
+                new.get_path("availability_mode").and_then(Value::as_str),
+                Some("all")
+            );
+            let availability = new.get_path("availability").unwrap().as_array().unwrap();
+            assert_eq!(availability.len(), 2);
+            assert_eq!(availability[0], *old.get_path("availability").unwrap());
+            let topic = availability[1]
+                .get_path("topic")
+                .and_then(Value::as_str)
+                .unwrap();
+            assert!(topic.starts_with(&config.base_topic()));
+            assert!(topic.ends_with("/availability"));
+            assert_eq!(old.get_path("unique_id"), new.get_path("unique_id"));
+            assert_eq!(old.get_path("command_topic"), new.get_path("command_topic"));
+        }
+    }
 
     fn fixture() -> HaConfig {
         test_config()

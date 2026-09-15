@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import shlex
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 from .final_bundle import render_final_kernel_fragment
-from .final_root import prepare_from_private_directory, prepare_universal_final_root
+from .final_root import prepare_universal_final_root
 from .local_build_models import (
     BuildEnvironment,
     CleanBuildResult,
@@ -18,13 +18,9 @@ from .local_build_models import (
     PreparedFinalRoot,
     ValidatedBuildInputs,
 )
-from .local_build_support import LocalBuildRunError, _llvm_tools, _run, _sha256
+from .local_build_support import LocalBuildRunError, _llvm_tools, _run
 from .sd_package import atomic_write, read_snapshot
-from .stage1.build import (
-    build_install_set,
-    build_universal_install_set,
-    render_installer_kernel_fragment,
-)
+from .stage1.build import build_universal_install_set, render_installer_kernel_fragment
 
 
 def _workspace_tool(
@@ -56,16 +52,6 @@ exec docker run --rm --network none --privileged --platform linux/arm64 \\
 """
     atomic_write(output, content.encode(), mode=0o700)
     return output
-
-
-def _raptor_module(root: Path):
-    path = root / "components/raptor-rwd/build_persistent.py"
-    spec = importlib.util.spec_from_file_location("dcs6100_raptor_persistent", path)
-    if spec is None or spec.loader is None:
-        raise LocalBuildRunError("Raptor persistent builder cannot be loaded")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
 
 
 def _inspect_install_set(root: Path, install_set: Path, log_path: Path) -> dict[str, object]:
@@ -115,8 +101,15 @@ def prepare_install_root(
     environment: BuildEnvironment,
     clean: CleanBuildResult,
     run_dir: Path,
+    *,
+    progress: Callable[[dict[str, object]], None] | None = None,
 ) -> PreparedFinalRoot:
-    """Prepare the selected root and bind any Raptor overlay to its provenance."""
+    """Prepare and compose the source-built Raptor universal image."""
+
+    if inputs.artifact_scope != "model-universal":
+        raise LocalBuildRunError(
+            "only model-universal full Raptor builds are supported"
+        )
 
     mksquashfs = _workspace_tool(
         name="mksquashfs",
@@ -130,63 +123,41 @@ def prepare_install_root(
         workspace=clean.workspace,
         builder_image=environment.builder_image,
     )
-    if inputs.artifact_scope == "model-universal":
-        prepared_root = run_dir / "universal-final-root"
-        prepare_universal_final_root(
-            base_rootfs=(clean.result / "thingino-base.squashfs").read_bytes(),
-            vendor_bundle=inputs.vendor_bundle,
-            media_closure=inputs.media_closure,
-            output_dir=prepared_root,
-            mksquashfs=mksquashfs,
-            unsquashfs=unsquashfs,
-        )
-        prepared_system_name = "system.universal.squashfs"
-        prepared_manifest_name = "final-root.universal.json"
-    else:
-        assert inputs.private_config_dir is not None
-        assert inputs.expected_wpa_config_path is not None
-        assert inputs.session_dir is not None
-        prepared_root = run_dir / "private-final-root"
-        prepare_from_private_directory(
-            base_rootfs_path=clean.result / "thingino-base.squashfs",
-            private_config_dir=inputs.private_config_dir,
-            expected_wpa_config_path=inputs.expected_wpa_config_path,
-            vendor_bundle_dir=inputs.vendor_bundle_dir,
-            media_closure_dir=inputs.media_closure_dir,
-            session_dir=inputs.session_dir,
-            output_dir=prepared_root,
-            mksquashfs=mksquashfs,
-            unsquashfs=unsquashfs,
-        )
-        prepared_system_name = "system.private.squashfs"
-        prepared_manifest_name = "final-root.private.json"
-
-    if inputs.raptor_rwd_artifact is not None:
-        raptor = _raptor_module(inputs.root)
-        raptor_root = run_dir / "raptor-final-root"
-        raptor_result = raptor.build_persistent_root(
-            base_rootfs_path=prepared_root / prepared_system_name,
-            base_provenance_path=prepared_root / prepared_manifest_name,
-            artifact_path=inputs.raptor_rwd_artifact,
-            artifact_sha256=_sha256(inputs.raptor_rwd_artifact),
-            supervisor_path=inputs.root / "components/raptor-rwd/S13prudynt-rwd",
-            service_path=inputs.root / "components/raptor-rwd/S96rwd",
-            output_dir=raptor_root,
-            mksquashfs=mksquashfs,
-            unsquashfs=unsquashfs,
-            static_rwd_tls=True,
-            split_mtd3=True,
-            artifact_scope=inputs.artifact_scope,
-        )
-        if not isinstance(raptor_result, dict) or "raptor_rwd" not in raptor_result:
-            raise LocalBuildRunError("Raptor overlay lacks raptor_rwd provenance")
-    else:
-        raptor_root = prepared_root
-    system_rootfs = raptor_root / (
-        "system.universal.squashfs"
-        if inputs.artifact_scope == "model-universal"
-        else "system.private.squashfs"
+    prepared_root = run_dir / "universal-final-root"
+    prepare_universal_final_root(
+        base_rootfs=(clean.result / "thingino-base.squashfs").read_bytes(),
+        vendor_bundle=inputs.vendor_bundle,
+        media_closure=None,
+        output_dir=prepared_root,
+        mksquashfs=mksquashfs,
+        unsquashfs=unsquashfs,
+        support_only=True,
     )
+    prepared_system_name = "system.universal.squashfs"
+    prepared_manifest_name = "final-root.universal.json"
+
+    from .raptor_full_build import build_full_component
+    from .raptor_full_root import compose_universal_root
+
+    component = build_full_component(
+        root=inputs.root, build_root=inputs.build_root, run_dir=run_dir,
+        builder_image=environment.builder_image,
+        base_rootfs=prepared_root / prepared_system_name,
+        base_workspace=clean.workspace,
+        toolchain=environment.thingino_toolchain_archive,
+        progress=progress,
+    )
+    raptor_root = run_dir / "raptor-final-root"
+    compose_universal_root(
+        repository=inputs.root,
+        base_rootfs=prepared_root / prepared_system_name,
+        base_manifest=prepared_root / prepared_manifest_name,
+        component_artifact=Path(component["artifact"]),
+        component_sha256=component["sha256"],
+        build_inputs=component["identity"]["build_inputs"],
+        output_dir=raptor_root, mksquashfs=mksquashfs, unsquashfs=unsquashfs,
+    )
+    system_rootfs = raptor_root / "system.universal.squashfs"
     system = read_snapshot(system_rootfs)
     return PreparedFinalRoot(
         directory=raptor_root,
@@ -204,6 +175,11 @@ def package_install_root(
     run_dir: Path,
 ) -> PackagedInstallSet:
     """Build split kernels from build A, package, then require schema-2 inspection."""
+
+    if inputs.artifact_scope != "model-universal" or inputs.signing_key is None:
+        raise LocalBuildRunError(
+            "only signed model-universal full Raptor install sets are supported"
+        )
 
     fragments = run_dir / "kernel-fragments"
     fragments.mkdir(mode=0o700)
@@ -267,25 +243,22 @@ def package_install_root(
         "mksquashfs": final_root.mksquashfs,
         "unsquashfs": final_root.unsquashfs,
     }
-    if inputs.artifact_scope == "model-universal":
-        assert inputs.signing_key is not None
-        try:
-            universal_root_manifest = json.loads(
-                (final_root.directory / "final-root.universal.json").read_text(
-                    encoding="utf-8"
-                )
+    try:
+        universal_root_manifest = json.loads(
+            (final_root.directory / "final-root.universal.json").read_text(
+                encoding="utf-8"
             )
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-            raise LocalBuildRunError(
-                "universal final-root provenance is invalid"
-            ) from exc
-        build_universal_install_set(
-            **install_arguments,
-            universal_root_manifest=universal_root_manifest,
-            signing_key=inputs.signing_key,
         )
-    else:
-        build_install_set(**install_arguments, data_mode=inputs.data_mode)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise LocalBuildRunError(
+            "universal final-root provenance is invalid"
+        ) from exc
+    build_universal_install_set(
+        **install_arguments,
+        universal_root_manifest=universal_root_manifest,
+        signing_key=inputs.signing_key,
+        data_mode=inputs.data_mode,
+    )
     inspection = _inspect_install_set(
         inputs.root,
         install_set,

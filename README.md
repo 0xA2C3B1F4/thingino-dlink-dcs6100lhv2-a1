@@ -11,7 +11,8 @@ Do not use its images or tools on another model or revision.
 > There is no supported public firmware download yet. Tested on DCS-6100LHV2 A1:
 > UART-free recovery and installation, source build, main/substream WebRTC,
 > Motion, Privacy, Day/Night and Information. Validation covers one camera and
-> Apple Silicon macOS. See [test results and release status](docs/status.md) and
+> Apple Silicon macOS. This is development evidence for one camera, not blanket
+> physical acceptance or a public firmware release. See [test results and release status](docs/status.md) and
 > [recovery requirements](docs/recovery.md) before installing.
 
 ## Choose your installation
@@ -22,7 +23,7 @@ Do not use its images or tools on another model or revision.
 | Need an exact original stock backup | Use the [UART-assisted read-only backup](docs/installation.md#public-checkout-complete-backup-path) before any SD updater. |
 | Already have this camera's validated functional recovery | Reuse it and its `preserved/` directory. Skip capture, not the same-camera validation. |
 | Already have an inspected universal install set | Skip firmware building. Keep its model public key and supply the matching per-camera provisioning and authorization. |
-| Want WebRTC | Select the Raptor profile below. The default image provides RTSP/MJPEG, not WebRTC. |
+| Want the normal local build | `local-build build-universal` selects the full Raptor stack, including WebRTC. |
 
 The repository includes the installer and validators. You supply stock media
 files acquired from your camera, its recovery material, and local configuration.
@@ -30,24 +31,27 @@ files acquired from your camera, its recovery material, and local configuration.
 See [installation projects and automation](docs/installer-projects.md) to keep
 per-camera inputs once, link outputs between stages and review SD write plans.
 
-### Base profile or WebRTC
+### Full Raptor build
 
-The base build combines source-built Prudynt with catalog-locked stock
-`libimp`, TX-ISP and OS02G10 modules, and sensor IQ. Support libraries
-`libalog`, `libsysutils`, and `libaudioProcess` come from pinned open
-source. The stock sensor configuration includes I2C address `0x3c`, reset
-GPIO18, and 1920x1080 geometry. Public upstream sensor modules are not substitutes.
+`local-build build-universal` selects the full Raptor media stack by default,
+including its own sensor/encoder, audio, RTSP, recorder and video-only WebRTC
+services. It supports one WebRTC client at a time; the selected profile is
+15 fps. The installer acquires locked public sources, compiles against the
+fresh support image's libraries and SDK, then composes the Raptor-owned runtime.
+No separately prepared Raptor archive is required. This integrated source-build path
+is undergoing clean-build and installation validation.
+See [Raptor source build](components/raptor/README.md).
 
-Raptor `rwd` adds video-only WebRTC using Prudynt's existing encoders.
-It supports one WebRTC client at a time; the selected profile is 15 fps.
-Select `local-build build-universal --webrtc`. The installer acquires locked
-public sources, builds the component offline, validates it and includes it
-automatically. No separately prepared Raptor archive is required.
-An existing reviewed archive remains supported with `--raptor-rwd-artifact`.
-See [Raptor inputs](components/raptor-rwd/README.md#build-inputs) and
-[overlay validation](docs/build.md#optional-raptor-overlay).
-Without `--webrtc` or an explicit or project-selected artifact, the base profile provides
-RTSP and MJPEG. Source-build success does not establish camera acceptance.
+The support image uses catalog-locked stock `libimp`, TX-ISP and OS02G10
+modules, and sensor IQ. Support libraries `libalog`, `libsysutils`, and
+`libaudioProcess` come from pinned open source. The stock sensor configuration
+includes I2C address `0x3c`, reset GPIO18, and 1920x1080 geometry. Public
+upstream sensor modules are not substitutes. Source-build success does not
+establish camera acceptance.
+
+The full-Raptor build is the only public media path. It acquires and compiles
+the locked Raptor sources as part of `build-universal`; no separate media
+archive is accepted.
 
 ## Before you start
 
@@ -141,11 +145,8 @@ the explicit command arguments below, not automatic CLI defaults.
 ```bash
 umask 077
 
-thingino-dlink workflow-preflight --json \
-  --mode production-build \
-  --data-volume "$DCS6100_DATA_VOLUME"
 mkdir -p "$DCS6100_CAMERA_ROOT"
-thingino-dlink local-build prepare
+thingino-dlink local-build prepare --build-root "$DCS6100_BUILD_ROOT"
 thingino-dlink local-build status
 thingino-dlink local-build bootstrap
 thingino-dlink local-build acquire
@@ -297,23 +298,25 @@ checks. Keep a separate private copy of the recovery directory off the SD card.
 
 ### 4. Build or select the universal firmware
 
-The base build needs the acquired vendor bundle, not Wi-Fi credentials.
-Choose the profile before starting the build. The command below selects WebRTC
-and builds Raptor from locked public sources. Without a project-selected Raptor
-artifact, omitting `--webrtc` selects the base profile. A project remembers its
-accepted artifact and uses it even when the flag is omitted. For a base build,
-use an explicit build workspace without that project selection.
+The build needs the acquired vendor bundle, not Wi-Fi credentials. The command
+below builds full Raptor from locked public sources.
 
 ```bash
 thingino-dlink inspect-vendor-bundle \
   --vendor-bundle-dir "$DCS6100_RECOVERY_ROOT/vendor"
-thingino-dlink local-build build-universal --webrtc \
+thingino-dlink local-build build-universal \
   --vendor-bundle-dir "$DCS6100_RECOVERY_ROOT/vendor"
 ```
 
-The legacy `--media-closure-dir` is not required by
-the default stock-media profile. Do not switch to the legacy
-`local-build configure` and `local-build build` workflow by mistake.
+That command defaults to `--data-mode initialize` for a first installation. For
+an already accepted split-layout installation whose settings must remain
+unchanged, build the update set with `--data-mode preserve`. The preserve set
+hashes the complete JFFS2 data region before the system update and requires the
+same complete-region hash afterward; it does not apply the staged provisioning
+JFFS2 image.
+
+The full-Raptor build does not accept a private media archive. Keep the vendor
+bundle and all other camera-specific inputs outside the checkout.
 
 Require phase `local-build-model-universal-install-set-inspected`. Keep the
 build result, logs, manifests, and model signing key pair. Copy its exact
@@ -349,7 +352,7 @@ no characters. The installer derives the WPA PSK and generates credentials.
 
 The management credential is `install-config/installer.credential`; the API
 key is `install-config/webui-api.key`. Provisioning derives a separate initial
-RTSP `viewer` credential without writing another secret file. Keep them
+separate RTSP credential without writing another secret file. Keep them
 private. Do not paste them
 into chat, command arguments, logs, or Git. For automation, see
 [private input through a file descriptor](docs/installation.md#private-input-through-a-file-descriptor).
@@ -390,10 +393,18 @@ thingino-dlink universal authorize \
   --output-dir "$DCS6100_CAMERA_ROOT/authorization"
 ```
 
+For a preserve-mode install set, add `--data-action preserve` to the
+`universal authorize` command. The authorization action must match the stage-2
+action reported by `inspect-install-set`; the default authorization action is
+`initialize`.
+
 Both provisioning files contain secrets. The JFFS2 image is exactly
-1,507,328 bytes. The universal path uses `initialize`: it replaces private
-settings with this configuration, not a preserve-settings update. Keep firmware,
-session, sidecar, data image, and authorization matched.
+1,507,328 bytes. An `initialize` install replaces private settings with this
+configuration. A `preserve` update still validates and binds the provisioning
+artifacts but does not write the provisioning image or erase data. Keep
+firmware, session, sidecar, data image, action, and authorization matched.
+The inspected physical write policy must report `action: preserve` and
+`verification: before-and-after-complete-region-sha256` for preserve.
 
 ### 7. Stage the installation card
 
@@ -487,9 +498,12 @@ verification. HTTP redirects to HTTPS. The camera uses a locally generated
 certificate; verify the address and review any browser warning yourself.
 Log in as `root` with the generated management credential from
 `$DCS6100_CAMERA_ROOT/install-config/installer.credential`, not the Wi-Fi password.
-Before adding an RTSP client, set a separate viewer password under
-**Settings / Media access** and use username `viewer`. RTSP Basic authentication
-and media are unencrypted, so keep port 554 on a trusted network.
+Before adding an RTSP client, set a separate RTSP password under
+**Settings / Media access** and use the username shown there. The full-Raptor
+profile initially uses `root`, a separate derived RTSP password, and Digest
+authentication; its default video paths are `/stream0` and `/stream1`.
+Digest authentication does not encrypt the media transport, so keep port 554 on
+a trusted network.
 
 Check both Preview stream selections. With Raptor, both should say
 `Live · WebRTC`; visible MJPEG fallback alone does not validate Raptor.
@@ -513,7 +527,7 @@ A failure does not require abandoning diagnosis.
 | Clean build failed | Find the first compiler/package error in `build-a.log`. Preserve the failed run. |
 | System exceeds 6,619,136 bytes | Fix the image contents and rebuild. Never extend the system region into data. |
 | Old SD backup/checkpoint | Use `universal evacuate-recovery` to copy and verify it privately before restaging. |
-| Backend timeout, unavailable stream, grey substream | Check the installed profile and Prudynt health. Raptor cannot fix a failed sensor or encoder. |
+| Backend timeout, unavailable stream, grey substream | Check the installed media profile and its sensor/encoder service. A visible MJPEG fallback does not prove WebRTC works. |
 | Red blinking or no LED | Identify the boot phase. Neither observation alone proves completion or failure. |
 
 A successful command may have `next_command: null` when finished. Read
@@ -531,7 +545,7 @@ end-to-end builds or physical installation on every platform.
 Linux uses a whole-disk node such as `/dev/sdb`, not `/dev/sdb1`, with
 `lsblk`, `findmnt`, and `udevadm`. Windows PowerShell uses the whole
 physical device reported by `Get-Disk` and its FAT32 drive root.
-See [host media requirements](docs/installation.md#local-install-set-and-supported-host-systems).
+See [host media requirements](docs/installation.md#supported-host-systems).
 
 - [Documentation index](docs/index.md), [build internals](docs/build.md),
   [installation details](docs/installation.md), and [release evidence](docs/status.md).
@@ -540,7 +554,7 @@ See [host media requirements](docs/installation.md#local-install-set-and-support
 - [Contributing and checks](CONTRIBUTING.md).
 - `installer/` implements the guided CLI, validators, and bounded Stage 1.
 - `components/thingino-control/` and `webui/` implement Control and the WebUI.
-- `components/raptor-rwd/` holds WebRTC source pins, patches, and lifecycle code.
+- `components/raptor/` holds the full media source pins, patches, and lifecycle code.
 - `profiles/dlink-dcs6100lhv2-a1/` and `patches/` define the locked A1 build.
 - [source-export.json](source-export.json) records the exported source commit
   and per-file provenance. Subsequent changes are recorded in Git.
@@ -549,7 +563,6 @@ See [host media requirements](docs/installation.md#local-install-set-and-support
 
 Project-authored source and documentation use the [MIT License](LICENSE).
 This does not license third-party patch context, vendor libraries, modules,
-tuning data, or complete images for redistribution. The complete required
-Prudynt patch series is included; its upstream license question and other
-distribution gates are open in [third-party notices](third_party/NOTICE.md) and
-[release status](docs/status.md).
+tuning data, or complete images for redistribution. Raptor corresponding-source
+review, RTL8188FU closure, reproducible builds, and physical acceptance remain
+open in [third-party notices](third_party/NOTICE.md) and [release status](docs/status.md).

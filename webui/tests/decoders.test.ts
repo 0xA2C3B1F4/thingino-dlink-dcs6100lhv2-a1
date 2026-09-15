@@ -16,7 +16,9 @@ test("all P0/P1 domain fixtures pass typed runtime decoders", () => {
   assert.deepEqual(decodeNetwork(networkFixture), networkFixture);
   assert.deepEqual(decodeAudio(audioFixture), audioFixture);
   assert.deepEqual(decodeImage(imageFixture), imageFixture);
-  assert.deepEqual(decodeImagingRuntime(imagingRuntimeFixture), imagingRuntimeFixture.message);
+  assert.deepEqual(decodeImagingRuntime(imagingRuntimeFixture), {
+    ...imagingRuntimeFixture.message, source: "raptor", persistent: true,
+  });
   assert.deepEqual(decodeStream(stream0Fixture, "stream0"), stream0Fixture);
   assert.deepEqual(decodeStream(stream1Fixture, "stream1"), stream1Fixture);
   assert.deepEqual(decodeWebui(webuiFixture), webuiFixture);
@@ -40,6 +42,39 @@ test("imaging runtime decoder requires complete ranges only for supported contro
   const invertedRange = structuredClone(imagingRuntimeFixture);
   invertedRange.message.fields.brightness.min = 255;
   assert.throws(() => decodeImagingRuntime(invertedRange), /valid range/);
+});
+
+test("imaging runtime decoder rejects the retired non-Raptor envelope", () => {
+  const legacy = structuredClone(imagingRuntimeFixture) as Record<string, unknown>;
+  delete legacy.source;
+  assert.throws(() => decodeImagingRuntime(legacy), /source/);
+});
+
+test("imaging runtime decoder keeps white-balance modes and manual gains coherent", () => {
+  const value = structuredClone(imagingRuntimeFixture) as Record<string, any>;
+  value.source = "raptor";
+  value.persistent = true;
+  value.message.white_balance = {
+    supported: true, available: true, verification: "sdk-readback",
+    modes: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], gain_min: 0, gain_max: 1024,
+    mode: 2, gains_effective: false, rgain: null, bgain: null,
+    configured_mode: 2, configured_rgain: 300, configured_bgain: 400,
+    saved_mode: 2, saved_rgain: 300, saved_bgain: 400, matches_saved: true,
+  };
+  assert.equal(decodeImagingRuntime(value).white_balance?.rgain, null);
+  for (const mutate of [
+    (copy: Record<string, any>) => { copy.message.white_balance.mode = 10; },
+    (copy: Record<string, any>) => { copy.message.white_balance.rgain = 300; },
+    (copy: Record<string, any>) => { copy.message.white_balance.configured_bgain = null; },
+    (copy: Record<string, any>) => { copy.message.white_balance.matches_saved = false; },
+  ]) {
+    const malformed = structuredClone(value);
+    mutate(malformed);
+    assert.throws(() => decodeImagingRuntime(malformed), /white balance/);
+  }
+  const manual = structuredClone(value);
+  Object.assign(manual.message.white_balance, { mode: 1, gains_effective: true, rgain: 300, bgain: 400, configured_mode: 1, saved_mode: 1 });
+  assert.equal(decodeImagingRuntime(manual).white_balance?.rgain, 300);
 });
 
 test("network fixture keeps every interface address field and fixed D-Link controls", () => {
@@ -139,4 +174,31 @@ test("enum contract stays explicit and excludes unsupported D-Link outputs", () 
   assert.throws(() => decodeGpio({ ...gpioFixture, led: { startup_indicator: "blue" } }), /startup indicator/);
   assert.equal(Object.hasOwn((daynightFixture.controls as Record<string, unknown>), "ir940"), false);
   assert.equal(Object.hasOwn((daynightFixture.controls as Record<string, unknown>), "white"), false);
+});
+
+test("Raptor audio rejects missing or invented readback values", () => {
+  const names = ["mic_vol", "mic_gain", "spk_vol", "spk_gain"];
+  const fields = Object.fromEntries(names.map((name) => [name, { supported: true, available: true, value: 20, min: name.endsWith("gain") ? 0 : -30, max: name.endsWith("gain") ? 31 : 120 }]));
+  fields.mic_alc_gain = { supported: true, available: true, value: 2, min: 0, max: 7 };
+  const value = { source: "raptor", mic_enabled: true, spk_enabled: true, mic_muted: false,
+    mic_format: "PCM", mic_sample_rate: 16000, input_readback: "owner", processing_readback: "owner",
+    codecs_built: { PCM: true, G711A: true, G711U: true, AAC: false, OPUS: false }, effects_built: false,
+    processing_available: false, mic_noise_suppression: null, mic_agc_enabled: null, mic_high_pass_filter: null,
+    mic_agc_target_level_dbfs: null, mic_agc_compression_gain_db: null, mic_alc_gain: 2,
+    mic_is_digital: false, mic_input_basis: "dlink-a1-profile-amic",
+    force_stereo: false, channel_basis: "rad-fixed-mono",
+    buffer_warn_frames: null, buffer_cap_frames: null, buffer_control: "unsupported-prudynt-queue-policy",
+    tap_enabled: null, tap_path: null, tap_control: "unsupported",
+    levels: fields, mic_vol: 20, mic_gain: 20, spk_vol: 20, spk_gain: 20 };
+  assert.deepEqual(decodeAudio(value), value);
+  const unavailable = structuredClone(value);
+  unavailable.levels.mic_vol!.available = false;
+  assert.throws(() => decodeAudio(unavailable), /must be null/);
+  const missing = structuredClone(value);
+  delete missing.levels.mic_vol;
+  assert.throws(() => decodeAudio(missing), /must be an object/);
+  assert.throws(() => decodeAudio({ ...value, mic_vol: 21 }), /disagrees/);
+  assert.throws(() => decodeAudio({ ...value, mic_is_digital: true }), /topology/);
+  assert.throws(() => decodeAudio({ ...value, buffer_cap_frames: 100 }), /queue controls/);
+  assert.throws(() => decodeAudio({ ...value, tap_enabled: false }), /tap controls/);
 });

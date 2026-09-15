@@ -232,7 +232,7 @@ diff --git a/file.c b/file.c
 diff --git a/uhttpd.h b/uhttpd.h
 --- a/uhttpd.h
 +++ b/uhttpd.h
-@@ -337,6 +337,7 @@ extern const char * const http_methods[];
+@@ -335,6 +335,7 @@ extern const char * const http_methods[];
  extern struct dispatch_handler cgi_dispatch;
  extern struct dispatch_handler control_proxy_dispatch;
 +bool control_proxy_host_allowed(const char *value);

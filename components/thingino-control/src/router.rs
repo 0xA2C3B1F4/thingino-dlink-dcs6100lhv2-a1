@@ -239,6 +239,20 @@ pub(crate) fn handle_api_key_route(
     let Some(auth) = state.web_auth.as_ref() else {
         return false;
     };
+    let persistent_auth_mutation = matches!(
+        (request.method.as_str(), request.target.as_str()),
+        ("POST", "/api/v1/auth/password") | ("POST" | "DELETE", "/api/v1/webui/api-key")
+    );
+    if persistent_auth_mutation && !state.backend.allows_persistent_auth_mutations() {
+        let _ = send_error(
+            stream,
+            deadline,
+            503,
+            "persistent_auth_unavailable",
+            "persistent credential changes are unavailable for this media backend",
+        );
+        return true;
+    }
     if request.method == "POST" && request.target == "/api/v1/auth/password" {
         if request.body.is_empty() || !has_json_content_type(request) {
             let (status, code, message) = if request.body.is_empty() {
@@ -286,20 +300,29 @@ pub(crate) fn handle_api_key_route(
                 return true;
             }
         };
-        let updated = matches!(
-            state
-                .backend
-                .update_management_credential("root", &password, deadline),
-            Some(Ok(_))
-        );
-        if !updated {
-            let _ = auth.restore_password(&original_shadow);
+        let updated = state
+            .backend
+            .update_management_credential("root", &password, deadline);
+        if !matches!(updated, Some(Ok(_))) {
+            let restored = auth.restore_password(&original_shadow).is_ok();
+            let partial = !restored || matches!(updated, Some(Err(BackendError::PartialApply(_))));
+            if partial {
+                auth.invalidate_sessions();
+            }
             let _ = send_error(
                 stream,
                 deadline,
                 503,
-                "credential_update_failed",
-                "WebUI and ONVIF credentials were not updated together",
+                if partial {
+                    "partial_apply"
+                } else {
+                    "credential_update_failed"
+                },
+                if partial {
+                    "Management credential rollback was not fully confirmed. Verify WebUI and ONVIF credentials before retrying."
+                } else {
+                    "WebUI and ONVIF credentials were not updated together"
+                },
             );
             return true;
         }
@@ -385,6 +408,13 @@ pub(crate) fn handle_api_key_route(
 
 fn send_whip_error(stream: &mut TcpStream, deadline: Instant, error: BackendError) {
     let (status, code, message) = match error {
+        BackendError::Unsupported(reason) => (503, "service_unavailable", reason),
+        BackendError::PartialApply(reason) => (503, "partial_apply", reason),
+        BackendError::Busy => (
+            503,
+            "backend_busy",
+            "Another settings change is in progress. Retry after it completes.",
+        ),
         BackendError::Timeout => (504, "backend_timeout", "WebRTC signaling timed out"),
         BackendError::Connection | BackendError::Unavailable => (
             503,
@@ -410,6 +440,7 @@ fn handle_whip_route(
     const CREATE_STREAM1: &str = "/api/v1/media/webrtc/whip?stream=1";
     const CREATE_PREFIX: &str = "/api/v1/media/webrtc/whip?stream=";
     const DELETE_PREFIX: &str = "/api/v1/media/webrtc/whip/";
+    let deleting_session = request.method == "DELETE" && request.target.starts_with(DELETE_PREFIX);
 
     let create_stream = match request.target.as_str() {
         CREATE_STREAM0 => Some(0),
@@ -473,7 +504,7 @@ fn handle_whip_route(
         return true;
     }
 
-    if request.method == "DELETE" && request.target.starts_with(DELETE_PREFIX) {
+    if deleting_session {
         if !request.body.is_empty() {
             let _ = send_error(
                 stream,
@@ -586,6 +617,29 @@ pub(crate) fn handle_client(mut stream: TcpStream, state: &SharedState, deadline
         let media_target = request
             .target
             .strip_prefix("/api/v1/internal/media-authorize?target=");
+        if let Some(target) = media_target.and_then(percent_decode) {
+            let backend_deadline = deadline.checked_sub(RESPONSE_RESERVE).unwrap_or(deadline);
+            match state.backend.media_file_identity(&target, backend_deadline) {
+                Ok(Some(identity)) => {
+                    let header = identity.header();
+                    let _ = send_response_headers(
+                        &mut stream,
+                        deadline,
+                        204,
+                        "No Content",
+                        "application/json",
+                        b"",
+                        &[("X-Thingino-File-Identity", &header)],
+                    );
+                    return;
+                }
+                Err(error) => {
+                    send_backend_result(&mut stream, deadline, Err(error), None);
+                    return;
+                }
+                Ok(None) => {}
+            }
+        }
         if request.target == "/api/v1/internal/media-authorize"
             || media_target.is_some_and(|target| {
                 percent_decode(target)

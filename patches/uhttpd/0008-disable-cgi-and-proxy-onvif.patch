@@ -249,7 +249,7 @@ diff --git a/main.c b/main.c
 index 542e890..1ae146a 100644
 --- a/main.c
 +++ b/main.c
-@@ -317,7 +317,6 @@ int main(int argc, char **argv)
+@@ -290,7 +290,6 @@ int main(int argc, char **argv)
  	BUILD_BUG_ON(sizeof(uh_buf) < PATH_MAX);
  
  	uh_dispatch_add(&control_proxy_dispatch);
@@ -356,7 +356,7 @@ diff --git a/uhttpd.h b/uhttpd.h
 index 116213f..956e320 100644
 --- a/uhttpd.h
 +++ b/uhttpd.h
-@@ -234,9 +234,12 @@ struct dispatch_control_proxy {
+@@ -226,9 +226,12 @@ struct dispatch_control_proxy {
  	bool content_disposition_seen;
  	bool location_seen;
  	bool set_cookie_seen;

@@ -465,7 +465,7 @@ export class MjpegPreview {
   private async open(stream: 0 | 1, force: boolean, epoch: number): Promise<void> {
     // Chromium can coalesce a synchronous same-URL retry into the failed image
     // request. uhttpd validates q but deliberately discards it before opening
-    // Prudynt, so it is a bounded request revision with no encoder-side effect.
+    // Raptor, so it is a bounded request revision with no encoder-side effect.
     const revision = force ? `&q=${50 + (++this.retryRevision % 50)}` : "";
     const source = `${routes.media.preview(stream)}${revision}`;
     if (this.transport === "native") {

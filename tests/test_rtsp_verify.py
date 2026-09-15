@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 
 from installer import rtsp_protocol, rtsp_verify
 from installer.rtsp_verify import (
@@ -25,8 +26,104 @@ class FakeSocket:
     def sendall(self, raw: bytes) -> None:
         self.sent += raw
 
+    def settimeout(self, timeout: float) -> None:
+        pass
+
+    def close(self) -> None:
+        pass
+
 
 class RtspVerificationTests(unittest.TestCase):
+    def test_digest_auth_matches_rfc_2617_vector(self) -> None:
+        with patch.object(rtsp_verify.secrets, "token_hex", return_value="0a4f113b"):
+            authorization, scheme = rtsp_verify._rtsp_authorization(
+                'Digest realm="testrealm@host.com", qop="auth,auth-int", '
+                'nonce="dcd98b7102dd2f0e8b11d0f600bfb0c093", '
+                'opaque="5ccc069c403ebaf9f0171e9517f40e41"',
+                "Mufasa", b"Circle Of Life",
+            )
+        self.assertEqual(scheme, "digest")
+        header = authorization("GET", "/dir/index.html")
+        self.assertIn('response="6629fae49393a05397450978507c4ef1"', header)
+        self.assertIn("nc=00000001", header)
+        self.assertIn("qop=auth", header)
+        second = authorization("GET", "/dir/index.html")
+        self.assertIn("nc=00000002", second)
+        self.assertNotEqual(second, header)
+
+    def test_raptor_digest_without_qop_binds_method_and_uri(self) -> None:
+        authorization, scheme = rtsp_verify._rtsp_authorization(
+            'Digest realm="Raptor", nonce="test-nonce"', "viewer", b"test-password"
+        )
+        options = authorization("OPTIONS", "rtsp://192.0.2.2:554/ch0")
+        describe = authorization("DESCRIBE", "rtsp://192.0.2.2:554/ch0")
+        setup = authorization("SETUP", "rtsp://192.0.2.2:554/ch0/track1")
+        self.assertEqual(scheme, "digest")
+        self.assertEqual(len({options, describe, setup}), 3)
+        self.assertNotIn("qop=", options)
+        self.assertNotIn("test-password", options)
+        self.assertIn('uri="rtsp://192.0.2.2:554/ch0/track1"', setup)
+
+    def test_legacy_basic_auth_remains_supported(self) -> None:
+        authorization, scheme = rtsp_verify._rtsp_authorization(
+            'Basic realm="camera"', "viewer", b"password"
+        )
+        self.assertEqual(scheme, "basic")
+        self.assertEqual(authorization, "Basic dmlld2VyOnBhc3N3b3Jk")
+
+    def test_digest_rejects_malformed_or_unsupported_challenges(self) -> None:
+        for challenge in (
+            "", "Bearer token", "Digest realm=x", "Digest nonce=x",
+            "Digest realm=x, nonce=", "Digest realm=x, nonce=n, nonce=m",
+            "Digest realm=x, nonce=n, algorithm=SHA-512",
+            "Digest realm=x, nonce=n, qop=auth-int",
+            "Digest realm=x, nonce=n\r\nInjected: value",
+        ):
+            with self.subTest(challenge=challenge):
+                with self.assertRaises(RtspVerificationError):
+                    rtsp_verify._rtsp_authorization(challenge, "viewer", b"password")
+
+    def test_full_rtp_acceptance_uses_observed_digest_challenge(self) -> None:
+        challenge = FakeSocket(
+            b'RTSP/1.0 401 Unauthorized\r\n'
+            b'WWW-Authenticate: Digest realm="Raptor", nonce="test-nonce"\r\n\r\n'
+        )
+        sdp = b'm=video 0 RTP/AVP 96\r\na=rtpmap:96 H264/90000\r\na=control:track1\r\n'
+        response = b'RTSP/1.0 200 OK\r\n\r\n'
+        sps = bytes.fromhex("67640028acd940780227e5c044000003000400000300083c60c658")
+        sps_rtp = bytes.fromhex("806000010000000100000001") + sps
+        idr_rtp = bytes.fromhex("80e0000200000002000000016501")
+        frames = b''.join(b'$\x00' + len(frame).to_bytes(2, 'big') + frame for frame in (sps_rtp, idr_rtp))
+        stream = FakeSocket(
+            response
+            + b'RTSP/1.0 200 OK\r\nContent-Length: ' + str(len(sdp)).encode() + b'\r\n\r\n' + sdp
+            + b'RTSP/1.0 200 OK\r\nSession: test-session\r\n\r\n'
+            + response + frames
+        )
+        with patch.object(rtsp_verify.socket, "create_connection", side_effect=[challenge, stream]):
+            result = rtsp_verify.verify_rtsp_h264_1080p(
+                host="192.0.2.2", username="root", password=b"test-password",
+                stream_path="/stream0",
+            )
+        self.assertTrue(result["authentication_enforced"])
+        self.assertEqual(result["rtsp_authentication"], "digest-hash-locked-closure-credential")
+        self.assertEqual(result["width"], 1920)
+        self.assertTrue(result["complete_idr_received"])
+        self.assertNotIn(b"Authorization:", challenge.sent)
+        self.assertEqual(stream.sent.count(b"Authorization: Digest "), 4)
+        self.assertNotIn(b"Basic", stream.sent)
+        self.assertIn(b'DESCRIBE rtsp://192.0.2.2:554/stream0 RTSP/1.0', stream.sent)
+
+    def test_invalid_stream_path_never_opens_a_connection(self) -> None:
+        with patch.object(rtsp_verify.socket, "create_connection") as connect:
+            for path in ("//other/ch0", "/ch0\r\nHeader: value", "rtsp://other/ch0", "/ch0?query"):
+                with self.subTest(path=path), self.assertRaises(RtspVerificationError):
+                    rtsp_verify.verify_rtsp_h264_1080p(
+                        host="192.0.2.2", username="root", password=b"test-password",
+                        stream_path=path,
+                    )
+            connect.assert_not_called()
+
     def test_rtsp_verify_preserves_protocol_facade_identities(self) -> None:
         self.assertIs(RtspVerificationError, rtsp_protocol.RtspVerificationError)
         self.assertIs(h264_sps_dimensions, rtsp_protocol.h264_sps_dimensions)

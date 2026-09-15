@@ -35,29 +35,24 @@ commands, so you do not copy paths between stages.
 For a new source build, run the local preparation commands in order:
 
 ```bash
-thingino-dlink workflow-preflight --json \
-  --mode production-build --data-volume "$DCS6100_DATA_VOLUME"
-thingino-dlink local-build prepare
+thingino-dlink local-build prepare --build-root "$DCS6100_BUILD_ROOT"
 thingino-dlink local-build bootstrap
 thingino-dlink local-build acquire
 thingino-dlink local-build recovery-assets
 ```
 
-## Select WebRTC
+## Select the Raptor build
 
-After preparation, a project can build the component without camera inputs:
+After attaching or acquiring the vendor bundle, the normal command acquires,
+builds and includes full Raptor:
 
 ```bash
-thingino-dlink local-build build-raptor --non-interactive --json --events-jsonl
+thingino-dlink local-build build-universal --non-interactive --json --events-jsonl
 ```
 
-The successful result links the validated component to `local-build build-universal`.
-After attaching or acquiring the vendor bundle, run that command normally.
-Alternatively, use `local-build build-universal --webrtc` to acquire, build and
-include the component in one command. Repeating `--webrtc` revalidates or builds
-the current source recipe; a remembered artifact does not override the flag.
-Both paths use the same headless build core. No manual Raptor archive is needed.
-See [source-build details](build.md#build-webrtc-from-public-sources).
+`--webrtc` remains a compatible explicit alias for the full-Raptor build. The
+project does not store or select a separate media artifact. See the
+[source-build details](build.md#build-full-raptor-from-public-sources).
 
 ## Capture functional recovery with the project
 
@@ -157,10 +152,15 @@ inputs. Configuration asks for private Wi-Fi input twice and generates a camera
 signer when none is supplied. Secrets stay in protected files and inherited
 descriptors; the project stores paths and digests, never raw passwords.
 
+`private-config inspect` reports credential roles without changing or printing
+secrets. Supplying `--session-dir` also checks that the saved SSH identity and
+service credential match that session. A UARTless provisioning session has no
+recovery-AP password; its inspection uses the provisioning host key instead.
+
 On macOS, provision with the repository's JFFS2 container wrapper. Set the
 immutable builder image ID from the successful bootstrap/acquire result or build
 manifest, and ensure that exact image is available locally. An arbitrary Docker
-tag is not a substitute. See [builder prerequisites](build.md#builder-image).
+tag is not a substitute. See the [build host gate](build.md#host-gate).
 From the checkout root:
 
 ```bash
@@ -329,10 +329,10 @@ thingino-dlink universal configure --non-interactive \
   --secrets-fd 3 3<"$DCS6100_CAMERA_ROOT/confirmed-wifi.json"
 ```
 
-Pipes are rejected
-because a read could block indefinitely. Legacy `install` does not support
-`--non-interactive`. Existing JSON callers without this flag retain their
-explicit legacy confirmations, bound to a freshly validated plan within the call.
+Pipes are rejected because a read could block indefinitely. The low-level
+`install` command does not support `--non-interactive`. Existing JSON callers
+without this flag retain their explicit confirmations, bound to a freshly
+validated plan within the call.
 
 ## Status and shared operations
 
@@ -376,8 +376,8 @@ recreates configuration or keys, or supplies a media confirmation.
 The shared project, recovery, camera setup and media modules accept typed inputs
 without a CLI parser or terminal prompts. They return the common installation
 result and emit structured phase events. CLI adapters handle choices, private
-input and presentation. Legacy development and restore commands keep their
-existing contracts.
+input and presentation. Recovery and restore commands keep their existing
+contracts.
 
 `--json` preserves the result schema and adds structured error details and missing
 inputs. Interrupted operations report an uncertain outcome. `--events-jsonl`

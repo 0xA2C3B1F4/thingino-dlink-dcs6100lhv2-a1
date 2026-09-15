@@ -17,7 +17,7 @@ class ProfileTests(unittest.TestCase):
 
         self.assertEqual(
             sha256(PROFILE / "defconfig"),
-            "8879586233f340c278ebb58a9ec31f1f7e11353dacc8991782570fc0b19aa25c",
+            "be40de6a77e286fe3786052a40eb650f0394262d707d39f13c35e1c74932cd65",
         )
         self.assertEqual(
             sha256(PROFILE / "kernel.fragment"),
@@ -36,7 +36,6 @@ class ProfileTests(unittest.TestCase):
             "BR2_THINGINO_TOOLCHAIN_LIBC_GLIBC=y",
             "# BR2_THINGINO_TOOLCHAIN_LIBC_MUSL is not set",
             "# BR2_PACKAGE_THINGINO_SYSUPGRADE is not set",
-            "# BR2_PACKAGE_PRUDYNT_T_DCS6100_CAMERA_LOCAL_VENDOR is not set",
             'BR2_STRIP_EXCLUDE_FILES="libimp.so libalog.so libsysutils.so"',
             "# BR2_PACKAGE_THINGINO_KOPT_IPV6 is not set",
             "# BR2_PACKAGE_THINGINO_ODHCP6C is not set",

@@ -2,7 +2,25 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { StreamerPreviewRetry, StreamerPreviewSession, isStreamerPreviewRoute, streamerPreviewStreamUsable } from "../src/app/streamer-preview";
 import type { PreviewTimers } from "../src/api/media";
-import { previewStreamUsable } from "../src/pages/preview";
+import { previewStreamUsable, previewVideoSummary } from "../src/pages/preview";
+
+test("preview summary follows the selected stream and preserves media details on heartbeat refresh", () => {
+  const media = {
+    stream0: { enabled: true, available: true, snapshot_url: null, width: 1920, height: 1080, fps: 15, format: "H264" as const },
+    stream1: { enabled: true, available: true, snapshot_url: null, width: 640, height: 360, fps: 15, format: "H264" as const },
+  };
+  assert.deepEqual(previewVideoSummary(1, media, { rec_ch0: true, rec_ch1: false }), {
+    value: "Substream ready", detail: "640 × 360 · 15 fps · H264",
+  });
+  assert.deepEqual(previewVideoSummary(1, media, { rec_ch0: false, rec_ch1: true }), {
+    value: "Substream recording", detail: "640 × 360 · 15 fps · H264",
+  });
+  assert.equal(previewVideoSummary(0, media, { rec_ch0: true, rec_ch1: false }).value, "Main stream recording");
+  assert.equal(previewVideoSummary(0, media, null).value, "Main stream ready");
+  assert.equal(previewVideoSummary(1, null, null).value, "Substream status unknown");
+  assert.equal(previewVideoSummary(1, { ...media, stream1: { ...media.stream1, available: false } }, null).value, "Substream unavailable");
+  assert.equal(previewVideoSummary(1, { ...media, stream1: { ...media.stream1, enabled: false } }, null).value, "Substream disabled");
+});
 
 test("Preview and Streamer retain their distinct enabled and available policies for both streams", () => {
   for (const stream of [0, 1] as const) {

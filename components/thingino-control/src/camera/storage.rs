@@ -5,17 +5,15 @@ use super::*;
 mod filesystem;
 mod format;
 mod paths;
-mod recording;
-mod retention;
 mod sd;
 
 pub(super) use filesystem::*;
+#[cfg(feature = "raptor-backend")]
+pub(crate) use format::RaptorStorageWorkerError;
 pub(super) use paths::*;
-pub(super) use recording::*;
-pub(super) use retention::*;
 // Keep the existing camera-level facade, including test and diagnostic helpers.
 #[allow(unused_imports)]
-pub(super) use sd::{SdMount, detect_sd_device, sd_mounts};
+pub(super) use sd::sd_mounts;
 
 pub(super) fn os_release_value(path: &Path, key: &str) -> Option<String> {
     let content = read_text_value(path, 16 * 1024)?;
@@ -25,24 +23,7 @@ pub(super) fn os_release_value(path: &Path, key: &str) -> Option<String> {
     })
 }
 
-#[derive(Debug)]
-pub(super) struct StorageFormatState {
-    phase: &'static str,
-    cid: Option<String>,
-    last_output: String,
-}
-
-impl Default for StorageFormatState {
-    fn default() -> Self {
-        Self {
-            phase: "idle",
-            cid: None,
-            last_output: String::new(),
-        }
-    }
-}
-
-pub(super) fn base64_encode(bytes: &[u8]) -> String {
+pub(crate) fn base64_encode(bytes: &[u8]) -> String {
     const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut output = String::with_capacity(bytes.len().div_ceil(3) * 4);
     for chunk in bytes.chunks(3) {

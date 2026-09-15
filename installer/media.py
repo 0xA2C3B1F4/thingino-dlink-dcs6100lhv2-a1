@@ -49,7 +49,7 @@ from .stage2 import (
     Stage2Error,
     Stage2Payload,
     validate_legacy_stage2_v1,
-    validate_retired_stage2_v2_42_22,
+    validate_retired_stage2_v2_39_25,
     validate_retired_stage2_v2_ipv6_disabled,
     validate_stage2,
 )
@@ -360,9 +360,9 @@ def _validate_install_manifest(
                 manifest.get("provisioning") != "separate-per-camera-audit-and-jffs2"
                 or not isinstance(firmware_identity, str)
                 or re.fullmatch(r"[0-9a-f]{64}", firmware_identity) is None
-                or stage2_payload.data_mode != "initialize"
+                or stage2_payload.data_mode not in {"initialize", "preserve"}
                 or manifest.get("physical_write_policy")
-                != universal_physical_write_policy()
+                != universal_physical_write_policy(stage2_payload.data_mode)
             ):
                 raise MediaError("model-universal install-set binding is invalid")
         elif artifact_scope == "device-personalized" and (
@@ -498,7 +498,21 @@ def validate_install_set(
 
     package = parse_package(bootstrap_bytes, require_project_header=True)
     validate_bootstrap(package)
-    stage2_payload = validate_stage2(stage2_bytes)
+    try:
+        manifest = json.loads(manifest_bytes)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise MediaError("install-set manifest is invalid JSON") from exc
+    if not isinstance(manifest, dict):
+        raise MediaError("install-set manifest must be an object")
+    development_profile = manifest.get("development_profile")
+    if development_profile is None:
+        stage2_payload = validate_stage2(stage2_bytes)
+    else:
+        from .stage2 import validate_stage2_for_profile
+
+        if manifest.get("schema_version") != 2 or manifest.get("artifact_scope") != "device-personalized":
+            raise MediaError("development profile requires a personalized schema-2 install set")
+        stage2_payload = validate_stage2_for_profile(stage2_bytes, development_profile)
     _validate_install_manifest(
         manifest_bytes,
         bootstrap_name=bootstrap_name,
@@ -664,7 +678,7 @@ def replace_passive_bootstrap(
         validate_sd_root=validate_sd_root,
         stage2_validators=Stage2Validators(
             current=validate_stage2,
-            retired_memory=validate_retired_stage2_v2_42_22,
+            retired_memory=validate_retired_stage2_v2_39_25,
             retired_ipv6=validate_retired_stage2_v2_ipv6_disabled,
             legacy=validate_legacy_stage2_v1,
         ),

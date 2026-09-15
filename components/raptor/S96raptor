@@ -1,0 +1,149 @@
+#!/bin/sh
+# Cold-boot owner for the full Raptor media stack.
+set -eu
+PATH=/bin:/sbin:/usr/bin:/usr/sbin
+export PATH
+
+state=/run/raptor-boot
+config=/etc/raptor-media.conf
+export LD_LIBRARY_PATH=/usr/lib
+
+start_owner() {
+    name=$1
+    binary=$2
+    shift 2
+    (
+        case "$name" in rad|rmr0|rmr1) ulimit -s 512 ;; esac
+        exec "$binary" "$@"
+    ) >"$state/$name.log" 2>&1 </dev/null &
+    child=$!
+    printf '%s\n' "$child" >"$state/$name.pid"
+    sleep 1
+    kill -0 "$child"
+}
+
+start() {
+    case "$(cat /proc/cmdline)" in
+        *'mem=42M@0x0 rmem=22M@0x2a00000 '*) ;;
+        *) echo 'Raptor requires the reviewed 42/22 kernel' >&2; return 1 ;;
+    esac
+    # A second SDK acquisition in one boot is not accepted. Do not remove
+    # rings, kill unknown processes, or retry after a failed acquisition.
+    test ! -e "$state"
+    test -z "$(pidof prudynt daynightd rvd rad ric rhd rod rsd rwd rmr 2>/dev/null || true)"
+    test ! -e /sys/bus/i2c/devices/0-003c
+    test ! -e /dev/shm/rss_ring_main
+    umask 077
+    mkdir "$state"
+    if [ -s /etc/TZ ]; then
+        IFS= read -r TZ </etc/TZ || true
+        export TZ
+    fi
+    start_owner rvd /usr/bin/rvd -f -c "$config"
+    attempt=0
+    until test -e /dev/shm/rss_ring_main; do
+        attempt=$((attempt + 1))
+        test "$attempt" -lt 15
+        kill -0 "$(cat "$state/rvd.pid")"
+        sleep 1
+    done
+    sub_status=$(/usr/bin/raptorctl -j \
+        '{"daemon":"rvd","cmd":"get-stream-enabled","stream_id":1}')
+    case "$sub_status" in
+        *'"status":"ok"'*'"supported":true'*'"configured_enabled":true'*)
+            sub_enabled=true
+            ;;
+        *'"status":"ok"'*'"supported":true'*'"configured_enabled":false'*)
+            sub_enabled=false
+            ;;
+        *) echo 'RVD substream configuration readback failed' >&2; return 1 ;;
+    esac
+    if [ "$sub_enabled" = true ]; then
+        attempt=0
+        until test -e /dev/shm/rss_ring_sub; do
+            attempt=$((attempt + 1))
+            test "$attempt" -lt 15
+            kill -0 "$(cat "$state/rvd.pid")"
+            sleep 1
+        done
+    fi
+    # ROD owns text layout and publishes OSD bitmaps; RVD applies those bitmaps.
+    start_owner rod /usr/bin/rod -f -c "$config"
+    # Wait for actual frames, not only process existence or a stale pidfile.
+    start_owner rhd /usr/bin/rhd -f -c "$config"
+    attempt=0
+    until curl --fail --silent --max-time 2 -o /dev/null \
+        'http://127.0.0.1:8080/snapshot?ch=0'; do
+        attempt=$((attempt + 1))
+        test "$attempt" -lt 15
+        kill -0 "$(cat "$state/rvd.pid")"
+        sleep 1
+    done
+    if [ "$sub_enabled" = true ]; then
+        curl --fail --silent --max-time 3 -o /dev/null \
+            'http://127.0.0.1:8080/snapshot?ch=1'
+    fi
+    start_owner rsd /usr/bin/rsd -f -c "$config"
+    start_owner ric /usr/bin/ric -f -c "$config"
+    start_owner rad /usr/bin/rad -f -c /etc/raptor-audio.conf
+    start_owner rmr0 /usr/bin/rmr --channel 0 -f -c "$config"
+    if [ "$sub_enabled" = true ]; then
+        start_owner rmr1 /usr/bin/rmr --channel 1 -f -c "$config"
+    fi
+
+    local_ip=$(ip -4 -o addr show scope global | awk \
+        '{ split($4, address, "/"); print address[1]; exit }')
+    test -n "$local_ip"
+    test -s /etc/ssl/certs/uhttpd.crt
+    test -s /etc/ssl/private/uhttpd.key
+    awk -v address="$local_ip" \
+        '{ print; if ($0 == "[webrtc]") print "local_ip=" address }' \
+        /etc/raptor-webrtc.conf >"$state/webrtc.conf"
+    start_owner rwd /usr/bin/rwd -f -c "$state/webrtc.conf"
+    start_owner storage /usr/sbin/thingino-controld --storage-worker
+    start_owner control /usr/sbin/thingino-controld \
+        --camera --media-backend raptor --listen 127.0.0.1:1998 \
+        --token-file /etc/thingino.json --whip-backend 127.0.0.1:8555
+    printf 'started\n' >"$state/ready"
+}
+
+stop_owner() {
+    name=$1
+    binary=$2
+    test -f "$state/$name.pid" || return 0
+    IFS= read -r pid <"$state/$name.pid"
+    case "$pid" in ''|*[!0-9]*) return 1 ;; esac
+    test -d "/proc/$pid" || return 0
+    test "$(readlink "/proc/$pid/exe")" = "$binary"
+    kill -TERM "$pid"
+    attempt=0
+    while test -d "/proc/$pid"; do
+        attempt=$((attempt + 1))
+        test "$attempt" -lt 20 || return 1
+        sleep 1
+    done
+}
+
+stop() {
+    # Stop request intake before closing the MP4 writers. The RMR SIGTERM
+    # cleanup finalizes its open file. Never force-kill a stalled writer.
+    stop_owner control /usr/sbin/thingino-controld
+    stop_owner rmr0 /usr/bin/rmr
+    stop_owner rmr1 /usr/bin/rmr
+    for owner in rwd rad ric rsd rhd rod; do
+        stop_owner "$owner" "/usr/bin/$owner"
+    done
+    stop_owner storage /usr/sbin/thingino-controld
+    stop_owner rvd /usr/bin/rvd
+    # Retain the per-boot marker: restarting IMP requires a fresh boot.
+}
+
+case "${1:-}" in
+    start) start ;;
+    stop) stop ;;
+    restart)
+        echo 'Use a normal reboot; warm sensor reacquisition is not supported' >&2
+        exit 1
+        ;;
+    *) echo "Usage: $0 {start|stop}" >&2; exit 2 ;;
+esac

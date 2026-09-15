@@ -29,7 +29,8 @@ export interface FieldSpec {
   placeholder?: string;
   readOnly?: boolean;
   writeOnlySecret?: boolean;
-  enabledWhen?: { path: string; equals: boolean };
+  enabledWhen?: { path: string; equals: boolean } | ((read: (path: string) => JsonValue | undefined) => boolean);
+  visibleWhen?: { path: string; equals: boolean };
   rangeFrom?: string;
 }
 
@@ -38,13 +39,15 @@ export interface ConfigFormSpec {
   eyebrow: string;
   description: string;
   endpoint: string;
+  fieldIdPrefix?: string;
   saveEndpoint?: string;
   load?: (client: ApiClient) => Promise<JsonObject>;
   decode?: (value: unknown) => JsonObject;
   fields: FieldSpec[];
   groupSections?: boolean;
   collapsibleSections?: readonly string[];
-  saveLabel?: string;
+  saveLabel?: string | ((loaded: JsonObject) => string);
+  successMessage?: (loaded: JsonObject) => string;
   loadTransform?: (value: JsonObject) => JsonObject;
   saveTransform?: (value: JsonObject, loaded: JsonObject) => JsonObject;
   validate?: (value: JsonObject, loaded: JsonObject) => string | undefined;
@@ -112,8 +115,8 @@ export function buildConfigPayload(
   return body;
 }
 
-function inputFor(field: FieldSpec): HTMLInputElement | HTMLSelectElement {
-  const id = `field-${field.path.replaceAll(".", "-")}`;
+function inputFor(field: FieldSpec, prefix = "field"): HTMLInputElement | HTMLSelectElement {
+  const id = `${prefix}-${field.path.replaceAll(".", "-")}`;
   if (field.type === "select") {
     const select = element("select", { className: "input", attrs: { id, name: field.path } });
     for (const option of field.options ?? []) {
@@ -144,7 +147,10 @@ function inputFor(field: FieldSpec): HTMLInputElement | HTMLSelectElement {
 }
 
 function writeValue(input: HTMLInputElement | HTMLSelectElement, value: JsonValue | undefined): void {
-  if (input instanceof HTMLInputElement && input.type === "checkbox") input.checked = value === true || value === 1;
+  if (input instanceof HTMLInputElement && input.type === "checkbox") {
+    input.checked = value === true || value === 1;
+    input.indeterminate = value === null;
+  }
   else input.value = value === undefined || value === null ? "" : String(value);
 }
 
@@ -160,7 +166,7 @@ function optionValues(value: JsonValue | undefined): FieldOption[] {
 }
 
 function readValue(input: HTMLInputElement | HTMLSelectElement, field: FieldSpec): JsonValue | undefined {
-  if (input instanceof HTMLInputElement && input.type === "checkbox") return input.checked;
+  if (input instanceof HTMLInputElement && input.type === "checkbox") return input.indeterminate ? undefined : input.checked;
   if (field.type === "number") return input.value === "" ? undefined : Number(input.value);
   if (field.type === "select" && field.valueType === "number") return input.value === "" ? undefined : Number(input.value);
   return input.value;
@@ -181,6 +187,7 @@ export function renderConfigForm(client: ApiClient, spec: ConfigFormSpec): { nod
   });
   const fields = new Map<string, {
     input: HTMLInputElement | HTMLSelectElement;
+    row: HTMLElement;
     optionsList?: HTMLDataListElement;
     spec: FieldSpec;
   }>();
@@ -190,12 +197,14 @@ export function renderConfigForm(client: ApiClient, spec: ConfigFormSpec): { nod
   let cancelled = false;
 
   const refreshDependencies = (): void => {
+    const read = (path: string): JsonValue | undefined => {
+      const field = fields.get(path);
+      return field ? readValue(field.input, field.spec) : getPath(loadedView, path);
+    };
     for (const field of fields.values()) {
-      if (!field.spec.enabledWhen) continue;
-      const controller = fields.get(field.spec.enabledWhen.path)?.input;
-      const active = controller instanceof HTMLInputElement && controller.type === "checkbox"
-        ? controller.checked === field.spec.enabledWhen.equals
-        : false;
+      const condition = field.spec.enabledWhen;
+      if (!condition) continue;
+      const active = typeof condition === "function" ? condition(read) : read(condition.path) === condition.equals;
       field.input.disabled = !active;
     }
   };
@@ -248,15 +257,15 @@ export function renderConfigForm(client: ApiClient, spec: ConfigFormSpec): { nod
         form.append(element("h2", { className: "form-section-title", text: field.section }));
       }
     }
-    const input = inputFor(field);
+    const input = inputFor(field, spec.fieldIdPrefix);
     const optionsList = field.type === "search" && field.optionsFrom
       ? element("datalist", { attrs: { id: `${input.id}-options` } })
       : undefined;
-    fields.set(field.path, { input, ...(optionsList ? { optionsList } : {}), spec: field });
     input.addEventListener("change", refreshDependencies);
     const row = field.type === "checkbox"
       ? switchField(field.label, input as HTMLInputElement, field.description)
       : element("div", { className: "field" });
+    fields.set(field.path, { input, row, ...(optionsList ? { optionsList } : {}), spec: field });
     if (field.type !== "checkbox") {
       const label = element("label", { text: field.label, attrs: { for: input.id } });
       row.append(label, input);
@@ -289,7 +298,7 @@ export function renderConfigForm(client: ApiClient, spec: ConfigFormSpec): { nod
   const reload = button("Reload", "button secondary");
   const save = element("button", {
     className: "button primary",
-    text: spec.saveLabel ?? "Save settings",
+    text: typeof spec.saveLabel === "string" ? spec.saveLabel : "Save settings",
     attrs: { type: "submit" },
   });
   save.disabled = true;
@@ -311,6 +320,9 @@ export function renderConfigForm(client: ApiClient, spec: ConfigFormSpec): { nod
       if (cancelled) return false;
       loadedView = spec.loadTransform ? spec.loadTransform(loadedRaw) : cloneObject(loadedRaw);
       for (const [path, field] of fields) {
+        if (field.spec.visibleWhen) {
+          field.row.hidden = getPath(loadedView, field.spec.visibleWhen.path) !== field.spec.visibleWhen.equals;
+        }
         if (field.spec.optionsFrom && (field.input instanceof HTMLSelectElement || field.optionsList)) {
           let currentOptions = optionValues(getPath(loadedView, field.spec.optionsFrom));
           const currentValue = getPath(loadedView, path);
@@ -327,11 +339,11 @@ export function renderConfigForm(client: ApiClient, spec: ConfigFormSpec): { nod
           if (typeof metadata !== "object" || metadata === null || Array.isArray(metadata)) {
             throw new TypeError(`Missing range metadata for ${path}.`);
           }
-          const supported = metadata.supported === true;
+          const supported = metadata.supported === true && metadata.available !== false;
           field.input.disabled = !supported;
           if (typeof metadata.min === "number") field.input.min = String(metadata.min);
           if (typeof metadata.max === "number") field.input.max = String(metadata.max);
-          field.input.title = supported ? `${metadata.min}–${metadata.max}` : "Unavailable on this sensor";
+          field.input.title = supported ? `${metadata.min}–${metadata.max}` : "Unavailable on this device";
         }
         writeValue(field.input, getPath(loadedView, path));
       }
@@ -347,6 +359,7 @@ export function renderConfigForm(client: ApiClient, spec: ConfigFormSpec): { nod
         header.summary.textContent = spec.cardSummary?.(card, loadedView) ?? "";
       }
       spec.onLoaded?.(loadedView);
+      if (typeof spec.saveLabel === "function") save.textContent = spec.saveLabel(loadedRaw);
       loadedSuccessfully = true;
       save.disabled = false;
       setMessage(message);
@@ -387,10 +400,23 @@ export function renderConfigForm(client: ApiClient, spec: ConfigFormSpec): { nod
         window.dispatchEvent(new CustomEvent("thingino:config-saved", {
           detail: { endpoint: spec.saveEndpoint ?? spec.endpoint, refreshStreamerPreview: spec.refreshStreamerPreview === true },
         }));
-        setMessage(message, "Settings saved.", "success");
+        setMessage(message, spec.successMessage?.(loadedRaw) ?? "Settings saved.", "success");
       }
     } catch (error) {
       if (!cancelled) setMessage(message, error instanceof Error ? error.message : "Unable to save settings.", "error");
+      // A checked save may update capability/persistence metadata before
+      // throwing. Refresh that metadata without replacing the user's inputs.
+      loadedView = spec.loadTransform ? spec.loadTransform(loadedRaw) : cloneObject(loadedRaw);
+      refreshDependencies();
+      if (typeof spec.saveLabel === "function") save.textContent = spec.saveLabel(loadedRaw);
+      for (const [card, header] of cardHeaders) {
+        const state = spec.cardState?.(card, loadedView);
+        if (state) {
+          header.state.textContent = state.label;
+          header.state.dataset.state = state.state;
+        }
+        header.summary.textContent = spec.cardSummary?.(card, loadedView) ?? "";
+      }
     } finally {
       save.disabled = !loadedSuccessfully;
     }

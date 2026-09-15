@@ -11,6 +11,13 @@ struct TimezoneEntry {
     data: String,
 }
 
+pub(crate) struct TimeUpdate {
+    pub(crate) name: String,
+    pub(crate) rule: String,
+    ntp: String,
+    ignore_dhcp: Option<bool>,
+}
+
 fn parse_timezone_catalog(bytes: &[u8]) -> Result<Vec<TimezoneEntry>, BackendError> {
     let value = json::parse(bytes).map_err(|_| BackendError::Protocol)?;
     let entries = value.as_array().ok_or(BackendError::Protocol)?;
@@ -85,7 +92,7 @@ fn current_epoch() -> u64 {
         .unwrap_or_default()
 }
 
-impl PrudyntBackend {
+impl HostBackend {
     pub(in crate::camera) fn time_config(&self) -> Result<BackendResponse, BackendError> {
         let _timezone_guard = self
             .timezone_lock
@@ -132,11 +139,7 @@ impl PrudyntBackend {
         Ok(BackendResponse::json(body.into_bytes()))
     }
 
-    pub(in crate::camera) fn update_time_config(
-        &self,
-        body: &[u8],
-        deadline: Instant,
-    ) -> Result<BackendResponse, BackendError> {
+    pub(crate) fn prepare_time_config(&self, body: &[u8]) -> Result<TimeUpdate, BackendError> {
         let request = json::parse(body).map_err(|_| BackendError::Protocol)?;
         if request.get_path("action").and_then(Value::as_str) != Some("update") {
             return Err(BackendError::Protocol);
@@ -149,7 +152,6 @@ impl PrudyntBackend {
             .filter(|value| !value.is_empty() && value.len() <= TIMEZONE_NAME_LIMIT)
             .and_then(|name| find_timezone(&catalog, name))
             .ok_or(BackendError::Protocol)?;
-        let timezone_changed = configured_timezone(&self.paths, &catalog).name != timezone.name;
         if let Some(legacy_name) = request.get_path("tz_name").and_then(Value::as_str)
             && legacy_name != timezone.name
         {
@@ -178,54 +180,113 @@ impl PrudyntBackend {
         if ntp.is_empty() {
             return Err(BackendError::Protocol);
         }
+        Ok(TimeUpdate {
+            name: timezone.name.clone(),
+            rule: timezone.data.clone(),
+            ntp,
+            ignore_dhcp: request
+                .get_path("dhcp_ignore_timezone")
+                .and_then(Value::as_bool),
+        })
+    }
+
+    #[cfg(feature = "raptor-backend")]
+    pub(crate) fn persist_time_config(&self, update: &TimeUpdate) -> Result<bool, BackendError> {
         let _timezone_guard = self
             .timezone_lock
             .lock()
             .map_err(|_| BackendError::Unavailable)?;
+        self.persist_time_config_locked(update)
+    }
+
+    fn persist_time_config_locked(&self, update: &TimeUpdate) -> Result<bool, BackendError> {
+        let catalog = catalog_for(&self.paths)?;
+        let changed = configured_timezone(&self.paths, &catalog).name != update.name;
         write_config_file(
             &self.paths.timezone,
-            format!("{}\n", timezone.name).as_bytes(),
+            format!("{}\n", update.name).as_bytes(),
             0o644,
         )?;
         write_config_file(
             &self.paths.tz,
-            format!("{}\n", timezone.data).as_bytes(),
+            format!("{}\n", update.rule).as_bytes(),
             0o644,
         )?;
-        write_config_file(&self.paths.ntp_config, ntp.as_bytes(), 0o444)?;
-        if let Some(ignore) = request
-            .get_path("dhcp_ignore_timezone")
-            .and_then(Value::as_bool)
-        {
-            let update = object([("ignore_timezone", Value::Bool(ignore))]);
-            self.merge_config_domain(
-                &self.paths.thingino_config,
+        write_config_file(&self.paths.ntp_config, update.ntp.as_bytes(), 0o444)?;
+        if let Some(ignore) = update.ignore_dhcp {
+            self.merge_thingino_domain(
                 "dhcp",
-                update.to_json().as_bytes(),
+                object([("ignore_timezone", Value::Bool(ignore))])
+                    .to_json()
+                    .as_bytes(),
             )?;
         }
-        if timezone_changed {
-            // The D-Link Prudynt patch turns the existing restart_thread:7
-            // action into a bounded in-place process replacement.  It reads
-            // the newly written /etc/TZ and execve's with that value, so the
-            // OSD timezone changes without a camera reboot.  Propagate any
-            // socket/protocol/timeout failure instead of claiming a live
-            // apply that did not happen.
-            self.restart_prudynt(deadline)
-                .map_err(|error| match error {
-                    // The hard-coded action is valid; a protocol error here is
-                    // therefore a malformed Prudynt response, not a bad client
-                    // request.  Keep the live-apply failure in the upstream error
-                    // family instead of returning a misleading 400.
-                    BackendError::Protocol => BackendError::Unavailable,
-                    error => error,
-                })?;
-        }
-        Ok(BackendResponse::json(
-            b"{\"status\":\"ok\",\"message\":\"Time configuration updated\"}\n".to_vec(),
-        ))
+        Ok(changed)
     }
 
+    fn merge_thingino_domain(
+        &self,
+        domain: &str,
+        body: &[u8],
+    ) -> Result<BackendResponse, BackendError> {
+        let path = &self.paths.thingino_config;
+        let mut document =
+            json::parse(&read_bounded(path, FILE_LIMIT)?).map_err(|_| BackendError::Protocol)?;
+        let mut update = json::parse(body).map_err(|_| BackendError::Protocol)?;
+        if update.as_object().is_none() {
+            return Err(BackendError::Protocol);
+        }
+        remove_unchanged_secret_fields(&mut update);
+        let mut current = document
+            .get_path(domain)
+            .cloned()
+            .unwrap_or_else(|| Value::Object(BTreeMap::new()));
+        current.merge(&update).map_err(|_| BackendError::Protocol)?;
+        document
+            .set_path(domain, current)
+            .map_err(|_| BackendError::Protocol)?;
+        let mut serialized = document.to_json().into_bytes();
+        serialized.push(b'\n');
+        write_in_place(path, &serialized)?;
+        Ok(BackendResponse::json(b"{\"status\":\"ok\"}\n".to_vec()))
+    }
+
+    #[cfg(feature = "raptor-backend")]
+    pub(crate) fn timezone_files_match(&self, name: &str, rule: &str) -> bool {
+        read_bounded(&self.paths.timezone, 1024)
+            .is_ok_and(|bytes| bytes == format!("{name}\n").as_bytes())
+            && read_bounded(&self.paths.tz, 1024)
+                .is_ok_and(|bytes| bytes == format!("{rule}\n").as_bytes())
+    }
+
+    #[cfg(feature = "raptor-backend")]
+    pub(crate) fn verify_time_config(&self, update: &TimeUpdate) -> Result<(), BackendError> {
+        let _timezone_guard = self
+            .timezone_lock
+            .lock()
+            .map_err(|_| BackendError::Unavailable)?;
+        if read_bounded(&self.paths.timezone, 1024)? != format!("{}\n", update.name).as_bytes()
+            || read_bounded(&self.paths.tz, 1024)? != format!("{}\n", update.rule).as_bytes()
+            || read_bounded(&self.paths.ntp_config, 4096)? != update.ntp.as_bytes()
+        {
+            return Err(BackendError::Upstream(502));
+        }
+        if let Some(ignore) = update.ignore_dhcp {
+            let config = json::parse(&read_bounded(&self.paths.thingino_config, FILE_LIMIT)?)
+                .map_err(|_| BackendError::Upstream(502))?;
+            if config
+                .get_path("dhcp.ignore_timezone")
+                .and_then(Value::as_bool)
+                != Some(ignore)
+            {
+                return Err(BackendError::Upstream(502));
+            }
+        }
+        Ok(())
+    }
+}
+
+impl HostBackend {
     pub(in crate::camera) fn sync_time(
         &self,
         deadline: Instant,
@@ -301,13 +362,16 @@ impl PrudyntBackend {
 mod tests {
     use super::*;
     use std::fs;
-    use std::io::{Read, Write};
-    use std::os::unix::net::UnixListener;
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::thread;
 
     static TEMP_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+    fn persist_host_time(backend: &HostBackend, body: &[u8]) -> Result<(), BackendError> {
+        let update = backend.prepare_time_config(body)?;
+        backend.persist_time_config(&update)?;
+        backend.verify_time_config(&update)
+    }
 
     fn task_temp(name: &str) -> PathBuf {
         let root = std::env::var_os("TMPDIR").expect("TMPDIR is required by repository policy");
@@ -379,6 +443,38 @@ mod tests {
     }
 
     #[test]
+    fn thingino_domain_merge_preserves_unchanged_secrets() {
+        let root = task_temp("unchanged-secret");
+        let config = root.join("thingino.json");
+        fs::write(
+            &config,
+            br#"{"dhcp":{"ignore_timezone":false,"password":"__SET_LOCALLY__"}}"#,
+        )
+        .unwrap();
+        let backend = HostBackend::new(CameraPaths {
+            thingino_config: config.clone(),
+            ..CameraPaths::default()
+        });
+
+        backend
+            .merge_thingino_domain("dhcp", br#"{"ignore_timezone":true,"password":null}"#)
+            .unwrap();
+
+        let persisted = json::parse(&fs::read(&config).unwrap()).unwrap();
+        assert_eq!(
+            persisted.get_path("dhcp.password").and_then(Value::as_str),
+            Some("__SET_LOCALLY__")
+        );
+        assert_eq!(
+            persisted
+                .get_path("dhcp.ignore_timezone")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn get_exposes_catalog_options_and_post_maps_helsinki_without_posix_input() {
         let root = task_temp("get-post");
         let timezone = root.join("timezone");
@@ -396,18 +492,7 @@ mod tests {
         .unwrap();
         fs::write(&ntp, b"server pool.ntp.org iburst\n").unwrap();
         fs::write(&thingino, br#"{"dhcp":{"ignore_timezone":false}}"#).unwrap();
-        let listener = UnixListener::bind(&prudynt_socket).unwrap();
-        let server = thread::spawn(move || {
-            let (mut stream, _) = listener.accept().unwrap();
-            let mut command = Vec::new();
-            stream.read_to_end(&mut command).unwrap();
-            assert_eq!(
-                command,
-                crate::camera::prudynt::framed_prudynt_json(br#"{"action":{"restart_thread":7}}"#)
-            );
-            stream.write_all(b"{\"code\":200}\n").unwrap();
-        });
-        let backend = PrudyntBackend::new(CameraPaths {
+        let backend = HostBackend::new(CameraPaths {
             timezone: timezone.clone(),
             tz: tz.clone(),
             timezone_catalog: catalog,
@@ -436,12 +521,11 @@ mod tests {
                     _ => None,
                 });
         assert!(current_unix_time.is_some_and(|value| value > 1_600_000_000));
-        backend
-            .update_time_config(
-                br#"{"action":"update","timezone":"Europe/Helsinki","ntp_server_0":"pool.ntp.org"}"#,
-                Instant::now() + Duration::from_secs(1),
-            )
-            .unwrap();
+        persist_host_time(
+            &backend,
+            br#"{"action":"update","timezone":"Europe/Helsinki","ntp_server_0":"pool.ntp.org"}"#,
+        )
+        .unwrap();
         let after = json::parse(&backend.time_config().unwrap().body).unwrap();
         assert_eq!(
             after.get_path("timezone").and_then(Value::as_str),
@@ -451,7 +535,6 @@ mod tests {
             fs::read_to_string(root.join("TZ")).unwrap(),
             "EET-2EEST,M3.5.0/3,M10.5.0/4\n"
         );
-        server.join().unwrap();
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -472,7 +555,7 @@ mod tests {
         .unwrap();
         fs::write(&ntp, b"server pool.ntp.org iburst\n").unwrap();
         fs::write(&thingino, br#"{"dhcp":{}}"#).unwrap();
-        let backend = PrudyntBackend::new(CameraPaths {
+        let backend = HostBackend::new(CameraPaths {
             timezone: timezone.clone(),
             tz: tz.clone(),
             timezone_catalog: catalog,
@@ -485,17 +568,11 @@ mod tests {
         let original_ntp = fs::read(&ntp).unwrap();
         let original_thingino = fs::read(&thingino).unwrap();
         assert!(matches!(
-            backend.update_time_config(
-                br#"{"action":"update","timezone":"Europe/NotARealZone","ntp_server_0":"pool.ntp.org"}"#,
-                Instant::now() + Duration::from_secs(1),
-            ),
+            persist_host_time(&backend, br#"{"action":"update","timezone":"Europe/NotARealZone","ntp_server_0":"pool.ntp.org"}"#),
             Err(BackendError::Protocol)
         ));
         assert!(matches!(
-            backend.update_time_config(
-                br#"{"action":"update","tz_name":"Europe/Helsinki","tz_data":"GMT0","ntp_server_0":"pool.ntp.org"}"#,
-                Instant::now() + Duration::from_secs(1),
-            ),
+            persist_host_time(&backend, br#"{"action":"update","tz_name":"Europe/Helsinki","tz_data":"GMT0","ntp_server_0":"pool.ntp.org"}"#),
             Err(BackendError::Protocol)
         ));
         assert_eq!(fs::read(&timezone).unwrap(), original_timezone);
@@ -506,7 +583,7 @@ mod tests {
     }
 
     #[test]
-    fn unchanged_timezone_does_not_contact_prudynt() {
+    fn unchanged_timezone_persists_without_a_media_owner() {
         let root = task_temp("unchanged");
         let timezone = root.join("timezone");
         let tz = root.join("TZ");
@@ -522,7 +599,7 @@ mod tests {
         .unwrap();
         fs::write(&ntp, b"server pool.ntp.org iburst\n").unwrap();
         fs::write(&thingino, br#"{"dhcp":{}}"#).unwrap();
-        let backend = PrudyntBackend::new(CameraPaths {
+        let backend = HostBackend::new(CameraPaths {
             timezone,
             tz,
             timezone_catalog: catalog,
@@ -531,53 +608,11 @@ mod tests {
             prudynt_socket: root.join("no-prudynt.sock"),
             ..CameraPaths::default()
         });
-        backend
-            .update_time_config(
-                br#"{"action":"update","timezone":"Europe/Helsinki","ntp_server_0":"pool.ntp.org"}"#,
-                Instant::now() + Duration::from_secs(1),
-            )
-            .unwrap();
-        fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn changed_timezone_reports_live_reload_failure_after_persisting_files() {
-        let root = task_temp("reload-failure");
-        let timezone = root.join("timezone");
-        let tz = root.join("TZ");
-        let catalog = root.join("tz.json");
-        let ntp = root.join("ntp.conf");
-        let thingino = root.join("thingino.json");
-        fs::write(&timezone, b"Etc/GMT\n").unwrap();
-        fs::write(&tz, b"GMT0\n").unwrap();
-        fs::write(
-            &catalog,
-            br#"[{"n":"Etc/GMT","v":"GMT0"},{"n":"Europe/Helsinki","v":"EET-2EEST,M3.5.0/3,M10.5.0/4"}]"#,
+        persist_host_time(
+            &backend,
+            br#"{"action":"update","timezone":"Europe/Helsinki","ntp_server_0":"pool.ntp.org"}"#,
         )
         .unwrap();
-        fs::write(&ntp, b"server pool.ntp.org iburst\n").unwrap();
-        fs::write(&thingino, br#"{"dhcp":{}}"#).unwrap();
-        let backend = PrudyntBackend::new(CameraPaths {
-            timezone: timezone.clone(),
-            tz: tz.clone(),
-            timezone_catalog: catalog,
-            ntp_config: ntp,
-            thingino_config: thingino,
-            prudynt_socket: root.join("no-prudynt.sock"),
-            ..CameraPaths::default()
-        });
-        assert!(matches!(
-            backend.update_time_config(
-                br#"{"action":"update","timezone":"Europe/Helsinki","ntp_server_0":"pool.ntp.org"}"#,
-                Instant::now() + Duration::from_secs(1),
-            ),
-            Err(BackendError::Connection | BackendError::Unavailable | BackendError::Timeout)
-        ));
-        assert_eq!(fs::read_to_string(timezone).unwrap(), "Europe/Helsinki\n");
-        assert_eq!(
-            fs::read_to_string(tz).unwrap(),
-            "EET-2EEST,M3.5.0/3,M10.5.0/4\n"
-        );
         fs::remove_dir_all(root).unwrap();
     }
 }

@@ -215,11 +215,8 @@ def ssh_arguments(facade: object,
     host: str,
     command: str,
     allow_uartless_station_health: bool = False,
+    allow_uartless_raptor_runtime: bool = False,
 ) -> list[str]:
-    RUNTIME_ACTIVATE_COMMAND = getattr(facade, 'RUNTIME_ACTIVATE_COMMAND')
-    RUNTIME_RECEIVE_COMMAND = getattr(facade, 'RUNTIME_RECEIVE_COMMAND')
-    RUNTIME_ROLLBACK_COMMAND = getattr(facade, 'RUNTIME_ROLLBACK_COMMAND')
-    RUNTIME_STATUS_COMMAND = getattr(facade, 'RUNTIME_STATUS_COMMAND')
     RecoveryApHostError = getattr(facade, 'RecoveryApHostError')
     RecoveryApHostSession = getattr(facade, 'RecoveryApHostSession')
     _host = getattr(facade, '_host')
@@ -228,32 +225,45 @@ def ssh_arguments(facade: object,
     uartless_station_health = (
         allow_uartless_station_health
         and session.session_kind == "uartless-functional-provisioning"
-        and command == "thingino-health; sha256sum /dev/mtd3"
+        and command in {
+            "thingino-health; sha256sum /dev/mtd3",
+            "dlink-application-verify",
+            "dlink-runtime-snapshot",
+        }
     )
-    if not session.transport_enabled and not uartless_station_health:
+    from ..raptor_runtime_protocol import is_runtime_command
+    uartless_raptor_runtime = (
+        allow_uartless_raptor_runtime
+        and session.session_kind == "uartless-functional-provisioning"
+        and is_runtime_command(command)
+    )
+    uartless_station = uartless_station_health or uartless_raptor_runtime
+    if (not session.transport_enabled
+            or session.session_kind == "uartless-functional-provisioning") and not uartless_station:
         raise RecoveryApHostError("UARTless provisioning session has no recovery-AP transport")
-    if uartless_station_health and session.station_known_hosts is None:
+    if uartless_station and (
+        session.station_known_hosts is None
+        or not session.station_known_hosts.is_file()
+        or session.station_known_hosts.is_symlink()
+        or not session.station_mdns_name
+    ):
         raise RecoveryApHostError("UARTless station host-key pin is missing")
     fixed = command in {
         "status",
-        "thingino-failure",
         "inspect-nor",
         "provision",
         "reboot",
         "vendor-export",
         "thingino-health; sha256sum /dev/mtd3",
         "dlink-media-verify",
+        "dlink-application-verify",
         "dlink-runtime-snapshot",
-        RUNTIME_RECEIVE_COMMAND,
-        RUNTIME_ACTIVATE_COMMAND,
-        RUNTIME_STATUS_COMMAND,
-        RUNTIME_ROLLBACK_COMMAND,
     }
     transfer = re.fullmatch(
         r"(?:receive [1-9][0-9]{0,6} [0-9a-f]{64}|send [0-9a-f]{64}|install-recovery [0-9a-f]{64}|install-mtd3 [0-9a-f]{64}|activate-mtd3 [0-9a-f]{64})",
         command,
     )
-    if not fixed and transfer is None:
+    if not fixed and transfer is None and not is_runtime_command(command):
         raise RecoveryApHostError("recovery-AP command is outside the fixed protocol")
     return [
         "ssh",
@@ -273,9 +283,9 @@ def ssh_arguments(facade: object,
         "-o",
         "GlobalKnownHostsFile=/dev/null",
         "-o",
-        f"UserKnownHostsFile={session.station_known_hosts if uartless_station_health else session.known_hosts}",
+        f"UserKnownHostsFile={session.station_known_hosts if uartless_station else session.known_hosts}",
         "-o",
-        f"HostKeyAlias={session.station_mdns_name if uartless_station_health else '192.168.88.1'}",
+        f"HostKeyAlias={session.station_mdns_name if uartless_station else '192.168.88.1'}",
         "-o",
         "ClearAllForwardings=yes",
         "-o",
@@ -283,6 +293,28 @@ def ssh_arguments(facade: object,
         f"root@{host}",
         command,
     ]
+
+def _runtime_stderr_category(raw: bytes) -> str:
+    """Classify bounded SSH diagnostics; never return remote-controlled text."""
+    sample = raw[:4096].lower()
+    for marker, category in (
+        (b"string too long", "ssh-string-too-long"),
+        (b"command too long", "command-too-long"),
+        (b"exec request failed", "exec-request-failed"),
+        (b"administratively prohibited", "channel-prohibited"),
+        (b"host key verification failed", "host-key-rejected"),
+        (b"remote host identification has changed", "host-key-changed"),
+        (b"permission denied", "authentication-rejected"),
+        (b"received disconnect", "peer-disconnected"),
+        (b"connection reset", "connection-reset"),
+        (b"connection closed", "connection-closed"),
+        (b"connection timed out", "connection-timeout"),
+        (b"raptor_error=quarantine-rejected", "receiver-quarantine-rejected"),
+    ):
+        if marker in sample:
+            return category
+    return "other" if raw else "empty"
+
 
 def _exchange(facade: object,
     session: RecoveryApHostSession,
@@ -292,11 +324,21 @@ def _exchange(facade: object,
     payload: bytes = b"",
     timeout: float = 30.0,
     allow_uartless_station_health: bool = False,
+    allow_uartless_raptor_runtime: bool = False,
 ) -> bytes:
     RecoveryApHostError = getattr(facade, 'RecoveryApHostError')
     RecoveryApHostSession = getattr(facade, 'RecoveryApHostSession')
     ssh_arguments = getattr(facade, 'ssh_arguments')
     subprocess = getattr(facade, 'subprocess')
+    from ..raptor_runtime_protocol import is_runtime_command
+    import shlex
+
+    runtime_label = None
+    if is_runtime_command(command):
+        parts = shlex.split(command)
+        runtime_label = f"Raptor runtime operation={parts[4]}"
+        if parts[4] == "receive":
+            runtime_label += f" member={parts[6]}"
     try:
         result = subprocess.run(
             ssh_arguments(
@@ -304,6 +346,7 @@ def _exchange(facade: object,
                 host=host,
                 command=command,
                 allow_uartless_station_health=allow_uartless_station_health,
+                allow_uartless_raptor_runtime=allow_uartless_raptor_runtime,
             ),
             input=payload,
             stdout=subprocess.PIPE,
@@ -312,7 +355,17 @@ def _exchange(facade: object,
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
+        if runtime_label is not None:
+            reason = "timeout" if isinstance(exc, subprocess.TimeoutExpired) else "transport-error"
+            raise RecoveryApHostError(f"{runtime_label} {reason}") from None
         raise RecoveryApHostError("authenticated recovery-AP exchange failed") from exc
     if result.returncode or len(result.stdout) > 16 * 1024 * 1024:
+        if runtime_label is not None:
+            raise RecoveryApHostError(
+                f"{runtime_label} rejected ssh_returncode={result.returncode}"
+                f" command_bytes={len(command.encode('utf-8'))}"
+                f" stderr_bytes={len(result.stderr)}"
+                f" ssh_diagnostic={_runtime_stderr_category(result.stderr)}"
+            )
         raise RecoveryApHostError("authenticated recovery-AP exchange was rejected")
     return result.stdout

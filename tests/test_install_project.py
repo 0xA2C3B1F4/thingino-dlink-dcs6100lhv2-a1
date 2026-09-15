@@ -127,6 +127,8 @@ class ProjectTests(unittest.TestCase):
         self.assertEqual(user_cli_project.expand(raw), raw)
 
     def test_noninteractive_missing_input_is_json_and_never_prompts(self):
+        if not user_cli.LEGACY_INSTALLER_AVAILABLE:
+            self.skipTest("legacy local-build configure is not exported")
         output = io.StringIO()
         with mock.patch("builtins.input", side_effect=AssertionError("prompt")), contextlib.redirect_stdout(output):
             self.assertEqual(user_cli.main(["--non-interactive", "local-build", "configure"]), 2)

@@ -12,6 +12,18 @@ import {
   rsyslogFixture, sendFixture, stream0Fixture, stream1Fixture, timeFixture, webuiFixture,
 } from "./support/fixtures";
 import { assertSecretSemantics, assertUnchangedPaths } from "./support/contracts";
+import { network } from "../src/pages/config/network-time";
+import { logging } from "../src/pages/config/access";
+import { homeAssistant } from "../src/pages/config/services";
+
+test("saved network and logging forms explain deferred application", () => {
+  for (const spec of [network, logging]) {
+    assert.match(spec.successMessage?.({}) ?? "", /saved/i);
+    assert.match(spec.successMessage?.({}) ?? "", /restart/i);
+  }
+  assert.match(logging.fields.find(field => field.path === "file")?.label ?? "", /local logs/i);
+  assert.match(logging.description, /memory/i);
+});
 
 const text = (path: string): FieldSpec => ({ path, label: path, type: "text" });
 const number = (path: string): FieldSpec => ({ path, label: path, type: "number" });
@@ -155,7 +167,7 @@ test("stream settings use two bounded cards without changing the complete save m
   const source = await readConfigSource();
   const formSource = await readFile("src/app/forms.ts", "utf8");
   const styles = await readFile("src/styles.css", "utf8");
-  for (const marker of ["cardGroups: true", "cardFocusStreams: true", "cardState:", "On, no frames", "Frame rate is 0; set 1–30 fps to start", "Enable stream", "Codec and resolution", "Frame rate and rate control", "GOP, profile and buffers", "RTSP and audio"]) assert.ok(source.includes(marker), marker);
+  for (const marker of ["cardGroups: true", "cardFocusStreams: true", "cardState:", "Enable stream", "Codec and resolution", "Frame rate and rate control", "GOP, profile and buffers", "RTSP and audio"]) assert.ok(source.includes(marker), marker);
   for (const marker of ["Main stream · CH0", "Sub stream · CH1", "data-stream-card"]) assert.ok(formSource.includes(marker), marker);
   for (const marker of ["stream-resolution-field", "stream-resolution-inputs", 'text: "Width"', 'text: "Height"', 'text: "×"']) assert.ok(formSource.includes(marker), marker);
   assert.doesNotMatch(formSource, /controls\.append\(state\)/);
@@ -176,12 +188,12 @@ test("stream settings use two bounded cards without changing the complete save m
   assert.deepEqual(Object.keys(payload), ["stream0", "stream1"]);
 });
 
-test("image save sends supported live ISP values before the full persisted image domain", () => {
+test("image save sends supported ISP values through the Raptor route", () => {
   const requests = buildImagingRequests(
     { image: { ...imageFixture, brightness: 141, highlight_depress: 77 } },
     { image: imageFixture, imaging_runtime: imagingRuntimeFixture.message },
   );
-  assert.deepEqual(requests.live, {
+  assert.deepEqual(requests, { live: {
     brightness: 141,
     contrast: 128,
     sharpness: 128,
@@ -190,9 +202,8 @@ test("image save sends supported live ISP values before the full persisted image
     wide_dynamic_range: 128,
     defog: 128,
     noise_reduction: 128,
-  });
+  } });
   assert.equal(Object.hasOwn(requests.live, "tone"), false);
-  assert.deepEqual(requests.persist, { image: { ...imageFixture, brightness: 141, highlight_depress: 77 } });
 });
 
 test("image quality explains that ISP controls are shared by both streams", async () => {
@@ -260,10 +271,40 @@ test("Home Assistant save omits response-only and unsupported fields", () => {
   assert.equal(Object.hasOwn(update, "enable_white_light"), false);
   assert.equal(Object.hasOwn(update, "doorbell_supported"), false);
   assert.equal(Object.hasOwn(update, "ota_supported"), false);
+  assert.equal(Object.hasOwn(update, "ota_check_interval"), false);
   assert.equal(update.enable_doorbell, false);
   assert.equal(update.enable_ota, false);
   assert.equal(Object.hasOwn(update.mqtt as JsonObject, "password_set"), false);
   assert.equal((update.mqtt as JsonObject).password, null);
+});
+
+test("Home Assistant intervals match worker limits and OTA is explicitly inactive", () => {
+  for (const [path, minimum] of [["state_interval", 5], ["discovery_interval", 60], ["camera_interval", 5]] as const) {
+    const field = homeAssistant.fields.find(field => field.path === path);
+    assert.equal(field?.min, minimum);
+    assert.equal(field?.max, 604800);
+    assert.notEqual(field?.readOnly, true);
+  }
+  const ota = homeAssistant.fields.find(field => field.path === "ota_check_interval");
+  assert.equal(ota?.readOnly, true);
+  assert.match(ota?.description ?? "", /no effect.*not implemented/);
+  const update = buildHomeAssistantUpdate({ ...homeAssistantFixture, state_interval: 8, discovery_interval: 120, camera_interval: 10 });
+  assert.equal(update.state_interval, 8);
+  assert.equal(update.discovery_interval, 120);
+  assert.equal(update.camera_interval, 10);
+});
+
+test("Home Assistant unrelated saves preserve legacy intervals behind effective GET values", () => {
+  const loaded = { ...homeAssistantFixture, state_interval: 5, discovery_interval: 60, camera_interval: 5 };
+  const unrelated = buildHomeAssistantUpdate({ ...loaded, device_name: "Renamed camera" }, loaded);
+  for (const key of ["state_interval", "discovery_interval", "camera_interval"]) {
+    assert.equal(Object.hasOwn(unrelated, key), false);
+  }
+  assert.equal(unrelated.device_name, "Renamed camera");
+  const changed = buildHomeAssistantUpdate({ ...loaded, state_interval: 8 }, loaded);
+  assert.equal(changed.state_interval, 8);
+  assert.equal(Object.hasOwn(changed, "discovery_interval"), false);
+  assert.equal(Object.hasOwn(changed, "camera_interval"), false);
 });
 
 test("GPIO, WebUI and admin pages use the exact Control write schema", async () => {
