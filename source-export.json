@@ -34,7 +34,7 @@
       "source": "Makefile"
     },
     "README.md": {
-      "sha256": "1d45093c1bee6f7035160644f8d89795bda39566eb9d8f1cc856e650d72bc77e",
+      "sha256": "46a182a7188e84b690300d8ed8d57f91dd6db33d02ab6bca0cfd8a54665f352c",
       "source": "production/README.md"
     },
     "SECURITY.md": {
@@ -702,7 +702,7 @@
       "source": "production/docs/recovery.md"
     },
     "docs/status.md": {
-      "sha256": "bee613ea1d4f227966e065ae823e2c27fd23bf798cbf21628c4f5d91b49e0359",
+      "sha256": "a24eeb652f0d870a4040e358411820438845e7614d0ad267800fa611c62190b8",
       "source": "production/docs/status.md"
     },
     "docs/testing.md": {
@@ -1601,6 +1601,10 @@
       "sha256": "dd76b73e747e662c9e98e59d9356c78024787d1789b801e99af8887638652f41",
       "source": "scripts/raptor_full_source_manifest.py"
     },
+    "scripts/release_closure.py": {
+      "sha256": "1fe979dfbca9957550a2ff0c61bb9fad3544ad33344e7d065f38b9752c5199da",
+      "source": "scripts/release_closure.py"
+    },
     "scripts/run_container_mkfs_jffs2.sh": {
       "sha256": "fae68ee16c4ddd9e508099b46f6edbdda365ed51f6841b0a5518d49283fd7dc1",
       "source": "scripts/run_container_mkfs_jffs2.sh"
@@ -1868,6 +1872,10 @@
     "tests/test_recovery_gate.py": {
       "sha256": "5efb437efaa61274e4af1791ca68d06164a2747280d2307d7d1d013a8aad8cbd",
       "source": "tests/test_recovery_gate.py"
+    },
+    "tests/test_release_closure.py": {
+      "sha256": "d59024cf9badaa9ab47c4859ebfcbd8a2e7ce7e9d31098d9d4408804dab2a8b8",
+      "source": "tests/test_release_closure.py"
     },
     "tests/test_release_gates.py": {
       "sha256": "48970e97315fa8517961ca9bd288706f089bb96303aa7b04dd862b340253cec8",
@@ -2339,6 +2347,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "89ec175c5eaec7e8afc42aed0a039a25cdd866e2",
+  "source_commit": "76d13ae930f610e47320550237db4197c47c7bb0",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }

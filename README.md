@@ -566,3 +566,6 @@ This does not license third-party patch context, vendor libraries, modules,
 tuning data, or complete images for redistribution. Raptor corresponding-source
 review, RTL8188FU closure, reproducible builds, and physical acceptance remain
 open in [third-party notices](third_party/NOTICE.md) and [release status](docs/status.md).
+The host-only `scripts/release_closure.py` command can bind a completed
+two-build candidate to source and notice manifests. Its output is technical
+evidence only and never grants redistribution permission.

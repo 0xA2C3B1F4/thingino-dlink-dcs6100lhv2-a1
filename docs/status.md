@@ -1,6 +1,6 @@
 # Release status
 
-Runtime baseline validated: 2026-09-06. Documentation updated: 2026-09-15.
+Runtime baseline validated: 2026-09-06. Documentation updated: 2026-09-16.
 
 This repository provides source and host tools. There is no supported firmware
 download yet. The validated platform is DCS-6100LHV2 A1 with Apple Silicon macOS.
@@ -35,6 +35,15 @@ Those settings also need checks of their actual effects and reboot persistence.
 Long-running full-Raptor stability remains open. The [feature table](features.md)
 separates source results from device acceptance. A passing page-load test does
 not establish that every field on that page works.
+
+The September 16 host candidate at source commit
+`bd93c29b56d095d67562c9f3b89015b08321f013` completed two independent
+`complete-firmware` builds. The base image, full Raptor component, final root,
+split kernels and complete install set were byte-identical. The second build
+did not reuse the Raptor component cache. Its signed universal bundle has
+SHA-256 `d594153ac2f11d8baa0f1b9decc8dad0950f9d422210a4e365fc71738851cf8a`.
+This is host evidence, not camera acceptance or permission to distribute the
+firmware.
 
 ## Tested installation
 
@@ -108,6 +117,22 @@ Chromium fixtures and Linux/Windows host contracts.
 
 [`source-export.json`](../source-export.json) records the exported source commit,
 file inventory and per-file hashes. Subsequent changes are recorded in Git.
+
+For a completed two-build run, `scripts/release_closure.py` validates the
+install set, final root, Raptor component, source locks and reproducibility
+evidence before writing `candidate-closure.json` and `notice-manifest.json`:
+
+```bash
+python3 scripts/release_closure.py \
+  --run-dir /path/to/completed/run \
+  --output-dir /path/to/new/release-evidence \
+  --universal-public-key /path/to/release-ed25519.pub
+```
+
+These sidecars bind technical evidence to exact candidate bytes. They always
+report legal review as `not-assessed` and redistribution as
+`not-authorized-by-this-repository`; generating them does not close a legal
+or physical release gate.
 
 ## Open release gates
 
