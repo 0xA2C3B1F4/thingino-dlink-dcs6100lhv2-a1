@@ -130,7 +130,11 @@ def validate_component(
         lock = source_lock(root, full_media=True)
         sdk = json.loads((root / "sources.lock.json").read_bytes())["sources"]["thingino_build_toolchain_aarch64"]
         if (
-            set(expected_build_inputs) != {"base_rootfs_sha256", "builder_image_id", "toolchain_sha256"}
+            set(expected_build_inputs) != {
+                "base_rootfs_sha256",
+                "builder_image_id",
+                "toolchain_sha256",
+            }
             or not re.fullmatch(r"[a-f0-9]{64}", str(expected_build_inputs.get("base_rootfs_sha256", "")))
             or not re.fullmatch(r"sha256:[a-f0-9]{64}", str(expected_build_inputs.get("builder_image_id", "")))
             or expected_build_inputs.get("toolchain_sha256") != sdk["sha256"]

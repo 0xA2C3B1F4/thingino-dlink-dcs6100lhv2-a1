@@ -103,6 +103,7 @@ def prepare_install_root(
     run_dir: Path,
     *,
     progress: Callable[[dict[str, object]], None] | None = None,
+    independent_component_build: bool = False,
 ) -> PreparedFinalRoot:
     """Prepare and compose the source-built Raptor universal image."""
 
@@ -146,6 +147,7 @@ def prepare_install_root(
         base_workspace=clean.workspace,
         toolchain=environment.thingino_toolchain_archive,
         progress=progress,
+        artifact_cache=not independent_component_build,
     )
     raptor_root = run_dir / "raptor-final-root"
     compose_universal_root(
@@ -164,6 +166,7 @@ def prepare_install_root(
         system=system,
         mksquashfs=mksquashfs,
         unsquashfs=unsquashfs,
+        component_artifact=Path(component["artifact"]),
     )
 
 
@@ -264,4 +267,8 @@ def package_install_root(
         install_set,
         run_dir / "logs/inspect-install-set.json",
     )
-    return PackagedInstallSet(directory=install_set, inspection=inspection)
+    return PackagedInstallSet(
+        directory=install_set,
+        inspection=inspection,
+        split_directory=split_result,
+    )

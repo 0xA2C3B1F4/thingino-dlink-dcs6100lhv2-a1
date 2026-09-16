@@ -136,7 +136,10 @@ class FullComponentTests(unittest.TestCase):
 
     def test_another_root_or_builder_cannot_reuse_component(self):
         raw = component.pack_component(self.files, self.provenance)
-        for name, value in (("base_rootfs_sha256", "3" * 64), ("builder_image_id", "sha256:" + "4" * 64)):
+        for name, value in (
+            ("base_rootfs_sha256", "3" * 64),
+            ("builder_image_id", "sha256:" + "4" * 64),
+        ):
             with self.subTest(name=name), self.assertRaisesRegex(ValueError, "provenance"):
                 self.validate(raw, inputs={**self.inputs, name: value})
 

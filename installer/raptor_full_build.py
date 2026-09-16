@@ -98,7 +98,7 @@ def run_container(arguments: list[str], *, label: str, log_path: Path) -> None:
 def build_full_component(
     *, root: Path, build_root: Path, run_dir: Path, builder_image: str,
     base_rootfs: Path, base_workspace: Path, toolchain: Path,
-    progress: Progress | None = None,
+    progress: Progress | None = None, artifact_cache: bool = True,
 ) -> dict[str, object]:
     """Build/cache a model component; never read camera credentials or write a device."""
     if not re.fullmatch(r"sha256:[a-f0-9]{64}", builder_image):
@@ -124,7 +124,7 @@ def build_full_component(
     cache = _private_child_directory(build_root / "cache", "downloads", "raptor-full-artifacts")
     destination = cache / key
     artifact = destination / "raptor-full-component.tar.gz"
-    if destination.exists() or destination.is_symlink():
+    if artifact_cache and (destination.exists() or destination.is_symlink()):
         _directory(destination, "full Raptor cache")
         cached = _load_json_object(destination / "build.json", "full Raptor build receipt")
         if cached.get("identity") != identity:
@@ -196,17 +196,28 @@ def build_full_component(
         validate_component(candidate, expected_sha256=digest, root=root, expected_build_inputs=build_inputs)
         report = {"identity": identity, "sha256": digest, "size": candidate.stat().st_size,
                   "elf": audits, "run_dir": str(run), "status": "host-built"}
-        publication = Path(tempfile.mkdtemp(prefix=".publish-", dir=cache))
-        try:
-            atomic_write(publication / artifact.name, candidate.read_bytes(), mode=0o400)
-            atomic_write(publication / "build.json", (json.dumps(report, sort_keys=True) + "\n").encode(), mode=0o400)
-            if destination.exists() or destination.is_symlink():
-                raise LocalBuildRunError("full Raptor cache generation already exists")
-            os.rename(publication, destination)
-        finally:
-            if publication.exists():
-                shutil.rmtree(publication)
-        return {**report, "artifact": str(artifact), "cached": False}
+        if artifact_cache:
+            publication = Path(tempfile.mkdtemp(prefix=".publish-", dir=cache))
+            try:
+                atomic_write(publication / artifact.name, candidate.read_bytes(), mode=0o400)
+                atomic_write(publication / "build.json", (json.dumps(report, sort_keys=True) + "\n").encode(), mode=0o400)
+                if destination.exists() or destination.is_symlink():
+                    raise LocalBuildRunError("full Raptor cache generation already exists")
+                os.rename(publication, destination)
+            finally:
+                if publication.exists():
+                    shutil.rmtree(publication)
+            output_artifact = artifact
+        else:
+            # Independent reproducibility builds retain their own compile output
+            # and may not satisfy the compile step from a shared artifact cache.
+            output_artifact = candidate
+            atomic_write(
+                run / "build.json",
+                (json.dumps(report, sort_keys=True) + "\n").encode(),
+                mode=0o400,
+            )
+        return {**report, "artifact": str(output_artifact), "cached": False}
     except BaseException:
         atomic_write(run / "FAILED", b"No full Raptor component selected\n", mode=0o600)
         raise

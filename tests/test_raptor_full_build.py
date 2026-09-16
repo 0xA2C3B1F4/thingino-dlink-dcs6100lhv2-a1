@@ -57,11 +57,12 @@ class FullBuildTests(unittest.TestCase):
             replacement.start()
             self.addCleanup(replacement.stop)
 
-    def build(self, run=None):
+    def build(self, run=None, **kwargs):
         return build.build_full_component(
             root=ROOT, build_root=self.root, run_dir=run or self.run,
             builder_image="sha256:" + "2" * 64, base_rootfs=self.base,
             base_workspace=self.workspace, toolchain=self.sdk,
+            **kwargs,
         )
 
     def inputs(self):
@@ -77,7 +78,11 @@ class FullBuildTests(unittest.TestCase):
         self.calls.append(command)
         if command[-1] != build.COMPILE:
             return
-        destination = self.run / "raptor-full/result/root"
+        result_mount = next(
+            item for item in command
+            if item.startswith("type=bind,src=") and item.endswith(",dst=/result")
+        )
+        destination = Path(result_mount.removeprefix("type=bind,src=").removesuffix(",dst=/result")) / "root"
         for relative, raw in self.payload.items():
             path = destination / relative
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -122,6 +127,21 @@ class FullBuildTests(unittest.TestCase):
             compile_command,
         )
         self.assertFalse((other_run / "raptor-full").exists())
+
+    def test_independent_build_bypasses_shared_component_cache(self):
+        with self.inputs(), patch.object(build, "run_container", side_effect=self.compile_fixture):
+            first = self.build()
+            other_run = self.root / "independent-run"
+            other_run.mkdir()
+            second = self.build(other_run, artifact_cache=False)
+        self.assertFalse(first["cached"])
+        self.assertFalse(second["cached"])
+        self.assertEqual(first["sha256"], second["sha256"])
+        self.assertEqual(
+            Path(second["artifact"]),
+            other_run / "raptor-full/raptor-full-component.tar.gz",
+        )
+        self.assertEqual(len(self.calls), 4)
 
     def test_recipe_generates_the_exact_packaged_motion_clip(self):
         recipe = (ROOT / "scripts/container_build_raptor_full.sh").read_text()

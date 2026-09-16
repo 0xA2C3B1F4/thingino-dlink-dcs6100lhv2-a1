@@ -42,6 +42,8 @@ class CleanBuildResult:
     result: Path
     workspace: Path
     reproducibility: dict[str, object]
+    verification_result: Path | None = None
+    verification_workspace: Path | None = None
 
 
 @dataclass(frozen=True, repr=False)
@@ -50,9 +52,11 @@ class PreparedFinalRoot:
     system: bytes
     mksquashfs: Path
     unsquashfs: Path
+    component_artifact: Path
 
 
 @dataclass(frozen=True)
 class PackagedInstallSet:
     directory: Path
     inspection: dict[str, object]
+    split_directory: Path

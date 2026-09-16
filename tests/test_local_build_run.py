@@ -144,6 +144,9 @@ class LocalBuildRunTests(unittest.TestCase):
     def test_full_raptor_failed_inspection_retains_reproducibility_without_success_manifest(self) -> None:
         self._exercise_install_build(build_count=1, failure="inspection")
 
+    def test_full_raptor_difference_retains_report_without_success_manifest(self) -> None:
+        self._exercise_install_build(build_count=2, failure="full-mismatch")
+
     def test_full_raptor_acquisition_os_error_keeps_owner_and_exception_cause(self) -> None:
         self._exercise_install_build(build_count=1, failure="acquisition")
 
@@ -231,8 +234,11 @@ class LocalBuildRunTests(unittest.TestCase):
                 events.append("full-component")
                 self.assertEqual(_["base_rootfs"].read_bytes(), b"base")
                 self.assertEqual(_["base_workspace"].name, "workspace.ext4")
+                self.assertEqual(_["artifact_cache"], build_count == 1)
+                artifact = _["run_dir"] / "raptor-full-component.tar.gz"
+                artifact.write_bytes(b"deterministic component")
                 return {
-                    "artifact": str(root / "raptor-full.tar.gz"),
+                    "artifact": str(artifact),
                     "sha256": "e" * 64,
                     "identity": {"build_inputs": {"base": "fresh"}},
                 }
@@ -250,11 +256,12 @@ class LocalBuildRunTests(unittest.TestCase):
             def split_run(_arguments: list[str], *, label: str, **_: object) -> None:
                 events.append("split")
                 self.assertEqual(label, "fixed-layout split-kernel build")
-                result = next(build_root.glob("runs/*/split-kernels"))
+                result = Path(_arguments[_arguments.index("--result") + 1])
                 self.assertEqual(_["log_path"], result.parent / "logs/split-kernels.log")
+                expected_build = "build-b" if "verification-build-b" in result.parts else "build-a"
                 self.assertEqual(
                     _arguments[_arguments.index("--workspace-image") + 1],
-                    str(result.parent / "build-a/workspace.ext4"),
+                    str(build_root / f"runs/build-characterized/{expected_build}/workspace.ext4"),
                 )
                 for filename in (
                     "installer-kernel.uimage",
@@ -275,6 +282,21 @@ class LocalBuildRunTests(unittest.TestCase):
                 )
                 self.assertEqual(_["data_mode"], data_mode)
                 output_dir.mkdir()
+                for filename in (
+                    "DCS6100LHV2Ax_FW000B00_THINGINO_SD.bin",
+                    "THINGINO2.BIN",
+                    "install-set.manifest.json",
+                    "stage1-bootstrap.squashfs",
+                    "thingino-universal.tgb",
+                ):
+                    payload = filename.encode()
+                    if (
+                        failure == "full-mismatch"
+                        and "verification-build-b" in output_dir.parts
+                        and filename == "thingino-universal.tgb"
+                    ):
+                        payload += b"-different"
+                    (output_dir / filename).write_bytes(payload)
 
             def inspect(*_: object):
                 events.append("inspection")
@@ -393,7 +415,8 @@ class LocalBuildRunTests(unittest.TestCase):
                 arguments["data_mode"] = data_mode
                 if failure:
                     with self.assertRaisesRegex(
-                        local_build_run.LocalBuildRunError, "failure|failed|provenance"
+                        local_build_run.LocalBuildRunError,
+                        "failure|failed|provenance|not byte-identical",
                     ) as raised:
                         build(**arguments)
                     run_dir = build_root / "runs/build-characterized"
@@ -409,6 +432,15 @@ class LocalBuildRunTests(unittest.TestCase):
                         self.assertEqual(events, ["build-a", "build-b"])
                     else:
                         self.assertTrue((run_dir / "reproducibility.json").is_file())
+                        if failure == "full-mismatch":
+                            report = json.loads(
+                                (run_dir / "reproducibility.json").read_text()
+                            )
+                            self.assertFalse(report["byte_identical"])
+                            self.assertEqual(
+                                report["differences"],
+                                ["install-set/thingino-universal.tgb"],
+                            )
                         if failure in {"overlay", "provenance"}:
                             self.assertNotIn("package", events)
                             self.assertNotIn("inspection", events)
@@ -420,11 +452,11 @@ class LocalBuildRunTests(unittest.TestCase):
             )
             self.assertEqual(
                 events,
-                clean_calls + ["final-root"]
-                + ["full-component", "full-compose"]
-                + ["split", "package", "inspection"],
+                clean_calls
+                + (["final-root", "full-component", "full-compose", "split", "package", "inspection"]
+                   * build_count),
             )
-            self.assertFalse(result["reproducible"])
+            self.assertEqual(result["reproducible"], build_count == 2)
             self.assertEqual(result["artifact_scope"], scope)
             self.assertEqual(result["schema_version"], 2)
             self.assertFalse(result["public_firmware_release_gate_consulted"])
@@ -453,7 +485,7 @@ class LocalBuildRunTests(unittest.TestCase):
                 "inspection": inspection,
                 "nor_writes": False,
                 "public_firmware_release_gate_consulted": False,
-                "reproducible": False,
+                "reproducible": build_count == 2,
                 "run_dir": str(run_dir),
                 "schema_version": 2,
                 "status": "host-built and inspected; live installation not authorized",
@@ -473,8 +505,18 @@ class LocalBuildRunTests(unittest.TestCase):
                     run_manifest["reproducibility"], {
                         "builds": 1,
                         "byte_identical": None,
-                        "scope": "base-image-only",
+                        "component_cache_used": None,
+                        "inspections_accepted": True,
+                        "scope": "complete-firmware",
                     }
+                )
+            else:
+                self.assertTrue(run_manifest["reproducibility"]["byte_identical"])
+                self.assertEqual(
+                    run_manifest["reproducibility"]["scope"], "complete-firmware"
+                )
+                self.assertFalse(
+                    run_manifest["reproducibility"]["component_cache_used"]
                 )
 
     def test_invalid_inputs_fail_before_acquisition_or_run_ownership(self) -> None:

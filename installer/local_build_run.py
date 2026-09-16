@@ -26,6 +26,7 @@ from .local_build_models import (
     BuildEnvironment,
     CleanBuildResult,
     PackagedInstallSet,
+    PreparedFinalRoot,
     ValidatedBuildInputs,
 )
 from .local_build_package import (
@@ -808,7 +809,7 @@ def _build_clean_roots(
         "byte_identical": None,
     }
     if inputs.build_count == 2:
-        build_b, _workspace_b = _run_clean_build(
+        build_b, workspace_b = _run_clean_build(
             root=inputs.root,
             run_dir=run_dir,
             label="build-b",
@@ -829,8 +830,93 @@ def _build_clean_roots(
     )
 
     return CleanBuildResult(
-        result=build_a, workspace=workspace_a, reproducibility=reproducibility
+        result=build_a,
+        workspace=workspace_a,
+        reproducibility=reproducibility,
+        verification_result=build_b if inputs.build_count == 2 else None,
+        verification_workspace=workspace_b if inputs.build_count == 2 else None,
     )
+
+
+def _compare_full_builds(
+    first_clean: CleanBuildResult,
+    first_root: PreparedFinalRoot,
+    first_package: PackagedInstallSet,
+    second_clean: CleanBuildResult,
+    second_root: PreparedFinalRoot,
+    second_package: PackagedInstallSet,
+) -> dict[str, object]:
+    """Compare the complete independently compiled and signed firmware outputs."""
+
+    first_paths = {
+        **{f"base/{name}": first_clean.result / name for name in BUILD_RESULT_FILES},
+        "raptor/raptor-full-component.tar.gz": first_root.component_artifact,
+        "final-root/final-root.universal.json": first_root.directory / "final-root.universal.json",
+        "final-root/system.universal.squashfs": first_root.directory / "system.universal.squashfs",
+        **{
+            f"split-kernels/{name}": first_package.split_directory / name
+            for name in (
+                "final-kernel.uimage", "final-linux.config",
+                "installer-jzmmc_v12.ko", "installer-kernel.uimage",
+            )
+        },
+        **{
+            f"install-set/{name}": first_package.directory / name
+            for name in (
+                "DCS6100LHV2Ax_FW000B00_THINGINO_SD.bin", "THINGINO2.BIN",
+                "install-set.manifest.json", "stage1-bootstrap.squashfs",
+                "thingino-universal.tgb",
+            )
+        },
+    }
+    second_paths = {
+        **{f"base/{name}": second_clean.result / name for name in BUILD_RESULT_FILES},
+        "raptor/raptor-full-component.tar.gz": second_root.component_artifact,
+        "final-root/final-root.universal.json": second_root.directory / "final-root.universal.json",
+        "final-root/system.universal.squashfs": second_root.directory / "system.universal.squashfs",
+        **{
+            f"split-kernels/{name}": second_package.split_directory / name
+            for name in (
+                "final-kernel.uimage", "final-linux.config",
+                "installer-jzmmc_v12.ko", "installer-kernel.uimage",
+            )
+        },
+        **{
+            f"install-set/{name}": second_package.directory / name
+            for name in (
+                "DCS6100LHV2Ax_FW000B00_THINGINO_SD.bin", "THINGINO2.BIN",
+                "install-set.manifest.json", "stage1-bootstrap.squashfs",
+                "thingino-universal.tgb",
+            )
+        },
+    }
+    if set(first_paths) != set(second_paths):
+        raise LocalBuildRunError("complete firmware artifact allowlist changed")
+    files: dict[str, dict[str, object]] = {}
+    differences: list[str] = []
+    for name in sorted(first_paths):
+        first = _regular(first_paths[name], f"build A {name}")
+        second = _regular(second_paths[name], f"build B {name}")
+        first_sha256, second_sha256 = _sha256(first), _sha256(second)
+        if first.stat().st_size != second.stat().st_size or first_sha256 != second_sha256:
+            differences.append(name)
+            files[name] = {
+                "build_a_sha256": first_sha256,
+                "build_a_size": first.stat().st_size,
+                "build_b_sha256": second_sha256,
+                "build_b_size": second.stat().st_size,
+            }
+        else:
+            files[name] = {"sha256": first_sha256, "size": first.stat().st_size}
+    return {
+        "builds": 2,
+        "byte_identical": not differences,
+        "component_cache_used": False,
+        "differences": differences,
+        "files": files,
+        "inspections_accepted": True,
+        "scope": "complete-firmware",
+    }
 
 
 def _write_install_build_manifest(
@@ -854,7 +940,7 @@ def _write_install_build_manifest(
         "project_head": inputs.head,
         "provisioning": "separate-per-camera-sidecar",
         "public_firmware_release_gate_consulted": False,
-        "reproducibility": {**clean.reproducibility, "scope": "base-image-only"},
+        "reproducibility": clean.reproducibility,
         "schema_version": RUN_SCHEMA_VERSION,
         "sources_lock_sha256": environment.lock_sha256,
         "status": "host-built and inspected; live installation not authorized",
@@ -902,8 +988,67 @@ def _build_local_install_set(
         final_root = prepare_install_root(
             inputs, environment, clean, run_dir,
             progress=progress,
+            independent_component_build=inputs.build_count == 2,
         )
         packaged = package_install_root(inputs, environment, clean, final_root, run_dir)
+        if inputs.build_count == 2:
+            if clean.verification_result is None or clean.verification_workspace is None:
+                raise LocalBuildRunError("second clean build was not retained")
+            verification_dir = run_dir / "verification-build-b"
+            verification_dir.mkdir(mode=0o700)
+            verification_clean = CleanBuildResult(
+                result=clean.verification_result,
+                workspace=clean.verification_workspace,
+                reproducibility=clean.reproducibility,
+            )
+            verification_root = prepare_install_root(
+                inputs,
+                environment,
+                verification_clean,
+                verification_dir,
+                progress=progress,
+                independent_component_build=True,
+            )
+            verification_package = package_install_root(
+                inputs,
+                environment,
+                verification_clean,
+                verification_root,
+                verification_dir,
+            )
+            reproducibility = _compare_full_builds(
+                clean,
+                final_root,
+                packaged,
+                verification_clean,
+                verification_root,
+                verification_package,
+            )
+        else:
+            reproducibility = {
+                "builds": 1,
+                "byte_identical": None,
+                "component_cache_used": None,
+                "inspections_accepted": True,
+                "scope": "complete-firmware",
+            }
+        atomic_write(
+            run_dir / "reproducibility.json",
+            (json.dumps(reproducibility, indent=2, sort_keys=True) + "\n").encode(),
+            mode=0o600,
+        )
+        clean = CleanBuildResult(
+            result=clean.result,
+            workspace=clean.workspace,
+            reproducibility=reproducibility,
+            verification_result=clean.verification_result,
+            verification_workspace=clean.verification_workspace,
+        )
+        if reproducibility["byte_identical"] is False:
+            differing = ", ".join(reproducibility["differences"])
+            raise LocalBuildRunError(
+                f"complete firmware builds are not byte-identical: {differing}"
+            )
         _write_install_build_manifest(
             inputs, environment, clean, packaged, run_dir,
         )
@@ -931,7 +1076,7 @@ def _build_local_install_set(
         "inspection": packaged.inspection,
         "nor_writes": False,
         "public_firmware_release_gate_consulted": False,
-        "reproducible": False,
+        "reproducible": clean.reproducibility["byte_identical"] is True,
         "run_dir": str(run_dir),
         "schema_version": 2,
         "status": "host-built and inspected; live installation not authorized",
