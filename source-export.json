@@ -870,11 +870,11 @@
       "source": "installer/local_build_models.py"
     },
     "installer/local_build_package.py": {
-      "sha256": "876dff62a225556a29356651b0f1283523d60d037d53ad4dd8054872ea739095",
+      "sha256": "48c44fa1ebc5f362f99c1809ef6e0b4cc2645a670cd0ac6d6acee44014fcd7b2",
       "source": "installer/local_build_package.py"
     },
     "installer/local_build_run.py": {
-      "sha256": "cb89b1bd7816bd7783962b920b46158dcbb1a42fbadfcc377dfedda1698a02c1",
+      "sha256": "4c9e18d79135621f5f2d9980b812240a7f3d245a9eb3479e0a97a73646366a36",
       "source": "installer/local_build_run.py"
     },
     "installer/local_build_support.py": {
@@ -1742,7 +1742,7 @@
       "source": "tests/test_local_build_bootstrap.py"
     },
     "tests/test_local_build_run.py": {
-      "sha256": "06002b0bf70aa344588a11a98ee5d5df7f86fa0f53e828ccc10a2c3a5a394b20",
+      "sha256": "d334df9aa5fafc56431899b5a2639ab39594c5f6e286b22dc5bc7da611ab25d2",
       "source": "tests/test_local_build_run.py"
     },
     "tests/test_macos_media_preflight.py": {
@@ -2335,6 +2335,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "fcfa270085ee58652ac537a05bb233a9612170eb",
+  "source_commit": "c03b0ae188645c39845d08663e2ffc4aae03822b",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }

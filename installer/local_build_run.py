@@ -1015,6 +1015,7 @@ def _build_local_install_set(
                 verification_clean,
                 verification_root,
                 verification_dir,
+                task_scratch_root=run_dir,
             )
             reproducibility = _compare_full_builds(
                 clean,

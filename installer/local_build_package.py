@@ -176,6 +176,8 @@ def package_install_root(
     clean: CleanBuildResult,
     final_root: PreparedFinalRoot,
     run_dir: Path,
+    *,
+    task_scratch_root: Path | None = None,
 ) -> PackagedInstallSet:
     """Build split kernels from build A, package, then require schema-2 inspection."""
 
@@ -184,6 +186,7 @@ def package_install_root(
             "only signed model-universal full Raptor install sets are supported"
         )
 
+    task_scratch_root = task_scratch_root or run_dir
     fragments = run_dir / "kernel-fragments"
     fragments.mkdir(mode=0o700)
     installer_fragment = fragments / "installer.fragment"
@@ -199,9 +202,9 @@ def package_install_root(
         [
             str(inputs.root / "scripts/run_macos_split_kernel_build.sh"),
             "--task-scratch-root",
-            str(run_dir),
+            str(task_scratch_root),
             "--builder-lock",
-            str(run_dir),
+            str(task_scratch_root),
             "--builder-image",
             environment.builder_image,
             "--container-name",

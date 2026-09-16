@@ -259,6 +259,15 @@ class LocalBuildRunTests(unittest.TestCase):
                 result = Path(_arguments[_arguments.index("--result") + 1])
                 self.assertEqual(_["log_path"], result.parent / "logs/split-kernels.log")
                 expected_build = "build-b" if "verification-build-b" in result.parts else "build-a"
+                expected_scratch = build_root / "runs/build-characterized"
+                self.assertEqual(
+                    _arguments[_arguments.index("--task-scratch-root") + 1],
+                    str(expected_scratch),
+                )
+                self.assertEqual(
+                    _arguments[_arguments.index("--builder-lock") + 1],
+                    str(expected_scratch),
+                )
                 self.assertEqual(
                     _arguments[_arguments.index("--workspace-image") + 1],
                     str(build_root / f"runs/build-characterized/{expected_build}/workspace.ext4"),
