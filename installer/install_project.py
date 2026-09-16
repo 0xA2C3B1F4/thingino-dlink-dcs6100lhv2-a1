@@ -90,6 +90,7 @@ def default_selections(path: Path, build_root: Path | None = None) -> dict[str, 
         "universal provision": {"output": str(root / "provisioning.zip"), "data-output": str(root / "provisioning.jffs2")},
         "universal authorize": {"output-dir": str(root / "authorization")},
         "universal evacuate-recovery": {"output-dir": str(root / "evacuated-stock")},
+        "universal quarantine-inconsistent-media": {"output-dir": str(root / "quarantined-media")},
     }
     if build_root is not None:
         for name in ("prepare", "status", "bootstrap", "acquire", "recovery-assets", "configure", "build", "build-universal"):

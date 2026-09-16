@@ -71,3 +71,12 @@ def _universal_handoff(facade, arguments):
 def _universal_evacuate_recovery(facade, arguments):
     return _media_call(arguments, install_actions.EvacuationInputs,
                        install_actions.plan_evacuation, install_actions.evacuate_recovery)
+
+
+def _universal_quarantine_inconsistent_media(facade, arguments):
+    return _media_call(
+        arguments,
+        install_actions.InconsistentMediaQuarantineInputs,
+        install_actions.plan_inconsistent_media_quarantine,
+        install_actions.quarantine_inconsistent_media,
+    )

@@ -31,6 +31,7 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
     _universal_authorize = getattr(facade, '_universal_authorize')
     _universal_configure = getattr(facade, '_universal_configure')
     _universal_evacuate_recovery = getattr(facade, '_universal_evacuate_recovery')
+    _universal_quarantine_inconsistent_media = getattr(facade, '_universal_quarantine_inconsistent_media')
     _universal_handoff = getattr(facade, '_universal_handoff')
     _universal_init_session = getattr(facade, '_universal_init_session')
     _universal_provision = getattr(facade, '_universal_provision')
@@ -520,6 +521,22 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
     universal_evacuate.add_argument("--confirm-physical-device")
     universal_evacuate.set_defaults(handler=_universal_evacuate_recovery)
 
+    universal_quarantine = universal_commands.add_parser("quarantine-inconsistent-media")
+    _add_common(universal_quarantine, inherited=True)
+    universal_quarantine.add_argument(
+        "--whole-device", required=True, help="physical removable whole-disk ID"
+    )
+    universal_quarantine.add_argument(
+        "--mount-root", type=Path, required=True, help="mounted FAT32 card root"
+    )
+    universal_quarantine.add_argument("--output-dir", type=Path, required=True)
+    universal_quarantine.add_argument(
+        "--resume", action="store_true",
+        help="resume the exact archived-pending-removal quarantine receipt",
+    )
+    universal_quarantine.add_argument("--confirm-physical-device")
+    universal_quarantine.set_defaults(handler=_universal_quarantine_inconsistent_media)
+
     universal_handoff = universal_commands.add_parser("handoff")
     _add_common(universal_handoff, inherited=True)
     add_recovery_inputs(universal_handoff)
@@ -702,6 +719,7 @@ def _installation_help(parser):
         "universal stage": "Validate the complete camera/artifact tuple and current card. --plan-only is read-only. Execution writes verified SD files and arms a future bootstrap, activation last. Confirm the printed plan, then follow physical boot instructions before handoff.",
         "universal handoff": "Revalidate the selected card and camera tuple after observing stock mtd1/mtd2 completion. Passivates the stock updater on SD for the next boot. Requires exact physical-result and device confirmations. Next: boot the final installer and verify.",
         "universal evacuate-recovery": "Copy and validate an existing recovery checkpoint into --output-dir before removing its SD copy. Requires current media and exact device confirmation. Next: stage the new camera-bound install set.",
+        "universal quarantine-inconsistent-media": "Archive a card file tree whose universal checkpoint no longer binds its current stage 2. The archive is not validated recovery. After independent readback, remove only the reviewed installer paths while preserving recordings and other user data. Use --resume with the same destination after an interrupted pending receipt; unrelated changes force rollback. Next: stage only after completed quarantine.",
         "universal verify": "Discover the selected session's mDNS name and verify the running camera using its retained SSH key and station pin. Requires dropbearkey, completed physical installation and network reachability. There is no host override. Host project status does not replace this check.",
         "project init": "Create a new private camera path project. Supply --project or DCS6100_PROJECT and a local --name; optionally --build-root or a command-specific --paths JSON map. Creates project metadata and its private output directory. Next: local-build prepare or project status.",
         "project status": "Read remembered completion and content identities without resuming work. Changed inputs or outputs require review. A completed record does not confirm a physical boot or authorize writing.",
@@ -735,7 +753,7 @@ def _installation_help(parser):
                 current.epilog = ("After selecting DCS6100_PROJECT, its inputs and the host tools in the guide. Interactive: thingino-dlink " + example + ". "
                     "Automation: select --non-interactive --json; media writes require --whole-device, "
                     "--mount-root and exact confirmations from --plan-only. See docs/installer-projects.md.")
-        media_commands = {"universal stage", "universal handoff", "universal evacuate-recovery",
+        media_commands = {"universal stage", "universal handoff", "universal evacuate-recovery", "universal quarantine-inconsistent-media",
                           "stock-recovery uartless-reuse",
                           "stock-recovery uartless-prepare", "stock-recovery uartless-authorize", "stock-recovery uartless-handoff"}
         if prefix in media_commands:

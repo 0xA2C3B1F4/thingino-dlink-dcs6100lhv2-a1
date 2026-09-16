@@ -207,6 +207,42 @@ This verifies the backup, checkpoint, and any archived backup before removing
 those reserved card paths. It preserves unrelated files and writes no NOR.
 Retain the private output. Do not manually delete a mismatching checkpoint.
 
+If `evacuate-recovery` reports that a universal checkpoint binds the stock
+backup but names a different same-size `THINGINO2.BIN`, stop. That tuple is not
+validated recovery. Use the separate quarantine operation only after reviewing
+its complete file-tree plan and choosing a new private destination:
+
+```bash
+export DCS6100_QUARANTINE="$DCS6100_CAMERA_ROOT/inconsistent-card-before-update-1"
+
+thingino-dlink universal quarantine-inconsistent-media \
+  --whole-device "$DCS6100_SD_DEVICE" \
+  --mount-root "$DCS6100_SD_MOUNT" \
+  --output-dir "$DCS6100_QUARANTINE" \
+  --plan-only --non-interactive --json
+```
+
+Review the snapshot digest, every planned removal, and the exact confirmations.
+Then repeat the command without `--plan-only` and supply the returned
+`--confirm-plan`, `--confirm-physical-device`, `--confirm-target`, and
+`--confirm-write-set` values. The command copies and independently reads back
+every regular file and empty directory before removing only the listed
+installer-owned root paths. Recordings and other non-installer paths stay on
+the card. The complete tree must still match at the start of removal; after
+that point, each installer path is rechecked independently so a new recording
+or Spotlight update is preserved without changing the reviewed removal set.
+The receipt explicitly does not validate recovery, authorization, or
+provisioning, and this operation does not close a physical recovery gate.
+
+If power or the process stops after the pending receipt exists, rerun the same
+command with the same destination and `--resume --plan-only`. A stable card
+offers a plan to finish the remaining exact removals. Any unrelated content
+change offers a rollback-only plan that restores missing installer paths from
+the verified archive and preserves the changed content. Confirm that new plan;
+never manually delete the checkpoint or edit the receipt. If publication
+stopped before a state receipt existed, the card was not cleared: preserve the
+partial destination for diagnosis and choose a new destination.
+
 ## Public-checkout complete-backup path
 
 After `local-build prepare`, `bootstrap`, and `acquire`, build the public

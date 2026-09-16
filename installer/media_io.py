@@ -30,7 +30,7 @@ def _write_verified_temporary(temporary: Path, raw: bytes) -> None:
 def _sync_directory(root: Path) -> None:
     if os.name == "nt":
         return
-    descriptor = os.open(root, os.O_RDONLY)
+    descriptor = os.open(root, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
     try:
         os.fsync(descriptor)
     finally:

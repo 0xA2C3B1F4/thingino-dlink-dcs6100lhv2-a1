@@ -5,6 +5,7 @@ import hashlib
 import os
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from unittest import mock
 
@@ -19,7 +20,9 @@ from installer.media import (
     deactivate_verified_package,
     deactivate_staged_install_set,
     evacuate_existing_stock_backups,
+    inspect_inconsistent_media_quarantine,
     load_media_preflight,
+    quarantine_inconsistent_media,
     replace_passive_bootstrap,
     stage_passive_verified_package,
     stage_verified_install_set,
@@ -1434,6 +1437,401 @@ class MediaTests(unittest.TestCase):
                     preflight=preflight,
                     confirmed_physical_device="/dev/test-external-media",
                 )
+
+    def _inconsistent_media(self, root: Path) -> tuple[bytes, bytes, bytes]:
+        backup = b"S" * 0x007C0000
+        expected_stage2 = b"old-stage2"
+        current_stage2 = b"new-stage2"
+        self.assertEqual(len(expected_stage2), len(current_stage2))
+        checkpoint = self._recovery_checkpoint(
+            backup,
+            expected_stage2,
+            authorization=b"old-authorization",
+            provisioning=b"old-provisioning",
+        )
+        (root / "STOCKM3.BIN").write_bytes(backup)
+        (root / "STOCKM3.OK").write_bytes(checkpoint)
+        (root / STAGE2_FILENAME).write_bytes(current_stage2)
+        (root / "STAGE1.PKG").write_bytes(b"stage1")
+        (root / "raptor").mkdir()
+        (root / "raptor" / "recording.mp4").write_bytes(b"recording")
+        (root / ".hidden-user-file").write_bytes(b"hidden")
+        return backup, checkpoint, current_stage2
+
+    def _quarantine_binding(self, inspection: dict[str, object]) -> dict[str, str]:
+        return {
+            "expected_snapshot_sha256": inspection["snapshot_sha256"],
+            "expected_resume_mode": inspection["resume_mode"],
+            "expected_missing_removals_sha256": hashlib.sha256(json.dumps(
+                inspection.get("missing_removals", []), separators=(",", ":")
+            ).encode()).hexdigest(),
+        }
+
+    def test_inconsistent_media_quarantine_archives_all_and_preserves_user_data(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            parent = Path(directory_name)
+            root = parent / "card"
+            root.mkdir()
+            backup, checkpoint, current_stage2 = self._inconsistent_media(root)
+            destination = parent / "private-quarantine"
+            preflight = load_media_preflight(self._preflight(root), expected_root=root)
+            inspection = inspect_inconsistent_media_quarantine(root=root, destination_dir=destination)
+            result = quarantine_inconsistent_media(
+                root=root,
+                destination_dir=destination,
+                preflight=preflight,
+                confirmed_physical_device="/dev/test-external-media",
+                **self._quarantine_binding(inspection),
+            )
+            archive = destination / "archive"
+            self.assertEqual((archive / "STOCKM3.BIN").read_bytes(), backup)
+            self.assertEqual((archive / "STOCKM3.OK").read_bytes(), checkpoint)
+            self.assertEqual((archive / STAGE2_FILENAME).read_bytes(), current_stage2)
+            self.assertEqual((archive / "raptor/recording.mp4").read_bytes(), b"recording")
+            receipt = json.loads(
+                (destination / "inconsistent-media.manifest.private.json").read_text()
+            )
+            self.assertEqual(receipt["status"], "inconsistent media file-tree archive, not validated recovery")
+            self.assertFalse(receipt["recovery_validated"])
+            self.assertFalse((root / "STOCKM3.BIN").exists())
+            self.assertFalse((root / "STOCKM3.OK").exists())
+            self.assertFalse((root / STAGE2_FILENAME).exists())
+            self.assertFalse((root / "STAGE1.PKG").exists())
+            self.assertEqual((root / "raptor/recording.mp4").read_bytes(), b"recording")
+            self.assertEqual((root / ".hidden-user-file").read_bytes(), b"hidden")
+            self.assertFalse(result["recovery_validated"])
+
+    def test_inconsistent_media_quarantine_rejects_consistent_checkpoint(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            parent = Path(directory_name)
+            root = parent / "card"
+            root.mkdir()
+            backup, _, current_stage2 = self._inconsistent_media(root)
+            (root / "STOCKM3.OK").write_bytes(
+                self._recovery_checkpoint(
+                    backup,
+                    current_stage2,
+                    authorization=b"authorization",
+                    provisioning=b"provisioning",
+                )
+            )
+            with self.assertRaisesRegex(MediaError, "consistent"):
+                inspect_inconsistent_media_quarantine(
+                    root=root, destination_dir=parent / "private-quarantine"
+                )
+
+    def test_inconsistent_media_quarantine_rejects_backup_mismatch_and_links(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            parent = Path(directory_name)
+            root = parent / "card"
+            root.mkdir()
+            self._inconsistent_media(root)
+            (root / "STOCKM3.BIN").write_bytes(b"X" * 0x007C0000)
+            with self.assertRaisesRegex(MediaError, "does not bind its stock backup"):
+                inspect_inconsistent_media_quarantine(
+                    root=root, destination_dir=parent / "private-quarantine"
+                )
+            (root / "STOCKM3.BIN").unlink()
+            (root / "STOCKM3.BIN").symlink_to(root / STAGE2_FILENAME)
+            with self.assertRaisesRegex(MediaError, "linked path"):
+                inspect_inconsistent_media_quarantine(
+                    root=root, destination_dir=parent / "private-quarantine"
+                )
+
+    def test_inconsistent_media_quarantine_refuses_existing_destination(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            parent = Path(directory_name)
+            root = parent / "card"
+            root.mkdir()
+            self._inconsistent_media(root)
+            destination = parent / "private-quarantine"
+            destination.mkdir()
+            with self.assertRaisesRegex(MediaError, "destination already exists"):
+                inspect_inconsistent_media_quarantine(
+                    root=root, destination_dir=destination
+                )
+
+    def test_inconsistent_media_quarantine_rolls_back_partial_removal(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            parent = Path(directory_name)
+            root = parent / "card"
+            root.mkdir()
+            backup, checkpoint, current_stage2 = self._inconsistent_media(root)
+            destination = parent / "private-quarantine"
+            preflight = load_media_preflight(self._preflight(root), expected_root=root)
+            inspection = inspect_inconsistent_media_quarantine(root=root, destination_dir=destination)
+            original_unlink = Path.unlink
+
+            def fail_checkpoint(path: Path, *args, **kwargs):
+                if path.parent == root and path.name == "STOCKM3.OK":
+                    raise OSError("simulated removal failure")
+                return original_unlink(path, *args, **kwargs)
+
+            with mock.patch.object(Path, "unlink", autospec=True, side_effect=fail_checkpoint):
+                with self.assertRaisesRegex(MediaError, "card state was restored"):
+                    quarantine_inconsistent_media(
+                        root=root,
+                        destination_dir=destination,
+                        preflight=preflight,
+                        confirmed_physical_device="/dev/test-external-media",
+                        **self._quarantine_binding(inspection),
+                    )
+            self.assertEqual((root / "STOCKM3.BIN").read_bytes(), backup)
+            self.assertEqual((root / "STOCKM3.OK").read_bytes(), checkpoint)
+            self.assertEqual((root / STAGE2_FILENAME).read_bytes(), current_stage2)
+            self.assertEqual((root / "STAGE1.PKG").read_bytes(), b"stage1")
+            self.assertTrue(destination.is_dir())
+
+    def test_inconsistent_media_quarantine_stops_when_source_changes_after_archive(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            parent = Path(directory_name)
+            root = parent / "card"
+            root.mkdir()
+            self._inconsistent_media(root)
+            destination = parent / "private-quarantine"
+            preflight = load_media_preflight(self._preflight(root), expected_root=root)
+            inspection = inspect_inconsistent_media_quarantine(root=root, destination_dir=destination)
+            real_inspect = media.inspect_inconsistent_media_quarantine
+            calls = 0
+
+            def mutate_on_recheck(*, root: Path, destination_dir: Path, resume: bool = False):
+                nonlocal calls
+                calls += 1
+                result = real_inspect(root=root, destination_dir=destination_dir, resume=resume)
+                if calls == 1:
+                    (root / ".hidden-user-file").write_bytes(b"changed")
+                return result
+
+            with mock.patch.object(
+                media,
+                "inspect_inconsistent_media_quarantine",
+                side_effect=mutate_on_recheck,
+            ):
+                with self.assertRaisesRegex(MediaError, "changed while being archived"):
+                    quarantine_inconsistent_media(
+                        root=root,
+                        destination_dir=destination,
+                        preflight=preflight,
+                        confirmed_physical_device="/dev/test-external-media",
+                        **self._quarantine_binding(inspection),
+                    )
+            self.assertTrue((root / "STOCKM3.BIN").exists())
+            self.assertTrue((root / "STOCKM3.OK").exists())
+            self.assertTrue((root / STAGE2_FILENAME).exists())
+            self.assertFalse(destination.exists())
+
+    def test_inconsistent_media_quarantine_preserves_unrelated_change_during_removals(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            parent = Path(directory_name)
+            root = parent / "card"
+            root.mkdir()
+            self._inconsistent_media(root)
+            destination = parent / "private-quarantine"
+            preflight = load_media_preflight(self._preflight(root), expected_root=root)
+            inspection = inspect_inconsistent_media_quarantine(root=root, destination_dir=destination)
+            original_unlink = Path.unlink
+
+            def mutate_after_first(path: Path, *args, **kwargs):
+                result = original_unlink(path, *args, **kwargs)
+                if path.parent == root and path.name == "STAGE1.PKG":
+                    (root / ".hidden-user-file").write_bytes(b"changed-during-removal")
+                return result
+
+            with mock.patch.object(Path, "unlink", autospec=True, side_effect=mutate_after_first):
+                quarantine_inconsistent_media(
+                    root=root, destination_dir=destination, preflight=preflight,
+                    confirmed_physical_device="/dev/test-external-media",
+                    **self._quarantine_binding(inspection),
+                )
+            self.assertEqual(
+                (root / ".hidden-user-file").read_bytes(), b"changed-during-removal"
+            )
+            self.assertTrue(all(not (root / name).exists() for name in inspection["removals"]))
+
+    def test_inconsistent_media_quarantine_binds_plan_snapshot_and_mount(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            parent = Path(directory_name)
+            root = parent / "card"
+            root.mkdir()
+            self._inconsistent_media(root)
+            destination = parent / "private-quarantine"
+            preflight = load_media_preflight(self._preflight(root), expected_root=root)
+            inspection = inspect_inconsistent_media_quarantine(root=root, destination_dir=destination)
+            with self.assertRaisesRegex(MediaError, "confirmed plan"):
+                quarantine_inconsistent_media(
+                    root=root, destination_dir=destination, preflight=preflight,
+                    confirmed_physical_device="/dev/test-external-media",
+                    **{**self._quarantine_binding(inspection), "expected_snapshot_sha256": "0" * 64},
+                )
+            self.assertFalse(destination.exists())
+            wrong_mount = replace(preflight, mount_inode=preflight.mount_inode + 1)
+            with self.assertRaisesRegex(MediaError, "media identity"):
+                quarantine_inconsistent_media(
+                    root=root, destination_dir=destination, preflight=wrong_mount,
+                    confirmed_physical_device="/dev/test-external-media",
+                    **self._quarantine_binding(inspection),
+                )
+
+    def test_inconsistent_media_quarantine_clears_exact_universal_sidecars_and_preserves_empty_dirs(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            parent = Path(directory_name)
+            root = parent / "card"
+            root.mkdir()
+            self._inconsistent_media(root)
+            (root / "empty-user-dir").mkdir()
+            stale = [
+                "THINGINO.PROVISION", "INSTALL.AUTH", "INSTALL.AUTH.SIG", "INSTALL.AUTH.BIN",
+                ".THINGINO.PROVISION.part", "._INSTALL.AUTH", "STOCKM3.PART",
+                "STOCKM3.OK.PART", "._STOCKM3.PART", ".thingino-stage1-replacement.part",
+            ]
+            for name in stale:
+                (root / name).write_bytes(name.encode())
+            destination = parent / "private-quarantine"
+            preflight = load_media_preflight(self._preflight(root), expected_root=root)
+            inspection = inspect_inconsistent_media_quarantine(root=root, destination_dir=destination)
+            self.assertTrue(set(stale).issubset(inspection["removals"]))
+            quarantine_inconsistent_media(
+                root=root, destination_dir=destination, preflight=preflight,
+                confirmed_physical_device="/dev/test-external-media",
+                **self._quarantine_binding(inspection),
+            )
+            self.assertTrue((destination / "archive/empty-user-dir").is_dir())
+            self.assertTrue((root / "empty-user-dir").is_dir())
+            self.assertTrue(all(not (root / name).exists() for name in stale))
+
+    def test_inconsistent_media_quarantine_resumes_after_unrecorded_partial_removal(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            parent = Path(directory_name)
+            root = parent / "card"
+            root.mkdir()
+            self._inconsistent_media(root)
+            destination = parent / "private-quarantine"
+            preflight = load_media_preflight(self._preflight(root), expected_root=root)
+            inspection = inspect_inconsistent_media_quarantine(root=root, destination_dir=destination)
+            quarantine_inconsistent_media(
+                root=root, destination_dir=destination, preflight=preflight,
+                confirmed_physical_device="/dev/test-external-media",
+                **self._quarantine_binding(inspection),
+            )
+            removals = inspection["removals"]
+            for relative in removals[1:]:
+                (root / relative).write_bytes((destination / "archive" / relative).read_bytes())
+            state_path = destination / "inconsistent-media.state.private.json"
+            state_path.write_text(json.dumps({
+                "schema_version": 1,
+                "phase": "archived-pending-removal",
+                "snapshot_sha256": inspection["snapshot_sha256"],
+                "completed_removals": [],
+            }))
+            resumed = inspect_inconsistent_media_quarantine(
+                root=root, destination_dir=destination, resume=True
+            )
+            self.assertEqual(resumed["missing_removals"], [removals[0]])
+            result = quarantine_inconsistent_media(
+                root=root, destination_dir=destination, preflight=preflight,
+                confirmed_physical_device="/dev/test-external-media",
+                **self._quarantine_binding(resumed), resume=True,
+            )
+            self.assertTrue(result["resumed"])
+            self.assertTrue(all(not (root / name).exists() for name in removals))
+            state = json.loads(state_path.read_text())
+            self.assertEqual(state["phase"], "completed")
+
+    def test_inconsistent_media_resume_rolls_back_when_unrelated_content_changed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            parent = Path(directory_name)
+            root = parent / "card"
+            root.mkdir()
+            self._inconsistent_media(root)
+            destination = parent / "private-quarantine"
+            preflight = load_media_preflight(self._preflight(root), expected_root=root)
+            inspection = inspect_inconsistent_media_quarantine(root=root, destination_dir=destination)
+            quarantine_inconsistent_media(
+                root=root, destination_dir=destination, preflight=preflight,
+                confirmed_physical_device="/dev/test-external-media",
+                **self._quarantine_binding(inspection),
+            )
+            removals = inspection["removals"]
+            for relative in removals[1:]:
+                (root / relative).write_bytes((destination / "archive" / relative).read_bytes())
+            (root / ".hidden-user-file").write_bytes(b"changed-after-crash")
+            state_path = destination / "inconsistent-media.state.private.json"
+            state_path.write_text(json.dumps({
+                "schema_version": 1,
+                "phase": "archived-pending-removal",
+                "snapshot_sha256": inspection["snapshot_sha256"],
+                "completed_removals": [],
+            }))
+            resumed = inspect_inconsistent_media_quarantine(
+                root=root, destination_dir=destination, resume=True
+            )
+            self.assertEqual(resumed["resume_mode"], "rollback")
+            result = quarantine_inconsistent_media(
+                root=root, destination_dir=destination, preflight=preflight,
+                confirmed_physical_device="/dev/test-external-media",
+                **self._quarantine_binding(resumed), resume=True,
+            )
+            self.assertTrue(result["rolled_back"])
+            self.assertTrue(all((root / name).is_file() for name in removals))
+            self.assertEqual((root / ".hidden-user-file").read_bytes(), b"changed-after-crash")
+            self.assertEqual(json.loads(state_path.read_text())["phase"], "rolled-back")
+
+    def test_inconsistent_media_completed_resume_rejects_restored_installer_path(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            parent = Path(directory_name)
+            root = parent / "card"
+            root.mkdir()
+            self._inconsistent_media(root)
+            destination = parent / "private-quarantine"
+            preflight = load_media_preflight(self._preflight(root), expected_root=root)
+            inspection = inspect_inconsistent_media_quarantine(root=root, destination_dir=destination)
+            quarantine_inconsistent_media(
+                root=root, destination_dir=destination, preflight=preflight,
+                confirmed_physical_device="/dev/test-external-media",
+                **self._quarantine_binding(inspection),
+            )
+            restored = inspection["removals"][0]
+            (root / restored).write_bytes((destination / "archive" / restored).read_bytes())
+            with self.assertRaisesRegex(MediaError, "completed quarantine"):
+                inspect_inconsistent_media_quarantine(
+                    root=root, destination_dir=destination, resume=True
+                )
+
+    def test_inconsistent_media_resume_mode_is_bound_to_confirmed_plan(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            parent = Path(directory_name)
+            root = parent / "card"
+            root.mkdir()
+            self._inconsistent_media(root)
+            destination = parent / "private-quarantine"
+            preflight = load_media_preflight(self._preflight(root), expected_root=root)
+            inspection = inspect_inconsistent_media_quarantine(root=root, destination_dir=destination)
+            quarantine_inconsistent_media(
+                root=root, destination_dir=destination, preflight=preflight,
+                confirmed_physical_device="/dev/test-external-media",
+                **self._quarantine_binding(inspection),
+            )
+            removals = inspection["removals"]
+            for relative in removals[1:]:
+                (root / relative).write_bytes((destination / "archive" / relative).read_bytes())
+            state_path = destination / "inconsistent-media.state.private.json"
+            state_path.write_text(json.dumps({
+                "schema_version": 1, "phase": "archived-pending-removal",
+                "snapshot_sha256": inspection["snapshot_sha256"], "completed_removals": [],
+            }))
+            (root / ".hidden-user-file").write_bytes(b"drift")
+            rollback_plan = inspect_inconsistent_media_quarantine(
+                root=root, destination_dir=destination, resume=True
+            )
+            self.assertEqual(rollback_plan["resume_mode"], "rollback")
+            (root / ".hidden-user-file").write_bytes(b"hidden")
+            with self.assertRaisesRegex(MediaError, "resume mode differs"):
+                quarantine_inconsistent_media(
+                    root=root, destination_dir=destination, preflight=preflight,
+                    confirmed_physical_device="/dev/test-external-media", resume=True,
+                    **self._quarantine_binding(rollback_plan),
+                )
+            self.assertFalse((root / removals[0]).exists())
 
     def test_recovery_activation_validates_checkpoint_before_selector(self) -> None:
         with tempfile.TemporaryDirectory() as directory_name:

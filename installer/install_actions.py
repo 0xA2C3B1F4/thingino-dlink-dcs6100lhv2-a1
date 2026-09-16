@@ -63,6 +63,8 @@ class WritePlan:
         phrases = {"universal stage": "STOCK-MTD1-MTD2-THEN-FINAL-MTD1-MTD3",
                    "universal handoff": "MTD1-MTD2-WRITTEN",
                    "universal evacuate-recovery": "COPY-VERIFY-THEN-REMOVE-BACKUPS",
+                   "universal quarantine-inconsistent-media": "ARCHIVE-INCONSISTENT-MEDIA-THEN-CLEAR-INSTALLER-PATHS",
+                   "universal quarantine-inconsistent-media-rollback": "RESTORE-ARCHIVED-INSTALLER-PATHS-ONLY",
                    "stock-recovery uartless-prepare": "STAGE-INERT-CAPTURE",
                    "stock-recovery uartless-reuse": "COPY-VERIFY-THEN-REMOVE-CAPTURE",
                    "stock-recovery uartless-authorize": "WRITE-MTD1-MTD2",
@@ -193,6 +195,14 @@ class EvacuationInputs:
     output_dir: Path
 
 
+@dataclass(frozen=True)
+class InconsistentMediaQuarantineInputs:
+    mount_root: Path
+    whole_device: str
+    output_dir: Path
+    resume: bool = False
+
+
 def plan_evacuation(inputs: EvacuationInputs) -> WritePlan:
     from .media import inspect_stock_backup_evacuation
     media = validate_media_preflight_document(create_preflight_document(
@@ -217,6 +227,101 @@ def execute_evacuation(inputs: EvacuationInputs, confirmation: WriteConfirmation
         emit("copying-verifying-removing")
     result = evacuate_existing_stock_backups(root=inputs.mount_root, destination_dir=inputs.output_dir,
         preflight=plan.media, confirmed_physical_device=confirmation.physical_device)
+    if emit:
+        emit("readback-completed")
+    return result
+
+
+def plan_inconsistent_media_quarantine(
+    inputs: InconsistentMediaQuarantineInputs,
+) -> WritePlan:
+    from .media import inspect_inconsistent_media_quarantine
+
+    media = validate_media_preflight_document(create_preflight_document(
+        whole_device=inputs.whole_device, mount_root=inputs.mount_root),
+        expected_root=inputs.mount_root)
+    inspection = inspect_inconsistent_media_quarantine(
+        root=inputs.mount_root, destination_dir=inputs.output_dir, resume=inputs.resume
+    )
+    files = inspection.get("files")
+    removals = inspection.get("removals")
+    if not isinstance(files, dict) or not isinstance(removals, list):
+        raise ProjectError("invalid_input", "inconsistent-media inspection is malformed")
+
+    identities: list[tuple[str, str]] = []
+    for relative, identity in sorted(files.items()):
+        if (
+            not isinstance(relative, str)
+            or not isinstance(identity, dict)
+            or not isinstance(identity.get("sha256"), str)
+        ):
+            raise ProjectError("invalid_input", "inconsistent-media file identity is malformed")
+        identities.append((f"file:{relative}", identity["sha256"]))
+    if any(not isinstance(relative, str) for relative in removals):
+        raise ProjectError("invalid_input", "inconsistent-media removal path is malformed")
+
+    rollback = inputs.resume and inspection.get("resume_mode") == "rollback"
+    writes = (
+        tuple(
+            f"restore exact archived installer path to SD: {relative}"
+            for relative in inspection.get("missing_removals", [])
+        )
+        + ("preserve all other current SD content; do not continue staging",)
+        if rollback
+        else (
+            f"archive and independently verify the complete SD file tree in {inputs.output_dir}",
+            *(f"remove exact archived installer path from SD: {relative}" for relative in removals),
+            "preserve all non-installer paths; this does not validate recovery, authorization, or provisioning",
+        )
+    )
+    return WritePlan(
+        "inconsistent-media-bound; recovery is not validated",
+        "inconsistent-media-quarantine",
+        media,
+        tuple(identities) + (
+            ("quarantine_snapshot", inspection["snapshot_sha256"]),
+            ("quarantine_state", str(inspection["state_phase"])),
+            ("quarantine_resume_mode", str(inspection["resume_mode"])),
+            (
+                "quarantine_missing_removals",
+                hashlib.sha256(json.dumps(
+                    inspection.get("missing_removals", []), separators=(",", ":")
+                ).encode()).hexdigest(),
+            ),
+            ("reserved_sd_contents", reserved_media_identity(inputs.mount_root)),
+        ),
+        writes,
+        operation=(
+            "universal quarantine-inconsistent-media-rollback"
+            if rollback else "universal quarantine-inconsistent-media"
+        ),
+    )
+
+
+def execute_inconsistent_media_quarantine(
+    inputs: InconsistentMediaQuarantineInputs,
+    confirmation: WriteConfirmation,
+    *,
+    emit: Callable[[str], None] | None = None,
+) -> dict[str, object]:
+    from .media import quarantine_inconsistent_media
+
+    if emit:
+        emit("validating")
+    plan = plan_inconsistent_media_quarantine(inputs)
+    require_write_confirmation(plan, confirmation)
+    if emit:
+        emit("copying-verifying-removing")
+    result = quarantine_inconsistent_media(
+        root=inputs.mount_root,
+        destination_dir=inputs.output_dir,
+        preflight=plan.media,
+        confirmed_physical_device=confirmation.physical_device,
+        expected_snapshot_sha256=dict(plan.artifacts)["quarantine_snapshot"],
+        expected_resume_mode=dict(plan.artifacts)["quarantine_resume_mode"],
+        expected_missing_removals_sha256=dict(plan.artifacts)["quarantine_missing_removals"],
+        resume=inputs.resume,
+    )
     if emit:
         emit("readback-completed")
     return result
@@ -262,3 +367,39 @@ def evacuate_recovery(inputs: EvacuationInputs, confirmation: WriteConfirmation,
             "nor_written_by_host": False, "physical_device": confirmation.physical_device,
             "safe_next_action": "stage-new-camera-bound-universal-card", "sd_modified": True,
             "write_set": [], "plan_sha256": confirmation.plan_sha256})
+
+
+def quarantine_inconsistent_media(
+    inputs: InconsistentMediaQuarantineInputs,
+    confirmation: WriteConfirmation,
+    *,
+    emit: EventSink | None = None,
+) -> InstallationResult:
+    quarantined = execute_inconsistent_media_quarantine(
+        inputs,
+        confirmation,
+        emit=(lambda phase: emit(InstallationEvent(
+            phase, "universal quarantine-inconsistent-media"
+        ))) if emit else None,
+    )
+    rolled_back = quarantined.get("rolled_back") is True
+    return document(
+        "universal quarantine-inconsistent-media",
+        ok=True,
+        phase=("inconsistent-media-quarantine-rolled-back" if rolled_back else "inconsistent-media-quarantined"),
+        next_command=(None if rolled_back else "thingino-dlink universal stage"),
+        result={
+            "quarantined_files": quarantined,
+            "quarantine_dir": str(inputs.output_dir),
+            "nor_written_by_host": False,
+            "physical_device": confirmation.physical_device,
+            "safe_next_action": (
+                "inspect-card-and-start-a-new-quarantine-destination"
+                if rolled_back else "stage-new-camera-bound-universal-card"
+            ),
+            "sd_modified": True,
+            "recovery_validated": False,
+            "write_set": [],
+            "plan_sha256": confirmation.plan_sha256,
+        },
+    )

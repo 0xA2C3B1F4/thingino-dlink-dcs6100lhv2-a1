@@ -526,7 +526,7 @@ A failure does not require abandoning diagnosis.
 | Locked download fetch failed | Read `download-fetch.log` for the exact failing source. Do not substitute unverified downloads. |
 | Clean build failed | Find the first compiler/package error in `build-a.log`. Preserve the failed run. |
 | System exceeds 6,619,136 bytes | Fix the image contents and rebuild. Never extend the system region into data. |
-| Old SD backup/checkpoint | Use `universal evacuate-recovery` to copy and verify it privately before restaging. |
+| Old SD backup/checkpoint | Use `universal evacuate-recovery` to copy and verify it privately before restaging. If it reports a same-size Stage 2 hash mismatch, follow the documented `quarantine-inconsistent-media` flow; never delete the checkpoint manually. |
 | Backend timeout, unavailable stream, grey substream | Check the installed media profile and its sensor/encoder service. A visible MJPEG fallback does not prove WebRTC works. |
 | Red blinking or no LED | Identify the boot phase. Neither observation alone proves completion or failure. |
 

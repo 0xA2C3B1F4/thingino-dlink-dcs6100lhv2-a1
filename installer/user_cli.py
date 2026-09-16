@@ -789,6 +789,16 @@ def _universal_evacuate_recovery(
     return implementation(sys.modules[__name__], arguments)
 
 
+def _universal_quarantine_inconsistent_media(
+    arguments: argparse.Namespace,
+) -> dict[str, object]:
+    from .user_cli_universal import (
+        _universal_quarantine_inconsistent_media as implementation,
+    )
+
+    return implementation(sys.modules[__name__], arguments)
+
+
 def _universal_handoff(arguments: argparse.Namespace) -> dict[str, object]:
     from .user_cli_universal import _universal_handoff as implementation
 

@@ -678,6 +678,7 @@ class UserCliTests(unittest.TestCase):
                 whole_device="/dev/test-card",
                 mount_root=card,
                 output_dir=output,
+                resume=False,
                 confirm_physical_device="/dev/test-card",
                 work_dir=work,
                 json=True,
@@ -717,6 +718,99 @@ class UserCliTests(unittest.TestCase):
             ]
         )
         self.assertIs(parsed.handler, user_cli._universal_evacuate_recovery)
+
+    def test_universal_inconsistent_media_quarantine_requires_exact_plan(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            root = Path(directory_name)
+            card = root / "card"
+            card.mkdir()
+            output = root / "private-quarantine"
+            from installer import install_actions
+            from installer.media_preflight import MediaPreflight
+
+            preflight = MediaPreflight(
+                "/dev/test-card", "fixture", 1024, "fat32", card
+            )
+            plan = install_actions.WritePlan(
+                "content-bound",
+                "inconsistent-media; not-validated-recovery",
+                preflight,
+                (
+                    ("media:THINGINO2.BIN", "b" * 64),
+                    ("quarantine_snapshot", "c" * 64),
+                    ("quarantine_resume_mode", "fresh"),
+                    ("quarantine_missing_removals", hashlib.sha256(b"[]").hexdigest()),
+                ),
+                ("archive then clear installer paths",),
+                operation="universal quarantine-inconsistent-media",
+            )
+            confirmations = plan.required_confirmations()
+            arguments = SimpleNamespace(
+                whole_device="/dev/test-card",
+                mount_root=card,
+                output_dir=output,
+                resume=False,
+                confirm_physical_device=confirmations["physical_device"],
+                confirm_target=confirmations["target"],
+                confirm_write_set=confirmations["write_set"],
+                confirm_plan=confirmations["plan_sha256"],
+                plan_only=False,
+                non_interactive=True,
+                events_jsonl=False,
+                work_dir=root / "work",
+                json=True,
+            )
+            quarantined = {
+                "archive_dir": str(output),
+                "checkpoint": {"expected_stage2_sha256": "c" * 64},
+                "files": {},
+                "recovery_validated": False,
+                "removed_installer_paths": ["THINGINO2.BIN"],
+            }
+            with (
+                mock.patch.object(
+                    install_actions,
+                    "plan_inconsistent_media_quarantine",
+                    return_value=plan,
+                ) as planner,
+                mock.patch(
+                    "installer.media.quarantine_inconsistent_media",
+                    return_value=quarantined,
+                ) as quarantine,
+            ):
+                result = user_cli._universal_quarantine_inconsistent_media(arguments)
+            self.assertEqual(planner.call_count, 2)
+            quarantine.assert_called_once_with(
+                root=card,
+                destination_dir=output,
+                preflight=preflight,
+                confirmed_physical_device="/dev/test-card",
+                expected_snapshot_sha256=dict(plan.artifacts)["quarantine_snapshot"],
+                expected_resume_mode=dict(plan.artifacts)["quarantine_resume_mode"],
+                expected_missing_removals_sha256=dict(plan.artifacts)["quarantine_missing_removals"],
+                resume=False,
+            )
+            self.assertEqual(result["phase"], "inconsistent-media-quarantined")
+            self.assertFalse(result["result"]["recovery_validated"])
+            self.assertTrue(result["result"]["sd_modified"])
+
+    def test_universal_inconsistent_media_quarantine_parser(self) -> None:
+        parsed = user_cli.build_parser().parse_args(
+            [
+                "universal",
+                "quarantine-inconsistent-media",
+                "--whole-device",
+                "/dev/test-card",
+                "--mount-root",
+                "/media/test-card",
+                "--output-dir",
+                "/private/camera/quarantine",
+                "--plan-only",
+            ]
+        )
+        self.assertIs(
+            parsed.handler, user_cli._universal_quarantine_inconsistent_media
+        )
 
     def test_universal_handoff_revalidates_tuple_before_passivation(self) -> None:
         with tempfile.TemporaryDirectory() as directory_name:

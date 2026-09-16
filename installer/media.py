@@ -7,8 +7,9 @@ import json
 import os
 import re
 import shutil
+import stat
 import tempfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from .install_policy import universal_physical_write_policy
 from . import media_transactions
@@ -257,6 +258,541 @@ def evacuate_existing_stock_backups(
             ) from restore_exc
         raise MediaError("stock-backup evacuation failed; card state was restored") from exc
     return hashes
+
+
+INCONSISTENT_MEDIA_MANIFEST_FILENAME = "inconsistent-media.manifest.private.json"
+INCONSISTENT_MEDIA_STATE_FILENAME = "inconsistent-media.state.private.json"
+INCONSISTENT_MEDIA_ROOT_INSTALLER_NAMES = {
+    "STOCKM3.PART",
+    "STOCKM3.OK.PART",
+    "THINGINO.PROVISION",
+    "INSTALL.AUTH",
+    "INSTALL.AUTH.SIG",
+    "INSTALL.AUTH.BIN",
+    ".THINGINO.PROVISION.part",
+    ".INSTALL.AUTH.part",
+    ".INSTALL.AUTH.SIG.part",
+    ".INSTALL.AUTH.BIN.part",
+    ".thingino-stage2-upload.part",
+    ".thingino-installer-upload.part",
+    ".thingino-stage1-deactivate-rollback.part",
+    ".thingino-stage1-replacement.part",
+    ".thingino-stage2-replacement.part",
+    ".thingino-stage1-rollback.part",
+    ".thingino-stage2-rollback.part",
+    ".thingino-installer-rollback.part",
+    ".thingino-recovery-deactivate-rollback.part",
+    ".uartless-capture-upload.part",
+}
+
+
+def _safe_media_relative(path: Path, root: Path) -> str:
+    relative = path.relative_to(root).as_posix()
+    pure = PurePosixPath(relative)
+    if not relative or pure.is_absolute() or ".." in pure.parts or str(pure) != relative:
+        raise MediaError("inconsistent media contains an unsafe path")
+    return relative
+
+
+def _read_stable_regular(path: Path) -> tuple[bytes, tuple[int, int, int, int, int]]:
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as exc:
+        raise MediaError("inconsistent media file cannot be opened safely") from exc
+    try:
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode):
+            raise MediaError("inconsistent media contains a non-regular path")
+        chunks: list[bytes] = []
+        while True:
+            chunk = os.read(descriptor, 1024 * 1024)
+            if not chunk:
+                break
+            chunks.append(chunk)
+        after = os.fstat(descriptor)
+    finally:
+        os.close(descriptor)
+    before_identity = (
+        before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns, before.st_ctime_ns
+    )
+    after_identity = (
+        after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns
+    )
+    raw = b"".join(chunks)
+    if before_identity != after_identity or len(raw) != before.st_size:
+        raise MediaError("inconsistent media file changed while being read")
+    return raw, after_identity
+
+
+def _tree_content_snapshot(root: Path) -> tuple[dict[str, dict[str, object]], list[str]]:
+    files: dict[str, dict[str, object]] = {}
+    directories: list[str] = []
+    for path in sorted(root.rglob("*")):
+        if path.is_symlink():
+            raise MediaError("inconsistent media contains a linked path")
+        relative = _safe_media_relative(path, root)
+        if path.is_dir():
+            directories.append(relative)
+            continue
+        if not path.is_file():
+            raise MediaError("inconsistent media contains a non-regular path")
+        raw, _ = _read_stable_regular(path)
+        files[relative] = {
+            "sha256": hashlib.sha256(raw).hexdigest(),
+            "size": len(raw),
+        }
+    return files, directories
+
+
+def _snapshot_sha256(snapshot: dict[str, object]) -> str:
+    bound = {
+        "checkpoint": snapshot["checkpoint"],
+        "directories": snapshot["directories"],
+        "files": snapshot["files"],
+        "removals": snapshot["removals"],
+    }
+    return hashlib.sha256(
+        json.dumps(bound, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
+def _validate_snapshot_shape(snapshot: object) -> dict[str, object]:
+    if not isinstance(snapshot, dict):
+        raise MediaError("inconsistent-media snapshot is malformed")
+    if not isinstance(snapshot.get("files"), dict) or not isinstance(snapshot.get("directories"), list):
+        raise MediaError("inconsistent-media snapshot tree is malformed")
+    if not isinstance(snapshot.get("removals"), list) or not isinstance(snapshot.get("checkpoint"), dict):
+        raise MediaError("inconsistent-media snapshot contract is malformed")
+    if snapshot.get("snapshot_sha256") != _snapshot_sha256(snapshot):
+        raise MediaError("inconsistent-media snapshot identity differs")
+    return snapshot
+
+
+def _load_quarantine_document(path: Path) -> dict[str, object]:
+    if path.is_symlink() or not path.is_file():
+        raise MediaError("inconsistent-media quarantine document is missing or ambiguous")
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise MediaError("inconsistent-media quarantine document is invalid") from exc
+    if not isinstance(value, dict):
+        raise MediaError("inconsistent-media quarantine document is malformed")
+    return value
+
+
+def _validate_tree_against_snapshot(
+    root: Path,
+    snapshot: dict[str, object],
+    *,
+    allow_missing_removals: bool,
+) -> list[str]:
+    files, directories = _tree_content_snapshot(root)
+    expected_files = snapshot["files"]
+    removals = set(snapshot["removals"])
+    missing = sorted(set(expected_files) - set(files))
+    if not allow_missing_removals and missing:
+        raise MediaError("inconsistent media changed after its reviewed snapshot")
+    if any(name not in removals for name in missing):
+        raise MediaError("non-installer media content is missing from the reviewed snapshot")
+    if set(files) - set(expected_files) or directories != snapshot["directories"]:
+        raise MediaError("inconsistent media tree changed after its reviewed snapshot")
+    for name, identity in files.items():
+        if identity != expected_files[name]:
+            raise MediaError("inconsistent media content changed after its reviewed snapshot")
+    return missing
+
+
+def inspect_inconsistent_media_quarantine(
+    *, root: Path, destination_dir: Path, resume: bool = False
+) -> dict[str, object]:
+    """Describe one mismatched universal checkpoint without accepting it as recovery."""
+
+    root_resolved = root.resolve(strict=True)
+    validate_sd_root(root)
+    if not destination_dir.is_absolute():
+        raise MediaError("private quarantine destination must be absolute")
+    for component in (destination_dir, *destination_dir.parents):
+        if component.is_symlink():
+            raise MediaError("private quarantine destination has a linked component")
+    destination_parent = destination_dir.parent.resolve(strict=True)
+    if destination_parent == root_resolved or root_resolved in destination_parent.parents:
+        raise MediaError("private quarantine destination must be outside the SD root")
+
+    if resume:
+        manifest = _load_quarantine_document(destination_dir / INCONSISTENT_MEDIA_MANIFEST_FILENAME)
+        state = _load_quarantine_document(destination_dir / INCONSISTENT_MEDIA_STATE_FILENAME)
+        if manifest.get("schema_version") != 2 or state.get("schema_version") != 1:
+            raise MediaError("inconsistent-media quarantine schema is unsupported")
+        parent_stat = destination_parent.stat(follow_symlinks=False)
+        if (
+            manifest.get("destination") != str(destination_dir)
+            or manifest.get("destination_parent_device") != parent_stat.st_dev
+            or manifest.get("destination_parent_inode") != parent_stat.st_ino
+        ):
+            raise MediaError("inconsistent-media quarantine destination identity differs")
+        snapshot = _validate_snapshot_shape(manifest.get("snapshot"))
+        if state.get("snapshot_sha256") != snapshot["snapshot_sha256"]:
+            raise MediaError("inconsistent-media resume state binds another snapshot")
+        if state.get("phase") not in ("archived-pending-removal", "completed"):
+            raise MediaError("inconsistent-media quarantine is not resumable")
+        archive = destination_dir / "archive"
+        archive_files, archive_directories = _tree_content_snapshot(archive)
+        if archive_files != snapshot["files"] or archive_directories != snapshot["directories"]:
+            raise MediaError("inconsistent-media archive differs from its receipt")
+        completed = state.get("completed_removals")
+        if not isinstance(completed, list) or any(name not in snapshot["removals"] for name in completed):
+            raise MediaError("inconsistent-media resume progress is malformed")
+        missing: list[str] = []
+        for name in snapshot["removals"]:
+            path = root / name
+            if not path.exists() and not path.is_symlink():
+                missing.append(name)
+                continue
+            if path.is_symlink():
+                raise MediaError("inconsistent-media removal path became ambiguous")
+            raw, _ = _read_stable_regular(path)
+            identity = snapshot["files"][name]
+            if len(raw) != identity["size"] or hashlib.sha256(raw).hexdigest() != identity["sha256"]:
+                raise MediaError("inconsistent-media removal path differs from its archive")
+        if state["phase"] == "completed":
+            if set(missing) != set(snapshot["removals"]):
+                raise MediaError("completed quarantine has a restored installer path")
+            resume_mode = "completed"
+        else:
+            try:
+                _validate_tree_against_snapshot(root, snapshot, allow_missing_removals=True)
+                stable = True
+            except MediaError:
+                stable = False
+            progress_consistent = set(completed).issubset(missing)
+            resume_mode = "finish" if stable and progress_consistent else "rollback"
+        snapshot = dict(snapshot)
+        snapshot["resume"] = True
+        snapshot["missing_removals"] = missing
+        snapshot["state_phase"] = state["phase"]
+        snapshot["resume_mode"] = resume_mode
+        return snapshot
+    if destination_dir.exists() or destination_dir.is_symlink():
+        raise MediaError("private quarantine destination already exists")
+
+    files, directories = _tree_content_snapshot(root)
+
+    required = {
+        STOCK_BACKUP_FILENAME,
+        RECOVERY_CHECKPOINT_FILENAME,
+        STAGE2_FILENAME,
+    }
+    if not required.issubset(files):
+        raise MediaError("inconsistent media lacks its recovery tuple")
+    backup, _ = _read_stable_regular(root / STOCK_BACKUP_FILENAME)
+    checkpoint, _ = _read_stable_regular(root / RECOVERY_CHECKPOINT_FILENAME)
+    stage2, _ = _read_stable_regular(root / STAGE2_FILENAME)
+    for name, raw in (
+        (STOCK_BACKUP_FILENAME, backup),
+        (RECOVERY_CHECKPOINT_FILENAME, checkpoint),
+        (STAGE2_FILENAME, stage2),
+    ):
+        if files[name] != {"sha256": hashlib.sha256(raw).hexdigest(), "size": len(raw)}:
+            raise MediaError("inconsistent media recovery tuple changed while being inspected")
+    if len(backup) != STOCK_BACKUP_SIZE:
+        raise MediaError("inconsistent media stock backup has the wrong exact size")
+    if (
+        len(checkpoint) != UNIVERSAL_RECOVERY_CHECKPOINT_SIZE
+        or checkpoint[:8] != UNIVERSAL_RECOVERY_CHECKPOINT_MAGIC
+    ):
+        raise MediaError("inconsistent media lacks a universal recovery checkpoint")
+    expected_backup_size = int.from_bytes(checkpoint[8:12], "big")
+    expected_stage2_size = int.from_bytes(checkpoint[12:16], "big")
+    expected_backup_sha256 = checkpoint[16:48].hex()
+    expected_stage2_sha256 = checkpoint[48:80].hex()
+    backup_sha256 = hashlib.sha256(backup).hexdigest()
+    stage2_sha256 = hashlib.sha256(stage2).hexdigest()
+    if expected_backup_size != len(backup) or expected_backup_sha256 != backup_sha256:
+        raise MediaError("inconsistent media checkpoint does not bind its stock backup")
+    if expected_stage2_size != len(stage2):
+        raise MediaError("inconsistent media checkpoint stage-2 size differs")
+    if expected_stage2_sha256 == stage2_sha256:
+        raise MediaError("recovery checkpoint is consistent; use evacuate-recovery")
+
+    reserved = INCONSISTENT_MEDIA_ROOT_INSTALLER_NAMES | {
+        PASSIVE_BOOTSTRAP_FILENAME,
+        PASSIVE_RECOVERY_FILENAME,
+        UARTLESS_CAPTURE_ACTIVE_FILENAME,
+        UARTLESS_CAPTURE_PASSIVE_FILENAME,
+        STOCK_BACKUP_FILENAME,
+        ARCHIVED_STOCK_BACKUP_FILENAME,
+        RECOVERY_CHECKPOINT_FILENAME,
+        STAGE2_FILENAME,
+    }
+    reserved.update("._" + name for name in tuple(reserved))
+    removals = sorted(
+        name
+        for name in files
+        if "/" not in name
+        and (name in reserved or is_matching_update_filename(name))
+    )
+    if not {STOCK_BACKUP_FILENAME, RECOVERY_CHECKPOINT_FILENAME, STAGE2_FILENAME}.issubset(removals):
+        raise MediaError("inconsistent media quarantine removal set is incomplete")
+    snapshot = {
+        "checkpoint": {
+            "backup_sha256": backup_sha256,
+            "current_stage2_sha256": stage2_sha256,
+            "expected_stage2_sha256": expected_stage2_sha256,
+            "stage2_size": len(stage2),
+        },
+        "files": files,
+        "directories": directories,
+        "removals": removals,
+    }
+    snapshot["snapshot_sha256"] = _snapshot_sha256(snapshot)
+    snapshot["resume"] = False
+    snapshot["missing_removals"] = []
+    snapshot["state_phase"] = "not-started"
+    snapshot["resume_mode"] = "fresh"
+    return snapshot
+
+
+def quarantine_inconsistent_media(
+    *,
+    root: Path,
+    destination_dir: Path,
+    preflight: MediaPreflight,
+    confirmed_physical_device: str,
+    expected_snapshot_sha256: str,
+    expected_resume_mode: str,
+    expected_missing_removals_sha256: str,
+    resume: bool = False,
+) -> dict[str, object]:
+    """Archive an inconsistent card's file tree, then clear exact installer paths."""
+
+    if confirmed_physical_device != preflight.physical_device:
+        raise MediaError("exact physical-device confirmation does not match preflight")
+    if root.resolve(strict=True) != preflight.mount_root:
+        raise MediaError("quarantine root changed after preflight")
+    expected_mount_identity = (preflight.mount_device_id, preflight.mount_inode)
+    if (root.stat(follow_symlinks=False).st_dev, root.stat(follow_symlinks=False).st_ino) != expected_mount_identity:
+        raise MediaError("quarantine media identity changed after preflight")
+    snapshot = inspect_inconsistent_media_quarantine(
+        root=root, destination_dir=destination_dir, resume=resume
+    )
+    if snapshot["snapshot_sha256"] != expected_snapshot_sha256:
+        raise MediaError("quarantine snapshot differs from the confirmed plan")
+    if snapshot["resume_mode"] != expected_resume_mode:
+        raise MediaError("quarantine resume mode differs from the confirmed plan")
+    missing_identity = hashlib.sha256(json.dumps(
+        snapshot.get("missing_removals", []), separators=(",", ":")
+    ).encode()).hexdigest()
+    if missing_identity != expected_missing_removals_sha256:
+        raise MediaError("quarantine missing-path set differs from the confirmed plan")
+    destination_parent = destination_dir.parent.resolve(strict=True)
+    parent_stat = destination_parent.stat(follow_symlinks=False)
+    expected_parent_identity = (parent_stat.st_dev, parent_stat.st_ino)
+
+    def validate_mount_and_parent() -> None:
+        mount_stat = root.resolve(strict=True).stat(follow_symlinks=False)
+        if (mount_stat.st_dev, mount_stat.st_ino) != expected_mount_identity:
+            raise MediaError("quarantine media identity changed during operation")
+        current_parent = destination_parent.stat(follow_symlinks=False)
+        if (current_parent.st_dev, current_parent.st_ino) != expected_parent_identity:
+            raise MediaError("private quarantine destination parent changed")
+
+    def write_state(phase: str, completed: list[str]) -> None:
+        state = {
+            "schema_version": 1,
+            "phase": phase,
+            "snapshot_sha256": snapshot["snapshot_sha256"],
+            "completed_removals": sorted(completed),
+        }
+        raw = (json.dumps(state, indent=2, sort_keys=True) + "\n").encode()
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix="." + INCONSISTENT_MEDIA_STATE_FILENAME + ".",
+            suffix=".part",
+            dir=destination_dir,
+        )
+        temporary = Path(temporary_name)
+        try:
+            with os.fdopen(descriptor, "wb", closefd=True) as output:
+                descriptor = -1
+                output.write(raw)
+                output.flush()
+                os.fsync(output.fileno())
+            if temporary.read_bytes() != raw:
+                raise MediaError("inconsistent-media state readback mismatch")
+            os.replace(temporary, destination_dir / INCONSISTENT_MEDIA_STATE_FILENAME)
+            _sync_directory(destination_dir)
+        finally:
+            if descriptor >= 0:
+                os.close(descriptor)
+            if temporary.exists():
+                temporary.unlink()
+
+    def restore_missing_removals() -> list[str]:
+        validate_mount_and_parent()
+        restored: list[str] = []
+        for relative in snapshot["removals"]:
+            path = root / relative
+            archived = destination_dir / "archive" / relative
+            archived_raw, _ = _read_stable_regular(archived)
+            identity = snapshot["files"][relative]
+            if (
+                len(archived_raw) != identity["size"]
+                or hashlib.sha256(archived_raw).hexdigest() != identity["sha256"]
+            ):
+                raise MediaError("cannot restore invalid quarantined installer path")
+            if path.exists() or path.is_symlink():
+                if path.is_symlink():
+                    raise MediaError("cannot restore an ambiguous installer path")
+                current_raw, _ = _read_stable_regular(path)
+                if current_raw != archived_raw:
+                    raise MediaError("cannot overwrite a changed installer path during rollback")
+                continue
+            temporary = root / f".thingino-{Path(relative).name.lower()}-restore.part"
+            _write_verified_temporary(temporary, archived_raw)
+            os.replace(temporary, path)
+            _sync_directory(root)
+            restored.append(relative)
+        write_state("rolled-back", [])
+        return restored
+
+    if not resume:
+        work = Path(tempfile.mkdtemp(prefix=f".{destination_dir.name}.", dir=destination_parent))
+        destination_created = False
+        try:
+            archive = work / "archive"
+            archive.mkdir(mode=0o700)
+            for relative in snapshot["directories"]:
+                (archive / relative).mkdir(parents=True, exist_ok=True, mode=0o700)
+            for relative, identity in snapshot["files"].items():
+                raw, _ = _read_stable_regular(root / relative)
+                if len(raw) != identity["size"] or hashlib.sha256(raw).hexdigest() != identity["sha256"]:
+                    raise MediaError("inconsistent media changed while being archived")
+                target = archive / relative
+                target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+                _write_verified_temporary(target, raw)
+                target.chmod(0o600)
+                with target.open("rb") as archived_stream:
+                    os.fsync(archived_stream.fileno())
+            for directory in sorted(
+                (path for path in archive.rglob("*") if path.is_dir()),
+                key=lambda path: len(path.parts), reverse=True,
+            ):
+                _sync_directory(directory)
+            _sync_directory(archive)
+            archived_files, archived_directories = _tree_content_snapshot(archive)
+            if archived_files != snapshot["files"] or archived_directories != snapshot["directories"]:
+                raise MediaError("inconsistent media archive final readback mismatch")
+            manifest = {
+                "schema_version": 2,
+                "status": "inconsistent media file-tree archive, not validated recovery",
+                "destination": str(destination_dir),
+                "destination_parent_device": expected_parent_identity[0],
+                "destination_parent_inode": expected_parent_identity[1],
+                "source": {
+                    "capacity_bytes": preflight.capacity_bytes,
+                    "filesystem": preflight.filesystem,
+                    "media_uuid": preflight.media_uuid,
+                    "model": preflight.model,
+                    "physical_device": preflight.physical_device,
+                },
+                "snapshot": {key: snapshot[key] for key in (
+                    "checkpoint", "directories", "files", "removals", "snapshot_sha256"
+                )},
+                "planned_installer_path_removals": snapshot["removals"],
+                "recovery_validated": False,
+                "authorization_and_provisioning_bindings_validated": False,
+            }
+            manifest_path = work / INCONSISTENT_MEDIA_MANIFEST_FILENAME
+            _write_verified_temporary(
+                manifest_path, (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode()
+            )
+            manifest_path.chmod(0o600)
+            _sync_directory(work)
+            validate_mount_and_parent()
+            _validate_tree_against_snapshot(root, snapshot, allow_missing_removals=False)
+            destination_dir.mkdir(mode=0o700)
+            destination_created = True
+            _sync_directory(destination_parent)
+            os.replace(archive, destination_dir / "archive")
+            os.replace(manifest_path, destination_dir / INCONSISTENT_MEDIA_MANIFEST_FILENAME)
+            _sync_directory(destination_dir)
+            write_state("archived-pending-removal", [])
+        except BaseException:
+            if not destination_created:
+                shutil.rmtree(work, ignore_errors=True)
+            raise
+        finally:
+            if work.exists():
+                shutil.rmtree(work, ignore_errors=True)
+    elif snapshot["resume_mode"] == "completed":
+        return {
+            "archive_dir": str(destination_dir), "checkpoint": snapshot["checkpoint"],
+            "files": snapshot["files"], "recovery_validated": False,
+            "removed_installer_paths": snapshot["removals"],
+            "snapshot_sha256": snapshot["snapshot_sha256"], "resumed": True,
+        }
+    elif snapshot["resume_mode"] == "rollback":
+        restored = restore_missing_removals()
+        return {
+            "archive_dir": str(destination_dir), "checkpoint": snapshot["checkpoint"],
+            "files": snapshot["files"], "recovery_validated": False,
+            "removed_installer_paths": [], "restored_installer_paths": restored,
+            "snapshot_sha256": snapshot["snapshot_sha256"], "resumed": True,
+            "rolled_back": True,
+        }
+
+    state = _load_quarantine_document(destination_dir / INCONSISTENT_MEDIA_STATE_FILENAME)
+    completed = list(state.get("completed_removals", []))
+    missing = _validate_tree_against_snapshot(root, snapshot, allow_missing_removals=True)
+    completed = sorted(set(completed) | set(missing))
+    write_state("archived-pending-removal", completed)
+    try:
+        for relative in snapshot["removals"]:
+            if relative in completed:
+                continue
+            validate_mount_and_parent()
+            path = root / relative
+            raw, stable_identity = _read_stable_regular(path)
+            after = path.stat(follow_symlinks=False)
+            identity = snapshot["files"][relative]
+            if (
+                stable_identity
+                != (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns)
+                or len(raw) != identity["size"]
+                or hashlib.sha256(raw).hexdigest() != identity["sha256"]
+            ):
+                raise MediaError("installer path changed immediately before removal")
+            path.unlink()
+            _sync_directory(root)
+            completed.append(relative)
+            completed.sort()
+            write_state("archived-pending-removal", completed)
+        validate_mount_and_parent()
+        if any(
+            (root / relative).exists() or (root / relative).is_symlink()
+            for relative in snapshot["removals"]
+        ):
+            raise MediaError("installer path remained after inconsistent-media quarantine")
+        write_state("completed", completed)
+    except BaseException as exc:
+        try:
+            restore_missing_removals()
+        except BaseException as restore_exc:
+            raise MediaError(
+                "inconsistent-media quarantine failed and card rollback also failed"
+            ) from restore_exc
+        raise MediaError(
+            "inconsistent-media quarantine failed; card state was restored"
+        ) from exc
+    return {
+        "archive_dir": str(destination_dir),
+        "checkpoint": snapshot["checkpoint"],
+        "files": snapshot["files"],
+        "recovery_validated": False,
+        "removed_installer_paths": snapshot["removals"],
+        "snapshot_sha256": snapshot["snapshot_sha256"],
+        "resumed": resume,
+    }
 
 
 def _validate_recovery_checkpoint(
