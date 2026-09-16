@@ -1377,6 +1377,10 @@
       "sha256": "81a6b951344bc2da981c6da8fbfb4292479f8b44388c00923b968a5a3aabfbaf",
       "source": "patches/thingino/0025-normalize-neo-library-comments.patch"
     },
+    "patches/thingino/0026-floor-buildroot-package-stamp-mtimes.patch": {
+      "sha256": "6823e594e681225673f7c8e04a09a901b87c7ff6164cf74c363da6c2bb2d1302",
+      "source": "patches/thingino/0026-floor-buildroot-package-stamp-mtimes.patch"
+    },
     "patches/uhttpd/0007-proxy-thingino-control.patch": {
       "sha256": "443f019f4d4895a629aa5f525889cc04c8d3803e179f570606bae9e0a69eb6b5",
       "source": "patches/uhttpd/0007-proxy-thingino-control.patch"
@@ -1458,7 +1462,7 @@
       "source": "profiles/dlink-dcs6100lhv2-a1/recovery-ap-kernel.fragment"
     },
     "profiles/dlink-dcs6100lhv2-a1/source-profile.json": {
-      "sha256": "6ac01cd5a7ec1255c91997f1066b33b29e78efc0ab76c9025af3d314155b17f9",
+      "sha256": "35a0f66441c85cbbedc63f48ee399ba1ebdf509bf3269a683bbb323372972d3f",
       "source": "profiles/dlink-dcs6100lhv2-a1/source-profile.json"
     },
     "profiles/dlink-dcs6100lhv2-a1/stock-restore-kernel.fragment": {
@@ -1894,7 +1898,7 @@
       "source": "tests/test_source_checkout.py"
     },
     "tests/test_source_prepare.py": {
-      "sha256": "27d005350dec94c6b4b78c45229c8315ce3968330507dcb6ce115ef6bc46bcab",
+      "sha256": "0579510f66d92c7c4b1ea258041a6dd0b982843eb0faefe009541b5d31997b95",
       "source": "tests/test_source_prepare.py"
     },
     "tests/test_split_kernel_build.py": {
@@ -2335,6 +2339,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "c03b0ae188645c39845d08663e2ffc4aae03822b",
+  "source_commit": "89ec175c5eaec7e8afc42aed0a039a25cdd866e2",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }

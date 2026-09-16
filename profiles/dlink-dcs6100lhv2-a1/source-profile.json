@@ -896,6 +896,10 @@
     {
       "sha256": "81a6b951344bc2da981c6da8fbfb4292479f8b44388c00923b968a5a3aabfbaf",
       "source": "patches/thingino/0025-normalize-neo-library-comments.patch"
+    },
+    {
+      "sha256": "6823e594e681225673f7c8e04a09a901b87c7ff6164cf74c363da6c2bb2d1302",
+      "source": "patches/thingino/0026-floor-buildroot-package-stamp-mtimes.patch"
     }
   ]
 }

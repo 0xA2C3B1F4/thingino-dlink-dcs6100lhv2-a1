@@ -221,7 +221,7 @@ class SourceProfileTests(unittest.TestCase):
         profile = PREP.load_profile()
         self.assertEqual(profile["model"], "DCS-6100LHV2")
         self.assertEqual(profile["hardware_revision"], "A1")
-        self.assertEqual(len(profile["thingino_patches"]), 19)
+        self.assertEqual(len(profile["thingino_patches"]), 20)
         self.assertEqual(len(profile["installed_files"]), 163)
         installed_sources = {entry["source"] for entry in profile["installed_files"]}
         self.assertTrue({
@@ -435,6 +435,96 @@ class SourceProfileTests(unittest.TestCase):
         self.assertEqual(normalized_neo.count("--remove-section=.comment"), 2)
         self.assertIn("$(TARGET_DIR)/usr/lib/libalog.so", normalized_neo)
         self.assertIn("$(TARGET_DIR)/usr/lib/libsysutils.so", normalized_neo)
+
+    def test_buildroot_stamp_floor_patch_is_complete(self) -> None:
+        outer = ROOT / "patches/thingino/0026-floor-buildroot-package-stamp-mtimes.patch"
+        with tempfile.TemporaryDirectory() as temporary:
+            subprocess.run(
+                ["git", "apply", "--whitespace=error-all", str(outer)],
+                cwd=temporary,
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            inner = (
+                Path(temporary)
+                / "package/all-patches/buildroot/0004-floor-package-stamp-mtimes.patch"
+            ).read_text(encoding="utf-8")
+            self.assertIn("define stampfile-touch", inner)
+            self.assertIn("for prerequisite in $^", inner)
+            self.assertIn(
+                'test -e "$$prerequisite" || { rm -f "$@"; exit 1; }',
+                inner,
+            )
+            self.assertIn('touch -r "$$prerequisite" "$@"', inner)
+            self.assertIn('rm -f "$@"', inner)
+            self.assertEqual(inner.count("-\t$(Q)touch $@"), 12)
+            self.assertEqual(inner.count("+\t$(Q)$(call stampfile-touch)"), 12)
+
+            added = [
+                line[1:]
+                for line in inner.splitlines()
+                if line.startswith("+") and not line.startswith("+++")
+            ]
+            macro_start = added.index("define stampfile-touch")
+            macro_end = added.index("endef", macro_start) + 1
+            root = Path(temporary)
+            makefile = root / "stamp-floor.mk"
+            makefile.write_text(
+                "\n".join(
+                    [
+                        *added[macro_start:macro_end],
+                        "Q = @",
+                        "target: first second | order-only",
+                        "\t@printf 'run\\n' >> runs",
+                        "\t$(Q)$(call stampfile-touch)",
+                        "missing:",
+                        "\t@:",
+                        "failed-target: missing",
+                        "\t$(Q)$(call stampfile-touch)",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            shim = root / "touch"
+            shim.write_text(
+                "#!/bin/sh\n"
+                "if [ \"${1-}\" = -r ]; then exec /usr/bin/touch \"$@\"; fi\n"
+                "exec /usr/bin/touch -t 202001010000 \"$@\"\n",
+                encoding="utf-8",
+            )
+            shim.chmod(0o755)
+            timestamps = {
+                "first": 1_609_459_200_111_111_111,
+                "second": 1_640_995_200_222_222_222,
+                "order-only": 1_672_531_200_333_333_333,
+            }
+            for name, timestamp in timestamps.items():
+                path = root / name
+                path.touch()
+                os.utime(path, ns=(timestamp, timestamp))
+            environment = {**os.environ, "PATH": f"{root}:{os.environ['PATH']}"}
+            command = ["make", "-f", str(makefile), "target"]
+            subprocess.run(command, cwd=root, env=environment, check=True)
+            self.assertEqual((root / "target").stat().st_mtime_ns, timestamps["second"])
+            subprocess.run(command, cwd=root, env=environment, check=True)
+            self.assertEqual((root / "runs").read_text().splitlines(), ["run"])
+            timestamps["first"] = 1_704_067_200_444_444_444
+            os.utime(root / "first", ns=(timestamps["first"], timestamps["first"]))
+            subprocess.run(command, cwd=root, env=environment, check=True)
+            self.assertEqual((root / "target").stat().st_mtime_ns, timestamps["first"])
+            self.assertEqual((root / "runs").read_text().splitlines(), ["run", "run"])
+            failed = subprocess.run(
+                ["make", "-f", str(makefile), "failed-target"],
+                cwd=root,
+                env=environment,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
+            self.assertNotEqual(failed.returncode, 0)
+            self.assertFalse((root / "failed-target").exists())
 
     def test_verified_service_stop_and_daynight_routing(self) -> None:
         uhttpd_stop = (
