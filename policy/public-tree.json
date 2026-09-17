@@ -507,6 +507,7 @@
     "webui/browser-tests/motion-email.spec.ts",
     "webui/browser-tests/motion-ftp.spec.ts",
     "webui/browser-tests/osd-font-size.spec.ts",
+    "webui/browser-tests/preview-audio.spec.ts",
     "webui/browser-tests/raptor.spec.ts",
     "webui/browser-tests/recorder.spec.ts",
     "webui/browser-tests/recording-files.spec.ts",

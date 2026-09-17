@@ -41,6 +41,7 @@ class FakeTimers implements PreviewTimers {
 }
 
 class FakeVideo {
+  muted = true;
   srcObject: MediaProvider | null = null;
   plays = 0;
   pauses = 0;
@@ -49,12 +50,16 @@ class FakeVideo {
 }
 
 class FakePeer {
+  readonly transceivers: Array<{ kind: string; direction: RTCRtpTransceiverDirection | undefined }> = [];
   iceGatheringState: RTCIceGatheringState = "complete";
   connectionState: RTCPeerConnectionState = "new";
   localDescription: RTCSessionDescription | null = null;
   ontrack: ((event: RTCTrackEvent) => void) | null = null;
   closed = false;
-  addTransceiver(): RTCRtpTransceiver { return { setCodecPreferences: () => undefined } as unknown as RTCRtpTransceiver; }
+  addTransceiver(kind: string, init?: RTCRtpTransceiverInit): RTCRtpTransceiver {
+    this.transceivers.push({ kind, direction: init?.direction });
+    return { setCodecPreferences: () => undefined } as unknown as RTCRtpTransceiver;
+  }
   addEventListener(_name: string, _listener: EventListenerOrEventListenerObject): void {}
   removeEventListener(_name: string, _listener: EventListenerOrEventListenerObject): void {}
   async createOffer(): Promise<RTCSessionDescriptionInit> { return { type: "offer", sdp: "v=0\r\n" }; }
@@ -161,6 +166,7 @@ test("video-only WHIP session is deleted before peer state is released", async (
 
   preview.start(1, (state) => states.push(state));
   await settle();
+  assert.deepEqual(peer.transceivers, [{ kind: "video", direction: "recvonly" }]);
   peer.ontrack?.({
     track: { kind: "video" },
     streams: [{} as MediaStream],
@@ -175,6 +181,56 @@ test("video-only WHIP session is deleted before peer state is released", async (
   ]);
   assert.equal(peer.closed, true);
   assert.equal(video.srcObject, null);
+});
+
+test("audio preview merges streamless audio and video tracks and resets playback on stop", async () => {
+  const original = globalThis.MediaStream;
+  class FakeStream {
+    readonly tracks: MediaStreamTrack[] = [];
+    addTrack(track: MediaStreamTrack): void { this.tracks.push(track); }
+  }
+  globalThis.MediaStream = FakeStream as unknown as typeof MediaStream;
+  try {
+    const video = new FakeVideo();
+    const peer = new FakePeer();
+    const availability: boolean[] = [];
+    const states: string[] = [];
+    let ended: (() => void) | undefined;
+    const preview = new WhipPreview(video as unknown as HTMLVideoElement, {
+      receiveAudio: true,
+      onAudioAvailable: (value) => availability.push(value),
+      peerFactory: () => peer as unknown as RTCPeerConnection,
+      fetcher: async (_input, init) => init?.method === "POST"
+        ? new Response("v=0\r\n", { status: 201, headers: { Location: "/session" } })
+        : new Response(null, { status: 204 }),
+    });
+    preview.start(0, (state) => states.push(state));
+    await settle();
+    assert.deepEqual(peer.transceivers, [
+      { kind: "video", direction: "recvonly" }, { kind: "audio", direction: "recvonly" },
+    ]);
+    const audio = { kind: "audio", addEventListener: (_name: string, listener: () => void) => { ended = listener; } };
+    const picture = { kind: "video" };
+    peer.ontrack?.({ track: audio, streams: [] } as unknown as RTCTrackEvent);
+    assert.equal(states.at(-1), "loading", "audio alone must not mark video live");
+    peer.ontrack?.({ track: picture, streams: [] } as unknown as RTCTrackEvent);
+    assert.deepEqual((video.srcObject as unknown as FakeStream).tracks, [audio, picture]);
+    assert.equal(states.at(-1), "live");
+    assert.equal(availability.at(-1), true);
+    assert.equal(video.muted, true, "receiving audio must not automatically enable listening");
+    video.muted = false;
+    ended?.();
+    assert.equal(video.muted, true);
+    assert.equal(availability.at(-1), false);
+    video.muted = false;
+    preview.stop();
+    assert.equal(video.muted, true);
+    assert.equal(video.srcObject, null);
+    peer.ontrack?.({ track: audio, streams: [] } as unknown as RTCTrackEvent);
+    assert.equal(availability.at(-1), false, "stale tracks must not revive audio availability");
+  } finally {
+    globalThis.MediaStream = original;
+  }
 });
 
 test("WHIP ICE deadline closes the peer before MJPEG fallback", async () => {

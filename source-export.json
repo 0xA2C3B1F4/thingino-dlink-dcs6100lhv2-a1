@@ -34,7 +34,7 @@
       "source": "Makefile"
     },
     "README.md": {
-      "sha256": "332b770836ac19447edd0a2dde42d253fde5db16a0fc43b99f99df912cb731bf",
+      "sha256": "84e9659334484ed9dbb60bd901a8bb03b37fff662ba8cb2c806a5e2d6c4ba9c7",
       "source": "production/README.md"
     },
     "SECURITY.md": {
@@ -1462,7 +1462,7 @@
       "source": "profiles/dlink-dcs6100lhv2-a1/recovery-ap-kernel.fragment"
     },
     "profiles/dlink-dcs6100lhv2-a1/source-profile.json": {
-      "sha256": "35a0f66441c85cbbedc63f48ee399ba1ebdf509bf3269a683bbb323372972d3f",
+      "sha256": "cadd88327941adc281de6f9828ad0a5497de7f289de78c59938fe454524acbcc",
       "source": "profiles/dlink-dcs6100lhv2-a1/source-profile.json"
     },
     "profiles/dlink-dcs6100lhv2-a1/stock-restore-kernel.fragment": {
@@ -2017,6 +2017,10 @@
       "sha256": "ec70da0008793e13721966d6d9581b42ad1b1f0e5b44cbe2faa276319367faa0",
       "source": "webui/browser-tests/osd-font-size.spec.ts"
     },
+    "webui/browser-tests/preview-audio.spec.ts": {
+      "sha256": "14614163f8b18631ed20a13d52950d1c16f88ffd46847e15120c9d091b576e22",
+      "source": "webui/browser-tests/preview-audio.spec.ts"
+    },
     "webui/browser-tests/raptor.spec.ts": {
       "sha256": "5aba3462af849b57a2de050684d40320283cb2ceb5135dd4857ecf3b941cab8b",
       "source": "webui/browser-tests/raptor.spec.ts"
@@ -2046,7 +2050,7 @@
       "source": "webui/browser-tests/webui.spec.ts"
     },
     "webui/firmware-bundle.json": {
-      "sha256": "5affc67f0a10130e20947b3a4584443ff5b3f67b7b9e562863313864c1ba7069",
+      "sha256": "0c18e6ac55b4424f44155f61a329a681a5c6334088cfbfb6dc1e2f183b45cf78",
       "source": "webui/firmware-bundle.json"
     },
     "webui/fixtures/server.mjs": {
@@ -2138,7 +2142,7 @@
       "source": "webui/src/api/decode.ts"
     },
     "webui/src/api/media.ts": {
-      "sha256": "db9cfdd3f55f9e25e65c77f99852fd74502f7616f18ac462304c062e4a52ff6b",
+      "sha256": "79cd6931caf88575631eaba7adb99de9d202d997320638462fc2d8e41c5b6537",
       "source": "webui/src/api/media.ts"
     },
     "webui/src/api/osd-metadata.ts": {
@@ -2222,7 +2226,7 @@
       "source": "webui/src/pages/login.ts"
     },
     "webui/src/pages/preview.ts": {
-      "sha256": "47dbe62f06577776b6e6cbfddbeb106ec8c20124bc0a74f853f4d45a4a85b681",
+      "sha256": "923edcfb46ec86e726b6236eb56cc676dc11e2d7b3451b6f3cf653c030793bf4",
       "source": "webui/src/pages/preview.ts"
     },
     "webui/src/pages/tools.ts": {
@@ -2258,7 +2262,7 @@
       "source": "webui/tests/fixture-fetch.test.ts"
     },
     "webui/tests/media.test.ts": {
-      "sha256": "9c03709b0435f2ccb0e4e0a4f7dae3525205f22c2c1140a475f84f70c60d6328",
+      "sha256": "4a572a1c4019e83c4928d2dcfa775a5f8939f25c2821a0c2bcdd28afdd5388d0",
       "source": "webui/tests/media.test.ts"
     },
     "webui/tests/page-payload.test.ts": {
@@ -2347,6 +2351,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "f77058a275385d9d8676f3ddb01cf9f328f987da",
+  "source_commit": "27ca928a0beb634d8d6d35763a07e301228b6569",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }

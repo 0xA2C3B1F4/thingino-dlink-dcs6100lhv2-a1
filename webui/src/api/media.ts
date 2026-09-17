@@ -11,6 +11,8 @@ type FetchPreview = (input: RequestInfo | URL, init?: RequestInit) => Promise<Re
 type DecodeFrame = (objectUrl: string) => Promise<void>;
 
 export interface WhipPreviewOptions {
+  receiveAudio?: boolean;
+  onAudioAvailable?: (available: boolean) => void;
   fetcher?: FetchPreview;
   peerFactory?: () => RTCPeerConnection;
   endpoint?: (stream: 0 | 1) => string;
@@ -56,7 +58,7 @@ export function rwdWhipEndpoint(
   return new URL(routes.media.whip(stream), pageUrl).href;
 }
 
-/** Owns one video-only WHIP session and deletes it before releasing WebRTC state. */
+/** Owns one receive-only WHIP session and deletes it before releasing WebRTC state. */
 export class WhipPreview {
   private active = false;
   private epoch = 0;
@@ -69,7 +71,7 @@ export class WhipPreview {
   private readonly iceTimeoutMs: number;
   private readonly timers: PreviewTimers;
 
-  constructor(private readonly video: HTMLVideoElement, options: WhipPreviewOptions = {}) {
+  constructor(private readonly video: HTMLVideoElement, private readonly options: WhipPreviewOptions = {}) {
     this.fetcher = options.fetcher ?? ((input, init) => window.fetch(input, init));
     this.peerFactory = options.peerFactory ?? (() => new RTCPeerConnection());
     this.endpoint = options.endpoint ?? rwdWhipEndpoint;
@@ -109,11 +111,28 @@ export class WhipPreview {
     if (h264.length && typeof transceiver.setCodecPreferences === "function") {
       transceiver.setCodecPreferences(h264);
     }
+    const remote = this.options.receiveAudio ? new MediaStream() : null;
+    if (remote) peer.addTransceiver("audio", { direction: "recvonly" });
     peer.ontrack = (event): void => {
-      if (!this.active || epoch !== this.epoch || event.track.kind !== "video") return;
-      this.video.srcObject = event.streams[0] ?? new MediaStream([event.track]);
+      if (!this.active || epoch !== this.epoch) return;
+      if (event.track.kind !== "video" && !(remote && event.track.kind === "audio")) return;
+      if (remote) {
+        remote.addTrack(event.track);
+        this.video.srcObject = remote;
+      } else {
+        this.video.srcObject = event.streams[0] ?? new MediaStream([event.track]);
+      }
+      if (event.track.kind === "audio") {
+        this.options.onAudioAvailable?.(true);
+        event.track.addEventListener("ended", () => {
+          if (this.active && epoch === this.epoch) {
+            this.video.muted = true;
+            this.options.onAudioAvailable?.(false);
+          }
+        });
+      }
       void this.video.play().catch(() => undefined);
-      this.emit("live");
+      if (event.track.kind === "video") this.emit("live");
     };
     const fail = (): void => {
       if (!this.active || epoch !== this.epoch) return;
@@ -172,7 +191,9 @@ export class WhipPreview {
     this.peer?.close();
     this.peer = null;
     this.video.pause();
+    this.video.muted = true;
     this.video.srcObject = null;
+    this.options.onAudioAvailable?.(false);
   }
 
   stop(emit = true): void {

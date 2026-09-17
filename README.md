@@ -34,7 +34,7 @@ per-camera inputs once, link outputs between stages and review SD write plans.
 ### Full Raptor build
 
 `local-build build-universal` selects the full Raptor media stack by default,
-including its own sensor/encoder, audio, RTSP, recorder and video-only WebRTC
+including its own sensor/encoder, audio, RTSP, recorder and receive-only WebRTC
 services. It supports one WebRTC client at a time; the selected profile is
 15 fps. The installer acquires locked public sources, compiles against the
 fresh support image's libraries and SDK, then composes the Raptor-owned runtime.
@@ -507,6 +507,14 @@ a trusted network.
 
 Check both Preview stream selections. With Raptor, both should say
 `Live · WebRTC`; visible MJPEG fallback alone does not validate Raptor.
+Preview starts with browser playback muted. Enable the camera's **Microphone**
+and click **Listen** to hear it on your computer. Listen changes browser playback
+only; it does not enable or unmute camera capture or request your computer's
+microphone. **Speaker** controls the camera's output, not your computer's
+speakers. Switching streams or stopping preview mutes playback again. MJPEG
+fallback has no audio. An available audio track does not prove audible capture.
+If a transition/readback error appears, inspect the actual camera state before
+retrying; the requested change may already have taken effect.
 Test Day/Night and observe the physical change, then your required RTSP,
 audio, recording, and Home Assistant functions.
 The SD card can stay inserted. The installed system does not require it;

@@ -117,7 +117,12 @@ export function renderPreview(
     1: element("option", { text: "Substream · CH1", attrs: { value: "1" } }),
   } as const;
   streamSelect.append(streamOptions[0], streamOptions[1]);
-  liveHeader.append(liveTitle, streamSelect);
+  const listen = button("Listen", "button secondary");
+  listen.disabled = true;
+  listen.setAttribute("aria-label", "Listen to camera audio");
+  listen.setAttribute("aria-pressed", "false");
+  const audioStatus = element("small", { text: "Waiting for WebRTC audio", attrs: { role: "status" } });
+  liveHeader.append(liveTitle, streamSelect, listen);
   const frame = element("div", { className: "preview-frame" });
   const video = element("video", {
     attrs: { "aria-label": "Live camera preview", autoplay: "", muted: "", playsinline: "", hidden: "" },
@@ -132,7 +137,7 @@ export function renderPreview(
   streamMessage.append(retry);
   frame.append(video, image, streamMessage);
   const endpoints = element("div", { className: "endpoint-list" });
-  liveCard.append(liveHeader, frame, endpoints);
+  liveCard.append(liveHeader, frame, audioStatus, endpoints);
 
   const controlCard = element("aside", { className: "card control-card", attrs: { "aria-label": "Live controls" } });
   controlCard.append(element("h2", { text: "Live controls" }), element("p", { text: "Each row shows the confirmed camera state." }));
@@ -195,7 +200,46 @@ export function renderPreview(
   section.append(controlCard, content);
 
   const mjpegPreview = new MjpegPreview(image);
-  const whipPreview = new WhipPreview(video);
+  let audioAvailable = false;
+  let listeningEpoch = 0;
+  function resetListening(): void {
+    listeningEpoch += 1;
+    video.muted = true;
+    listen.textContent = "Listen";
+    listen.setAttribute("aria-pressed", "false");
+  }
+  listen.addEventListener("click", () => {
+    if (!audioAvailable) return;
+    if (!video.muted) {
+      resetListening();
+      audioStatus.textContent = "Playback muted. Camera microphone is unchanged.";
+      return;
+    }
+    const epoch = ++listeningEpoch;
+    video.muted = false;
+    // play() runs directly inside the click gesture, without requesting a local microphone.
+    void video.play().then(() => {
+      if (epoch !== listeningEpoch || !audioAvailable) return;
+      listen.textContent = "Mute playback";
+      listen.setAttribute("aria-pressed", "true");
+      audioStatus.textContent = "Playback enabled. Sound requires an enabled, unmuted camera microphone.";
+    }).catch(() => {
+      if (epoch !== listeningEpoch) return;
+      resetListening();
+      audioStatus.textContent = "Browser blocked playback. Click Listen to try again.";
+    });
+  });
+  const whipPreview = new WhipPreview(video, {
+    receiveAudio: true,
+    onAudioAvailable(available): void {
+      audioAvailable = available;
+      listen.disabled = !available;
+      if (!available) resetListening();
+      audioStatus.textContent = available
+        ? "Playback muted. Click Listen to hear the camera microphone."
+        : "Waiting for WebRTC audio";
+    },
+  });
   const fullscreen = new PreviewFullscreen(frame, [video, image], "live camera preview");
   let previewTransport: "WebRTC" | "MJPEG" = "WebRTC";
   const preview = {
@@ -204,6 +248,7 @@ export function renderPreview(
       mjpegPreview.stop();
       const startMjpeg = (): void => {
         previewTransport = "MJPEG";
+        audioStatus.textContent = "MJPEG preview has no audio.";
         video.hidden = true;
         image.hidden = false;
         mjpegPreview.start(selected, onState, force);
