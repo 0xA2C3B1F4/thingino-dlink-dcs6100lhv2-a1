@@ -19,6 +19,18 @@ media trees differ from their public bases;
 their flattened binary patches live in `patches/raptor-full-source/`. The other
 seven trees have empty patch lists and must match their locked base trees exactly.
 
+The flattened Raptor patch includes the RWD audio-direction correction. It
+inherits session-level SDP direction unless audio overrides it and answers
+`recvonly` with `sendonly`, `sendonly` with `recvonly`, and `inactive` with
+`inactive`. An omitted direction remains `sendrecv`, preserving bidirectional
+clients. RWD does not create an outgoing audio transport for send-only or
+inactive offers, or an incoming audio backchannel for receive-only or inactive
+offers. The native SDP regression fixture exercises the actual parser
+and answer generator without requiring the firmware SDK. Browser acceptance,
+camera packet delivery and audible playback remain separate checks.
+The offline component build runs this native fixture before cross-compilation;
+a regression stops the build before producing a deployable component.
+
 `scripts/raptor_full_source_manifest.py` is the host-only preparation and
 verification helper. It binds the prepared media inputs by file content,
 executable mode, and symlink target; checks every public base tree and license;

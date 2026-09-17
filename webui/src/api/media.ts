@@ -13,6 +13,7 @@ type DecodeFrame = (objectUrl: string) => Promise<void>;
 export interface WhipPreviewOptions {
   receiveAudio?: boolean;
   onAudioAvailable?: (available: boolean) => void;
+  onError?: (message: string) => void;
   fetcher?: FetchPreview;
   peerFactory?: () => RTCPeerConnection;
   endpoint?: (stream: 0 | 1) => string;
@@ -172,10 +173,11 @@ export class WhipPreview {
     const epoch = ++this.epoch;
     this.onState = onState;
     this.emit("loading");
-    void this.open(epoch, stream).catch(() => {
+    void this.open(epoch, stream).catch((error: unknown) => {
       if (!this.active || epoch !== this.epoch) return;
       this.active = false;
       this.release();
+      this.options.onError?.(error instanceof Error ? error.message.slice(0, 240) : "WebRTC negotiation failed");
       this.emit("error");
     });
   }

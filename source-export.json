@@ -42,7 +42,7 @@
       "source": "SECURITY.md"
     },
     "components/raptor/README.md": {
-      "sha256": "79eb58ba79510e3882ca667cf04733fe9ac990626affca1b82690c302ab8b1bf",
+      "sha256": "3071471b5797a3873c88720ee24fdc0a6612b642ba5dd34805e991c6125a2b17",
       "source": "components/raptor/README.md"
     },
     "components/raptor/S05raptor-preconditions": {
@@ -78,7 +78,7 @@
       "source": "components/raptor/raptor-webrtc.conf"
     },
     "components/raptor/source-build-lock.json": {
-      "sha256": "312a55f2a42ac53d32fd59009afb5269475ab570be12efc472da2dd77f2b02cd",
+      "sha256": "b4cb469d0f14d70eebf4e99c5c2a7f289459eca45602c50a173a0cf415b14319",
       "source": "components/raptor/source-build-lock.json"
     },
     "components/thingino-control/Cargo.lock": {
@@ -1298,7 +1298,7 @@
       "source": "patches/raptor-full-source/raptor-ipc.patch"
     },
     "patches/raptor-full-source/raptor.patch": {
-      "sha256": "6474aa2bf8c0bb25ba6e679aafb581b4375921a5478c640125105254e5560dc6",
+      "sha256": "46ccdcc31eaf01b4942d6c8d81709d073e070818b7a0bc75286024ad55abaf9a",
       "source": "patches/raptor-full-source/raptor.patch"
     },
     "patches/thingino/0001-dlink-first-release-baseline.patch": {
@@ -1462,7 +1462,7 @@
       "source": "profiles/dlink-dcs6100lhv2-a1/recovery-ap-kernel.fragment"
     },
     "profiles/dlink-dcs6100lhv2-a1/source-profile.json": {
-      "sha256": "cadd88327941adc281de6f9828ad0a5497de7f289de78c59938fe454524acbcc",
+      "sha256": "d4d128adfc8d7c0d06f13d232c3617c132496aa60e26eb41975e3976617d0096",
       "source": "profiles/dlink-dcs6100lhv2-a1/source-profile.json"
     },
     "profiles/dlink-dcs6100lhv2-a1/stock-restore-kernel.fragment": {
@@ -1534,7 +1534,7 @@
       "source": "scripts/container_build_collector_kernel.sh"
     },
     "scripts/container_build_raptor_full.sh": {
-      "sha256": "754007bf0a9901c39c77fc76ba02f458ee8a175cb343d2782dd1ad52cfd39bfe",
+      "sha256": "b09ac81106847c49073f6845c5b3437d495dbb5718fbbc2c0f5ea1c7e1001628",
       "source": "scripts/container_build_raptor_full.sh"
     },
     "scripts/container_build_recovery_ap.sh": {
@@ -1822,7 +1822,7 @@
       "source": "tests/test_raptor_development.py"
     },
     "tests/test_raptor_full_acquire.py": {
-      "sha256": "5ffaf943f337d1ebfcbec6fd2bf3f00171afb46df5ec802f70ee139288346b6c",
+      "sha256": "4709e2c03b0d64a69e1f604e85bf6474b2cfe321ab9895d9d9dba4f35e5770eb",
       "source": "tests/test_raptor_full_acquire.py"
     },
     "tests/test_raptor_full_build.py": {
@@ -2018,7 +2018,7 @@
       "source": "webui/browser-tests/osd-font-size.spec.ts"
     },
     "webui/browser-tests/preview-audio.spec.ts": {
-      "sha256": "14614163f8b18631ed20a13d52950d1c16f88ffd46847e15120c9d091b576e22",
+      "sha256": "b5cc21e11d808647b4f12cbe39c328d13bc48dbbd1f778c8ca123e6d5ad1fa51",
       "source": "webui/browser-tests/preview-audio.spec.ts"
     },
     "webui/browser-tests/raptor.spec.ts": {
@@ -2050,7 +2050,7 @@
       "source": "webui/browser-tests/webui.spec.ts"
     },
     "webui/firmware-bundle.json": {
-      "sha256": "0c18e6ac55b4424f44155f61a329a681a5c6334088cfbfb6dc1e2f183b45cf78",
+      "sha256": "fbb60c2b03e771115b048769be1e26781ab67d9f32c5aacf79885b26a8b444e7",
       "source": "webui/firmware-bundle.json"
     },
     "webui/fixtures/server.mjs": {
@@ -2142,7 +2142,7 @@
       "source": "webui/src/api/decode.ts"
     },
     "webui/src/api/media.ts": {
-      "sha256": "79cd6931caf88575631eaba7adb99de9d202d997320638462fc2d8e41c5b6537",
+      "sha256": "2d5b6b6b4112619219ae7b6a681d95ec8770e4041b1dda9cf21e08e45e5abb04",
       "source": "webui/src/api/media.ts"
     },
     "webui/src/api/osd-metadata.ts": {
@@ -2226,7 +2226,7 @@
       "source": "webui/src/pages/login.ts"
     },
     "webui/src/pages/preview.ts": {
-      "sha256": "923edcfb46ec86e726b6236eb56cc676dc11e2d7b3451b6f3cf653c030793bf4",
+      "sha256": "89215ff934df2121bd254b5cc24f404484279b68d28ea574dffdaccbaadcc3b2",
       "source": "webui/src/pages/preview.ts"
     },
     "webui/src/pages/tools.ts": {
@@ -2262,7 +2262,7 @@
       "source": "webui/tests/fixture-fetch.test.ts"
     },
     "webui/tests/media.test.ts": {
-      "sha256": "4a572a1c4019e83c4928d2dcfa775a5f8939f25c2821a0c2bcdd28afdd5388d0",
+      "sha256": "7c61172d6bc24b9012cab5b1dca4037d6ac125ca7c6c5cbe99ed8aa678f6396f",
       "source": "webui/tests/media.test.ts"
     },
     "webui/tests/page-payload.test.ts": {
@@ -2351,6 +2351,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "27ca928a0beb634d8d6d35763a07e301228b6569",
+  "source_commit": "4d20594080c8d9cecfd953df81989bfde6671495",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }

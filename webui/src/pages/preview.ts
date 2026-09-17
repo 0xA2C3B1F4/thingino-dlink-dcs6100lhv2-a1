@@ -201,6 +201,7 @@ export function renderPreview(
 
   const mjpegPreview = new MjpegPreview(image);
   let audioAvailable = false;
+  let webrtcError = "";
   let listeningEpoch = 0;
   function resetListening(): void {
     listeningEpoch += 1;
@@ -231,6 +232,7 @@ export function renderPreview(
   });
   const whipPreview = new WhipPreview(video, {
     receiveAudio: true,
+    onError(message): void { webrtcError = message; },
     onAudioAvailable(available): void {
       audioAvailable = available;
       listen.disabled = !available;
@@ -244,11 +246,14 @@ export function renderPreview(
   let previewTransport: "WebRTC" | "MJPEG" = "WebRTC";
   const preview = {
     start(selected: 0 | 1, onState: (state: PreviewState) => void, force = false): void {
+      webrtcError = "";
       whipPreview.stop(false);
       mjpegPreview.stop();
       const startMjpeg = (): void => {
         previewTransport = "MJPEG";
-        audioStatus.textContent = "MJPEG preview has no audio.";
+        audioStatus.textContent = webrtcError
+          ? `WebRTC failed: ${webrtcError}. MJPEG preview has no audio.`
+          : "MJPEG preview has no audio.";
         video.hidden = true;
         image.hidden = false;
         mjpegPreview.start(selected, onState, force);

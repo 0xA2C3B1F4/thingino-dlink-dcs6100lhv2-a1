@@ -32,6 +32,10 @@ if [ "${1:-}" != --compile ]; then
 fi
 
 test "$(id -u)" = 1000
+# Exercise the actual SDP parser and answer generator before cross-compilation.
+make -C /work/src/raptor/tests test-rwd-sdp-direction \
+    RWD_SDP_DIRECTION_CC=/usr/bin/gcc \
+    "RWD_SDP_DIRECTION_BUILD=$TMPDIR/rwd-sdp-direction"
 sdk=/work/sdk/mipsel-thingino-linux-gnu_sdk-buildroot
 (cd "$sdk" && ./relocate-sdk.sh)
 export PATH="$sdk/bin:$PATH"

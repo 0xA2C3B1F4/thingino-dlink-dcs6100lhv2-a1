@@ -70,6 +70,18 @@ index 3b079ba91e630db8a65b367ab1457ff9b0d3dcbd..c46c8ae4f025ab89365d16256d02d8f2
  # gpio_ircut = -1             # -1 = auto from /etc/thingino.json
  # gpio_ircut2 = -1
  # gpio_irled = -1             # ir850 pin, -1 = auto from /etc/thingino.json
+diff --git a/fuzz/fuzz_rwd_shim.h b/fuzz/fuzz_rwd_shim.h
+index f4becdf53ab3069a72ce21eeec8c763543030f5e..20998cea6f3fb5e3153f17851ad713f0fd5457a4 100644
+--- a/fuzz/fuzz_rwd_shim.h
++++ b/fuzz/fuzz_rwd_shim.h
+@@ -23,6 +23,7 @@ typedef struct {
+ 	int audio_pt;
+ 	bool has_pcmu;
+ 	bool has_pcma;
++	char audio_direction[9];
+ 	char mid_video[16];
+ 	char mid_audio[16];
+ 	int mid_ext_id;
 diff --git a/osd_metadata_snapshot.c b/osd_metadata_snapshot.c
 new file mode 100644
 index 0000000000000000000000000000000000000000..d7be09b25d5bab6b741d317affa298f0f56317fd
@@ -18348,10 +18360,18 @@ index 0000000000000000000000000000000000000000..a0ac529950cf49a6b2755989ec94a5ba
 +}
 +#endif
 diff --git a/rwd/rwd.h b/rwd/rwd.h
-index e684cc8e233c684a51283e6e21ef05de1f00c656..5e331717c85fa41ce842fac7ef462f77fd906d46 100644
+index e684cc8e233c684a51283e6e21ef05de1f00c656..3864aaf03c066e27f33f241edd031152efa1f8e2 100644
 --- a/rwd/rwd.h
 +++ b/rwd/rwd.h
-@@ -238,6 +238,8 @@ struct rwd_server {
+@@ -97,6 +97,7 @@ typedef struct {
+ 	int audio_pt;	      /* browser's Opus payload type (-1 if none) */
+ 	bool has_pcmu;	      /* browser offered PCMU (PT 0) */
+ 	bool has_pcma;	      /* browser offered PCMA (PT 8) */
++	char audio_direction[9]; /* offered direction; empty means sendrecv */
+ 	char mid_video[16];   /* BUNDLE mid for video */
+ 	char mid_audio[16];   /* BUNDLE mid for audio */
+ 
+@@ -238,6 +239,8 @@ struct rwd_server {
  	rss_ring_t *audio_ring;
  	uint64_t audio_read_seq;
  	bool has_audio;
@@ -18482,10 +18502,34 @@ index 47fa00a34049c940bdab01c5b242fdf750f623ee..bec92f79cc6ff5785632edf4354eef59
  	if (srv.audio_ring)
  		rss_ring_close(srv.audio_ring);
 diff --git a/rwd/rwd_media.c b/rwd/rwd_media.c
-index 3ba3c9c7a0135e85304998e816818f9bfd48378d..281e669766da15553163d2ee0a0e5cce4db05922 100644
+index 3ba3c9c7a0135e85304998e816818f9bfd48378d..482be89ebe48d4c6fb1251668c59f59277ce93d9 100644
 --- a/rwd/rwd_media.c
 +++ b/rwd/rwd_media.c
-@@ -550,6 +550,10 @@ void *rwd_video_reader_thread(void *arg)
+@@ -225,7 +225,9 @@ int rwd_media_setup(rwd_client_t *c)
+ 	/* Audio: UDP → SRTP → RTP (no NAL for audio)
+ 	 * Check audio_ring directly instead of has_audio flag — the flag may
+ 	 * not be set yet if the audio reader thread is still starting up. */
+-	if (c->offer.has_audio && c->offer.audio_pt >= 0 && srv->audio_ring) {
++	if (c->offer.has_audio && c->offer.audio_pt >= 0 && srv->audio_ring &&
++	    strcmp(c->offer.audio_direction, "sendonly") != 0 &&
++	    strcmp(c->offer.audio_direction, "inactive") != 0) {
+ 		Compy_Transport udp_a = rwd_transport_sendto(srv->udp_fd, &c->addr, c->addr_len);
+ 		if (udp_a.self) {
+ 			c->srtp_audio = compy_transport_srtp(udp_a, suite, &send_key);
+@@ -257,7 +259,11 @@ int rwd_media_setup(rwd_client_t *c)
+ 	/* Backchannel: SRTP recv context + Compy_Backchannel for incoming audio.
+ 	 * Accept Opus (PT from offer) — browsers send Opus over WebRTC.
+ 	 * Also accept PCMU (PT 0) as fallback. */
+-	rwd_bc_recv_t *bc = calloc(1, sizeof(rwd_bc_recv_t));
++	rwd_bc_recv_t *bc = NULL;
++	if (c->offer.has_audio &&
++	    strcmp(c->offer.audio_direction, "recvonly") != 0 &&
++	    strcmp(c->offer.audio_direction, "inactive") != 0)
++		bc = calloc(1, sizeof(rwd_bc_recv_t));
+ 	if (bc) {
+ 		bc->speaker_ring_ptr = &c->speaker_ring;
+ 
+@@ -550,6 +556,10 @@ void *rwd_video_reader_thread(void *arg)
  	}
  	if (!srv->video_rings[0])
  		return NULL;
@@ -18496,7 +18540,7 @@ index 3ba3c9c7a0135e85304998e816818f9bfd48378d..281e669766da15553163d2ee0a0e5cce
  
  	/* Initialize per-stream state */
  	for (int s = 0; s < RWD_STREAM_COUNT; s++) {
-@@ -585,6 +589,7 @@ void *rwd_video_reader_thread(void *arg)
+@@ -585,6 +595,7 @@ void *rwd_video_reader_thread(void *arg)
  			if (!srv->video_rings[s] && srv->video_bufs[s]) {
  				srv->video_rings[s] = rss_ring_open(ring_names[s]);
  				if (srv->video_rings[s]) {
@@ -18504,7 +18548,7 @@ index 3ba3c9c7a0135e85304998e816818f9bfd48378d..281e669766da15553163d2ee0a0e5cce
  					{
  						char vname[24];
  						snprintf(vname, sizeof(vname), "video[%d]", s);
-@@ -598,6 +603,7 @@ void *rwd_video_reader_thread(void *arg)
+@@ -598,6 +609,7 @@ void *rwd_video_reader_thread(void *arg)
  					if (ds > srv->video_buf_sizes[s]) {
  						uint8_t *new_buf = malloc(ds);
  						if (!new_buf) {
@@ -18512,7 +18556,7 @@ index 3ba3c9c7a0135e85304998e816818f9bfd48378d..281e669766da15553163d2ee0a0e5cce
  							rss_ring_close(srv->video_rings[s]);
  							srv->video_rings[s] = NULL;
  							srv->video_buf_sizes[s] = 0;
-@@ -672,6 +678,7 @@ void *rwd_video_reader_thread(void *arg)
+@@ -672,6 +684,7 @@ void *rwd_video_reader_thread(void *arg)
  				if (idle[s] >= 40) { /* ~2s at 50ms timeout */
  					RSS_DEBUG("media: video[%d] idle, closing ring (%s)", s,
  						  ring_names[s]);
@@ -18520,7 +18564,7 @@ index 3ba3c9c7a0135e85304998e816818f9bfd48378d..281e669766da15553163d2ee0a0e5cce
  					rss_ring_close(srv->video_rings[s]);
  					srv->video_rings[s] = NULL;
  					idle[s] = 0;
-@@ -690,7 +697,7 @@ void *rwd_video_reader_thread(void *arg)
+@@ -690,7 +703,7 @@ void *rwd_video_reader_thread(void *arg)
  			const rss_ring_header_t *vhdr = rss_ring_get_header(srv->video_rings[s]);
  			uint64_t ws = vhdr->write_seq;
  			if (ws > read_seq + 10 && read_seq > 0) {
@@ -18529,7 +18573,7 @@ index 3ba3c9c7a0135e85304998e816818f9bfd48378d..281e669766da15553163d2ee0a0e5cce
  				rwd_request_idr(srv, s);
  				pthread_mutex_lock(&srv->clients_lock);
  				for (int i = 0; i < RWD_MAX_CLIENTS; i++) {
-@@ -888,7 +895,9 @@ void *rwd_audio_reader_thread(void *arg)
+@@ -888,7 +901,9 @@ void *rwd_audio_reader_thread(void *arg)
  
  	uint32_t audio_codec = 0;
  	int sample_rate = 0;
@@ -18539,7 +18583,7 @@ index 3ba3c9c7a0135e85304998e816818f9bfd48378d..281e669766da15553163d2ee0a0e5cce
  	int64_t audio_ts_epoch = 0;
  	uint8_t audio_buf[4096];
  	uint8_t transcode_out[1024]; /* max Opus or PCMU frame output */
-@@ -927,7 +936,9 @@ void *rwd_audio_reader_thread(void *arg)
+@@ -927,7 +942,9 @@ void *rwd_audio_reader_thread(void *arg)
  			const rss_ring_header_t *ahdr = rss_ring_get_header(srv->audio_ring);
  			audio_codec = ahdr->codec;
  			sample_rate = ahdr->fps_num;
@@ -18549,6 +18593,93 @@ index 3ba3c9c7a0135e85304998e816818f9bfd48378d..281e669766da15553163d2ee0a0e5cce
  			srv->audio_read_seq = ahdr->write_seq;
  			audio_ts_epoch = 0;
  			last_write_seq = 0;
+diff --git a/rwd/rwd_sdp.c b/rwd/rwd_sdp.c
+index 10bae3c9f061cb1f0cea2a58eb225a0ae0611a1e..08f70f3e360ec5f30d11f4f8522ead7a2abc1ec5 100644
+--- a/rwd/rwd_sdp.c
++++ b/rwd/rwd_sdp.c
+@@ -3,9 +3,9 @@
+  *
+  * Parses the browser's SDP offer to extract ICE credentials, DTLS
+  * fingerprint, and codec payload types. Generates a minimal SDP
+- * answer with ICE-lite candidate and sendonly media.
++ * answer with ICE-lite candidate, sendonly video and negotiated audio direction.
+  *
+- * Only supports H.264 video + Opus audio. No transcoding.
++ * Supports H.264 video and the configured audio wire codec.
+  */
+ 
+ #include <stdio.h>
+@@ -84,18 +84,24 @@ int rwd_sdp_parse_offer(const char *sdp, rwd_sdp_offer_t *offer)
+ 	const char *next;
+ 	bool in_video = false;
+ 	bool in_audio = false;
++	bool in_media = false;
++	char session_direction[9] = "sendrecv";
+ 
+ 	while (sdp_next_line(p, &next, line, sizeof(line))) {
+ 		p = next;
+ 
+ 		/* m= line: detect media section */
+ 		if (strncmp(line, "m=video", 7) == 0) {
++			in_media = true;
+ 			in_video = true;
+ 			in_audio = false;
+ 			offer->has_video = true;
+ 			continue;
+ 		}
+ 		if (strncmp(line, "m=audio", 7) == 0) {
++			in_media = true;
++			rss_strlcpy(offer->audio_direction, session_direction,
++				    sizeof(offer->audio_direction));
+ 			in_video = false;
+ 			in_audio = true;
+ 			offer->has_audio = true;
+@@ -122,6 +128,7 @@ int rwd_sdp_parse_offer(const char *sdp, rwd_sdp_offer_t *offer)
+ 			continue;
+ 		}
+ 		if (line[0] == 'm') {
++			in_media = true;
+ 			in_video = false;
+ 			in_audio = false;
+ 			continue;
+@@ -129,6 +136,20 @@ int rwd_sdp_parse_offer(const char *sdp, rwd_sdp_offer_t *offer)
+ 
+ 		const char *val;
+ 
++		/* Media direction overrides the session-level default. */
++		if (strcmp(line, "a=sendrecv") == 0 ||
++		    strcmp(line, "a=sendonly") == 0 ||
++		    strcmp(line, "a=recvonly") == 0 ||
++		    strcmp(line, "a=inactive") == 0) {
++			if (in_audio)
++				rss_strlcpy(offer->audio_direction, line + 2,
++					    sizeof(offer->audio_direction));
++			else if (!in_media)
++				rss_strlcpy(session_direction, line + 2,
++					    sizeof(session_direction));
++			continue;
++		}
++
+ 		/* ICE credentials (take from first occurrence) */
+ 		val = sdp_attr_value(line, "ice-ufrag");
+ 		if (val && !offer->ice_ufrag[0]) {
+@@ -347,7 +368,15 @@ int rwd_sdp_generate_answer(rwd_client_t *c, const rwd_server_t *srv, char *buf,
+ 		APPEND("a=fingerprint:%s", srv->dtls->fingerprint);
+ 		APPEND("a=setup:passive");
+ 		APPEND("a=mid:%s", c->offer.mid_audio[0] ? c->offer.mid_audio : "1");
+-		APPEND("a=sendrecv");
++		/* Answer only directions allowed by the offer (RFC 3264). */
++		const char *audio_direction = "sendrecv";
++		if (strcmp(c->offer.audio_direction, "recvonly") == 0)
++			audio_direction = "sendonly";
++		else if (strcmp(c->offer.audio_direction, "sendonly") == 0)
++			audio_direction = "recvonly";
++		else if (strcmp(c->offer.audio_direction, "inactive") == 0)
++			audio_direction = "inactive";
++		APPEND("a=%s", audio_direction);
+ 		if (wc == RWD_CODEC_PCMU)
+ 			APPEND("a=rtpmap:0 PCMU/8000");
+ 		else if (wc == RWD_CODEC_PCMA)
 diff --git a/rwd/rwd_signaling.c b/rwd/rwd_signaling.c
 index ba0063aa43f4eab5aff54bd1f1270ab251608799..4c7bbac59dff5c94a2618860c3b513d6f4f82267 100644
 --- a/rwd/rwd_signaling.c
@@ -18567,10 +18698,21 @@ index ba0063aa43f4eab5aff54bd1f1270ab251608799..4c7bbac59dff5c94a2618860c3b513d6
  			       "Connection: close\r\n"
  			       "\r\n",
 diff --git a/tests/Makefile b/tests/Makefile
-index 62dee3c2a0c3cbb54afa47ce6f3ba5648fd04ffd..05819b395e68d384ba673d266f00c6b96aacedce 100644
+index 62dee3c2a0c3cbb54afa47ce6f3ba5648fd04ffd..2d00e7225c7731475b0d017aeebf6764479ea22e 100644
 --- a/tests/Makefile
 +++ b/tests/Makefile
-@@ -11,8 +11,8 @@ CFLAGS = -Wall -Wextra -std=c11 -D_GNU_SOURCE -g -fsanitize=$(SAN) \
+@@ -1,5 +1,10 @@
+ CC ?= gcc
+ 
++# This target is self-contained and compiles the complete rwd_sdp.c without
++# pulling in compy, mbedTLS, or any missing submodule dependencies.
++RWD_SDP_DIRECTION_CC ?= clang
++RWD_SDP_DIRECTION_BUILD ?= $(if $(TMPDIR),$(TMPDIR)/raptor-rwd-sdp-direction-20260917.CfYLuL,$(error TMPDIR must be set for native SDP tests))
++
+ # Sanitizer selection — `address` (default) or `thread`. ASAN and TSAN
+ # are mutually exclusive; CI runs both in separate jobs.
+ SAN ?= address
+@@ -11,8 +16,8 @@ CFLAGS = -Wall -Wextra -std=c11 -D_GNU_SOURCE -g -fsanitize=$(SAN) \
  LDFLAGS = -fsanitize=$(SAN) -lpthread -lrt -lm
  
  TEST_SRCS = main.c test_nal.c test_prebuf.c test_mux.c test_codec.c test_sdp.c test_ring.c test_rsp.c \
@@ -18581,7 +18723,7 @@ index 62dee3c2a0c3cbb54afa47ce6f3ba5648fd04ffd..05819b395e68d384ba673d266f00c6b9
             ../../raptor-common/src/rss_util.c ../../raptor-common/src/rss_log.c \
             ../../raptor-common/src/cJSON.c \
             ../../raptor-common/third_party/monocypher/monocypher.c \
-@@ -35,10 +35,14 @@ tests: $(TEST_SRCS) $(LIB_SRCS) $(CTRL_SRCS) $(IPC_SRCS) $(SDP_SRC) greatest.h
+@@ -35,10 +40,23 @@ tests: $(TEST_SRCS) $(LIB_SRCS) $(CTRL_SRCS) $(IPC_SRCS) $(SDP_SRC) greatest.h
  test_slow_rtsp: test_slow_rtsp.c
  	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
  
@@ -18596,6 +18738,15 @@ index 62dee3c2a0c3cbb54afa47ce6f3ba5648fd04ffd..05819b395e68d384ba673d266f00c6b9
  clean:
 -	rm -f tests test_slow_rtsp sdp_parse.c
 +	rm -f tests test_slow_rtsp test_rhd_snapshot_policy sdp_parse.c
++
++.PHONY: test-rwd-sdp-direction
++test-rwd-sdp-direction:
++	mkdir -p "$(RWD_SDP_DIRECTION_BUILD)"
++	$(RWD_SDP_DIRECTION_CC) -std=c11 -Wall -Wextra -Werror -D_GNU_SOURCE -DRWD_H \
++		-include rwd_sdp_direction_shim.h -I. \
++		-o "$(RWD_SDP_DIRECTION_BUILD)/test_rwd_sdp_direction" \
++		test_rwd_sdp_direction.c ../rwd/rwd_sdp.c
++	"$(RWD_SDP_DIRECTION_BUILD)/test_rwd_sdp_direction"
  
  .PHONY: test clean
 diff --git a/tests/main.c b/tests/main.c
@@ -18688,6 +18839,108 @@ index 0000000000000000000000000000000000000000..144efcb2ba6be8197ad2d2fcaedaee96
 +#include <sys/socket.h>
 +int native_getsockopt(int fd, int level, int option, void *value, socklen_t *size);
 +#define getsockopt native_getsockopt
++#endif
+diff --git a/tests/rwd_sdp_direction_shim.h b/tests/rwd_sdp_direction_shim.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..9ff189365a4b0422f8166b1eb93fea9cbef19547
+--- /dev/null
++++ b/tests/rwd_sdp_direction_shim.h
+@@ -0,0 +1,96 @@
++/*
++ * Host-only shim for the complete rwd_sdp.c parser and answer generator.
++ *
++ * Keep this independent from rwd.h: that header pulls in compy and mbedTLS,
++ * while this test only needs the fields touched by rwd_sdp.c.
++ */
++#ifndef RWD_SDP_DIRECTION_SHIM_H
++#define RWD_SDP_DIRECTION_SHIM_H
++
++#include <stddef.h>
++#include <stdint.h>
++#include <stdbool.h>
++#include <string.h>
++#include <sys/time.h>
++
++#define RWD_H 1
++#define RWD_MAX_CANDIDATES 16
++#define RWD_CODEC_PCMU 0
++#define RWD_CODEC_PCMA 8
++#define RWD_CODEC_L16 11
++#define RWD_CODEC_AAC 97
++#define RWD_CODEC_OPUS 111
++#define ICE_PRIORITY_SRFLX ((100u << 24) | (65535u << 8) | 255u)
++
++static inline size_t rss_strlcpy(char *dst, const char *src, size_t size)
++{
++	size_t length = strlen(src);
++	if (size != 0) {
++		size_t copy = length < size - 1 ? length : size - 1;
++		memcpy(dst, src, copy);
++		dst[copy] = '\0';
++	}
++	return length;
++}
++
++static inline int64_t rss_timestamp_us(void)
++{
++	struct timeval tv;
++	gettimeofday(&tv, NULL);
++	return (int64_t)tv.tv_sec * 1000000 + tv.tv_usec;
++}
++
++#define RSS_WARN(...) ((void)0)
++#define RSS_DEBUG(...) ((void)0)
++
++typedef struct {
++	char ice_ufrag[64];
++	char ice_pwd[256];
++	char fingerprint[256];
++	char setup[16];
++	int video_pt;
++	char video_fmtp[256];
++	int audio_pt;
++	bool has_pcmu;
++	bool has_pcma;
++	char audio_direction[9];
++	char mid_video[16];
++	char mid_audio[16];
++	int mid_ext_id;
++	bool has_video;
++	bool has_audio;
++	struct {
++		char ip[64];
++		uint16_t port;
++	} candidates[RWD_MAX_CANDIDATES];
++	int candidate_count;
++} rwd_sdp_offer_t;
++
++typedef struct {
++	char fingerprint[128];
++} rwd_dtls_ctx_t;
++
++typedef struct rwd_client {
++	rwd_sdp_offer_t offer;
++	char local_ufrag[16];
++	char local_pwd[32];
++	uint32_t video_ssrc;
++	uint32_t audio_ssrc;
++} rwd_client_t;
++
++typedef struct rwd_server {
++	char local_ip[64];
++	int udp_port;
++	rwd_dtls_ctx_t *dtls;
++	int wire_codec;
++	int wire_pt;
++	bool has_srflx;
++	char srflx_ip[64];
++	uint16_t srflx_port;
++} rwd_server_t;
++
++int rwd_sdp_parse_offer(const char *sdp, rwd_sdp_offer_t *offer);
++int rwd_sdp_generate_answer(rwd_client_t *client, const rwd_server_t *server,
++				    char *buf, size_t buf_size);
++
 +#endif
 diff --git a/tests/test-osd-metadata-runtime.sh b/tests/test-osd-metadata-runtime.sh
 new file mode 100755
@@ -30544,6 +30797,155 @@ index 0000000000000000000000000000000000000000..dd38a7bcff2078ac2ad8133416d0bc4b
 +	RUN_TEST(rsd_capture_timestamp_uses_wrap_aware_rtp_delta);
 +	RUN_TEST(rsd_timestamp_rational_fallback);
 +	RUN_TEST(rsd_timestamp_buffered_capture_survives_rate_change);
++}
+diff --git a/tests/test_rwd_sdp_direction.c b/tests/test_rwd_sdp_direction.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..36a3bcd815facb9db829028f3796e93800d9b88d
+--- /dev/null
++++ b/tests/test_rwd_sdp_direction.c
+@@ -0,0 +1,143 @@
++/*
++ * Native regression tests for the full rwd_sdp.c parser and answer generator.
++ *
++ * Run with:
++ *   make -C tests test-rwd-sdp-direction
++ *
++ * The Makefile places the binary under $TMPDIR so this test leaves no build
++ * output in the source tree.
++ */
++
++#include <assert.h>
++#include <stdio.h>
++#include <string.h>
++
++#include "rwd_sdp_direction_shim.h"
++
++static void make_offer(char *sdp, size_t size, const char *session_direction,
++		       const char *video_direction, const char *unknown_direction,
++		       const char *audio_direction)
++{
++	const char *session = session_direction ? session_direction : "";
++	const char *video = video_direction ? video_direction : "";
++	const char *unknown = unknown_direction ? unknown_direction : "";
++	const char *audio = audio_direction ? audio_direction : "";
++	const char *unknown_prefix = unknown_direction
++		? "m=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\na="
++		: "";
++	const char *unknown_suffix = unknown_direction ? "\r\n" : "";
++	int written = snprintf(sdp, size,
++		"v=0\r\n"
++		"o=- 1234 1 IN IP4 0.0.0.0\r\n"
++		"s=-\r\n"
++		"t=0 0\r\n"
++		"a=ice-ufrag:abcd\r\n"
++		"a=ice-pwd:efghijklmnopqrstuvwxyz1234\r\n"
++		"a=fingerprint:sha-256 AA:BB\r\n"
++		"a=setup:actpass\r\n"
++		"%s%s\r\n"
++		"m=video 9 UDP/TLS/RTP/SAVPF 96\r\n"
++		"a=mid:0\r\n"
++		"a=rtpmap:96 H264/90000\r\n"
++		"%s%s\r\n"
++		"%s%s%s"
++		"m=audio 9 UDP/TLS/RTP/SAVPF 111 0 8\r\n"
++		"a=mid:1\r\n"
++		"a=rtpmap:111 opus/48000/2\r\n"
++		"a=rtpmap:0 PCMU/8000\r\n"
++		"a=rtpmap:8 PCMA/8000\r\n"
++		"%s%s\r\n",
++		session_direction ? "a=" : "", session,
++		video_direction ? "a=" : "", video,
++		unknown_prefix, unknown, unknown_suffix,
++		audio_direction ? "a=" : "", audio);
++	assert(written > 0 && (size_t)written < size);
++}
++
++static void parse_direction(const char *session_direction, const char *video_direction,
++			    const char *unknown_direction, const char *audio_direction,
++			    const char *expected)
++{
++	char sdp[4096];
++	rwd_sdp_offer_t offer;
++	make_offer(sdp, sizeof(sdp), session_direction, video_direction,
++		  unknown_direction, audio_direction);
++	assert(rwd_sdp_parse_offer(sdp, &offer) == 0);
++	assert(strcmp(offer.audio_direction, expected) == 0);
++}
++
++static void test_parser_default_and_session_directions(void)
++{
++	parse_direction(NULL, NULL, NULL, NULL, "sendrecv");
++	parse_direction("sendrecv", NULL, NULL, NULL, "sendrecv");
++	parse_direction("sendonly", NULL, NULL, NULL, "sendonly");
++	parse_direction("recvonly", NULL, NULL, NULL, "recvonly");
++	parse_direction("inactive", NULL, NULL, NULL, "inactive");
++}
++
++static void test_parser_media_override_and_isolation(void)
++{
++	/* Audio media direction wins over the session attribute. */
++	parse_direction("recvonly", "sendonly", "inactive", "sendonly", "sendonly");
++
++	/* Direction attributes in video and data media do not leak into audio. */
++	parse_direction("inactive", "sendonly", "recvonly", NULL, "inactive");
++}
++
++static void assert_audio_direction(const char *answer, const char *expected)
++{
++	const char *audio = strstr(answer, "m=audio ");
++	const char *next_media;
++	char line[32];
++	const char *found;
++	assert(audio != NULL);
++	next_media = strstr(audio + 8, "\r\nm=");
++	if (!next_media)
++		next_media = answer + strlen(answer);
++	snprintf(line, sizeof(line), "a=%s\r\n", expected);
++	found = strstr(audio, line);
++	assert(found != NULL && found < next_media);
++}
++
++static void generate_direction(const char *offered, const char *expected)
++{
++	char sdp[4096];
++	char answer[8192];
++	rwd_client_t client = {0};
++	rwd_server_t server = {0};
++	rwd_dtls_ctx_t dtls = {0};
++
++	make_offer(sdp, sizeof(sdp), offered, NULL, NULL, NULL);
++	assert(rwd_sdp_parse_offer(sdp, &client.offer) == 0);
++	strcpy(client.local_ufrag, "serverufrag");
++	strcpy(client.local_pwd, "serverpassword123456789012");
++	client.video_ssrc = 100;
++	client.audio_ssrc = 200;
++	strcpy(server.local_ip, "192.0.2.1");
++	server.udp_port = 5000;
++	strcpy(dtls.fingerprint, "sha-256 11:22");
++	server.dtls = &dtls;
++	server.wire_codec = RWD_CODEC_PCMU;
++	server.wire_pt = 0;
++
++	assert(rwd_sdp_generate_answer(&client, &server, answer, sizeof(answer)) > 0);
++	assert_audio_direction(answer, expected);
++}
++
++static void test_generator_directions(void)
++{
++	generate_direction(NULL, "sendrecv");
++	generate_direction("sendrecv", "sendrecv");
++	generate_direction("recvonly", "sendonly");
++	generate_direction("sendonly", "recvonly");
++	generate_direction("inactive", "inactive");
++}
++
++int main(void)
++{
++	test_parser_default_and_session_directions();
++	test_parser_media_override_and_isolation();
++	test_generator_directions();
++	puts("rwd SDP direction parser/generator tests passed");
++	return 0;
 +}
 diff --git a/tests/test_storage.c b/tests/test_storage.c
 index 326446f5a62dcfa80cafa6d3c5b939bface2ff40..76e6a1afbdf04ee8994953ce1adfea0a25184c29 100644

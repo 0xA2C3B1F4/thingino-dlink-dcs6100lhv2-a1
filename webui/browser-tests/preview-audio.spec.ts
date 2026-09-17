@@ -89,3 +89,27 @@ test("rejected browser playback stays muted and allows an explicit retry", async
   await expect(listen).toHaveAttribute("aria-pressed", "false");
   expect(await page.locator(".preview-page .preview-frame video").evaluate((element: HTMLVideoElement) => element.muted)).toBe(true);
 });
+
+test("receive-only offer rejects a sendrecv audio answer", async ({ page }) => {
+  await page.goto("/");
+  const result = await page.evaluate(async () => {
+    const peer = new RTCPeerConnection();
+    try {
+      peer.addTransceiver("video", { direction: "recvonly" });
+      peer.addTransceiver("audio", { direction: "recvonly" });
+      const offer = await peer.createOffer();
+      await peer.setLocalDescription(offer);
+      const sections = offer.sdp!.replaceAll("a=setup:actpass", "a=setup:passive").split("m=");
+      const answer = sections.map(section => section.replaceAll("a=recvonly", section.startsWith("audio ") ? "a=sendrecv" : "a=sendonly")).join("m=");
+      let incompatible = "accepted";
+      try {
+        await peer.setRemoteDescription({ type: "answer", sdp: answer });
+      } catch (error) { incompatible = error instanceof Error ? error.message : "unknown error"; }
+      if (incompatible === "accepted") return { incompatible, corrected: false };
+      await peer.setRemoteDescription({ type: "answer", sdp: answer.replaceAll("a=sendrecv", "a=sendonly") });
+      return { incompatible, corrected: true };
+    } finally { peer.close(); }
+  });
+  expect(result.incompatible).toContain("Incompatible send direction");
+  expect(result.corrected).toBe(true);
+});

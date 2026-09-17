@@ -255,6 +255,30 @@ test("WHIP ICE deadline closes the peer before MJPEG fallback", async () => {
   assert.equal(fetches, 0);
 });
 
+test("WHIP reports the negotiation error after deleting its failed session", async () => {
+  const video = new FakeVideo();
+  const peer = new FakePeer();
+  peer.setRemoteDescription = async () => { throw new Error("invalid audio direction"); };
+  const errors: string[] = [];
+  const methods: string[] = [];
+  const preview = new WhipPreview(video as unknown as HTMLVideoElement, {
+    peerFactory: () => peer as unknown as RTCPeerConnection,
+    onError: message => errors.push(message),
+    fetcher: async (_input, init) => {
+      methods.push(init?.method ?? "GET");
+      return init?.method === "POST"
+        ? new Response("v=0\r\n", { status: 201, headers: { Location: "/session" } })
+        : new Response(null, { status: 204 });
+    },
+  });
+  preview.start(0, () => undefined);
+  await settle();
+  assert.deepEqual(errors, ["invalid audio direction"]);
+  assert.deepEqual(methods, ["POST", "DELETE"]);
+  assert.equal(peer.closed, true);
+  assert.equal(video.srcObject, null);
+});
+
 test("native MJPEG becomes live without Fetch and disconnects cleanly", () => {
   const image = new FakeImage();
   const timers = new FakeTimers();

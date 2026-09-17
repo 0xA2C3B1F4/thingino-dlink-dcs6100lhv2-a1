@@ -5,11 +5,11 @@
       "url": "https://github.com/gtxaspec/raptor.git",
       "base": "17b36386f980a24c7c90adb7c9b46f31b41c3b24",
       "base_tree": "9525370fc9f1a20f0743efe75a8426ca35dc8d11",
-      "tree": "116b211b2d2d411d13930af41ac74340d4a1736d",
+      "tree": "ae9f4185645b0cfab44495a98ba1a502d92d7c03",
       "patches": [
         {
           "path": "patches/raptor-full-source/raptor.patch",
-          "sha256": "6474aa2bf8c0bb25ba6e679aafb581b4375921a5478c640125105254e5560dc6"
+          "sha256": "46ccdcc31eaf01b4942d6c8d81709d073e070818b7a0bc75286024ad55abaf9a"
         }
       ],
       "license": "LICENSE",
