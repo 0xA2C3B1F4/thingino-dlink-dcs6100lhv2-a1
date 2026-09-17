@@ -19,6 +19,16 @@ from installer import (
 
 
 class LocalBuildRunTests(unittest.TestCase):
+    def test_split_container_names_include_verification_parent_identity(self) -> None:
+        first = Path("run-one/verification-build-b")
+        second = Path("run-two/verification-build-b")
+        self.assertNotEqual(local_build_package._split_container_name(first),
+                            local_build_package._split_container_name(second))
+        self.assertEqual(local_build_package._split_container_name(first),
+                         local_build_package._split_container_name(first))
+        self.assertRegex(local_build_package._split_container_name(first),
+                         r"^dcs6100-split-[0-9a-f]{24}$")
+
     def test_download_cache_key_tracks_prepared_source_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as name:
             root = Path(name)

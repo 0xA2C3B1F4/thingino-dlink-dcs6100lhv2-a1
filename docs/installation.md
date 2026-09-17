@@ -511,7 +511,7 @@ and will not run while the stock-matching bootstrap remains active.
 
 Installation, installed-artifact verification, main/substream WebRTC and
 selected controls have passed on one A1 camera. Management verification allows
-five minutes for startup. See [test coverage](status.md#tested-installation)
+five minutes for startup. See [historical test coverage](status.md#historical-tested-installation)
 for the validated scope. Physical interruption, wider provisioning acceptance
 and second-camera acceptance remain open release gates.
 

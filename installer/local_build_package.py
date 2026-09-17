@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import shlex
 import subprocess
 import sys
@@ -21,6 +22,12 @@ from .local_build_models import (
 from .local_build_support import LocalBuildRunError, _llvm_tools, _run
 from .sd_package import atomic_write, read_snapshot
 from .stage1.build import build_universal_install_set, render_installer_kernel_fragment
+
+
+def _split_container_name(run_dir: Path) -> str:
+    """Include the whole run identity, including a verification child's parent."""
+    identity = hashlib.sha256(str(run_dir.resolve()).encode()).hexdigest()[:24]
+    return f"dcs6100-split-{identity}"
 
 
 def _workspace_tool(
@@ -208,7 +215,7 @@ def package_install_root(
             "--builder-image",
             environment.builder_image,
             "--container-name",
-            f"dcs6100-split-{run_dir.name[-25:]}",
+            _split_container_name(run_dir),
             "--workspace-image",
             str(clean.workspace),
             "--installer-fragment",

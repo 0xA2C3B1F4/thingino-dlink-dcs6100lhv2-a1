@@ -1,6 +1,6 @@
 # Release status
 
-Runtime baseline validated: 2026-09-06. Documentation updated: 2026-09-16.
+Historical runtime baseline validated: 2026-09-06. Documentation updated: 2026-09-17.
 
 This repository provides source and host tools. There is no supported firmware
 download yet. The validated platform is DCS-6100LHV2 A1 with Apple Silicon macOS.
@@ -45,7 +45,27 @@ SHA-256 `d594153ac2f11d8baa0f1b9decc8dad0950f9d422210a4e365fc71738851cf8a`.
 This is host evidence, not camera acceptance or permission to distribute the
 firmware.
 
-## Tested installation
+The September 17 Preview audio changes correct the reciprocal WebRTC SDP
+direction and start RWD's audio reader with `video_only=false`. They do not
+enable microphone capture at boot or change the computer's microphone state.
+The operator heard audio with Listen on both Mainstream and Substream after
+the RWD, WebUI and profile changes were installed as overlays on the older
+September 16 whole image. This is bounded overlay acceptance, not acceptance
+of a new complete firmware image. The intermittent microphone transition or
+independent-readback failure remains unresolved.
+
+The new September 17 full-Raptor candidate completed the two-build comparison
+with the explicit host-packaging completion described in the
+[dated build evidence](release-evidence/2026-09-17-raptor-audio-reproducibility.md).
+All 16 compared files, including independently compiled full-Raptor payloads,
+final roots, split kernels and signed install sets, were byte-identical. Its
+universal bundle has SHA-256
+`98c764a5a01eac261290e6cb37e1a83c75b2006da01bb200f8e325b91dbbd7fd`.
+The reproducibility gate is closed for these exact candidate inputs. The bundle
+has not yet been installed or physically accepted, and it is not an authorized
+firmware download.
+
+## Historical tested installation
 
 | Component | Result |
 | --- | --- |
@@ -62,7 +82,7 @@ Recovery capture and the latest build/installation have separate acceptance
 records. The current five-minute management timeout has host coverage and
 running-camera acceptance, but has not been revalidated through a cold install.
 
-### Validated firmware
+### September 6 validated firmware
 
 The system image fits the fixed 6,619,136-byte system region.
 
@@ -71,7 +91,7 @@ The system image fits the fixed 6,619,136-byte system region.
 | System SquashFS, 6,500,352 bytes | `71311eaf4b578f1c357b645cd4d6708e5b3e72f477a2cfc2cd81daff148b8b63` |
 | Final kernel | `570d9653f5b541592fc94545b814ae123833c5ebb5d086987e199bbfb8e8ae4a` |
 
-## Tested runtime features
+## Historical tested runtime features
 
 | Feature | Result |
 | --- | --- |
@@ -99,9 +119,12 @@ The full acceptance scope is in [testing](testing.md#candidate-acceptance).
 - `local-build build-universal` builds the full Raptor stack from locked
   sources. It needs no separately prepared media archive.
 - The universal installer has host-tested `initialize` and `preserve` build,
-  authorization, Stage-1 contract and manifest paths. The preserve path has not
-  yet passed a matching full-Raptor physical camera update; universal
+  authorization, Stage-1 contract and manifest paths. Those results do not
+  establish physical acceptance of the latest complete source candidate; universal
   `factory-reset` install sets remain rejected.
+- Preview Listen has operator-audible Mainstream and Substream overlay
+  acceptance. Microphone enable/disable transitions still need a reproducible
+  diagnosis and independent readback on the complete candidate.
 - Linux and Windows staging adapters have host coverage, not equivalent physical
   installation acceptance. The full guided build targets Apple Silicon macOS.
 
@@ -134,6 +157,13 @@ report legal review as `not-assessed` and redistribution as
 `not-authorized-by-this-repository`; generating them does not close a legal
 or physical release gate.
 
+`scripts/source_delivery_inventory.py` records all 13 full-Raptor source
+entries, their public origins, Git identities, reconstruction patches and
+license/notice digests. With `--verified-cache-root`, it also checks the
+reconstructed trees using the normal source validator. The output contains
+no private cache paths or vendor blobs. It is an inventory, not the source
+delivery archive or a legal review, and it does not close a firmware gate.
+
 ## Open release gates
 
 [`policy/release-gates.json`](../policy/release-gates.json) tracks source
@@ -141,7 +171,6 @@ publication separately from firmware distribution. Remaining firmware
 requirements include:
 
 - Raptor corresponding-source review and RTL8188FU license-file provenance;
-- two byte-identical clean builds from documented source and camera-acquired inputs;
 - the complete candidate acceptance checklist;
 - physical interrupted-write, corrupt-data, reset, reinstall and final-layout
   recovery tests, including original-partition capture requirements;

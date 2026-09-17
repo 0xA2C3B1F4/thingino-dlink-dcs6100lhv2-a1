@@ -140,6 +140,27 @@ Both complete install sets, firmware members, normalized inventories, and
 provenance manifests must match byte for byte. Matching Control binaries or
 matching base images alone do not close this gate.
 
+### Technical source-delivery inventory
+
+Record the full-Raptor source inputs without copying vendor blobs or private
+paths into the output:
+
+```bash
+export DCS6100_RAPTOR_SOURCE_CACHE="$DCS6100_BUILD_ROOT/cache/sources/raptor-sources/RECIPE_SHA256"
+export DCS6100_SOURCE_INVENTORY="$DCS6100_DATA_VOLUME/thingino/source-delivery-inventory.json"
+python3 scripts/source_delivery_inventory.py \
+  --verified-cache-root "$DCS6100_RAPTOR_SOURCE_CACHE" \
+  --output "$DCS6100_SOURCE_INVENTORY"
+```
+
+Replace `RECIPE_SHA256` with the source-cache recipe key recorded by the build.
+The cache argument names the directory whose immediate children are the 13
+reconstructed Git checkouts. Omit it to produce a lock-only inventory without
+claiming reconstructed-source verification. The command checks the public
+origins, base/final identities, patch digests and license/notice inputs, refuses
+to replace an existing output and emits no local cache paths. It is technical
+provenance, not a corresponding-source archive or legal authorization.
+
 ## Provision the model build for one camera
 
 The universal firmware has no station credentials. Use the same camera-bound

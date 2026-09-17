@@ -1,0 +1,111 @@
+"""Focused tests for the public-safe Raptor source inventory."""
+
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+import tempfile
+import unittest
+from unittest import mock
+
+from scripts import source_delivery_inventory as inventory
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class SourceDeliveryInventoryTests(unittest.TestCase):
+    def test_current_lock_renders_all_sources_without_local_paths(self) -> None:
+        document = inventory.build_source_delivery_inventory(ROOT)
+
+        self.assertEqual(document["schema_version"], 1)
+        self.assertEqual(document["technical_status"], "source-lock-inventory-only")
+        self.assertEqual(document["legal_review_status"], "not-assessed")
+        self.assertEqual(document["redistribution"], "not-authorized-by-this-repository")
+        self.assertEqual(document["source_count"], 13)
+        self.assertEqual(len(document["sources"]), 13)
+        self.assertEqual(document["verified_cache"]["provided"], False)
+        self.assertEqual(document["verified_cache"]["sources"], {})
+
+        encoded = json.dumps(document, sort_keys=True)
+        self.assertNotIn(str(ROOT), encoded)
+        self.assertNotIn(str(Path(tempfile.gettempdir())), encoded)
+        self.assertEqual(
+            document["sources"]["raptor"]["license_or_notice"]["kind"],
+            "license",
+        )
+        self.assertEqual(
+            document["sources"]["ingenic-headers"]["license_or_notice"]["kind"],
+            "notice",
+        )
+        self.assertEqual(
+            document["sources"]["raptor"]["final_tree"],
+            inventory.source_lock(ROOT, full_media=True)["sources"]["raptor"]["tree"],
+        )
+
+    def test_existing_output_is_never_replaced(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path(os.environ["TMPDIR"])) as temporary:
+            output = Path(temporary) / "inventory.json"
+            output.write_bytes(b"preserve-existing-evidence")
+            with self.assertRaisesRegex(inventory.SourceDeliveryInventoryError, "output already exists"):
+                inventory.write_inventory(output, ROOT)
+            self.assertEqual(output.read_bytes(), b"preserve-existing-evidence")
+
+    def test_local_cache_uses_verify_source_and_emits_relative_names_only(self) -> None:
+        with tempfile.TemporaryDirectory(
+            dir=Path(os.environ["TMPDIR"]).resolve(strict=True)
+        ) as temporary:
+            cache = Path(temporary) / "private-cache"
+            cache.mkdir()
+            source_names = sorted(inventory.source_lock(ROOT, full_media=True)["sources"])
+            for name in source_names:
+                (cache / name).mkdir()
+
+            calls: list[tuple[Path, str, str]] = []
+
+            def fake_verify(path, spec, *, tree):
+                calls.append((path, spec["url"], tree))
+                return "a" * 64
+
+            with mock.patch.object(inventory, "verify_source", side_effect=fake_verify):
+                document = inventory.build_source_delivery_inventory(
+                    ROOT, verified_cache_root=cache
+                )
+
+            self.assertEqual(len(calls), 13)
+            self.assertEqual(document["technical_status"], "source-lock-and-reconstructed-cache-verified")
+            self.assertTrue(document["verified_cache"]["all_verified"])
+            self.assertEqual(
+                document["verified_cache"]["sources"]["raptor"],
+                {"path": "raptor", "tree_digest": "a" * 64},
+            )
+            encoded = json.dumps(document, sort_keys=True)
+            self.assertNotIn(str(cache), encoded)
+            self.assertNotIn("private-cache", encoded)
+            self.assertEqual({path.name for path, _, _ in calls}, set(source_names))
+
+    def test_cache_integrity_failure_does_not_leak_path(self) -> None:
+        with tempfile.TemporaryDirectory(
+            dir=Path(os.environ["TMPDIR"]).resolve(strict=True)
+        ) as temporary:
+            cache = Path(temporary) / "private-cache"
+            cache.mkdir()
+            for name in inventory.source_lock(ROOT, full_media=True)["sources"]:
+                (cache / name).mkdir()
+
+            def fail_verify(path, spec, *, tree):
+                raise ValueError(f"private path: {path}")
+
+            with mock.patch.object(inventory, "verify_source", side_effect=fail_verify):
+                with self.assertRaisesRegex(
+                    inventory.SourceDeliveryInventoryError,
+                    r"^verified cache integrity check failed: compy$",
+                ):
+                    inventory.build_source_delivery_inventory(
+                        ROOT, verified_cache_root=cache
+                    )
+
+
+if __name__ == "__main__":
+    unittest.main()

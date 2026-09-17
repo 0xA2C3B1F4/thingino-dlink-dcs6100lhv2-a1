@@ -5,7 +5,7 @@ The September 6 baseline passed main/substream WebRTC, Motion, Privacy,
 Day/Night and Information checks. Those results do not validate later full
 Raptor source changes. The full-Raptor profile owns the sensor, encoder, audio,
 RTSP and recording services. See
-[current acceptance](status.md#tested-installation) for measured results and limits.
+[historical acceptance](status.md#historical-tested-installation) for measured results and limits.
 
 | Feature | Source state | Validation boundary |
 | --- | --- | --- |

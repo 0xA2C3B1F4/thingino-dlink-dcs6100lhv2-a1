@@ -1,0 +1,74 @@
+{
+  "builds": 2,
+  "byte_identical": true,
+  "component_cache_used": false,
+  "differences": [],
+  "files": {
+    "base/source-preparation.json": {
+      "sha256": "380c7356a117874ec164ae801721813504bf35d4f51cd9c9cb5f41982963c2a5",
+      "size": 47255
+    },
+    "base/thingino-base.manifest.json": {
+      "sha256": "74a2dbb524576552bf9c922f80144256daa88c9b691f4ff28b6e44bf0383fa1e",
+      "size": 2243
+    },
+    "base/thingino-base.squashfs": {
+      "sha256": "1c6b78d680a84a5f7e0e467602629a5cdd4bc986dbe7885ab050a8f3193816ab",
+      "size": 5713920
+    },
+    "base/thingino-linux.config": {
+      "sha256": "ce40e7ad4cb98c8d71fdaef6240825514ac7ecd622dde1ca3529c8715d60e8b2",
+      "size": 47978
+    },
+    "final-root/final-root.universal.json": {
+      "sha256": "bc57fb902bd402d7b4a50bfef53da47c38cb258f40353100beb850c82acc3576",
+      "size": 5387
+    },
+    "final-root/system.universal.squashfs": {
+      "sha256": "5395ee1285c178b3fc4914e720e73c0e51984d48c9a8bbb717f42d2881a8c57f",
+      "size": 6352896
+    },
+    "install-set/DCS6100LHV2Ax_FW000B00_THINGINO_SD.bin": {
+      "sha256": "9f274e83a76dd7ef57c736d18eeceb09e0d815a201f16b26745cb214e957f23e",
+      "size": 1529088
+    },
+    "install-set/THINGINO2.BIN": {
+      "sha256": "4cfaf045893e66d7789761121c4633ceebdca50ba5eb82dfd2ba5fb53956e46e",
+      "size": 7869619
+    },
+    "install-set/install-set.manifest.json": {
+      "sha256": "f47b40a7113ab210253de7560ec540888f1b3e16ec998eee86ea4948d9a1ec48",
+      "size": 5084
+    },
+    "install-set/stage1-bootstrap.squashfs": {
+      "sha256": "6c939a240939ee2ffd1fa06585fbe7f2c9f8465a1c9d274b33f8eaeb65d29649",
+      "size": 16384
+    },
+    "install-set/thingino-universal.tgb": {
+      "sha256": "98c764a5a01eac261290e6cb37e1a83c75b2006da01bb200f8e325b91dbbd7fd",
+      "size": 7934033
+    },
+    "raptor/raptor-full-component.tar.gz": {
+      "sha256": "88e5c125af2348bb33110fc43bf370d989d9ca25dd172a708bd41303a7053439",
+      "size": 847144
+    },
+    "split-kernels/final-kernel.uimage": {
+      "sha256": "faf28040e59639fb9818b3cc12ead8c1c5a0f8109d01ab693fb579797dd3e383",
+      "size": 1512627
+    },
+    "split-kernels/final-linux.config": {
+      "sha256": "d76a02d21576dba68fa196e2832c6bb4551578a97e0f43dd731cd60d0be4af8a",
+      "size": 48256
+    },
+    "split-kernels/installer-jzmmc_v12.ko": {
+      "sha256": "d788c209c6b8b07a486eed5580c36d915230f0b2775d7828ba4894ac32da788d",
+      "size": 30652
+    },
+    "split-kernels/installer-kernel.uimage": {
+      "sha256": "b983e96d0bec86d8530b9dcba299444f8119ed8658f35ada0e3905edaab2781f",
+      "size": 1512372
+    }
+  },
+  "inspections_accepted": true,
+  "scope": "complete-firmware"
+}

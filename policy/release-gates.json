@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status_date": "2026-09-15",
+  "status_date": "2026-09-17",
   "scopes": [
     {
       "id": "source-publication",
@@ -42,9 +42,9 @@
         },
         {
           "id": "reproducible-firmware",
-          "status": "blocked",
+          "status": "closed",
           "requirement": "Two clean builds from documented public and owner-acquired inputs are byte-identical.",
-          "evidence": ["docs/build.md", "docs/testing.md"]
+          "evidence": ["docs/build.md", "docs/release-evidence/2026-09-17-raptor-audio-reproducibility.json", "docs/release-evidence/2026-09-17-raptor-audio-reproducibility.md", "docs/testing.md"]
         },
         {
           "id": "content-addressed-candidate",

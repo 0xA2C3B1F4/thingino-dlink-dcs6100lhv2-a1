@@ -1,5 +1,5 @@
 {
-  "export_policy_sha256": "9d89f0e0f8d8812849fd23960ff8235bdaf971a9f2bc2d9ae5a4768497472160",
+  "export_policy_sha256": "2d8423c0e17625950e32fb63097eff76255d1df5b869682b7c5ed88feae87c0a",
   "files": {
     ".editorconfig": {
       "sha256": "77d71c2bd466915cf8363f0929ef8a1f6a25b92a21d01c6ae5c6c7f5c307fd8a",
@@ -674,11 +674,11 @@
       "source": "production/docs/architecture.md"
     },
     "docs/build.md": {
-      "sha256": "23b552911549bbb34ea210b2e060b2138652ae88445772bcb6b89a300e51fbaa",
+      "sha256": "e3043d24413a24d36f9593a6130dda1e1dcf068665971ebc0d26a762ec8c726c",
       "source": "production/docs/build.md"
     },
     "docs/features.md": {
-      "sha256": "db96b029362082c37f2125df9f703033e36873fdd8132c213ce8869686cfebd0",
+      "sha256": "8a57d48af1440a02f33c04907ca004c059fbc3d9d4c312499e3a1c44de1897a4",
       "source": "production/docs/features.md"
     },
     "docs/hardware.md": {
@@ -690,7 +690,7 @@
       "source": "production/docs/index.md"
     },
     "docs/installation.md": {
-      "sha256": "9329a92e78bbf22287a78bd5215642fc41f433ade792e539c78e76fbcb7b4f9b",
+      "sha256": "e4ef9e6854ad98956bf2ec50ddf61dc1bccf23081ca6ddd6c7b03488c4c00c20",
       "source": "production/docs/installation.md"
     },
     "docs/installer-projects.md": {
@@ -701,8 +701,16 @@
       "sha256": "26e36f60ff3a3610eb1d4460026b5948608fbd6f7d28aa579c1ce4da5a12298e",
       "source": "production/docs/recovery.md"
     },
+    "docs/release-evidence/2026-09-17-raptor-audio-reproducibility.json": {
+      "sha256": "35c6a3851949a67cc53241519a2cc0ed88f50a7f652cb91373debfa47570e84f",
+      "source": "production/docs/release-evidence/2026-09-17-raptor-audio-reproducibility.json"
+    },
+    "docs/release-evidence/2026-09-17-raptor-audio-reproducibility.md": {
+      "sha256": "e30067685dd27d345dac05314e47e31e712a81c99ef4e095ed616347cd15a030",
+      "source": "production/docs/release-evidence/2026-09-17-raptor-audio-reproducibility.md"
+    },
     "docs/status.md": {
-      "sha256": "a24eeb652f0d870a4040e358411820438845e7614d0ad267800fa611c62190b8",
+      "sha256": "e62ff30aa3b34bfb1f076065d01fa6883eb610aed357d68f1058c4d4ae9f66f0",
       "source": "production/docs/status.md"
     },
     "docs/testing.md": {
@@ -870,7 +878,7 @@
       "source": "installer/local_build_models.py"
     },
     "installer/local_build_package.py": {
-      "sha256": "48c44fa1ebc5f362f99c1809ef6e0b4cc2645a670cd0ac6d6acee44014fcd7b2",
+      "sha256": "113f1eaf6e69e17fc716ed4a8647300be5d85bd0ee4a562c643bbda516200dec",
       "source": "installer/local_build_package.py"
     },
     "installer/local_build_run.py": {
@@ -1426,7 +1434,7 @@
       "source": "patches/uhttpd/0017-bind-recording-file-identity.patch"
     },
     "policy/release-gates.json": {
-      "sha256": "d6286f2877ee7b2be20c11ced083594813e5f200fc5f4d51a6f4ce51e083ca00",
+      "sha256": "a3a41d745bff0348a9620f0a91eba425e87a724eb03cfbaf9f0b85aa01dc191e",
       "source": "policy/release-gates.json"
     },
     "profiles/dlink-dcs6100lhv2-a1/artifact-limits.json": {
@@ -1641,6 +1649,10 @@
       "sha256": "708d86da43f6716b180a150ac42dfc789b498801ed9a16959caeb8fdaf546dd6",
       "source": "scripts/source_checkout.py"
     },
+    "scripts/source_delivery_inventory.py": {
+      "sha256": "b7e7acced5e2a3078ebcd3154ea6540b8856c026041eeae8f4474a3f3186ee67",
+      "source": "scripts/source_delivery_inventory.py"
+    },
     "scripts/source_prepare.py": {
       "sha256": "9f6878a79357036569da08e2dd0f19d6954cde8a07ed19b4d234344df195c11b",
       "source": "scripts/source_prepare.py"
@@ -1750,7 +1762,7 @@
       "source": "tests/test_local_build_bootstrap.py"
     },
     "tests/test_local_build_run.py": {
-      "sha256": "d334df9aa5fafc56431899b5a2639ab39594c5f6e286b22dc5bc7da611ab25d2",
+      "sha256": "cb88a45b0f651fd9c111b71e9809a1f70f8b257f07b7a6c7def02c6b254209e3",
       "source": "tests/test_local_build_run.py"
     },
     "tests/test_macos_media_preflight.py": {
@@ -1904,6 +1916,10 @@
     "tests/test_source_checkout.py": {
       "sha256": "d9ebff11085bfd3fe9f6e5cb67305458f4de967d4a06ec370def79a351101cd8",
       "source": "tests/test_source_checkout.py"
+    },
+    "tests/test_source_delivery_inventory.py": {
+      "sha256": "28a4b82f10801b32397698a8324a1cbcfc8ac89a329795f25b77e7b29ba56e4e",
+      "source": "tests/test_source_delivery_inventory.py"
     },
     "tests/test_source_prepare.py": {
       "sha256": "0579510f66d92c7c4b1ea258041a6dd0b982843eb0faefe009541b5d31997b95",
@@ -2351,6 +2367,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "74fdfeb5d6d95fb0300de02bda77739549a14b0d",
+  "source_commit": "6a59e4930d16601b07cc1f023ed871ea3d215f03",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }
