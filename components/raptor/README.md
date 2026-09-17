@@ -30,6 +30,10 @@ and answer generator without requiring the firmware SDK. Browser acceptance,
 camera packet delivery and audible playback remain separate checks.
 The offline component build runs this native fixture before cross-compilation;
 a regression stops the build before producing a deployable component.
+The camera profile sets `video_only = false` so RWD starts its audio reader.
+This allows reception of independently enabled camera capture; it does not
+enable the microphone or request a browser microphone. A negotiated audio
+track alone does not prove that RWD has an active audio reader.
 
 `scripts/raptor_full_source_manifest.py` is the host-only preparation and
 verification helper. It binds the prepared media inputs by file content,

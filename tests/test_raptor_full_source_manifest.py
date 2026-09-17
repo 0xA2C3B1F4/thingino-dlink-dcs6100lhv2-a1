@@ -1,6 +1,7 @@
 """Host-only tests for the full Raptor source manifest generator."""
 
 import hashlib
+import configparser
 import importlib.util
 import json
 import os
@@ -19,6 +20,17 @@ SPEC.loader.exec_module(MODULE)
 
 
 class ManifestTests(unittest.TestCase):
+    def test_camera_profile_starts_the_audio_reader(self):
+        config = configparser.ConfigParser(interpolation=None)
+        config.read(ROOT / "components/raptor/raptor-webrtc.conf")
+        self.assertFalse(config.getboolean("webrtc", "video_only"))
+        self.assertTrue(config.getboolean("webrtc", "signaling_loopback"))
+        self.assertEqual(config.getint("webrtc", "max_clients"), 1)
+        audio = configparser.ConfigParser(interpolation=None)
+        audio.read(ROOT / "components/raptor/raptor-audio.conf")
+        self.assertFalse(audio.getboolean("audio", "ai_enabled"))
+        self.assertFalse(audio.getboolean("audio", "ao_enabled"))
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(dir=Path(os.environ["TMPDIR"]).resolve(strict=True))
         self.addCleanup(self.temp.cleanup)

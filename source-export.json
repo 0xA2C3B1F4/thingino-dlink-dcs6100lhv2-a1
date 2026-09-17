@@ -34,7 +34,7 @@
       "source": "Makefile"
     },
     "README.md": {
-      "sha256": "84e9659334484ed9dbb60bd901a8bb03b37fff662ba8cb2c806a5e2d6c4ba9c7",
+      "sha256": "6db0deb8423c5d4837ff2687cf7ea4c44a0f3a3948b8171e7c41516f977760d3",
       "source": "production/README.md"
     },
     "SECURITY.md": {
@@ -42,7 +42,7 @@
       "source": "SECURITY.md"
     },
     "components/raptor/README.md": {
-      "sha256": "3071471b5797a3873c88720ee24fdc0a6612b642ba5dd34805e991c6125a2b17",
+      "sha256": "e22bea5f0ed6a8962e31562a2a272ca48e98a2b3683204e0a14acfc47a4aade5",
       "source": "components/raptor/README.md"
     },
     "components/raptor/S05raptor-preconditions": {
@@ -74,7 +74,7 @@
       "source": "components/raptor/raptor-media.conf"
     },
     "components/raptor/raptor-webrtc.conf": {
-      "sha256": "58249ddd3b92caf92b0b90151600de04f06997e70652a76b14ff5d88fc0e699c",
+      "sha256": "7c0bf1375f0e18a4b373f6d62ce1da7a92a749ebbdfb2fb0a5fa6ec15ac9f3fb",
       "source": "components/raptor/raptor-webrtc.conf"
     },
     "components/raptor/source-build-lock.json": {
@@ -1842,7 +1842,7 @@
       "source": "tests/test_raptor_full_root.py"
     },
     "tests/test_raptor_full_source_manifest.py": {
-      "sha256": "d2096fe94fe16dd6b637217a94e7e2c28cf7370f6fdae9c0a0d8bd8ae5c01df3",
+      "sha256": "f071ed49a480503898eadb3d7dd678431a77cdb1590b2fce48c93afdfefab065",
       "source": "tests/test_raptor_full_source_manifest.py"
     },
     "tests/test_recording_file_guard.py": {
@@ -2351,6 +2351,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "4d20594080c8d9cecfd953df81989bfde6671495",
+  "source_commit": "74fdfeb5d6d95fb0300de02bda77739549a14b0d",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }

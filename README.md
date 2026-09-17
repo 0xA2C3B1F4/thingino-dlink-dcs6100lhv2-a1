@@ -36,7 +36,8 @@ per-camera inputs once, link outputs between stages and review SD write plans.
 `local-build build-universal` selects the full Raptor media stack by default,
 including its own sensor/encoder, audio, RTSP, recorder and receive-only WebRTC
 services. It supports one WebRTC client at a time; the selected profile is
-15 fps. The installer acquires locked public sources, compiles against the
+15 fps, with WebRTC audio reception enabled when camera capture is enabled.
+Microphone and camera speaker are initially disabled. The installer acquires locked public sources, compiles against the
 fresh support image's libraries and SDK, then composes the Raptor-owned runtime.
 No separately prepared Raptor archive is required. This integrated source-build path
 is undergoing clean-build and installation validation.
