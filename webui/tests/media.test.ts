@@ -255,6 +255,115 @@ test("WHIP ICE deadline closes the peer before MJPEG fallback", async () => {
   assert.equal(fetches, 0);
 });
 
+test("late old WHIP POST deletes only its session, not the newer playing peer", async () => {
+  const video = new FakeVideo();
+  const peers = [new FakePeer(), new FakePeer()];
+  const responses: Array<(response: Response) => void> = [];
+  const deleted: string[] = [];
+  const states: string[] = [];
+  let index = 0;
+  const preview = new WhipPreview(video as unknown as HTMLVideoElement, {
+    peerFactory: () => peers[index++] as unknown as RTCPeerConnection,
+    endpoint: () => "https://camera.local/whip",
+    fetcher: (input, init) => {
+      if (init?.method === "POST") return new Promise<Response>(resolve => { responses.push(resolve); });
+      deleted.push(String(input));
+      return Promise.resolve(new Response(null, { status: 204 }));
+    },
+  });
+  const response = (id: string) => new Response("v=0\r\n", { status: 201, headers: { Location: `/session/${id}` } });
+  preview.start(0, state => states.push(state));
+  await settle();
+  preview.start(0, state => states.push(state));
+  await settle();
+  responses[1]!(response("new"));
+  await settle();
+  const stream = {} as MediaStream;
+  peers[1]!.ontrack?.({ track: { kind: "video" }, streams: [stream] } as unknown as RTCTrackEvent);
+  video.muted = false;
+  const previousStates = [...states];
+  responses[0]!(response("old"));
+  await settle();
+  assert.equal(peers[1]!.closed, false);
+  assert.equal(video.muted, false);
+  assert.equal(video.srcObject, stream);
+  assert.deepEqual(states, previousStates);
+  assert.deepEqual(deleted, ["https://camera.local/session/old"]);
+  preview.stop();
+  await settle();
+  assert.deepEqual(deleted, ["https://camera.local/session/old", "https://camera.local/session/new"]);
+});
+
+test("audio preview attaches one stream for video-first tracks and delegates play", async () => {
+  const original = globalThis.MediaStream;
+  class FakeStream { tracks: MediaStreamTrack[] = []; addTrack(track: MediaStreamTrack) { this.tracks.push(track); } }
+  globalThis.MediaStream = FakeStream as unknown as typeof MediaStream;
+  try {
+    const video = new FakeVideo();
+    const peer = new FakePeer();
+    let ready = 0;
+    let available = false;
+    let ended!: () => void;
+    const preview = new WhipPreview(video as unknown as HTMLVideoElement, {
+      receiveAudio: true, onMediaReady: () => { ++ready; }, onAudioAvailable: value => { available = value; },
+      peerFactory: () => peer as unknown as RTCPeerConnection,
+      fetcher: async (_input, init) => init?.method === "POST"
+        ? new Response("v=0\r\n", { status: 201, headers: { Location: "/session" } }) : new Response(null, { status: 204 }),
+    });
+    preview.start(0, () => undefined);
+    await settle();
+    peer.ontrack?.({ track: { kind: "video" }, streams: [] } as unknown as RTCTrackEvent);
+    const stream = video.srcObject;
+    const audio = { kind: "audio", addEventListener: (_name: string, callback: () => void) => { ended = callback; } };
+    peer.ontrack?.({ track: audio, streams: [] } as unknown as RTCTrackEvent);
+    assert.equal(video.srcObject, stream);
+    assert.equal(ready, 2);
+    assert.equal(video.plays, 0, "caller owns playback; no competing play() calls");
+    assert.equal(available, true);
+    preview.stop();
+    video.muted = false;
+    ended();
+    assert.equal(video.muted, false, "stale ended must not change newer playback");
+    assert.equal(available, false);
+  } finally { globalThis.MediaStream = original; }
+});
+
+test("late old response body cannot negotiate or release the newer peer", async () => {
+  const video = new FakeVideo();
+  const peers = [new FakePeer(), new FakePeer()];
+  let index = 0;
+  let readBody!: (answer: string) => void;
+  let oldAnswers = 0;
+  peers[0]!.setRemoteDescription = async () => { ++oldAnswers; };
+  const old = new Response(null, { status: 201, headers: { Location: "/session/old" } });
+  old.text = () => new Promise<string>(resolve => { readBody = resolve; });
+  const deleted: string[] = [];
+  const preview = new WhipPreview(video as unknown as HTMLVideoElement, {
+    peerFactory: () => peers[index++] as unknown as RTCPeerConnection,
+    endpoint: () => "https://camera.local/whip",
+    fetcher: async (input, init) => {
+      if (init?.method === "POST") return index === 1 ? old
+        : new Response("v=0\r\n", { status: 201, headers: { Location: "/session/new" } });
+      deleted.push(String(input));
+      return new Response(null, { status: 204 });
+    },
+  });
+  preview.start(0, () => undefined);
+  await settle();
+  preview.start(0, () => undefined);
+  await settle();
+  video.muted = false;
+  readBody("v=0\r\n");
+  await settle();
+  assert.equal(oldAnswers, 0);
+  assert.equal(peers[1]!.closed, false);
+  assert.equal(video.muted, false);
+  assert.deepEqual(deleted, ["https://camera.local/session/old"]);
+  preview.stop();
+  await settle();
+  assert.deepEqual(deleted, ["https://camera.local/session/old", "https://camera.local/session/new"]);
+});
+
 test("WHIP reports the negotiation error after deleting its failed session", async () => {
   const video = new FakeVideo();
   const peer = new FakePeer();
@@ -277,6 +386,44 @@ test("WHIP reports the negotiation error after deleting its failed session", asy
   assert.deepEqual(methods, ["POST", "DELETE"]);
   assert.equal(peer.closed, true);
   assert.equal(video.srcObject, null);
+});
+
+test("audio stats are selected, bounded and discarded after connection replacement", async () => {
+  const video = new FakeVideo();
+  const peer = new FakePeer();
+  const timers = new FakeTimers();
+  const report = new Map([
+    ["audio", { type: "inbound-rtp", kind: "audio", packetsReceived: 12, bytesReceived: 340,
+      audioLevel: 0.2, totalAudioEnergy: 0.4, totalSamplesDuration: 1, address: "must-not-leak" }],
+    ["video", { type: "inbound-rtp", kind: "video", packetsReceived: 99, bytesReceived: 999 }],
+  ]) as unknown as RTCStatsReport;
+  const statsPeer = peer as unknown as RTCPeerConnection;
+  statsPeer.getStats = async () => report;
+  const preview = new WhipPreview(video as unknown as HTMLVideoElement, {
+    timers, peerFactory: () => statsPeer,
+    fetcher: async (_input, init) => init?.method === "POST"
+      ? new Response("v=0\r\n", { status: 201, headers: { Location: "/session" } }) : new Response(null, { status: 204 }),
+  });
+  preview.start(0, () => undefined);
+  await settle();
+  const stats = await preview.audioStats();
+  assert.deepEqual(stats, { epoch: stats!.epoch, packetsReceived: 12, bytesReceived: 340,
+    audioLevel: 0.2, totalAudioEnergy: 0.4, totalSamplesDuration: 1 });
+  assert.equal(timers.jobs.size, 0);
+  let resolve!: (value: RTCStatsReport) => void;
+  statsPeer.getStats = () => new Promise(done => { resolve = done; });
+  const stale = preview.audioStats();
+  preview.stop();
+  resolve(report);
+  assert.equal(await stale, null);
+  preview.start(0, () => undefined);
+  await settle();
+  statsPeer.getStats = () => new Promise(() => undefined);
+  const hung = preview.audioStats();
+  timers.runNext();
+  assert.equal(await hung, null);
+  assert.equal(timers.jobs.size, 0);
+  preview.stop();
 });
 
 test("native MJPEG becomes live without Fetch and disconnects cleanly", () => {

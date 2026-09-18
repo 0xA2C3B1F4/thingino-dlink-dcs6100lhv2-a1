@@ -39,7 +39,7 @@
     },
     {
       "destination": "dcs6100-webui/firmware-bundle.json",
-      "sha256": "fbb60c2b03e771115b048769be1e26781ab67d9f32c5aacf79885b26a8b444e7",
+      "sha256": "a0b73787916297a3293dfce7823b9d96119cc783d38d485d1471b75f2358f130",
       "source": "webui/firmware-bundle.json"
     },
     {
@@ -124,13 +124,18 @@
     },
     {
       "destination": "dcs6100-webui/src/api/media.ts",
-      "sha256": "2d5b6b6b4112619219ae7b6a681d95ec8770e4041b1dda9cf21e08e45e5abb04",
+      "sha256": "633203833870b98f16106ccf2f068a1152f5a075491100cee3040b5f51566803",
       "source": "webui/src/api/media.ts"
     },
     {
       "destination": "dcs6100-webui/src/api/osd-metadata.ts",
       "sha256": "711cbf40c36d3cf704c9803afbb49928870453d6b62963d3f8c0de872e75cc4b",
       "source": "webui/src/api/osd-metadata.ts"
+    },
+    {
+      "destination": "dcs6100-webui/src/api/preview-audio.ts",
+      "sha256": "d2b97f5e04f688322b8812a28c344540706a73f4099dcc91a630a90595bdd2e0",
+      "source": "webui/src/api/preview-audio.ts"
     },
     {
       "destination": "dcs6100-webui/src/api/routes.ts",
@@ -229,7 +234,7 @@
     },
     {
       "destination": "dcs6100-webui/src/pages/preview.ts",
-      "sha256": "89215ff934df2121bd254b5cc24f404484279b68d28ea574dffdaccbaadcc3b2",
+      "sha256": "82c28b5c5b5f4ef80d3edb87342d950d596c76ef9c90107fe0b6afa6fd93e219",
       "source": "webui/src/pages/preview.ts"
     },
     {

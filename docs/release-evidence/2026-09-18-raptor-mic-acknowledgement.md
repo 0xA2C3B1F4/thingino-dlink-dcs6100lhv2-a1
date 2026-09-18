@@ -115,3 +115,81 @@ payment or spending-limit restriction. The remote tests are unexecuted, not
 passed and not evidence of a source regression. Local project checks do not
 replace the missing platform and browser CI acceptance. No billing settings
 were changed. Legal and other physical firmware-release gates remain open.
+
+## Installed session candidate and Preview lifecycle correction
+
+After the operator completed both installation phases and reported normal WebUI
+availability, pinned read-only SSH and the normal universal verification passed.
+Independent readback matched the candidate's system partition, FF-padded to
+6,619,136 bytes, SHA-256
+`b82a781315e402dc102ceb3bffa41faf9a244f9453d89225adae1d657be47c0f`.
+The live IPC library and RWD matched their candidate component payloads.
+This establishes installation of the session-clock system candidate above;
+kernel and protected-partition equality are not claimed.
+
+The operator's first Listen attempt was silent despite live WebRTC, Microphone
+On and the Mute playback button. Later Listen returned to off without an
+operator playback retry. A read-only browser observation then showed the active
+video muted, playing, readyState 4, and live enabled audio/video tracks.
+RAD was enabled and unmuted; RWD reported ICE/DTLS established and sending.
+These observations do not establish audio RTP delivery or audibility during
+the initial silent attempt. First-attempt audio acceptance remains failed/open.
+
+Independent source consultation reproduced a separate client teardown race:
+a delayed old WHIP POST response could overwrite the shared session URL and
+release a newer playing peer. Its occurrence in the camera incident is not
+proven. The source correction now deletes only the stale response's own session,
+guards response-body completion, and attaches one remote stream per connection.
+A browser-only playback controller separates listening intent, audio-track
+availability and accepted playback. Temporary visibility/focus suspension
+preserves intent; explicit Mute, Reload, stream change, fallback and disposal
+clear it. Rejected audible resume stays muted with a click-to-retry message and
+one bounded muted-video retry. Stale playback completions cannot update newer
+state. Focus return cancels a pending stop deadline and resumes an elapsed stop.
+
+Preview's Audio diagnostics action reads two bounded inbound-audio counter
+samples, one second apart. It reports packet/byte deltas and supported
+energy/sample counters, rejects samples from replaced connections, and exposes
+neither SDP, addresses, credentials nor raw audio. Counters do not prove speaker
+audibility. The action does not enable playback or mutate camera controls.
+
+Local verification used the bundled Node runtime, the existing pinned esbuild
+dependencies, GNU coreutils for the Linux-style installation timestamp test,
+and an existing Chromium executable. Commands:
+
+```sh
+cd webui
+npm run check
+npm run test:browser -- preview-audio.spec.ts
+```
+
+The WebUI check passed typechecking, 238 tests, production bundle generation and
+the bundle/route scan. All eight focused Chromium browser tests passed. They
+cover both track orders, transient reconnect, pending/elapsed focus deadlines,
+explicit resets, rejected playback, diagnostics and MJPEG fallback. Unit tests
+also cover delayed old POST/response-body completions, stale play callbacks,
+muted retry and bounded/stale stats. Synthetic-track/play mocks are state-machine
+evidence, not actual Safari autoplay or camera audio acceptance. Astra High's
+final read-only review found no blocking correctness issue.
+
+The complete local project check, `./scripts/check.sh`, subsequently passed all
+901 tests, public-tree/source locks, documentation and route-contract checks.
+The exact source-profile contract now requires 164 installed files, including
+the new playback controller; no hash or file-scope verification was weakened.
+
+A wider, filtered run of existing WebUI/Raptor browser tests had six passes,
+one skip and one failure. The failure expected `1920 × 1080 · H.264 · 20 fps`
+on the Streams page. The same single test failed at the identical assertion
+using an unmodified HEAD WebUI snapshot with the same Chromium/runtime fixture
+environment. This is baseline evidence, not a passed broad browser suite;
+the existing Streams summary-test discrepancy remains unresolved. It does not
+replace the focused Preview lifecycle test results above.
+
+The reviewed WebUI bundle is 369,024 bytes; its JavaScript SHA-256 is
+`34ea9374fe23e05c76444ee7957e87e9e8d27a0904273c8e26f97c7d086029a3`.
+The firmware source profile includes the new playback-controller source and
+updated input hashes. This correction has not been built into a complete
+firmware, installed on the camera, or physically audio-accepted. No firmware/SD
+write, camera-control mutation, warm service restart or new binary publication
+occurred in this source-correction round. Physical, remote CI and legal release
+gates remain open.

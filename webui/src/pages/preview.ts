@@ -2,6 +2,7 @@ import type { LiveControlCommand, RuntimeHeartbeat, RuntimeMedia } from "../api/
 import { ApiClient } from "../api/client";
 import { ControlApi } from "../api/control";
 import { MjpegPreview, WhipPreview, type PreviewState } from "../api/media";
+import { PreviewAudioPlayback } from "../api/preview-audio";
 import { routes } from "../api/routes";
 import { button, element, setMessage, statusMessage } from "../app/dom";
 import { PreviewFullscreen } from "../app/fullscreen-preview";
@@ -200,47 +201,52 @@ export function renderPreview(
   section.append(controlCard, content);
 
   const mjpegPreview = new MjpegPreview(image);
-  let audioAvailable = false;
   let webrtcError = "";
-  let listeningEpoch = 0;
-  function resetListening(): void {
-    listeningEpoch += 1;
-    video.muted = true;
-    listen.textContent = "Listen";
-    listen.setAttribute("aria-pressed", "false");
-  }
-  listen.addEventListener("click", () => {
-    if (!audioAvailable) return;
-    if (!video.muted) {
-      resetListening();
-      audioStatus.textContent = "Playback muted. Camera microphone is unchanged.";
-      return;
-    }
-    const epoch = ++listeningEpoch;
-    video.muted = false;
-    // play() runs directly inside the click gesture, without requesting a local microphone.
-    void video.play().then(() => {
-      if (epoch !== listeningEpoch || !audioAvailable) return;
-      listen.textContent = "Mute playback";
-      listen.setAttribute("aria-pressed", "true");
-      audioStatus.textContent = "Playback enabled. Sound requires an enabled, unmuted camera microphone.";
-    }).catch(() => {
-      if (epoch !== listeningEpoch) return;
-      resetListening();
-      audioStatus.textContent = "Browser blocked playback. Click Listen to try again.";
-    });
+  const playback = new PreviewAudioPlayback(video, state => {
+    listen.disabled = !state.available;
+    listen.textContent = state.active ? "Mute playback" : "Listen";
+    listen.setAttribute("aria-pressed", String(state.active));
+    audioStatus.textContent = state.message;
   });
+  listen.addEventListener("click", () => playback.toggle());
   const whipPreview = new WhipPreview(video, {
     receiveAudio: true,
     onError(message): void { webrtcError = message; },
-    onAudioAvailable(available): void {
-      audioAvailable = available;
-      listen.disabled = !available;
-      if (!available) resetListening();
-      audioStatus.textContent = available
-        ? "Playback muted. Click Listen to hear the camera microphone."
-        : "Waiting for WebRTC audio";
-    },
+    onAudioAvailable: available => playback.setAvailable(available),
+    onMediaReady: () => playback.mediaReady(),
+  });
+  const audioDiagnostics = element("details");
+  const inspectAudio = button("Inspect received audio", "button secondary");
+  const audioStats = element("pre", { text: "Packet counters do not prove audible output." });
+  audioDiagnostics.append(element("summary", { text: "Audio diagnostics" }), inspectAudio, audioStats);
+  liveCard.insertBefore(audioDiagnostics, endpoints);
+  let diagnosticEpoch = 0;
+  let diagnosticTimer = 0;
+  let restartReason = "initial";
+  inspectAudio.addEventListener("click", () => {
+    const epoch = ++diagnosticEpoch;
+    window.clearTimeout(diagnosticTimer);
+    inspectAudio.disabled = true;
+    audioStats.textContent = "Reading two audio counter samples…";
+    void (async () => {
+      const first = await whipPreview.audioStats();
+      if (epoch !== diagnosticEpoch || cancelled) return;
+      diagnosticTimer = window.setTimeout(() => {
+        void (async () => {
+          const second = await whipPreview.audioStats();
+          if (epoch !== diagnosticEpoch || cancelled) return;
+          const sameConnection = first && second && first.epoch === second.epoch;
+          audioStats.textContent = JSON.stringify({
+            restartReason, muted: video.muted, paused: video.paused,
+            first, second,
+            packetDelta: sameConnection ? second.packetsReceived - first.packetsReceived : null,
+            byteDelta: sameConnection ? second.bytesReceived - first.bytesReceived : null,
+            note: "Counters do not prove speaker audibility. Null means unavailable or connection changed.",
+          }, null, 2);
+          inspectAudio.disabled = false;
+        })();
+      }, 1000);
+    })();
   });
   const fullscreen = new PreviewFullscreen(frame, [video, image], "live camera preview");
   let previewTransport: "WebRTC" | "MJPEG" = "WebRTC";
@@ -250,6 +256,7 @@ export function renderPreview(
       whipPreview.stop(false);
       mjpegPreview.stop();
       const startMjpeg = (): void => {
+        playback.reset();
         previewTransport = "MJPEG";
         audioStatus.textContent = webrtcError
           ? `WebRTC failed: ${webrtcError}. MJPEG preview has no audio.`
@@ -273,6 +280,7 @@ export function renderPreview(
     stop(): void {
       whipPreview.stop(false);
       mjpegPreview.stop();
+      updatePreviewState("idle");
     },
   };
   let stream = 0 as 0 | 1;
@@ -300,6 +308,7 @@ export function renderPreview(
 
   function startPreview(force = false): void {
     window.clearTimeout(focusTimeout);
+    if (document.hidden) return;
     updateVideoSummary();
     if (!media || !previewStreamUsable(stream, media)) {
       previewStarted = false;
@@ -330,6 +339,7 @@ export function renderPreview(
       return;
     }
     const changed = stream !== fallback;
+    if (changed) { playback.reset(); restartReason = "stream availability fallback"; }
     stream = fallback;
     streamSelect.value = String(stream);
     liveTitle.querySelector("strong")!.textContent = stream === 0 ? "Main stream" : "Substream";
@@ -535,11 +545,13 @@ export function renderPreview(
       return;
     }
     stream = requested;
+    playback.reset();
+    restartReason = "stream selection";
     startPreview(true);
     void refreshRuntime();
   });
-  reload.addEventListener("click", () => { startPreview(true); void refreshRuntime(); });
-  retry.addEventListener("click", () => startPreview(true));
+  reload.addEventListener("click", () => { playback.reset(); restartReason = "reload"; startPreview(true); void refreshRuntime(); });
+  retry.addEventListener("click", () => { playback.reset(); restartReason = "retry"; startPreview(true); });
   snapshot.addEventListener("click", async () => {
     if (!media || !previewStreamUsable(stream, media)) return;
     snapshot.disabled = true;
@@ -556,12 +568,15 @@ export function renderPreview(
     }
   });
 
-  const pageHide = () => { void fullscreen.exit(); preview.stop(); };
+  const pageHide = () => { playback.reset(); void fullscreen.exit(); preview.stop(); };
   const visibilityChange = (): void => {
     if (document.hidden) { void fullscreen.exit(); preview.stop(); }
-    else if (previewState !== "error") startPreview();
+    else if (previewState !== "error" && !previewStarted) { restartReason = "visibility resume"; startPreview(); }
   };
-  const windowFocus = (): void => { if (previewState !== "error" && !previewStarted) startPreview(); };
+  const windowFocus = (): void => {
+    window.clearTimeout(focusTimeout);
+    if (!document.hidden && previewState !== "error" && !previewStarted) { restartReason = "focus resume"; startPreview(); }
+  };
   const windowBlur = (): void => stopForLostFocus();
   window.addEventListener("pagehide", pageHide);
   document.addEventListener("visibilitychange", visibilityChange);
@@ -577,6 +592,9 @@ export function renderPreview(
     node: section,
     cleanup: () => {
       cancelled = true;
+      playback.reset();
+      ++diagnosticEpoch;
+      window.clearTimeout(diagnosticTimer);
       window.clearInterval(interval);
       window.clearTimeout(focusTimeout);
       window.removeEventListener("pagehide", pageHide);

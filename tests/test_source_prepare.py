@@ -222,7 +222,7 @@ class SourceProfileTests(unittest.TestCase):
         self.assertEqual(profile["model"], "DCS-6100LHV2")
         self.assertEqual(profile["hardware_revision"], "A1")
         self.assertEqual(len(profile["thingino_patches"]), 20)
-        self.assertEqual(len(profile["installed_files"]), 163)
+        self.assertEqual(len(profile["installed_files"]), 164)
         installed_sources = {entry["source"] for entry in profile["installed_files"]}
         self.assertTrue({
             "components/thingino-control/src/raptor.rs",
@@ -245,6 +245,7 @@ class SourceProfileTests(unittest.TestCase):
             "webui/firmware-bundle.json",
             "webui/scripts/build.mjs",
             "webui/scripts/firmware-bundle.mjs",
+            "webui/src/api/preview-audio.ts",
         }.issubset(installed_sources))
         icon_sources = {
             entry["source"] for entry in profile["installed_files"]

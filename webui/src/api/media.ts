@@ -14,11 +14,22 @@ export interface WhipPreviewOptions {
   receiveAudio?: boolean;
   onAudioAvailable?: (available: boolean) => void;
   onError?: (message: string) => void;
+  /** When supplied, the caller owns all media play() calls. */
+  onMediaReady?: () => void;
   fetcher?: FetchPreview;
   peerFactory?: () => RTCPeerConnection;
   endpoint?: (stream: 0 | 1) => string;
   iceTimeoutMs?: number;
   timers?: PreviewTimers;
+}
+
+export interface PreviewAudioStats {
+  epoch: number;
+  packetsReceived: number;
+  bytesReceived: number;
+  audioLevel?: number;
+  totalAudioEnergy?: number;
+  totalSamplesDuration?: number;
 }
 
 export interface MjpegPreviewOptions {
@@ -119,7 +130,7 @@ export class WhipPreview {
       if (event.track.kind !== "video" && !(remote && event.track.kind === "audio")) return;
       if (remote) {
         remote.addTrack(event.track);
-        this.video.srcObject = remote;
+        if (this.video.srcObject !== remote) this.video.srcObject = remote;
       } else {
         this.video.srcObject = event.streams[0] ?? new MediaStream([event.track]);
       }
@@ -132,7 +143,8 @@ export class WhipPreview {
           }
         });
       }
-      void this.video.play().catch(() => undefined);
+      if (this.options.onMediaReady) this.options.onMediaReady();
+      else void this.video.play().catch(() => undefined);
       if (event.track.kind === "video") this.emit("live");
     };
     const fail = (): void => {
@@ -146,7 +158,9 @@ export class WhipPreview {
     peer.addEventListener("connectionstatechange", fail);
 
     const offer = await peer.createOffer();
+    if (!this.active || epoch !== this.epoch) return;
     await peer.setLocalDescription(offer);
+    if (!this.active || epoch !== this.epoch) return;
     await this.waitForIce(peer);
     if (!this.active || epoch !== this.epoch || !peer.localDescription?.sdp) return;
     const response = await this.fetcher(endpoint, {
@@ -156,14 +170,16 @@ export class WhipPreview {
       body: peer.localDescription.sdp,
     });
     if (!response.ok) throw new Error(`WHIP request failed (${response.status})`);
-    const answer = await response.text();
     const locationHeader = response.headers.get("location");
     if (!locationHeader) throw new Error("WHIP response omitted session location");
-    this.sessionUrl = new URL(locationHeader, endpoint).href;
+    const sessionUrl = new URL(locationHeader, endpoint).href;
     if (!this.active || epoch !== this.epoch) {
-      this.release();
+      this.deleteSession(sessionUrl);
       return;
     }
+    this.sessionUrl = sessionUrl;
+    const answer = await response.text();
+    if (!this.active || epoch !== this.epoch) return;
     await peer.setRemoteDescription({ type: "answer", sdp: answer });
   }
 
@@ -182,14 +198,48 @@ export class WhipPreview {
     });
   }
 
-  private release(): void {
-    const sessionUrl = this.sessionUrl;
-    this.sessionUrl = "";
+  private deleteSession(sessionUrl: string): void {
     if (sessionUrl) void this.fetcher(sessionUrl, {
       method: "DELETE",
       cache: "no-store",
       keepalive: true,
     }).catch(() => undefined);
+  }
+
+  /** Selected counters only: no SDP, addresses, credentials or audio samples. */
+  async audioStats(): Promise<PreviewAudioStats | null> {
+    const peer = this.peer;
+    const epoch = this.epoch;
+    if (!this.active || !peer) return null;
+    let timeout = 0;
+    try {
+      const report = await Promise.race([
+        peer.getStats(),
+        new Promise<null>(resolve => { timeout = this.timers.setTimeout(() => resolve(null), 1500); }),
+      ]);
+      if (!report || !this.active || epoch !== this.epoch || peer !== this.peer) return null;
+      let result: PreviewAudioStats | null = null;
+      report.forEach(stat => {
+        if (stat.type !== "inbound-rtp" || (stat.kind ?? stat.mediaType) !== "audio") return;
+        const finite = (name: string): number | undefined => typeof stat[name] === "number" && Number.isFinite(stat[name]) ? stat[name] : undefined;
+        const packets = finite("packetsReceived");
+        const bytes = finite("bytesReceived");
+        if (packets === undefined || bytes === undefined) return;
+        result = { epoch, packetsReceived: packets, bytesReceived: bytes };
+        for (const name of ["audioLevel", "totalAudioEnergy", "totalSamplesDuration"] as const) {
+          const value = finite(name);
+          if (value !== undefined) result[name] = value;
+        }
+      });
+      return result;
+    } catch { return null; }
+    finally { this.timers.clearTimeout(timeout); }
+  }
+
+  private release(): void {
+    const sessionUrl = this.sessionUrl;
+    this.sessionUrl = "";
+    this.deleteSession(sessionUrl);
     this.peer?.close();
     this.peer = null;
     this.video.pause();

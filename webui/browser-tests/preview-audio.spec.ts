@@ -4,8 +4,9 @@ test.beforeEach(async ({ request }) => {
   await request.post("/__fixture__/reset");
 });
 
-async function mockAudio(page: import("@playwright/test").Page): Promise<void> {
-  await page.addInitScript(() => {
+// State-machine tests with synthetic tracks, not proof of audible playback.
+async function mockAudio(page: import("@playwright/test").Page, videoFirst = false): Promise<void> {
+  await page.addInitScript((videoFirst) => {
     Object.defineProperty(HTMLMediaElement.prototype, "play", { configurable: true, value() {
       return Promise.resolve();
     } });
@@ -14,6 +15,12 @@ async function mockAudio(page: import("@playwright/test").Page): Promise<void> {
       connectionState = "connected";
       localDescription: RTCSessionDescriptionInit | null = null;
       ontrack: ((event: unknown) => void) | null = null;
+      statsReads = 0;
+      getStats() {
+        return Promise.resolve(new Map([["audio", { type: "inbound-rtp", kind: "audio",
+          packetsReceived: ++this.statsReads, bytesReceived: this.statsReads * 40, totalAudioEnergy: 0,
+          address: "not-for-diagnostics" }]]));
+      }
       addTransceiver() { return { setCodecPreferences() {} }; }
       addEventListener() {}
       removeEventListener() {}
@@ -24,14 +31,13 @@ async function mockAudio(page: import("@playwright/test").Page): Promise<void> {
         const video = canvas.captureStream().getVideoTracks()[0];
         const context = new AudioContext();
         const audio = context.createMediaStreamDestination().stream.getAudioTracks()[0];
-        this.ontrack?.({ track: audio, streams: [] });
-        this.ontrack?.({ track: video, streams: [] });
+        for (const track of videoFirst ? [video, audio] : [audio, video]) this.ontrack?.({ track, streams: [] });
         return Promise.resolve();
       }
       close() { this.connectionState = "closed"; }
     }
     Object.defineProperty(window, "RTCPeerConnection", { value: Peer });
-  });
+  }, videoFirst);
   await page.route("**/api/v1/media/webrtc/whip**", route => route.fulfill(
     route.request().method() === "POST"
       ? { status: 201, contentType: "application/sdp", body: "v=0\r\n", headers: { Location: "/api/v1/media/webrtc/whip/0123456789abcdef0123456789abcdef" } }
@@ -61,6 +67,87 @@ test("Listen only unmutes browser playback and resets on stream change", async (
   await expect(listen).toHaveAttribute("aria-pressed", "false");
   expect(await video.evaluate((element: HTMLVideoElement) => element.muted)).toBe(true);
   expect(cameraWrites).toBe(0);
+});
+
+for (const videoFirst of [false, true]) {
+  test(`temporary visibility reconnect preserves Listen, ${videoFirst ? "video" : "audio"}-first tracks`, async ({ page }) => {
+    await mockAudio(page, videoFirst);
+    let posts = 0;
+    let cameraWrites = 0;
+    page.on("request", request => {
+      if (request.method() === "POST" && request.url().includes("/media/webrtc/whip")) ++posts;
+      if (request.url().includes("/actions/control")) ++cameraWrites;
+    });
+    await page.goto("/");
+    await page.getByLabel("Password").fill("thingino");
+    await page.getByRole("button", { name: "Log in", exact: true }).click();
+    const listen = page.getByRole("button", { name: "Listen to camera audio", exact: true });
+    await expect(listen).toBeEnabled();
+    await listen.click();
+    await expect(listen).toHaveAttribute("aria-pressed", "true");
+    await page.evaluate(() => {
+      Object.defineProperty(document, "hidden", { configurable: true, value: true });
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await expect(listen).toBeDisabled();
+    await expect(listen).toHaveAttribute("aria-pressed", "false");
+    await page.evaluate(() => {
+      Object.defineProperty(document, "hidden", { configurable: true, value: false });
+      document.dispatchEvent(new Event("visibilitychange"));
+      window.dispatchEvent(new Event("focus"));
+    });
+    await expect(listen).toHaveAttribute("aria-pressed", "true");
+    expect(posts).toBe(2);
+    expect(cameraWrites).toBe(0);
+    expect(await page.locator(".preview-page .preview-frame video").evaluate((v: HTMLVideoElement) => v.muted)).toBe(false);
+    await page.getByRole("button", { name: "Reload", exact: true }).click();
+    await expect(listen).toBeEnabled();
+    await expect(listen).toHaveAttribute("aria-pressed", "false");
+    expect(await page.locator(".preview-page .preview-frame video").evaluate((v: HTMLVideoElement) => v.muted)).toBe(true);
+  });
+}
+
+test("focus return cancels a pending stop, and resumes after an elapsed stop", async ({ page }) => {
+  await mockAudio(page);
+  await page.route("**/api/v1/config/webui", async route => {
+    const response = await route.fetch();
+    await route.fulfill({ response, json: { ...await response.json(), track_focus: true, focus_timeout: 1 } });
+  });
+  let posts = 0;
+  page.on("request", request => { if (request.method() === "POST" && request.url().includes("/media/webrtc/whip")) ++posts; });
+  await page.goto("/");
+  await page.getByLabel("Password").fill("thingino");
+  await page.getByRole("button", { name: "Log in", exact: true }).click();
+  const listen = page.getByRole("button", { name: "Listen to camera audio", exact: true });
+  await expect(listen).toBeEnabled();
+  await listen.click();
+  await expect(listen).toHaveAttribute("aria-pressed", "true");
+  await page.evaluate(() => { window.dispatchEvent(new Event("blur")); window.dispatchEvent(new Event("focus")); });
+  await page.waitForTimeout(1200); // Must exceed the configured stop deadline.
+  await expect(listen).toBeEnabled();
+  await expect(listen).toHaveAttribute("aria-pressed", "true");
+  expect(posts).toBe(1);
+  await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+  await expect(listen).toBeDisabled();
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(listen).toHaveAttribute("aria-pressed", "true");
+  expect(posts).toBe(2);
+});
+
+test("diagnostics expose only bounded audio counters and do not change playback", async ({ page }) => {
+  await mockAudio(page);
+  await page.goto("/");
+  await page.getByLabel("Password").fill("thingino");
+  await page.getByRole("button", { name: "Log in", exact: true }).click();
+  const listen = page.getByRole("button", { name: "Listen to camera audio", exact: true });
+  await expect(listen).toBeEnabled();
+  await page.getByText("Audio diagnostics", { exact: true }).click();
+  await page.getByRole("button", { name: "Inspect received audio" }).click();
+  const diagnostic = page.locator(".preview-page details pre");
+  await expect(diagnostic).toContainText('"packetDelta": 1');
+  await expect(diagnostic).toContainText('"byteDelta": 40');
+  await expect(diagnostic).not.toContainText("not-for-diagnostics");
+  await expect(listen).toHaveAttribute("aria-pressed", "false");
 });
 
 test("MJPEG fallback explicitly disables audio listening", async ({ page }) => {
