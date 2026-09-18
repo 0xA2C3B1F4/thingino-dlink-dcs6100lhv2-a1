@@ -33,11 +33,11 @@
       "url": "https://github.com/gtxaspec/raptor-ipc.git",
       "base": "ce78064748416037bf8e3a5e1000c0ef497b35ed",
       "base_tree": "3be9b5bad45bfa5247cdc5da1d0b8b35923661e6",
-      "tree": "6047380375dc021b9a0bcc4e6d84f619dae15812",
+      "tree": "67274ab44406926d61ae37b353218dac630ef72d",
       "patches": [
         {
           "path": "patches/raptor-full-source/raptor-ipc.patch",
-          "sha256": "c0ce2651240a69ce9c6465002d965c7f012832914d60f1abde9960338f6a4dc6"
+          "sha256": "8ec2d6b8fae3c24fafb051ec254c4c8cd8ff94f132056dccbcb91fa60b7abd69"
         }
       ],
       "license": "LICENSE",

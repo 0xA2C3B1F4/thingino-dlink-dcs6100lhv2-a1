@@ -289,22 +289,46 @@ impl RaptorBackend {
         if before.get_path(name).and_then(Value::as_bool).is_none() {
             return Err(BackendError::Unavailable);
         }
-        let apply = || -> Result<(), BackendError> {
+        let started = Instant::now();
+        let mut stage = "rad-command";
+        let mut apply = || -> Result<(), BackendError> {
             let command = format!(
                 r#"{{"cmd":"{prefix}-{}"}}"#,
                 if enabled { "enable" } else { "disable" }
             );
-            require_ok(&self.command(RaptorDaemon::Rad, command.as_bytes(), deadline)?)?;
+            let reply = self.command(RaptorDaemon::Rad, command.as_bytes(), deadline)?;
+            stage = "rad-acknowledgement";
+            require_ok(&reply)?;
+            stage = "independent-readback";
             let after = self.live_audio_observation(deadline)?;
-            if after.get_path(name).and_then(Value::as_bool) != Some(enabled)
-                || after.get_path("mic_muted") != before.get_path("mic_muted")
-            {
+            stage = "enabled-comparison";
+            if after.get_path(name).and_then(Value::as_bool) != Some(enabled) {
+                eprintln!(
+                    "audio-transition field={name} requested={enabled} observed={:?}",
+                    after.get_path(name).and_then(Value::as_bool)
+                );
+                return Err(BackendError::Upstream(502));
+            }
+            stage = "mute-comparison";
+            if after.get_path("mic_muted") != before.get_path("mic_muted") {
+                eprintln!(
+                    "audio-transition field={name} mute_before={:?} mute_after={:?}",
+                    before.get_path("mic_muted").and_then(Value::as_bool),
+                    after.get_path("mic_muted").and_then(Value::as_bool)
+                );
                 return Err(BackendError::Upstream(502));
             }
             Ok(())
         };
-        apply().map_err(|_| BackendError::PartialApply(
-            "Audio transition or independent readback failed. Reload before explicitly retrying."))?;
+        let result = apply();
+        result.map_err(|error| {
+            // Only fixed stage names, booleans and error categories are logged.
+            // Never log daemon payloads, credentials or captured audio.
+            eprintln!("audio-transition field={name} requested={enabled} stage={stage} elapsed_ms={} error={error:?}",
+                started.elapsed().as_millis());
+            BackendError::PartialApply(
+                "Audio transition or independent readback failed. Reload before explicitly retrying.")
+        })?;
         Ok(BackendResponse::json(br#"{"status":"accepted"}"#.to_vec()))
     }
 
@@ -912,6 +936,112 @@ pub(super) mod tests {
                 daemon.join().unwrap();
                 fs::remove_dir_all(root).unwrap();
             }
+        }
+    }
+
+    #[test]
+    fn live_audio_transition_failures_preserve_partial_apply_and_do_not_retry() {
+        const PARTIAL: &str =
+            "Audio transition or independent readback failed. Reload before explicitly retrying.";
+        let assert_partial = |result: Result<BackendResponse, BackendError>| match result {
+            Err(BackendError::PartialApply(reason)) => assert_eq!(reason, PARTIAL),
+            other => panic!("expected exact audio partial-apply error, got {other:?}"),
+        };
+
+        let cases: [(&str, Vec<(&'static [u8], Vec<u8>)>); 4] = [
+            (
+                "rad-acknowledgement",
+                vec![
+                    (
+                        br#"{"cmd":"get-audio-observation-levels"}"#,
+                        live_levels(false, false),
+                    ),
+                    (
+                        br#"{"cmd":"get-input-state"}"#,
+                        input_state(false, "l16", false),
+                    ),
+                    (br#"{"cmd":"ai-enable"}"#, br#"{"status":"error"}"#.to_vec()),
+                ],
+            ),
+            (
+                "after-readback-malformed",
+                vec![
+                    (
+                        br#"{"cmd":"get-audio-observation-levels"}"#,
+                        live_levels(false, false),
+                    ),
+                    (
+                        br#"{"cmd":"get-input-state"}"#,
+                        input_state(false, "l16", false),
+                    ),
+                    (br#"{"cmd":"ai-enable"}"#, br#"{"status":"ok"}"#.to_vec()),
+                    (
+                        br#"{"cmd":"get-audio-observation-levels"}"#,
+                        br#"{"status":"ok"}"#.to_vec(),
+                    ),
+                ],
+            ),
+            (
+                "after-readback-error",
+                vec![
+                    (
+                        br#"{"cmd":"get-audio-observation-levels"}"#,
+                        live_levels(false, false),
+                    ),
+                    (
+                        br#"{"cmd":"get-input-state"}"#,
+                        input_state(false, "l16", false),
+                    ),
+                    (br#"{"cmd":"ai-enable"}"#, br#"{"status":"ok"}"#.to_vec()),
+                    (
+                        br#"{"cmd":"get-audio-observation-levels"}"#,
+                        live_levels(true, false),
+                    ),
+                    (
+                        br#"{"cmd":"get-input-state"}"#,
+                        br#"{"status":"error"}"#.to_vec(),
+                    ),
+                ],
+            ),
+            (
+                "mute-mismatch",
+                vec![
+                    (
+                        br#"{"cmd":"get-audio-observation-levels"}"#,
+                        live_levels(false, false),
+                    ),
+                    (
+                        br#"{"cmd":"get-input-state"}"#,
+                        input_state(false, "l16", false),
+                    ),
+                    (br#"{"cmd":"ai-enable"}"#, br#"{"status":"ok"}"#.to_vec()),
+                    (
+                        br#"{"cmd":"get-audio-observation-levels"}"#,
+                        live_levels(true, false),
+                    ),
+                    (
+                        br#"{"cmd":"get-input-state"}"#,
+                        String::from_utf8(input_state(true, "l16", false))
+                            .unwrap()
+                            .replace("\"muted\":false", "\"muted\":true")
+                            .into_bytes(),
+                    ),
+                ],
+            ),
+        ];
+
+        for (label, pairs) in cases {
+            let root = task_temp("live-audio-transition-failure");
+            let daemon = sequence(&root, pairs);
+            let result = backend(&root, "127.0.0.1:9".parse().unwrap()).live_control(
+                br#"{"audio":{"mic_enabled":true}}"#,
+                Instant::now() + Duration::from_secs(1),
+            );
+            assert_partial(result);
+            daemon
+                .join()
+                .unwrap_or_else(|error| panic!("{label}: {error:?}"));
+            fs::remove_dir_all(root).unwrap();
         }
     }
 

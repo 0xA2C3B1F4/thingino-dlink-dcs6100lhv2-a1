@@ -86,7 +86,7 @@ index e6065f119b492aece1936a483cca98d12064538c..c308fb2c30cf38cab3b51f5c8c55fcd7
                            int resp_buf_size, uint32_t timeout_ms);
  
 diff --git a/src/rss_ctrl.c b/src/rss_ctrl.c
-index 80c7ea854130ba9d629b2de9a3c08e3b9e81a66e..ede7eb3f33ac1dbe300a05e98be14007b20603da 100644
+index 80c7ea854130ba9d629b2de9a3c08e3b9e81a66e..7f23afbd53e89af6fda0576b6cc0cb8ba500ee67 100644
 --- a/src/rss_ctrl.c
 +++ b/src/rss_ctrl.c
 @@ -16,19 +16,23 @@
@@ -411,21 +411,31 @@ index 80c7ea854130ba9d629b2de9a3c08e3b9e81a66e..ede7eb3f33ac1dbe300a05e98be14007
 -     * every 4.9s could hold the handler longer, but on a root-only local
 -     * Unix socket this is not a practical attack vector). */
 -    int msg_len = read_message(client_fd, &cmd, 5000);
-+    /* One shared deadline bounds the complete accepted-client exchange. */
++    /* Bound request receipt independently of synchronous handler work. */
 +    int msg_len = read_message_deadline(client_fd, &cmd, deadline_ms);
      if (msg_len < 0) {
          ret = msg_len;
          goto done;
-@@ -286,7 +371,7 @@ int rss_ctrl_accept_and_handle(rss_ctrl_t *ctrl,
+@@ -285,8 +370,16 @@ int rss_ctrl_accept_and_handle(rss_ctrl_t *ctrl,
+                             resp_len);
      }
  
-     /* Write the response. */
+-    /* Write the response. */
 -    ret = write_message(client_fd, resp_buf, (size_t)resp_len);
++    /* Hardware initialization can outlive the receive deadline. Start a
++     * separate bounded write budget so a completed mutation keeps its ACK.
++     * The client still enforces its own total command deadline. */
++    started_ms = monotonic_ms();
++    if (started_ms < 0) {
++        ret = (int)started_ms;
++        goto done;
++    }
++    deadline_ms = started_ms + RSS_CTRL_SERVER_TIMEOUT_MS;
 +    ret = write_message_deadline(client_fd, resp_buf, (size_t)resp_len, deadline_ms);
  
  done:
      free(resp_buf);
-@@ -314,14 +399,22 @@ int rss_ctrl_send_command(const char *sock_path, const char *cmd_json, char *res
+@@ -314,14 +407,22 @@ int rss_ctrl_send_command(const char *sock_path, const char *cmd_json, char *res
      addr.sun_family = AF_UNIX;
      snprintf(addr.sun_path, sizeof(addr.sun_path), "%s", sock_path);
  
@@ -452,7 +462,7 @@ index 80c7ea854130ba9d629b2de9a3c08e3b9e81a66e..ede7eb3f33ac1dbe300a05e98be14007
      if (ret < 0) {
          close(fd);
          return ret;
-@@ -332,7 +425,7 @@ int rss_ctrl_send_command(const char *sock_path, const char *cmd_json, char *res
+@@ -332,7 +433,7 @@ int rss_ctrl_send_command(const char *sock_path, const char *cmd_json, char *res
  
      /* Read the response. */
      char *resp = NULL;
@@ -552,10 +562,10 @@ index 0000000000000000000000000000000000000000..5a5b4a08c723df65fa3fa3b80ff3a1ff
 +#define FUTEX_WAIT 0
 +#define FUTEX_WAKE 1
 diff --git a/tests/test_ctrl.c b/tests/test_ctrl.c
-index 439c1f1a857225f1ba400174d78a5078be1b794c..83ae1a4566d52846f4abe2279a7c1e0ff24a17c6 100644
+index 439c1f1a857225f1ba400174d78a5078be1b794c..f7cd06742bd72e6cb78d7d85dfbcef40fc0e7c66 100644
 --- a/tests/test_ctrl.c
 +++ b/tests/test_ctrl.c
-@@ -1,128 +1,310 @@
+@@ -1,128 +1,342 @@
  #include "greatest.h"
  #include "rss_ipc.h"
  
@@ -692,6 +702,37 @@ index 439c1f1a857225f1ba400174d78a5078be1b794c..83ae1a4566d52846f4abe2279a7c1e0f
 -	return NULL;
 +    serve_one(arg, error_handler);
 +    return NULL;
++}
++
++static int slow_handler(const char *cmd_json, char *resp_buf, int resp_buf_size,
++                        void *userdata)
++{
++    /* Hardware initialization may exceed the transport receive budget. */
++    usleep(1200000);
++    return echo_handler(cmd_json, resp_buf, resp_buf_size, userdata);
++}
++
++static void *slow_server_thread(void *arg)
++{
++    serve_one(arg, slow_handler);
++    return NULL;
++}
++
++TEST ctrl_slow_handler_preserves_acknowledgement(void)
++{
++    char sock[sizeof(((struct sockaddr_un *)0)->sun_path)];
++    ASSERT_EQ(0, ctrl_sock_path(sock, sizeof(sock), "rss_test_ctrl_slow.sock"));
++    rss_ctrl_t *srv = rss_ctrl_listen(sock);
++    ASSERT(srv);
++    pthread_t tid;
++    ASSERT_EQ(0, pthread_create(&tid, NULL, slow_server_thread, srv));
++    char resp[512] = {0};
++    int ret = rss_ctrl_send_command(sock, "enable", resp, sizeof(resp), 2500);
++    pthread_join(tid, NULL);
++    rss_ctrl_destroy(srv);
++    ASSERT(ret > 0);
++    ASSERT(strstr(resp, "enable"));
++    PASS();
  }
  
  TEST ctrl_handler_error(void)
@@ -815,10 +856,8 @@ index 439c1f1a857225f1ba400174d78a5078be1b794c..83ae1a4566d52846f4abe2279a7c1e0f
 -	const char *sock = "/tmp/rss_test_ctrl_to.sock";
 +	char sock[sizeof(((struct sockaddr_un *)0)->sun_path)];
 +	ASSERT_EQ(0, ctrl_sock_path(sock, sizeof(sock), "rss_test_ctrl_to.sock"));
- 	unlink(sock);
- 
--	int fd = socket(AF_UNIX, SOCK_STREAM, 0);
--	ASSERT(fd >= 0);
++	unlink(sock);
++
 +    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
 +    ASSERT(fd >= 0);
 +    struct sockaddr_un addr;
@@ -851,8 +890,10 @@ index 439c1f1a857225f1ba400174d78a5078be1b794c..83ae1a4566d52846f4abe2279a7c1e0f
 +{
 +	char sock[sizeof(((struct sockaddr_un *)0)->sun_path)];
 +	ASSERT_EQ(0, ctrl_sock_path(sock, sizeof(sock), "rss_test_ctrl_connect_to.sock"));
-+	unlink(sock);
-+
+ 	unlink(sock);
+ 
+-	int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+-	ASSERT(fd >= 0);
 +	int listen_fd = socket(AF_UNIX, SOCK_STREAM, 0);
 +	ASSERT(listen_fd >= 0);
  	struct sockaddr_un addr;
@@ -918,6 +959,7 @@ index 439c1f1a857225f1ba400174d78a5078be1b794c..83ae1a4566d52846f4abe2279a7c1e0f
 -	RUN_TEST(ctrl_timeout);
 +    RUN_TEST(ctrl_roundtrip);
 +    RUN_TEST(ctrl_handler_error);
++    RUN_TEST(ctrl_slow_handler_preserves_acknowledgement);
 +    RUN_TEST(ctrl_partial_prefix_does_not_park_server);
 +    RUN_TEST(ctrl_partial_body_does_not_park_server);
 +    RUN_TEST(ctrl_timeout);

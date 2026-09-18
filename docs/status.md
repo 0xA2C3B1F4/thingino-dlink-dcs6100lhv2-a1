@@ -61,9 +61,20 @@ All 16 compared files, including independently compiled full-Raptor payloads,
 final roots, split kernels and signed install sets, were byte-identical. Its
 universal bundle has SHA-256
 `98c764a5a01eac261290e6cb37e1a83c75b2006da01bb200f8e325b91dbbd7fd`.
-The reproducibility gate is closed for these exact candidate inputs. The bundle
-has not yet been installed or physically accepted, and it is not an authorized
-firmware download.
+The reproducibility gate is closed for these exact candidate inputs. Subsequent
+same-camera installation passed native management verification. Independent
+readback of the complete system partition matched the candidate padded to the
+fixed system region, and live RWD matched the built executable. This establishes
+persistent system installation, not complete physical acceptance or permission
+to distribute firmware. Independent kernel equality remains unverified.
+
+On September 18, a single native microphone-enable command lost its response
+although independent RAD readback showed input enabled. A slow-handler IPC
+regression reproduced acknowledgement loss when handler work consumed the
+server's receive deadline. Separate bounded response transmission passed host
+tests. This source fix is not in the installed candidate; a matching build,
+microphone-transition test, both Preview streams and cold-boot acceptance remain
+required. See the dated evidence above for the boundaries of these results.
 
 ## Historical tested installation
 

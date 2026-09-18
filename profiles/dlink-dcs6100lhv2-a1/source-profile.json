@@ -555,7 +555,7 @@
     {
       "source": "components/thingino-control/src/raptor_backend/audio.rs",
       "destination": "package/thingino-control/rust/src/raptor_backend/audio.rs",
-      "sha256": "565845811666804eac036a366239ba8435b4f2e05dcc0c3cdbea1b1f90d6cf7c"
+      "sha256": "faece1c77c76c2f15e8c8046a87e3a25c3a10ba519bad340b0fc292f81b25e0b"
     },
     {
       "destination": "package/thingino-control/rust/src/raptor_backend/browser_bridge.rs",
