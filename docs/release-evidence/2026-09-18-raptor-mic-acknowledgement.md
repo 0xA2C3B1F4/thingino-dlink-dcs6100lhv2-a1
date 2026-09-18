@@ -243,9 +243,9 @@ The system image is 6,356,992 bytes, SHA-256
 Its expected full 6,619,136-byte system-partition readback digest after padding
 with `0xff` is
 `67085cde490b1242bebf607788ed1d05943ccb528366bbfc2ab2429d0136280c`.
-This establishes host build reproducibility only. This newer candidate has not
-yet been staged, installed or physically accepted; the following installed-camera
-observations concern the earlier c1 candidate.
+At this build checkpoint, the newer candidate had not yet been staged or
+installed. The following initial camera observations concern the earlier c1
+candidate; the later installation and runtime-override result is recorded below.
 
 The operator subsequently completed the two installation phases. Strict-pinned
 SSH readback of the full system partition matched the Preview candidate padded
@@ -312,8 +312,9 @@ missing-audio and invalid-payload offers. It verifies the setup decision, not
 end-to-end packet delivery or physical sound. Fifteen focused source/manifest
 and inventory tests passed. Clean patch application reconstructed Raptor tree
 `0f05599901aeb93e6d1ab65f46abb04c9a65884a`; all 13 source trees were
-independently checked for the refreshed inventory. This correction has not
-yet been built into a new firmware or installed on the camera.
+independently checked for the refreshed inventory. At that source-test checkpoint,
+the correction had not yet been built or installed. Subsequent build and camera
+results are recorded in this document.
 
 The complete project check passed 904 tests. Independent Luna review found no
 blocking issue for the shipped no-Opus profile and confirmed serialization of
@@ -322,3 +323,49 @@ the explicit PCMU profile setting. Packet delivery after delayed capture,
 ring reopen and audible playback remain required runtime acceptance; the host
 predicate test alone does not close them. Generic Opus/video-only behavior and
 pre-existing transport allocation-failure handling were not expanded by this fix.
+
+## Installed candidate and persistent RWD override
+
+Both normal SD installation phases completed for source commit `38607f3`.
+Each host phase passed independent remount/readback of all six card files.
+Native management, application, WebUI and media verification passed, and the
+full system partition matched the new padded digest recorded above.
+
+Independent component readback nevertheless failed: `/overlay/usr/bin/rwd`
+contained the previous RWD and masked the new SquashFS binary. The running
+process matched the old override, SHA-256
+`4fd3a82152cbd2b59b11c372a160780a69e3981214f31b30d04f58e07533e106`, while
+`/rom/usr/bin/rwd` matched the new component, SHA-256
+`c064acfa1d805156e2e5bb71ddad8cf12505e6dfee4b2a14658b5f904f85288d`.
+Thus matching firmware flash does not establish effective runtime identity when
+persistent overrides are preserved.
+
+The operator explicitly approved backing up and quarantining that one override
+and rebooting once. The old binary was hash-verified in backups on the host and
+camera. No configuration or recordings were intentionally changed. The existing
+RWD configuration digest was unchanged; its absent audio_mode entry retains the
+no-Opus build's PCMU fallback. After the reboot and service startup, the running
+RWD process matched the new digest. Native verification passed again, as did
+independent readback of the full system partition, IPC library and effective RWD.
+
+With capture initially off, the operator opened Preview, waited for live WebRTC,
+enabled the microphone and pressed Listen once. The operator confirmed audible
+sound on that first press, without Reload or retry. The operator then disabled
+capture, switched to the other stream, waited for live WebRTC, enabled capture
+and pressed Listen once. Sound was immediately audible on that stream too.
+Both stream attempts are therefore physically reported passed, following a
+software reboot.
+
+The operator then performed the requested power-off cold boot and reported that
+WebUI responded. A fresh pinned read-only probe confirmed a changed boot ID,
+the same expected full system-partition digest and the new running RWD process
+digest, with no active binary override. Microphone owner readback was available
+and input was disabled. The operator repeated the first-attempt sequence on
+both streams and confirmed that both worked. This closes the specific
+capture-disabled-at-connection -> microphone-On -> one-Listen regression for
+this candidate and camera, including the reported cold boot. Physical audibility
+is operator-reported, not inferred from packet counters or service readiness.
+
+The remaining candidate matrix and public firmware-release gates remain open.
+These successful audio observations do not establish licensing closure, other
+host platforms, second-camera acceptance or failure/recovery coverage.
