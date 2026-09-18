@@ -88,3 +88,30 @@ time, apply forward/backward wall steps and enforce recent/idle/max boundaries
 through both authorization and session-status paths. This session fix is not
 included in the installed bundle identified above; it requires a matching new
 firmware build and physical first-login/time-change/Preview acceptance.
+
+## Session-clock candidate build
+
+The normal universal workflow subsequently completed from firmware-input commit
+`ee822b1cd572a72f3eb4f3d887ec0124c045e19c`, with two independent complete
+builds and preserve data mode. All 16 compared artifacts were byte-identical,
+with no component artifact-cache reuse. Both schema-2 install-set inspections
+passed. The builder image and owner-acquired vendor inputs were unchanged.
+
+| Artifact | SHA-256 |
+| --- | --- |
+| New signed universal bundle | `91b3904b62f7b3f676df8e83434a42d2b2c610c2d3c5fd2eaded67c30fd0373a` |
+| New system SquashFS, 6,356,992 bytes | `a2f6e501634f91a711ce908546f42e5cda23dc79ca50a7f0e7c3082e5991fb79` |
+| New full Raptor component | `3cdc6bb280e2dfa7b136065db698b29a207e07c7a1022c6ffd1f7582eb22c244` |
+
+This establishes host build reproducibility for the session fix, not its
+installation or physical acceptance. No camera or SD write is established by
+the build receipt. First-login lifetime, wall-clock changes and first-attempt
+Listen after cold boot still require acceptance on this exact new candidate.
+
+Public source commit `65991516419bdee23d1f7cd96908d707d317f8a5` was
+published, but GitHub Actions run `35318448945` did not execute its jobs.
+Rust-Control and WebUI check-run annotations independently report an account
+payment or spending-limit restriction. The remote tests are unexecuted, not
+passed and not evidence of a source regression. Local project checks do not
+replace the missing platform and browser CI acceptance. No billing settings
+were changed. Legal and other physical firmware-release gates remain open.
