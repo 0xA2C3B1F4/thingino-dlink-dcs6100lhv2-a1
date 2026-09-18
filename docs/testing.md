@@ -120,3 +120,35 @@ leave the affected acceptance row open. Do not infer it from a host fixture.
 The release also needs two byte-identical clean builds, removable-media
 readback, physical interruption and recovery tests, and the licensing closure
 listed in [status.md](status.md).
+
+### First-attempt Preview audio
+
+For the exact installed candidate, test main and substream separately, including
+after a cold boot. Record the candidate digest, browser/version, selected stream,
+boot condition, initial microphone state and time to audible output. Keep one
+Preview client connected during each test.
+
+1. Set the camera microphone off, then open Preview and wait for live WebRTC.
+   The connection must be established while capture is disabled. MJPEG cannot
+   satisfy this test because it has no audio.
+2. Enable the microphone once and confirm that the UI reports On without a
+   transition/readback error. Press Listen once. Make an identifiable sound near
+   the camera and confirm that it is heard at the browser's output device.
+3. Do not use Reload, reconnect or a second Listen click to turn a failed first
+   attempt into a pass. Record silence, unexpected button changes, browser
+   playback errors and session expiry as separate observations.
+4. If silent, preserve the connection and microphone state. Open Audio
+   diagnostics and press Inspect received audio. Retain its two samples,
+   packetDelta, byteDelta, muted, paused and restartReason, along with the button
+   label and visible errors. Collect a read-only camera input-state and RWD
+   client snapshot before changing anything. A null delta means unavailable
+   statistics or a changed connection, not zero received packets.
+5. Only after recording the failed attempt, record any operator-approved retry
+   separately. Success after Reload or a second click does not close this row.
+
+Increasing packet counters or audio energy cannot establish physical audibility.
+A later microphone-Off observation cannot explain an earlier silent attempt if
+the operator disabled capture afterward. Record the order of those actions.
+Reload deliberately resets browser playback to Listen; that reset alone is not
+evidence of the original failure's cause. Also test ordinary playback with the
+microphone already on and recovery after a background/foreground transition.

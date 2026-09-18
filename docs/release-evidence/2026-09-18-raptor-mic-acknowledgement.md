@@ -235,6 +235,15 @@ to 6,619,136 bytes, SHA-256
 Normal universal verification stopped at mDNS resolution; complete runtime
 acceptance is still open.
 
+A later management-only verification on 2026-09-18 passed through the normal
+`universal verify` route, with phase
+`camera-bound-universal-management-verified`. The existing station host pin was
+reused, mDNS resolved successfully, and the reported full system-partition digest
+matched the c1 candidate above. No service restart or configuration change was
+needed. The earlier discovery timeout remains unexplained. This retry proves
+management access to the installed c1 candidate, not cold-boot discovery
+reliability, audio acceptance, or installation of the later audio-transport fix.
+
 The operator enabled the microphone manually, reported silence on the first
 Listen attempt, then heard audio after Reload and another Listen click. A later
 RAD observation reported input disabled; the operator confirmed they had

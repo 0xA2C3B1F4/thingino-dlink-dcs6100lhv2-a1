@@ -710,7 +710,7 @@
       "source": "production/docs/release-evidence/2026-09-17-raptor-audio-reproducibility.md"
     },
     "docs/release-evidence/2026-09-18-raptor-mic-acknowledgement.md": {
-      "sha256": "baca3c15b1722a960aadc4c9a7a3514029b9b2fb168512e6137e9a499fe0b8fa",
+      "sha256": "b8fb04a44a89b9cb72f35e0139d379b1af7e844a563f991cfea65b7851fbf726",
       "source": "production/docs/release-evidence/2026-09-18-raptor-mic-acknowledgement.md"
     },
     "docs/status.md": {
@@ -718,7 +718,7 @@
       "source": "production/docs/status.md"
     },
     "docs/testing.md": {
-      "sha256": "8b42c67ff1ddfd6657bbe7305fe92ff1f1c00b94e8365b5084035d57f7291a48",
+      "sha256": "7616d5cda973af9d64e86ffec27735e5df8e3726afe9f27ec11e930a1a7191a8",
       "source": "production/docs/testing.md"
     },
     "installer/__init__.py": {
@@ -2391,6 +2391,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "38607f3468cf4df58840d18ae5ea802732c67e9f",
+  "source_commit": "28494a6397c92a75ca9413adff1d528d71f51289",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }
