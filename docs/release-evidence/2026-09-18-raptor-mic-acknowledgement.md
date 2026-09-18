@@ -369,3 +369,25 @@ is operator-reported, not inferred from packet counters or service readiness.
 The remaining candidate matrix and public firmware-release gates remain open.
 These successful audio observations do not establish licensing closure, other
 host platforms, second-camera acceptance or failure/recovery coverage.
+
+### Post-acceptance resource baseline
+
+Two read-only `diagnose-runtime` snapshots at 14:46:41Z and 14:47:15Z on
+2026-09-18 still matched the expected full system and running RWD digests.
+Across this 34-second baseline, all 12 sampled processes retained their PIDs,
+thread counts and file-descriptor counts. Their RSS did not increase. The
+available-memory proxy changed from 9,944 to 9,920 KiB; this is a reclaimability
+estimate, not the kernel's `MemAvailable`. The network counts were unchanged.
+No new media sessions or settings changes were introduced for this collection.
+
+`/var/log/messages` was absent. The snapshot's zero Raptor/ISP error counters
+therefore cannot establish absence of errors. A separate successful `dmesg`
+read captured 20,858 bytes, SHA-256
+`bbb5ae96f32beb72a596ab9582062e784ef7dea84599573724b6f64c7d4d87c1`,
+with no matches for the recorded OOM, panic, allocation,
+segfault and selected ISP/encoder failure patterns. This is limited to the
+retained kernel ring and that filter, not a complete media-log review.
+
+Private content-addressed snapshots and the kernel acquisition receipt retain
+the collection details. This short baseline does not close the resource,
+concurrency or kernel/media-error acceptance rows under media load.

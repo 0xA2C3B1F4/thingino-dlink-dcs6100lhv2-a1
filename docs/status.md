@@ -133,9 +133,13 @@ The full acceptance scope is in [testing](testing.md#candidate-acceptance).
   authorization, Stage-1 contract and manifest paths. Those results do not
   establish physical acceptance of the latest complete source candidate; universal
   `factory-reset` install sets remain rejected.
-- Preview Listen has operator-audible Mainstream and Substream overlay
-  acceptance. Microphone enable/disable transitions still need a reproducible
-  diagnosis and independent readback on the complete candidate.
+- The complete candidate has operator-audible Mainstream and Substream
+  acceptance after a cold boot: connect while microphone Off, enable it and
+  press Listen once, without Reload or retry. Running RWD and the full system
+  partition independently match the new build. This required approved removal
+  of a preserved old RWD binary override; existing configuration was retained.
+  See the [candidate evidence](release-evidence/2026-09-18-raptor-mic-acknowledgement.md).
+  Other controls, settings and the full acceptance matrix remain open.
 - Linux and Windows staging adapters have host coverage, not equivalent physical
   installation acceptance. The full guided build targets Apple Silicon macOS.
 
@@ -146,8 +150,16 @@ set and card handoffs are in the [installation guide](../README.md).
 ## Source and host checks
 
 `make check` validates the allowlist/privacy policy, source lock, documentation,
-release ledger, API contract and Python tests. CI also checks Control, WebUI,
-Chromium fixtures and Linux/Windows host contracts.
+release ledger, API contract and Python tests. The CI workflow defines checks
+for Control, WebUI, Chromium fixtures and Linux/Windows host contracts.
+Hosted execution is not currently accepted: the latest inspected public run,
+[`35357294489`](https://github.com/0xA2C3B1F4/thingino-dlink-dcs6100lhv2-a1/actions/runs/35357294489),
+for commit `28764a5a00df964ff3961928420f203356e00168`, ended before any of its
+eight jobs executed steps. GitHub reports an account payment/spending-limit
+restriction. Local passes do not replace these unexecuted remote checks.
+The repository owner confirmed that the hosted allowance is exhausted and
+cannot currently be extended. Leave hosted platform acceptance open; do not
+treat retries or local runs as a substitute for the missing hosted evidence.
 
 [`source-export.json`](../source-export.json) records the exported source commit,
 file inventory and per-file hashes. Subsequent changes are recorded in Git.

@@ -710,11 +710,11 @@
       "source": "production/docs/release-evidence/2026-09-17-raptor-audio-reproducibility.md"
     },
     "docs/release-evidence/2026-09-18-raptor-mic-acknowledgement.md": {
-      "sha256": "a98bbbeebb13ff4fbb3b8f554c432db6c7f728246225e9fa1f1f6228ce67d797",
+      "sha256": "8066f36b7028a71c7399c5dc7df4ecd2cc607333947bd78851477c15406fd2ae",
       "source": "production/docs/release-evidence/2026-09-18-raptor-mic-acknowledgement.md"
     },
     "docs/status.md": {
-      "sha256": "2e099041602d83c70df022c239a55105e2d3383d4ad5ba64022d34aa5254a380",
+      "sha256": "28a1513a4bdb08a193f84fcc3f2c4832bf659c19830365e84a7cec465a4e9bb8",
       "source": "production/docs/status.md"
     },
     "docs/testing.md": {
@@ -1438,7 +1438,7 @@
       "source": "patches/uhttpd/0017-bind-recording-file-identity.patch"
     },
     "policy/release-gates.json": {
-      "sha256": "a3a41d745bff0348a9620f0a91eba425e87a724eb03cfbaf9f0b85aa01dc191e",
+      "sha256": "de61602909d97e4e7b94e9a8073a7062269c6312bfc46066833079f1d477abb4",
       "source": "policy/release-gates.json"
     },
     "profiles/dlink-dcs6100lhv2-a1/artifact-limits.json": {
@@ -2391,6 +2391,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "09a847cc2bb1c8022fbcc877dd7db6afe89c2316",
+  "source_commit": "9307b0dc80df7064c40792517e2209ac4d0e9462",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }
