@@ -40,6 +40,52 @@ RTL8188FU file closure or corresponding-source package for a firmware binary.
 The firmware gate stays blocked until that generated closure and its notices are
 recorded together.
 
+### Linked translation-unit evidence
+
+`rtl8188fu-linked-sources.inventory.json` records 150 C translation units from
+the actual Kbuild link and compile records in the completed clean build of
+firmware source `14b81c671931b038545b0d9177a4609ad8818e91`. It binds each source,
+object and compile record by SHA-256, plus the kernel configuration, generated
+module source, link record and built/installed modules. The build workspace was
+mounted read-only with journal replay disabled. Regenerate the JSON with:
+
+```sh
+python3 scripts/inventory_rtl_linked_sources.py --workspace /path/to/readonly/workspace
+```
+
+The complete JSON is byte-identical to the independently captured preceding
+`38607f3` build inventory. The installed module hash is
+`2ac80b9f1d3b08080cb55ed8011379fc8872caa73502269cb3d0591b9ff2735f`.
+Earlier inspection of those same built-module bytes verified that the target
+toolchain's `--strip-debug` produces that installed hash. Header marker counts
+are observations only, not license classifications. The tool accepts the exact
+merged-usr `lib -> usr/lib` alias and rejects other symlink components.
+
+This inventory does not cover transitive driver/kernel/compiler headers, full
+per-file notice review or a corresponding-source delivery archive. In particular,
+absence of a license marker in a file's first 80 lines is not a license decision.
+The RTL8188FU firmware gate remains blocked until those requirements are met.
+
+The follow-up `rtl8188fu-header-dependencies.inventory.json` records the 767
+existing header dependencies from all 150 verified compile records: 605 kernel,
+161 driver and one compiler header. It separately lists 983 absent optional
+configuration headers. Shared `source_sets` preserve the translation-unit
+mapping without repeating identical source-name lists for every header.
+Regenerate from the same read-only workspace and linked-unit inventory:
+
+```sh
+python3 scripts/inventory_rtl_dependencies.py --workspace /path/to/readonly/workspace \\
+  --units third_party/rtl8188fu-linked-sources.inventory.json
+```
+
+The parser does not evaluate Make expressions. Only literal paths and the
+recorded optional configuration-header form are accepted. Required dependencies
+must exist, compile-record hashes must match, and resolved paths must remain
+inside the workspace. Internal symlinks retain both recorded and resolved paths.
+This extends the technical inventory to recorded transitive headers, but does
+not establish unrecorded generator/compiler inputs, per-file licensing or a
+complete corresponding-source delivery package. No license gate is closed.
+
 The bundled copies were retrieved from the primary sources on 2026-08-29:
 
 - `RTL8188FU-GPL-2.0-only.txt` has SHA-256

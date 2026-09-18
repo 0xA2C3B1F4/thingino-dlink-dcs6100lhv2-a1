@@ -1597,6 +1597,14 @@
       "sha256": "c1c05a30f23b957e2df0a84a17bd0ccde2c060e9dfbe12ec43ba15aa5d8bea86",
       "source": "scripts/container_fetch_thingino_toolchain_downloads.sh"
     },
+    "scripts/inventory_rtl_dependencies.py": {
+      "sha256": "cd827e3090d8f70f7018747e4ed4087a58173eac4698640e8061861ea36f2339",
+      "source": "scripts/inventory_rtl_dependencies.py"
+    },
+    "scripts/inventory_rtl_linked_sources.py": {
+      "sha256": "96e92bb35085302694db6ada6eedf610bf84d4878819d0c602375bc17eafd0ac",
+      "source": "scripts/inventory_rtl_linked_sources.py"
+    },
     "scripts/platform/__init__.py": {
       "sha256": "3c29ef6a52f8a60234297f356870b475013937c197246910cbbe2e103f48ff7f",
       "source": "scripts/platform/__init__.py"
@@ -1764,6 +1772,14 @@
     "tests/test_installer_contracts.py": {
       "sha256": "b00c53e86212130e39d28c7ca6f1b52438689cace8ae99c21d6c8921b000c7e7",
       "source": "tests/test_installer_contracts.py"
+    },
+    "tests/test_inventory_rtl_dependencies.py": {
+      "sha256": "56a07395b7240a8e092e2e9d6ee96565769c024706e68e7b40eb2023fcd2c1b9",
+      "source": "tests/test_inventory_rtl_dependencies.py"
+    },
+    "tests/test_inventory_rtl_linked_sources.py": {
+      "sha256": "27994d482bb03a062aff88e06fa6192e4daff99ccbd2cdb2d15a50272e4cedcc",
+      "source": "tests/test_inventory_rtl_linked_sources.py"
     },
     "tests/test_linux_media_preflight.py": {
       "sha256": "7f7ff60d541e19000ce2013eed44aea4b4676a4e8c5537b53c1edecfe0f37269",
@@ -2042,7 +2058,7 @@
       "source": "tests/test_windows_media_preflight.py"
     },
     "third_party/LICENSE_REVIEW.md": {
-      "sha256": "fa3a1dc3fb3dee8ce036ce0ddecceb0589c8ee4389d15e061daca490a7f90c01",
+      "sha256": "a7597a6a242aefb3dace2d8659ee8ea10972a921cd9e27d3da2d656c74ec97e6",
       "source": "third_party/LICENSE_REVIEW.md"
     },
     "third_party/NOTICE.md": {
@@ -2076,6 +2092,14 @@
     "third_party/raptor-source-delivery.inventory.json": {
       "sha256": "d791b979d896e7b108297203758f5ca1ab40bd43118eb3424baf596b6c193daa",
       "source": "third_party/raptor-source-delivery.inventory.json"
+    },
+    "third_party/rtl8188fu-header-dependencies.inventory.json": {
+      "sha256": "967927371061ce0bdb6443e73cadd7063f8a3f54509e6fe2f33c6ae9fa9d16bc",
+      "source": "third_party/rtl8188fu-header-dependencies.inventory.json"
+    },
+    "third_party/rtl8188fu-linked-sources.inventory.json": {
+      "sha256": "1658bfa4fcc4c627b80194815bdb4b34f592e4305b374463812e2db584e0d145",
+      "source": "third_party/rtl8188fu-linked-sources.inventory.json"
     },
     "webui/browser-tests/motion-email.spec.ts": {
       "sha256": "000a420d52226a7a343732895aede82e1b2761d8b021b1fc19eb19409a0d82ae",
@@ -2431,6 +2455,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "56da13cb708c4674bb2bf7c6836d5a40d8f7cfd8",
+  "source_commit": "fa780f76588d7b4ed22abd5f1dc74043c8fd96d0",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }
