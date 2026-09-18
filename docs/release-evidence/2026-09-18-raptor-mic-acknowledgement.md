@@ -188,8 +188,40 @@ replace the focused Preview lifecycle test results above.
 The reviewed WebUI bundle is 369,024 bytes; its JavaScript SHA-256 is
 `34ea9374fe23e05c76444ee7957e87e9e8d27a0904273c8e26f97c7d086029a3`.
 The firmware source profile includes the new playback-controller source and
-updated input hashes. This correction has not been built into a complete
-firmware, installed on the camera, or physically audio-accepted. No firmware/SD
+updated input hashes. At the end of this source-correction round, the correction
+had not yet been built into a complete firmware, installed on the camera, or
+physically audio-accepted. No firmware/SD
 write, camera-control mutation, warm service restart or new binary publication
 occurred in this source-correction round. Physical, remote CI and legal release
 gates remain open.
+
+## Preview lifecycle candidate build
+
+The normal `local-build build-universal` workflow subsequently completed with
+exit 0 from firmware-input commit
+`c1e6d93b442abcacfb784f6c146ca301eee48051`, using two clean builds and
+preserve data mode. The immutable builder image was unchanged. The complete
+firmware comparison found all 16 artifacts byte-identical, with no differences
+and no component artifact-cache reuse. Both schema-2 install-set inspections
+were accepted.
+
+| Artifact | SHA-256 |
+| --- | --- |
+| Signed universal bundle, 7,938,129 bytes | `fd676c516bcbbbc02fb7e5c99854837e6866c3baf52b0677ad518e6199876013` |
+| System SquashFS, 6,356,992 bytes | `d53ce7485c2632cee81eb20c87ad48424d04cb21931020a64466cc7550bee568` |
+| Full Raptor component | `e69a4bc6c96608d9e7fbe920cf631e7684bb8c3c14d35deb7180a7be51b40a37` |
+| Final kernel | `faf28040e59639fb9818b3cc12ead8c1c5a0f8109d01ab693fb579797dd3e383` |
+
+The base manifest binds the reviewed 369,024-byte WebUI bundle and JavaScript
+hash above. The normal workflow reports Raptor-only media, full source build,
+no physical actions and no NOR writes. The bundle hash was independently read
+from the completed install-set on the host.
+
+This candidate is host-built and inspected. It has not been installed or
+physically accepted on the camera. The installed session-clock candidate above
+remains the latest verified camera state. First Listen after cold boot, both
+streams, playback after temporary visibility loss, first-login lifetime and
+clock-change session behavior still require acceptance on this new candidate.
+Source-side notice additions and the verified source inventory do not close
+legal redistribution gates. Public CI and the remaining firmware-release gates
+remain open.

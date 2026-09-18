@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 from pathlib import Path
 import tempfile
@@ -16,6 +17,34 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class SourceDeliveryInventoryTests(unittest.TestCase):
+    def test_published_verified_inventory_matches_current_inputs_and_retains_legal_blocks(self) -> None:
+        published = json.loads((ROOT / "third_party/raptor-source-delivery.inventory.json").read_text())
+        expected = inventory.build_source_delivery_inventory(ROOT)
+        self.assertEqual(published["technical_status"], "source-lock-and-reconstructed-cache-verified")
+        self.assertTrue(published["verified_cache"]["all_verified"])
+        self.assertEqual(published["verified_cache"]["source_count"], 13)
+        self.assertEqual(set(published["verified_cache"]["sources"]), set(expected["sources"]))
+        for key in expected:
+            if key not in {"technical_status", "verified_cache"}:
+                self.assertEqual(published[key], expected[key], key)
+        self.assertEqual(published["legal_review_status"], "not-assessed")
+        self.assertEqual(published["redistribution"], "not-authorized-by-this-repository")
+
+    def test_embedded_notice_payloads_retain_exact_upstream_text_identities(self) -> None:
+        expected = {
+            "raptor-common-cJSON-header.txt": "3384d75264549cd04a5c00538a15871785f3f6ba60a779781df747d591655892",
+            "raptor-common-Monocypher-LICENCE.txt": "5f8360e4c06ddcc584bdb4b210c6af824c4bb301e6a9a521869b6d90795ca4b3",
+        }
+        for name, digest in expected.items():
+            payload = (ROOT / "third_party/licenses" / name).read_bytes()
+            self.assertEqual(hashlib.sha256(payload).hexdigest(), digest, name)
+        cjson = (ROOT / "third_party/licenses/raptor-common-cJSON-header.txt").read_text()
+        self.assertIn("Copyright (c) 2009-2017 Dave Gamble and cJSON contributors", cjson)
+        self.assertIn("permission notice shall be included", cjson)
+        mono = (ROOT / "third_party/licenses/raptor-common-Monocypher-LICENCE.txt").read_text()
+        self.assertIn("Licence 1 (2-clause BSD)", mono)
+        self.assertIn("Licence 2 (CC-0)", mono)
+
     def test_current_lock_renders_all_sources_without_local_paths(self) -> None:
         document = inventory.build_source_delivery_inventory(ROOT)
 

@@ -82,3 +82,40 @@ unspecified. Pinning does not grant redistribution rights.
 Full-Raptor component validation currently checks payload provenance and the
 two delivered font and rendering license files. It is not an audit or delivery
 package for every linked component's notices and corresponding source.
+
+### Embedded common-library notices and technical inventory
+
+The [technical source inventory](raptor-source-delivery.inventory.json) binds
+all twelve stack inputs and the separately pinned Ingenic-header input to
+their origins, reconstructed trees, patches and license/notice digests.
+It was produced by `scripts/source_delivery_inventory.py` against the verified
+source cache. `legal_review_status` remains `not-assessed` and redistribution
+remains `not-authorized-by-this-repository`. It is not a source-delivery archive
+or a license grant for the complete firmware.
+
+The pinned `raptor-common` Makefile explicitly compiles `src/cJSON.c`,
+`third_party/monocypher/monocypher.c` and
+`third_party/monocypher/monocypher-ed25519.c`. The source package now carries:
+
+- [cJSON's complete copyright and permission header](licenses/raptor-common-cJSON-header.txt),
+  copied without changes from lines 1 through 21 of `src/cJSON.c`. That full source file
+  has SHA-256 `607e756460fa0de37d20a7a9181f2de29c97bfb7ce5a0e6c2f548243836cd852`;
+  the extracted header has SHA-256
+  `3384d75264549cd04a5c00538a15871785f3f6ba60a779781df747d591655892`.
+- [Monocypher's complete original license file](licenses/raptor-common-Monocypher-LICENCE.txt),
+  copied byte-for-byte from `third_party/monocypher/LICENCE.md`, SHA-256
+  `5f8360e4c06ddcc584bdb4b210c6af824c4bb301e6a9a521869b6d90795ca4b3`.
+  It retains both original license alternatives and contributor notices;
+  individual source-file notices still require review.
+
+Both notices come from the common-library origin
+`https://github.com/gtxaspec/raptor-common.git`, base commit
+`75d83e8bd2c6d2a2c8ef2b8a7040d74b84236d04` and reconstructed tree
+`9c0da09898641fe6d42c72c317a13f2bd56bda34`, as recorded in the technical
+inventory. The top-level project MIT license does not replace these notices.
+
+These files accompany the published source. They are not currently installed
+by the full-Raptor component builder or embedded in its signed firmware bundle.
+Binary-release materials must account for the complete linked-code notices and
+corresponding-source delivery, including the unresolved SDK/vendor and driver
+closure. The firmware-release gates remain open.
