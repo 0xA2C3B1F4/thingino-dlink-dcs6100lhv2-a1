@@ -1646,7 +1646,7 @@
       "source": "scripts/release_closure.py"
     },
     "scripts/run_container_mkfs_jffs2.sh": {
-      "sha256": "fae68ee16c4ddd9e508099b46f6edbdda365ed51f6841b0a5518d49283fd7dc1",
+      "sha256": "80ee29c7319ecc8899b1322beb589f12f9da8434948585febab2846b2b96ad1a",
       "source": "scripts/run_container_mkfs_jffs2.sh"
     },
     "scripts/run_macos_collector_kernel_build.sh": {
@@ -1878,7 +1878,7 @@
       "source": "tests/test_project.py"
     },
     "tests/test_provisioning_data.py": {
-      "sha256": "0ec94504db02d79f7f037718ce7623b1db78446e16e45d3c11e2534a9ad91ebf",
+      "sha256": "204f8bef5f1a1daebee3aef5f41cf932ec9545df395861807e8cb1c1d45f8424",
       "source": "tests/test_provisioning_data.py"
     },
     "tests/test_public_tree.py": {
@@ -2058,7 +2058,7 @@
       "source": "tests/test_windows_media_preflight.py"
     },
     "third_party/LICENSE_REVIEW.md": {
-      "sha256": "a7597a6a242aefb3dace2d8659ee8ea10972a921cd9e27d3da2d656c74ec97e6",
+      "sha256": "8c18d00f139bc3780a4f45ef4afbdcfae01fac11a9c3a4941f1aa1d86a989a88",
       "source": "third_party/LICENSE_REVIEW.md"
     },
     "third_party/NOTICE.md": {
@@ -2455,6 +2455,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "fa780f76588d7b4ed22abd5f1dc74043c8fd96d0",
+  "source_commit": "8449f15cc583b1eb36b6c616469ce35ba4bc3a50",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }

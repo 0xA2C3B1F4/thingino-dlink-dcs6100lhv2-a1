@@ -70,5 +70,5 @@ docker run --rm --network none --platform linux/arm64 \
 docker run --rm --network none --platform linux/arm64 \
   -v "$output_parent/$output_name:/input/data.jffs2:ro" \
   "$DCS6100_BUILDER_IMAGE" /bin/sh -c \
-  'jffs2dump -c /input/data.jffs2 >/dev/null 2>/tmp/jffs2-errors; test ! -s /tmp/jffs2-errors'
+  'errors=$(jffs2dump -c /input/data.jffs2 2>&1 >/dev/null) || exit "$?"; test -z "$errors"'
 chmod 0600 "$output_parent/$output_name"

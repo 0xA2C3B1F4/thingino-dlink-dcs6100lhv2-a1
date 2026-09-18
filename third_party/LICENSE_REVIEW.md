@@ -86,6 +86,32 @@ This extends the technical inventory to recorded transitive headers, but does
 not establish unrecorded generator/compiler inputs, per-file licensing or a
 complete corresponding-source delivery package. No license gate is closed.
 
+### Remaining driver notice questions
+
+A full-file marker check against the hash-verified 150 translation units and
+161 driver headers found GNU GPL references in 289 files and BSD references in
+19 files. The following three files contained none of the searched GPL, BSD,
+SPDX or permission-grant markers:
+
+- `core/crypto/rtw_crypto_wrap.c`
+- `core/crypto/rtw_crypto_wrap.h`
+- `include/rtw_version.h`
+
+These are text observations, not determinations that the files lack a license.
+The first two are small compatibility wrappers; the version header contains
+one version-definition line. The pinned upstream history for
+[`rtw_crypto_wrap.c`](https://github.com/gtxaspec/rtl8188ftv-wifi/blob/6e3c1c2d244f5056d2a7ade3dbcf9daa3876fc06/core/crypto/rtw_crypto_wrap.c)
+leads to import commit `252ab91e666918c52541891519cf029641e31fec`, rather than
+providing an earlier file-level license explanation. Package-wide GPL metadata
+alone is not recorded here as a resolution of those provenance questions.
+
+The exact Thingino package declares `WIFI_RTL8188FU_LICENSE = GPL-2.0` and
+`WIFI_RTL8188FU_LICENSE_FILES = COPYING`, while the pinned driver tree lacks
+that file. A source-delivery process must explicitly reconcile the missing
+upstream license file and the BSD notices instead of assuming that invoking
+Buildroot legal-info completes the review. No legal-info success or complete
+source-delivery archive is claimed by these inventories.
+
 The bundled copies were retrieved from the primary sources on 2026-08-29:
 
 - `RTL8188FU-GPL-2.0-only.txt` has SHA-256

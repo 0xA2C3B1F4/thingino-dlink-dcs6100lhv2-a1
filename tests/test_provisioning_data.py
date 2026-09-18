@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -325,6 +326,24 @@ class ProvisioningDataTests(unittest.TestCase):
         self.assertIn("jffs2dump -c", script)
         self.assertNotIn("curl ", script)
         self.assertNotIn("wget ", script)
+        self.assertNotIn("/tmp/jffs2-errors", script)
+
+    @unittest.skipUnless(shutil.which("sh"), "POSIX shell is required")
+    def test_container_crc_check_rejects_stderr_and_nonzero_status(self) -> None:
+        script = Path("scripts/run_container_mkfs_jffs2.sh").read_text(encoding="utf-8")
+        check = next(line.strip()[1:-1] for line in script.splitlines()
+                     if line.strip().startswith("'errors=$(jffs2dump"))
+        for body, expected in (("return 0", 0),
+                               ("printf 'CRC error' >&2; return 0", 1),
+                               ("return 7", 7)):
+            with self.subTest(body=body):
+                result = subprocess.run(
+                    [shutil.which("sh"), "-c", "jffs2dump() { " + body + "; }; " + check],
+                    check=False, capture_output=True,
+                )
+                self.assertEqual(result.returncode, expected)
+                self.assertEqual(result.stdout, b"")
+                self.assertEqual(result.stderr, b"")
 
     def test_receipt_path_is_inside_overlay_upper(self) -> None:
         self.assertEqual(PROVISIONING_RECEIPT, "etc/dcs6100-provisioning.json")
