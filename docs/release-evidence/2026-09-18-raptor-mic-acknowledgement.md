@@ -680,3 +680,29 @@ The complete `scripts/check.sh` run with both lifecycle source environment
 variables explicitly set passed 955 tests, along with policy, source-lock,
 documentation and Control contract checks. The corrected source is ready for
 the next full firmware build, not for a firmware release declaration.
+
+## Corrected ONVIF full-firmware build pair
+
+The subsequent normal `local-build build-universal --build-count 2
+--data-mode preserve` run completed successfully from source commit
+`14b81c671931b038545b0d9177a4609ad8818e91`, using the immutable builder image
+recorded above. Both clean builds included ONVIF patches 0001 through 0004
+and uhttpd patch 0018. The complete-firmware report compared 16 artifacts
+byte-for-byte, with no compiled component cache reuse. Both schema-2 install-set
+inspections passed. An independent host read rehashed all 32 files against
+the report and checked their sizes and both inspection results.
+
+| Artifact | SHA-256 |
+| --- | --- |
+| Signed universal bundle | `89d59476baa455bd67aa15f96f3a48d7a5f5c88f74aa15baccc35d0fbc221f37` |
+| System SquashFS, 6,365,184 bytes | `bc31911422c0359bb0fbefb557a1e21496acb2bf2d3d545f8e987da5bde9a13d` |
+| Full Raptor component | `47744a5e3411b870b083ddec896e7c1c42d5b83270b59b399c3d6f553ef6e524` |
+| System image padded to its installation span | `5d929ca52e5cc5e185a95784f796d316e8ebbe9fbd41cb02af4c5d5da5b18b0e` |
+
+The packaged RWD hash remains
+`c064acfa1d805156e2e5bb71ddad8cf12505e6dfee4b2a14658b5f904f85288d`.
+That equality does not transfer earlier device acceptance to this new firmware.
+The build result establishes host reproducibility only. This version has not
+yet been staged or installed, and its physical ONVIF, browser, first-press audio
+and remaining candidate checks are open. Source/license delivery, recovery,
+provisioning, second-camera and host-platform release gates remain separate.
