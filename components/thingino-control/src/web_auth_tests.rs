@@ -202,14 +202,14 @@ fn login_limiter_bounds_each_source_and_resets_its_short_window() {
 fn credential_mutations_require_a_recent_but_still_valid_session() {
     let (root, paths) = test_paths("recent-session");
     let auth = WebAuth::new(paths);
-    let now = unix_time().unwrap();
+    let now = Instant::now();
     let session_id = "0123456789abcdef0123456789abcdef";
     auth.sessions.lock().unwrap().insert(
         session_id.to_owned(),
         Session {
             username: "root".to_owned(),
             is_default_password: false,
-            created: now.saturating_sub(SESSION_RECENT_SECONDS + 1),
+            created: now - Duration::from_secs(SESSION_RECENT_SECONDS + 1),
             last_access: now,
         },
     );
@@ -251,6 +251,97 @@ fn credential_writer_atomically_preserves_identity_and_enforces_api_key_mode() {
             .contains("thingino-auth")
     }));
     fs::remove_dir_all(root).unwrap();
+}
+
+struct ClockTestVerifier;
+
+impl PasswordVerifier for ClockTestVerifier {
+    fn verify(&self, password: &[u8], _stored: &str) -> bool {
+        password == b"__SET_LOCALLY__"
+    }
+}
+
+// Keep simulated wall time separate from elapsed time. Neither NTP steps nor
+// Time settings are allowed to affect the process-local session clock.
+fn clock_test_auth(name: &str) -> (PathBuf, WebAuth, Arc<Mutex<(u64, i64)>>, String) {
+    let (root, paths) = test_paths(name);
+    let mut auth = WebAuth::with_password_verifier(paths, Arc::new(ClockTestVerifier));
+    let clocks = Arc::new(Mutex::new((0_u64, 1_786_006_608_i64)));
+    let elapsed = Arc::clone(&clocks);
+    let start = Instant::now();
+    auth.session_clock = Arc::new(move || start + Duration::from_secs(elapsed.lock().unwrap().0));
+    let login = auth
+        .login(br#"{"username":"root","password":"__SET_LOCALLY__"}"#)
+        .unwrap();
+    let cookie = format!("{COOKIE_NAME}={}", login.session_id);
+    (root, auth, clocks, cookie)
+}
+
+#[test]
+fn wall_clock_steps_do_not_expire_or_rejuvenate_sessions() {
+    let (root, auth, clocks, cookie) = clock_test_auth("wall-clock-steps");
+    for wall_step in [30 * 86400_i64, -60 * 86400, 90 * 86400] {
+        clocks.lock().unwrap().1 += wall_step;
+        assert!(auth.authorize_session(Some(cookie.as_bytes())));
+        assert!(
+            auth.session_status(Some(cookie.as_bytes()), None)
+                .authenticated
+        );
+        assert!(auth.authorize_recent_session(Some(cookie.as_bytes())));
+    }
+    clocks.lock().unwrap().0 = SESSION_RECENT_SECONDS;
+    assert!(auth.authorize_recent_session(Some(cookie.as_bytes())));
+    {
+        let mut time = clocks.lock().unwrap();
+        time.0 += 1;
+        time.1 -= 365 * 86400;
+    }
+    assert!(!auth.authorize_recent_session(Some(cookie.as_bytes())));
+    assert!(auth.authorize_session(Some(cookie.as_bytes())));
+    assert!(
+        auth.session_status(Some(cookie.as_bytes()), None)
+            .authenticated
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn monotonic_idle_and_maximum_age_expire_on_both_session_paths() {
+    for status_path in [false, true] {
+        let valid = |auth: &WebAuth, cookie: &str| {
+            if status_path {
+                auth.session_status(Some(cookie.as_bytes()), None)
+                    .authenticated
+            } else {
+                auth.authorize_session(Some(cookie.as_bytes()))
+            }
+        };
+        let (root, auth, clocks, cookie) = clock_test_auth("monotonic-idle");
+        clocks.lock().unwrap().0 = SESSION_IDLE_SECONDS;
+        assert!(valid(&auth, &cookie));
+        {
+            let mut time = clocks.lock().unwrap();
+            time.0 += SESSION_IDLE_SECONDS + 1;
+            time.1 -= 365 * 86400;
+        }
+        assert!(!valid(&auth, &cookie));
+        assert!(auth.sessions.lock().unwrap().is_empty());
+        fs::remove_dir_all(root).unwrap();
+
+        let (root, auth, clocks, cookie) = clock_test_auth("monotonic-max");
+        clocks.lock().unwrap().0 = SESSION_IDLE_SECONDS;
+        assert!(valid(&auth, &cookie));
+        clocks.lock().unwrap().0 = SESSION_MAX_SECONDS;
+        assert!(valid(&auth, &cookie));
+        {
+            let mut time = clocks.lock().unwrap();
+            time.0 += 1;
+            time.1 += 365 * 86400;
+        }
+        assert!(!valid(&auth, &cookie));
+        assert!(auth.sessions.lock().unwrap().is_empty());
+        fs::remove_dir_all(root).unwrap();
+    }
 }
 
 #[test]

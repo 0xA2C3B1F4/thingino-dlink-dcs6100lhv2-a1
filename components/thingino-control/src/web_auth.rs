@@ -9,7 +9,7 @@ use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::ptr;
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 use crate::decode::decode_base64;
 use crate::json::{self, Value};
@@ -38,13 +38,6 @@ pub struct WebAuthPaths {
     pub api_key: PathBuf,
     pub thingino_config: PathBuf,
     pub shadow: PathBuf,
-}
-
-fn unix_time() -> Option<u64> {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .ok()
-        .map(|value| value.as_secs())
 }
 
 fn random_hex(bytes: usize) -> io::Result<String> {
@@ -195,6 +188,9 @@ pub struct WebAuth {
     credential_updates: Arc<Mutex<()>>,
     password_verifier: Arc<dyn PasswordVerifier>,
     password_hasher: Arc<dyn PasswordHasher>,
+    // Sessions are process-local. NTP/manual wall-clock changes must not alter
+    // their age, idle timeout or recent-authentication window.
+    session_clock: Arc<dyn Fn() -> Instant + Send + Sync>,
 }
 
 #[derive(Debug, Default)]
@@ -228,8 +224,8 @@ impl LoginRateLimiter {
 struct Session {
     username: String,
     is_default_password: bool,
-    created: u64,
-    last_access: u64,
+    created: Instant,
+    last_access: Instant,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -281,6 +277,7 @@ impl WebAuth {
             credential_updates: Arc::new(Mutex::new(())),
             password_verifier,
             password_hasher,
+            session_clock: Arc::new(Instant::now),
         }
     }
 
@@ -355,14 +352,17 @@ impl WebAuth {
         let Some(current) = sessions.get_mut(session) else {
             return false;
         };
-        let now = unix_time().unwrap_or(current.last_access);
-        if now.saturating_sub(current.last_access) > SESSION_IDLE_SECONDS
-            || now.saturating_sub(current.created) > SESSION_MAX_SECONDS
+        let now = (self.session_clock)();
+        if now.saturating_duration_since(current.last_access)
+            > Duration::from_secs(SESSION_IDLE_SECONDS)
+            || now.saturating_duration_since(current.created)
+                > Duration::from_secs(SESSION_MAX_SECONDS)
         {
             sessions.remove(session);
             return false;
         }
-        let accepted = now.saturating_sub(current.created) <= maximum_age;
+        let accepted =
+            now.saturating_duration_since(current.created) <= Duration::from_secs(maximum_age);
         current.last_access = now;
         accepted
     }
@@ -392,7 +392,7 @@ impl WebAuth {
             return Err(AuthError::InvalidCredentials);
         }
         let session_id = random_hex(16).map_err(|_| AuthError::Unavailable)?;
-        let now = unix_time().ok_or(AuthError::Unavailable)?;
+        let now = (self.session_clock)();
         let session = Session {
             username: username.to_owned(),
             is_default_password: password == b"root",
@@ -437,9 +437,11 @@ impl WebAuth {
         let session = self.sessions.lock().ok().and_then(|mut sessions| {
             let session_id = session_id?;
             let value = sessions.get_mut(session_id)?;
-            let now = unix_time().unwrap_or(value.last_access);
-            if now.saturating_sub(value.last_access) > SESSION_IDLE_SECONDS
-                || now.saturating_sub(value.created) > SESSION_MAX_SECONDS
+            let now = (self.session_clock)();
+            if now.saturating_duration_since(value.last_access)
+                > Duration::from_secs(SESSION_IDLE_SECONDS)
+                || now.saturating_duration_since(value.created)
+                    > Duration::from_secs(SESSION_MAX_SECONDS)
             {
                 sessions.remove(session_id);
                 return None;

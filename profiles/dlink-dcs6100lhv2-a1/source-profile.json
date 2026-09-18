@@ -739,12 +739,12 @@
     },
     {
       "destination": "package/thingino-control/rust/src/web_auth.rs",
-      "sha256": "b11cdd64b5b67a78031ee3d3a272c41582add2cf6c403054062b3b0dbe826228",
+      "sha256": "4c345b5ed8a764debf2e66a83d06855eeab01c880b7940c16b5c147b2b68734b",
       "source": "components/thingino-control/src/web_auth.rs"
     },
     {
       "destination": "package/thingino-control/rust/src/web_auth_tests.rs",
-      "sha256": "e986536793e264a41e445882bdba21560fc140e4e7f46f10dff68ee7eb7defc3",
+      "sha256": "1abc6c7cf2f24747ef0257edf99effcf143d98703a71d2ea5c79f56d259546cf",
       "source": "components/thingino-control/src/web_auth_tests.rs"
     },
     {
