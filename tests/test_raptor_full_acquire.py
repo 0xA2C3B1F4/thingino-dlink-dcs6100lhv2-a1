@@ -61,7 +61,7 @@ class FullMediaSourceTests(unittest.TestCase):
                          "8e533fd07acc2f8ae4cffe7f95d2c3392773e2b5")
         self.assertEqual(
             lock["sources"]["raptor"]["tree"],
-            "ae9f4185645b0cfab44495a98ba1a502d92d7c03",
+            "0f05599901aeb93e6d1ab65f46abb04c9a65884a",
         )
         self.assertNotIn("runtime_tree", lock)
         self.assertEqual(

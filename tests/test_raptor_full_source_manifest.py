@@ -24,12 +24,60 @@ class ManifestTests(unittest.TestCase):
         config = configparser.ConfigParser(interpolation=None)
         config.read(ROOT / "components/raptor/raptor-webrtc.conf")
         self.assertFalse(config.getboolean("webrtc", "video_only"))
+        self.assertEqual(config.get("webrtc", "audio_mode"), "pcmu")
         self.assertTrue(config.getboolean("webrtc", "signaling_loopback"))
         self.assertEqual(config.getint("webrtc", "max_clients"), 1)
         audio = configparser.ConfigParser(interpolation=None)
         audio.read(ROOT / "components/raptor/raptor-audio.conf")
         self.assertFalse(audio.getboolean("audio", "ai_enabled"))
         self.assertFalse(audio.getboolean("audio", "ao_enabled"))
+
+    def test_rwd_negotiated_audio_transport_does_not_require_live_microphone(self):
+        patch = (ROOT / "patches/raptor-full-source/raptor.patch").read_text()
+        section = patch.split("diff --git a/rwd/rwd_media.c b/rwd/rwd_media.c\n", 1)[1]
+        section = section.split("\ndiff --git ", 1)[0]
+        added = "\n".join(line[1:] for line in section.splitlines()
+                          if line.startswith("+") and not line.startswith("+++"))
+        condition = added.split("if (", 1)[1].split(") {", 1)[0]
+        fixture = self.root / "audio-transport-gate.c"
+        fixture.write_text('''#include <assert.h>
+#include <stdbool.h>
+#include <string.h>
+typedef struct { bool has_audio; int audio_pt; const char *audio_direction; } Offer;
+typedef struct { Offer offer; } Client;
+typedef struct { void *audio_ring; bool video_only; } Server;
+static bool creates_audio(Client *c, Server *srv) {
+    (void)srv;
+    return (''' + condition + ''');
+}
+int main(void) {
+    Client c = {{true, 0, "recvonly"}};
+    Server srv = {0, false};
+    /* The actual shipped setup predicate must permit negotiation before
+       capture starts. A later ring opening cannot rerun client setup. */
+    assert(creates_audio(&c, &srv));
+    srv.audio_ring = &srv;
+    assert(creates_audio(&c, &srv));
+    srv.audio_ring = 0;
+    assert(creates_audio(&c, &srv));
+    c.offer.audio_direction = "sendrecv";
+    assert(creates_audio(&c, &srv));
+    c.offer.audio_direction = "sendonly";
+    assert(!creates_audio(&c, &srv));
+    c.offer.audio_direction = "inactive";
+    assert(!creates_audio(&c, &srv));
+    c.offer.audio_direction = "recvonly";
+    c.offer.has_audio = false;
+    assert(!creates_audio(&c, &srv));
+    c.offer.has_audio = true; c.offer.audio_pt = -1;
+    assert(!creates_audio(&c, &srv));
+    return 0;
+}
+''')
+        binary = self.root / "audio-transport-gate"
+        subprocess.check_call(["cc", "-std=c11", "-Wall", "-Wextra", "-Werror",
+                               str(fixture), "-o", str(binary)], timeout=15)
+        subprocess.check_call([str(binary)], timeout=5)
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(dir=Path(os.environ["TMPDIR"]).resolve(strict=True))

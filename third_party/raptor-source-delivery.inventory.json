@@ -11,7 +11,7 @@
   "source_count": 13,
   "source_lock": {
     "path": "components/raptor/source-build-lock.json",
-    "sha256": "38dc43903aade533f7f626b06f0bbf80459a49c9b95fbd6cc801ba38ca66f2b1"
+    "sha256": "bff85f6d1dd168b9152770f688d9e0a354a9e95d3557a59446ed2cda6f40e769"
   },
   "sources": {
     "compy": {
@@ -145,7 +145,7 @@
     "raptor": {
       "base": "17b36386f980a24c7c90adb7c9b46f31b41c3b24",
       "base_tree": "9525370fc9f1a20f0743efe75a8426ca35dc8d11",
-      "final_tree": "ae9f4185645b0cfab44495a98ba1a502d92d7c03",
+      "final_tree": "0f05599901aeb93e6d1ab65f46abb04c9a65884a",
       "legal_review_status": "not-assessed",
       "license_or_notice": {
         "kind": "license",
@@ -154,12 +154,12 @@
       },
       "origin": "https://github.com/gtxaspec/raptor.git",
       "patch_digests": [
-        "46ccdcc31eaf01b4942d6c8d81709d073e070818b7a0bc75286024ad55abaf9a"
+        "0f1094f0e86efd402ad30a423839ab260b469ca5640058fa1a2c485230729a16"
       ],
       "patches": [
         {
           "path": "patches/raptor-full-source/raptor.patch",
-          "sha256": "46ccdcc31eaf01b4942d6c8d81709d073e070818b7a0bc75286024ad55abaf9a"
+          "sha256": "0f1094f0e86efd402ad30a423839ab260b469ca5640058fa1a2c485230729a16"
         }
       ],
       "redistribution": "not-authorized-by-this-repository"
@@ -286,7 +286,7 @@
       },
       "raptor": {
         "path": "raptor",
-        "tree_digest": "cb8cd500ee00f4ccb78d982d1cc6573bfd29179b6a8c562799ab65412765c4db"
+        "tree_digest": "6ae90afe036cd5686660c697fee4363fbf4558920bf9fd0e9ae9044603379f27"
       },
       "raptor-common": {
         "path": "raptor-common",

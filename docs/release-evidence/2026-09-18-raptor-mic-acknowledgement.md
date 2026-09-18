@@ -217,11 +217,80 @@ hash above. The normal workflow reports Raptor-only media, full source build,
 no physical actions and no NOR writes. The bundle hash was independently read
 from the completed install-set on the host.
 
-This candidate is host-built and inspected. It has not been installed or
+At build completion, this candidate was host-built and inspected but had not been installed or
 physically accepted on the camera. The installed session-clock candidate above
-remains the latest verified camera state. First Listen after cold boot, both
+was then the latest verified camera state. First Listen after cold boot, both
 streams, playback after temporary visibility loss, first-login lifetime and
 clock-change session behavior still require acceptance on this new candidate.
 Source-side notice additions and the verified source inventory do not close
 legal redistribution gates. Public CI and the remaining firmware-release gates
 remain open.
+
+## Required microphone-enable playback acceptance
+
+The operator subsequently completed the two installation phases. Strict-pinned
+SSH readback of the full system partition matched the Preview candidate padded
+to 6,619,136 bytes, SHA-256
+`6118866901cf3e12b2513e04d48c7c1b10f67293cc46cc6f5d4d35b81daae6f0`.
+Normal universal verification stopped at mDNS resolution; complete runtime
+acceptance is still open.
+
+The operator enabled the microphone manually, reported silence on the first
+Listen attempt, then heard audio after Reload and another Listen click. A later
+RAD observation reported input disabled; the operator confirmed they had
+manually disabled it afterward. That later observation does not explain the
+initial silence. Failure to update an existing WebRTC connection after microphone
+enable is a hypothesis requiring evidence, not an established root cause.
+
+The release-readiness goal explicitly includes diagnosing and fixing this case:
+with Preview already open and the microphone off, enable the microphone and
+press Listen once. Audio must become audible without Reload or a second Listen
+attempt. Verify this on both main and substream, including after a cold boot.
+If it fails, retain the original session and collect input state and bounded
+inbound-audio diagnostics before retrying. Physical audibility is required;
+ICE/DTLS establishment, a live track, or a resolved play promise alone is
+insufficient. Keep this acceptance requirement open until verified.
+
+Source inspection of the installed candidate identified a specific missing
+transport path. In reconstructed `raptor/rwd/rwd_media.c`, client setup creates
+`c->rtp_audio` only when `srv->audio_ring` is already open. The audio reader can
+open that ring later, but does not create the missing client transport. The
+send routine returns immediately when `c->rtp_audio` is null. SDP can meanwhile
+advertise sendonly PCMU audio even before the ring exists. Thus a client that
+connects while the microphone is off can remain silent after it is enabled;
+a fresh connection after the ring opens can obtain its audio transport.
+This source defect fits the operator sequence. The failed browser session's
+packet counters were not captured, so occurrence in that session is not proven.
+
+The next correction must separate negotiated client audio transport lifetime
+from temporary microphone-ring availability, retain offer-direction checks,
+and test connection-before-microphone, later enable, disable/re-enable and
+rejected audio directions. Codec/clock consistency between SDP and the sender
+must also be retained. The currently shipped camera profile uses L16 capture
+transcoded to PCMU; broader codec transitions need explicit handling rather
+than assuming every ring re-open uses the same RTP clock.
+
+The follow-up source patch removes the ring-availability condition from client
+audio transport setup while retaining offer-presence, payload and direction
+checks. The camera profile explicitly selects PCMU so SDP and client transport
+remain at payload 0 and 8 kHz across supported L16/PCMU/PCMA capture changes.
+The existing reader decodes/transcodes capture frames into that fixed wire
+format. This does not enable microphone capture or browser playback.
+
+A compiled C regression executes the setup predicate extracted from the
+shipped patch. It fails before the fix with capture absent and passes afterward,
+including subsequent ring presence/absence and rejected sendonly/inactive,
+missing-audio and invalid-payload offers. It verifies the setup decision, not
+end-to-end packet delivery or physical sound. Fifteen focused source/manifest
+and inventory tests passed. Clean patch application reconstructed Raptor tree
+`0f05599901aeb93e6d1ab65f46abb04c9a65884a`; all 13 source trees were
+independently checked for the refreshed inventory. This correction has not
+yet been built into a new firmware or installed on the camera.
+
+The complete project check passed 904 tests. Independent Luna review found no
+blocking issue for the shipped no-Opus profile and confirmed serialization of
+client setup, send and teardown under the client lock. The review recommended
+the explicit PCMU profile setting. Packet delivery after delayed capture,
+ring reopen and audible playback remain required runtime acceptance; the host
+predicate test alone does not close them. Generic Opus/video-only behavior and
+pre-existing transport allocation-failure handling were not expanded by this fix.

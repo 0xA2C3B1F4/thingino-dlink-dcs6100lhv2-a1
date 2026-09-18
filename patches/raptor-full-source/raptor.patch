@@ -18502,15 +18502,19 @@ index 47fa00a34049c940bdab01c5b242fdf750f623ee..bec92f79cc6ff5785632edf4354eef59
  	if (srv.audio_ring)
  		rss_ring_close(srv.audio_ring);
 diff --git a/rwd/rwd_media.c b/rwd/rwd_media.c
-index 3ba3c9c7a0135e85304998e816818f9bfd48378d..482be89ebe48d4c6fb1251668c59f59277ce93d9 100644
+index 3ba3c9c7a0135e85304998e816818f9bfd48378d..80e012685eafdaef41074fa15f603044cd334ae3 100644
 --- a/rwd/rwd_media.c
 +++ b/rwd/rwd_media.c
-@@ -225,7 +225,9 @@ int rwd_media_setup(rwd_client_t *c)
+@@ -223,9 +223,11 @@ int rwd_media_setup(rwd_client_t *c)
+ 	}
+ 
  	/* Audio: UDP → SRTP → RTP (no NAL for audio)
- 	 * Check audio_ring directly instead of has_audio flag — the flag may
- 	 * not be set yet if the audio reader thread is still starting up. */
+-	 * Check audio_ring directly instead of has_audio flag — the flag may
+-	 * not be set yet if the audio reader thread is still starting up. */
 -	if (c->offer.has_audio && c->offer.audio_pt >= 0 && srv->audio_ring) {
-+	if (c->offer.has_audio && c->offer.audio_pt >= 0 && srv->audio_ring &&
++	 * Negotiate transport independently of capture: the microphone may be
++	 * enabled after this client connects, without a new DTLS handshake. */
++	if (c->offer.has_audio && c->offer.audio_pt >= 0 &&
 +	    strcmp(c->offer.audio_direction, "sendonly") != 0 &&
 +	    strcmp(c->offer.audio_direction, "inactive") != 0) {
  		Compy_Transport udp_a = rwd_transport_sendto(srv->udp_fd, &c->addr, c->addr_len);

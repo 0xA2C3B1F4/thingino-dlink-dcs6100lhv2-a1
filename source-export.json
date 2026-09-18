@@ -74,11 +74,11 @@
       "source": "components/raptor/raptor-media.conf"
     },
     "components/raptor/raptor-webrtc.conf": {
-      "sha256": "7c0bf1375f0e18a4b373f6d62ce1da7a92a749ebbdfb2fb0a5fa6ec15ac9f3fb",
+      "sha256": "4c5025e09e0d338d2daea283256144a9ba39f1674b46b1a1d750cede9c8fad67",
       "source": "components/raptor/raptor-webrtc.conf"
     },
     "components/raptor/source-build-lock.json": {
-      "sha256": "38dc43903aade533f7f626b06f0bbf80459a49c9b95fbd6cc801ba38ca66f2b1",
+      "sha256": "bff85f6d1dd168b9152770f688d9e0a354a9e95d3557a59446ed2cda6f40e769",
       "source": "components/raptor/source-build-lock.json"
     },
     "components/thingino-control/Cargo.lock": {
@@ -710,7 +710,7 @@
       "source": "production/docs/release-evidence/2026-09-17-raptor-audio-reproducibility.md"
     },
     "docs/release-evidence/2026-09-18-raptor-mic-acknowledgement.md": {
-      "sha256": "0e8b9fb58a006ea98675a0b78aba8c1c1d5f16585d171e9280d98f9663cd6192",
+      "sha256": "baca3c15b1722a960aadc4c9a7a3514029b9b2fb168512e6137e9a499fe0b8fa",
       "source": "production/docs/release-evidence/2026-09-18-raptor-mic-acknowledgement.md"
     },
     "docs/status.md": {
@@ -1310,7 +1310,7 @@
       "source": "patches/raptor-full-source/raptor-ipc.patch"
     },
     "patches/raptor-full-source/raptor.patch": {
-      "sha256": "46ccdcc31eaf01b4942d6c8d81709d073e070818b7a0bc75286024ad55abaf9a",
+      "sha256": "0f1094f0e86efd402ad30a423839ab260b469ca5640058fa1a2c485230729a16",
       "source": "patches/raptor-full-source/raptor.patch"
     },
     "patches/thingino/0001-dlink-first-release-baseline.patch": {
@@ -1838,7 +1838,7 @@
       "source": "tests/test_raptor_development.py"
     },
     "tests/test_raptor_full_acquire.py": {
-      "sha256": "4709e2c03b0d64a69e1f604e85bf6474b2cfe321ab9895d9d9dba4f35e5770eb",
+      "sha256": "e0fe7239f870bb5074f046798c70130f009dafbd11946c162e920f18dd3e086e",
       "source": "tests/test_raptor_full_acquire.py"
     },
     "tests/test_raptor_full_build.py": {
@@ -1858,7 +1858,7 @@
       "source": "tests/test_raptor_full_root.py"
     },
     "tests/test_raptor_full_source_manifest.py": {
-      "sha256": "f071ed49a480503898eadb3d7dd678431a77cdb1590b2fce48c93afdfefab065",
+      "sha256": "e3b61e5640a919e7cc7515365a590256c67407d86feebe7dedcb3338871060ed",
       "source": "tests/test_raptor_full_source_manifest.py"
     },
     "tests/test_recording_file_guard.py": {
@@ -2034,7 +2034,7 @@
       "source": "third_party/licenses/raptor-common-cJSON-header.txt"
     },
     "third_party/raptor-source-delivery.inventory.json": {
-      "sha256": "b7641ff815c9a38692709149d4a301565f298efed51c4f12e18995f8806b2eb9",
+      "sha256": "d791b979d896e7b108297203758f5ca1ab40bd43118eb3424baf596b6c193daa",
       "source": "third_party/raptor-source-delivery.inventory.json"
     },
     "webui/browser-tests/motion-email.spec.ts": {
@@ -2391,6 +2391,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "f83852d1bf58ff33c941c814fd1fe2a86351d3d4",
+  "source_commit": "38607f3468cf4df58840d18ae5ea802732c67e9f",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }
