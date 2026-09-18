@@ -75,6 +75,36 @@ class SourceProfileTests(unittest.TestCase):
                     f"project patch has identity metadata: {patch_path.relative_to(ROOT)}",
                 )
 
+    def test_complete_uhttpd_chain_routes_digest_snapshots_without_media_auth(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as raw_directory:
+            checkout = Path(raw_directory)
+            for path in sorted((ROOT / "patches/uhttpd").glob("*.patch")):
+                patch = path.read_text()
+                start = patch.find("diff --git a/control_proxy.c b/control_proxy.c\n")
+                if start < 0:
+                    continue
+                end = patch.find("\ndiff --git ", start + 1)
+                section = patch[start:] if end < 0 else patch[start:end + 1]
+                result = subprocess.run(
+                    ["patch", "-F0", "-p1", "--batch"], cwd=checkout,
+                    input=section, text=True, capture_output=True,
+                )
+                self.assertEqual(result.returncode, 0, f"{path.name}: {result.stdout} {result.stderr}")
+            source = (checkout / "control_proxy.c").read_text()
+            start = source.index("static bool control_proxy_is_media_url(")
+            media = source[start:source.index("\n}", start)]
+            self.assertNotIn("/onvif/image", media)
+            self.assertIn('!strcmp(url, "/onvif/image.cgi")', source)
+            self.assertIn('!strcmp(url, "/onvif/image1.cgi")', source)
+            self.assertIn("proxy->backend_port = onvif ? CONTROL_ONVIF_PORT", source)
+            self.assertIn("proxy->onvif = onvif && !onvif_snapshot;", source)
+            self.assertIn("if (!control_proxy_tls(cl) && !proxy->onvif)", source)
+            self.assertIn("if ((!proxy->onvif && !proxy->onvif_snapshot) || proxy->www_authenticate_seen", source)
+            self.assertIn("if (onvif_snapshot && !control_proxy_single_authorization(cl))", source)
+            self.assertIn('"Authorization: %s\\r\\n"', source)
+            self.assertIn("if (proxy->onvif || proxy->onvif_snapshot)", source)
+
+
     def test_uhttpd_onvif_patch_preserves_control_proxy_headers(self) -> None:
         with tempfile.TemporaryDirectory(dir=TMP_ROOT) as raw_directory:
             checkout = Path(raw_directory)
@@ -127,6 +157,7 @@ class SourceProfileTests(unittest.TestCase):
                 ".handle_request = control_proxy_request,",
             ):
                 self.assertIn(required, control_proxy)
+
 
             for patch_name in (
                 "0010-defer-control-proxy-pump.patch",
@@ -222,7 +253,7 @@ class SourceProfileTests(unittest.TestCase):
         self.assertEqual(profile["model"], "DCS-6100LHV2")
         self.assertEqual(profile["hardware_revision"], "A1")
         self.assertEqual(len(profile["thingino_patches"]), 20)
-        self.assertEqual(len(profile["installed_files"]), 164)
+        self.assertEqual(len(profile["installed_files"]), 168)
         installed_sources = {entry["source"] for entry in profile["installed_files"]}
         self.assertTrue({
             "components/thingino-control/src/raptor.rs",
@@ -332,6 +363,9 @@ class SourceProfileTests(unittest.TestCase):
                 "package/thingino-control/rust/src/web_auth.rs",
                 "package/thingino-control/rust/src/whip.rs",
                 "package/thingino-onvif/0001-persistent-httpd-no-request-children.patch",
+                "package/thingino-onvif/0002-snapshot-digest.patch",
+                "package/thingino-onvif/0003-control-token-reader.patch",
+                "package/thingino-onvif/0004-config-lifetime.patch",
                 "dcs6100-webui/src/app/fullscreen-preview.ts",
                 "package/thingino-uhttpd/0007-proxy-thingino-control.patch",
                 "package/thingino-uhttpd/0008-disable-cgi-and-proxy-onvif.patch",
@@ -344,6 +378,7 @@ class SourceProfileTests(unittest.TestCase):
                 "package/thingino-uhttpd/0015-require-authenticated-tls-ingress.patch",
                 "package/thingino-uhttpd/0016-buffer-request-before-backend.patch",
                 "package/thingino-uhttpd/0017-bind-recording-file-identity.patch",
+                "package/thingino-uhttpd/0018-onvif-snapshot-digest.patch",
             }
             <= installed_destinations
         )

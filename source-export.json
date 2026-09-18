@@ -710,7 +710,7 @@
       "source": "production/docs/release-evidence/2026-09-17-raptor-audio-reproducibility.md"
     },
     "docs/release-evidence/2026-09-18-raptor-mic-acknowledgement.md": {
-      "sha256": "8066f36b7028a71c7399c5dc7df4ecd2cc607333947bd78851477c15406fd2ae",
+      "sha256": "fda753044d67e935a362240460a35b6eee0ad4fbbddc55537bd3ae4359640e13",
       "source": "production/docs/release-evidence/2026-09-18-raptor-mic-acknowledgement.md"
     },
     "docs/status.md": {
@@ -1290,8 +1290,20 @@
       "source": "patches/README.md"
     },
     "patches/onvif/0001-persistent-httpd-no-request-children.patch": {
-      "sha256": "f73803ad08104c2d855cc6340459f69143cc5030932e57688638fbca49a23d05",
+      "sha256": "86e8125238fc3af6a45d16a2867dbf29280ef50cc201aa4e196f8008d35069ea",
       "source": "patches/onvif/0001-persistent-httpd-no-request-children.patch"
+    },
+    "patches/onvif/0002-snapshot-digest.patch": {
+      "sha256": "dca818f05b5837ba983e79d4b62f6dcd187b1b5cbe6c904ed144fdd893686e5b",
+      "source": "patches/onvif/0002-snapshot-digest.patch"
+    },
+    "patches/onvif/0003-control-token-reader.patch": {
+      "sha256": "eac21e65c4f4b67de47c61d3fcc1deca4abc3a41309942ab30cba4a31d0c4c77",
+      "source": "patches/onvif/0003-control-token-reader.patch"
+    },
+    "patches/onvif/0004-config-lifetime.patch": {
+      "sha256": "e66553c3f290ec364ced385cdabe886fa0a4fdc5ed07f49158d16a375c8f2b10",
+      "source": "patches/onvif/0004-config-lifetime.patch"
     },
     "patches/raptor-full-source/compy.patch": {
       "sha256": "a24df57eb764e43d4bce8a1c8ad89107a7bbbb4495fba8a90b53a0e4b83327f2",
@@ -1437,6 +1449,10 @@
       "sha256": "25901c3da4080bbd75f9693f927bda3aa05b8cb93a80aafdbf6ed957c8cf9c0b",
       "source": "patches/uhttpd/0017-bind-recording-file-identity.patch"
     },
+    "patches/uhttpd/0018-onvif-snapshot-digest.patch": {
+      "sha256": "752ad4480e3aff553bcba4469e119fd50019a107e8e1fa05a0b5cfbc496df438",
+      "source": "patches/uhttpd/0018-onvif-snapshot-digest.patch"
+    },
     "policy/release-gates.json": {
       "sha256": "de61602909d97e4e7b94e9a8073a7062269c6312bfc46066833079f1d477abb4",
       "source": "policy/release-gates.json"
@@ -1474,7 +1490,7 @@
       "source": "profiles/dlink-dcs6100lhv2-a1/recovery-ap-kernel.fragment"
     },
     "profiles/dlink-dcs6100lhv2-a1/source-profile.json": {
-      "sha256": "02810fd7cbcbeb6e82469ef31f29492668911579644e21d74d3439d02cde9fac",
+      "sha256": "65250a3f9823aa8be569af34f613908cec9b7cf60a7354d28bac7fc23a71df05",
       "source": "profiles/dlink-dcs6100lhv2-a1/source-profile.json"
     },
     "profiles/dlink-dcs6100lhv2-a1/stock-restore-kernel.fragment": {
@@ -1524,6 +1540,10 @@
     "scripts/check_docs.py": {
       "sha256": "31c5a2d16b0810373ef5b21c3150798ee0116b9c12f4bad6ac8b2b2cd453e4df",
       "source": "scripts/check_docs.py"
+    },
+    "scripts/check_onvif_https_chain.py": {
+      "sha256": "b5d399ae3d87a210afe6db6310d005a643bc2957338b883f3f0cf2151db08ec9",
+      "source": "scripts/check_onvif_https_chain.py"
     },
     "scripts/check_public_tree.py": {
       "sha256": "b772032abca28c184190bb065b96404f60bfb91e0c6501ced9fd9119e8e14898",
@@ -1801,9 +1821,29 @@
       "sha256": "56de48745483173c1e501ba6dcab99f8f3bd0045960605bd98ce2c9f17eabd70",
       "source": "tests/test_official_input.py"
     },
+    "tests/test_onvif_config_lifetime.py": {
+      "sha256": "a3b2d2522fe1c1b85de605308e7f80355f51e7ad271239a83d1c140773a4fe21",
+      "source": "tests/test_onvif_config_lifetime.py"
+    },
     "tests/test_onvif_control_imaging_bridge.py": {
-      "sha256": "e5313bfccd9525a31e52f6f124eacdb39f3909b819d452a77154ffa6e979e393",
+      "sha256": "72ac97772af666a231cfa8092bc1a496026d8b6530038a83df53204fe3ae3474",
       "source": "tests/test_onvif_control_imaging_bridge.py"
+    },
+    "tests/test_onvif_control_token.py": {
+      "sha256": "88cc83f7eaa7d3d6b292a7ff74579f0862a8cbcc5ade6a10be494b2e643ab9d4",
+      "source": "tests/test_onvif_control_token.py"
+    },
+    "tests/test_onvif_digest.py": {
+      "sha256": "0a4619d5414f1f2fff4103858174690508986619bc2e50a0c0100017f4ff1b1c",
+      "source": "tests/test_onvif_digest.py"
+    },
+    "tests/test_onvif_snapshot_http.py": {
+      "sha256": "1838f6c4f69edd6b6de7547271d9eae401456b3440d54018b7b7ea1e478f06ea",
+      "source": "tests/test_onvif_snapshot_http.py"
+    },
+    "tests/test_onvif_snapshot_io.py": {
+      "sha256": "7a8c782e7d6a4bbd59340f46ca9ecb4be879a50ca9ea57fc34affbed1acb8f36",
+      "source": "tests/test_onvif_snapshot_io.py"
     },
     "tests/test_platform_wifi.py": {
       "sha256": "91229a9120a69f7dbe89f8736436f16e416447daa756cbb8d04ee78c2488ec77",
@@ -1926,7 +1966,7 @@
       "source": "tests/test_source_delivery_inventory.py"
     },
     "tests/test_source_prepare.py": {
-      "sha256": "2dfe39bd90b01cc2ff7999c28e1749e4eef966efa5c41b94d1c4abeb83d1c3bc",
+      "sha256": "f8aa7ecce8f6b040c6aca504500032345724d908d8adc88b5c835a0d5ef761ce",
       "source": "tests/test_source_prepare.py"
     },
     "tests/test_split_kernel_build.py": {
@@ -2391,6 +2431,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "9307b0dc80df7064c40792517e2209ac4d0e9462",
+  "source_commit": "14b81c671931b038545b0d9177a4609ad8818e91",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }

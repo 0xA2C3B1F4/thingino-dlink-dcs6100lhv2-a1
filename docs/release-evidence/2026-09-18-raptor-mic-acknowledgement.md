@@ -391,3 +391,292 @@ retained kernel ring and that filter, not a complete media-log review.
 Private content-addressed snapshots and the kernel acquisition receipt retain
 the collection details. This short baseline does not close the resource,
 concurrency or kernel/media-error acceptance rows under media load.
+
+### Snapshot and MJPEG ingress acceptance
+
+Two authenticated HTTPS snapshot requests through the production ingress
+returned HTTP 200 and `image/jpeg`. Complete JPEGs decoded on the host at
+1920x1080 for stream 0 and 640x360 for stream 1. Images were processed in
+memory, not retained. This verifies the snapshot endpoints, not browser saving.
+
+Serial four-second HTTPS MJPEG samples returned HTTP 200 and multipart JPEG.
+The host decoded four complete, distinct main-stream frames and three complete,
+distinct substream frames at the same respective dimensions. Incomplete final
+parts were excluded. Curl's deadline exit was expected for the continuous
+response; success required valid HTTP, MIME framing and decoded frames.
+
+Pinned SSH authenticated the camera; HTTPS requests stayed on its loopback
+interface with its self-signed certificate. The API key remained in camera
+pipe memory. No camera settings, persistent files or services were changed.
+Before and after each probe group, boot identity, full system digest and running
+RWD digest matched the accepted candidate. The private candidate ledger records
+the four endpoint checks. No browser rendering, reconnect, concurrency or
+long-duration resource acceptance is inferred from these bounded samples.
+
+### Main-stream RTSP transport probe
+
+The existing bounded installer RTSP verifier passed on the same candidate's
+`/stream0` over interleaved TCP. It observed unauthenticated rejection,
+successful Digest authentication, 26 H.264 RTP packets with two timestamps,
+a complete IDR and SPS dimensions of 1920x1080. Boot, system and running RWD
+identities still matched before and after the test. The credential was derived
+from the existing private installer session in memory and not logged.
+
+This checks RTP framing and SPS metadata, not decoded pixels, RTSP audio or the
+substream. The combined RTSP acceptance row remains open pending those coverage
+decisions and further tests; ONVIF was not exercised in this probe.
+
+### ONVIF read-only ingress observations
+
+Unauthenticated SOAP `GetSystemDateAndTime` and `GetCapabilities` returned
+HTTP 200 with their expected XML response elements and no SOAP fault through
+production HTTPS ingress. Unauthenticated `GetProfiles` returned HTTP 401 and
+a SOAP fault. Boot and full system identity matched before and after collection.
+
+A subsequent `GetProfiles` attempt using HTTP Digest and the existing installer
+service credential also returned HTTP 401. Authenticated profile acceptance
+therefore remains unresolved. Check the service's supported authentication
+mechanism and current credential binding before attributing this to a firmware
+defect; HTTP Digest and SOAP WS-Security are distinct mechanisms. No credentials
+or service settings were changed, and the ONVIF acceptance row remains open.
+
+The subsequent source check at the exact built ONVIF revision,
+[`4ca8f063`](https://github.com/themactep/thingino-onvif/blob/4ca8f063563b96631d04e1ed7ceb2244d413f736/src/onvif_simple_server.c),
+showed that protected SOAP requests validate a WS-Security UsernameToken and
+PasswordDigest. Retesting `GetProfiles` with that mechanism and the same
+credential returned HTTP 200 with the expected response and two profiles,
+1920x1080 and 640x360. No firmware or credential change was needed. The earlier
+HTTP-Digest-only 401 is retained as a test-method limitation, not evidence of a
+camera authentication defect. Discovery, returned media URIs and wider ONVIF
+operations still require acceptance; a successful profile read alone does not
+close the combined protocol row.
+
+Subsequent authenticated URI lookup exposed a release blocker. Both profiles
+returned legacy RTSP paths `/ch0` and `/ch1`, while current RSD access status
+reported `/stream0` and `/stream1`. The same bounded verifier that passed
+`/stream0` failed at authenticated DESCRIBE for ONVIF's returned `/ch0`.
+The returned snapshot paths were also legacy `/x/ch0.jpg` and `/x/ch1.jpg`, not
+the current ingress routes. URI query values are redacted from evidence.
+The source of these stale URLs, including preserved configuration versus image
+defaults, still requires diagnosis. ONVIF must not be accepted on profile reads
+alone; advertised media URLs must work end to end.
+
+Read-only comparison then found the same legacy `profiles.stream0/stream1`
+`url` and `snapurl` fields in both effective `/etc/onvif.json` and
+`/rom/etc/onvif.json`. Thus this is not only a preserved-overlay artifact.
+At the pinned upstream revision, Media service constructs returned URIs from
+those profile fields. Current image composition and provisioning update ONVIF
+credentials but do not reconcile these media endpoints with live RSD settings.
+
+The fix must also address snapshot authentication. The existing Control
+contract deliberately rejects unauthenticated `/onvif/image.cgi` and
+`/onvif/image1.cgi`, including requests carrying only the internal proxy marker;
+its tests authorize them with the WebUI API key. Merely changing `snapurl` to
+those routes would not establish interoperability for an ONVIF client that has
+no WebUI cookie or API key. Do not bypass authentication to make this pass.
+
+Required regression coverage includes fresh and preserved old configuration,
+both profiles, runtime RTSP endpoint/port changes, an ONVIF-authenticated client
+fetching the returned snapshot without a WebUI session, rejected unauthorized
+snapshot requests, and failure when live media state cannot be established.
+The implementation and physical retest are still pending.
+
+During local implementation, a short-lived snapshot-ticket design was tested
+but rejected before publication or installation. Media2 section 5.5.1 requires
+the returned snapshot URI to remain valid indefinitely, so expiring the URI
+after 30 seconds would break that contract even though the local ticket tests
+passed. The experimental ticket state and HTTP routes were removed; the separate
+live RTSP URI bridge changes remain under development.
+
+The snapshot correction must instead expose a stable URI with independent HTTP
+Digest authentication, retaining normal access checks and avoiding credentials
+in URLs. Nonce expiry must not expire the resource URI. References:
+[Media2 21.12, section 5.5.1](https://www.onvif.org/specs/2112/ONVIF-Media2-Service-Spec-v2112.pdf)
+and [Core 22.12 authentication](https://www.onvif.org/specs/2212/ONVIF-Core-Spec-v2212.pdf).
+
+Read-only design review selected the persistent ONVIF daemon as the Digest
+authentication owner, reusing its effective SOAP credentials. Control's WebUI
+authentication remains unchanged. Implementation must cover the entire proxy
+path: exact snapshot GET routes to the ONVIF daemon, forwarded Authorization,
+Digest challenge response headers and binary JPEG responses, without the old
+proxy-marker/local-file authorization flow. The fixed internal Control snapshot
+action delegates capture to RHD. RHD checks privacy before reading camera frames
+and returns a privacy image, or 503 if that image is unavailable. Physical
+acceptance must verify that private camera pixels never reach the snapshot.
+
+The snapshot relay needs a separate binary transfer path, not the existing
+32-KiB JSON helper or 256-KiB CGI response buffer. Control admits JPEGs up to
+2 MiB. Use bounded headers and a small transfer buffer, validate framing and
+status, and enforce one monotonic request deadline across client input, backend
+access and output. Nonces and replay counters must have bounded storage;
+discarding replay counters must invalidate their nonce. Stable URLs must remain
+usable with fresh authentication after nonce expiry and daemon restart.
+
+These are implementation requirements, not completed checks. Actual ONVIF
+crypto build capability, credential rotation, proxy challenge round-trip,
+large JPEGs, privacy denial and slow-client recovery still require validation.
+No snapshot authentication fix has been installed. A separate bridge parser
+change now checks boolean value length before advancing its pointer; the
+focused bridge and source-preparation suite passed 36 tests, including short
+and malformed boolean rejection. This host result does not close the failed
+physical ONVIF candidate check.
+
+The new `0002-snapshot-digest.patch` now supplies a standalone C authentication
+core and is included in the source profile. It is not yet linked into the daemon
+or exposed through HTTP. It implements MD5 `qop=auth`, random nonces with
+monotonic expiry, bounded replay counters and credential-change invalidation.
+Challenge reuse prevents unauthenticated requests from continuously evicting
+pending nonces. The caller contract requires exact GET routing and rejection of
+embedded NUL bytes and duplicate Authorization headers before verification.
+Core 22.12 section 5.9.2 specifies MD5 as the default algorithm and SHA-256 as
+optional; this does not claim general Digest algorithm support.
+
+After read-only review and corrections, 53 focused host tests passed. Coverage
+includes both snapshot paths with an actual curl Digest client against a local
+test server, nonce expiry and restart, observed credential rotation, replay
+counter maximum and wrap, bounded-table pressure, malformed headers and crypto
+callback failures. AddressSanitizer and UndefinedBehaviorSanitizer passed an
+exact-allocation header-truncation sweep and single-byte mutations. Hashlib
+provides the test hash callback; these checks do not prove the production crypto
+binding, uhttpd challenge forwarding, camera JPEG transfer or deadline behavior.
+Those integration steps and physical ONVIF acceptance remain open. No new
+firmware has been built, published or installed for this work.
+
+The same patch now contains the bounded binary snapshot relay and deadline I/O
+helpers. They connect only to loopback Control, use the fixed stream action with
+a Bearer token, validate response headers and JPEG framing, and cap the image
+at 2 MiB. The relay uses a small transfer buffer rather than allocating the full
+image. One monotonic deadline governs connect, input and output. After a partial
+response, failure closes the stream instead of appending a second HTTP response.
+Host network tests cover both streams with 1,280,004-byte binary images,
+fragmented headers and JPEG prefix, malformed and denied backend responses,
+truncation, slow headers/body and client backpressure. This does not yet test
+the production daemon or HTTPS proxy integration.
+
+Inspection of the existing universal SquashFS found a defined global dynamic
+`mbedtls_md5` function in its MIPS `libmbedcrypto.so.3.6.6`. Library SHA-256:
+`8aad205f70da256100a0206053de4123151798e85328ae45d965de843ffb591b`.
+The separate production callback calls that API and fails compilation if
+`MBEDTLS_MD5_C` is absent. Target compilation/linking, effective-credential
+loading, strict HTTP ingress, structural Control-token loading and proxy wiring
+remain to be completed before this is an installable correction.
+
+The expanded host suite passed 61 tests after catching and correcting a blocked
+socket send on macOS. Per-call nonblocking flags alone did not bound that send;
+the I/O helpers now explicitly set `O_NONBLOCK` before the deadline-driven
+operation. The backpressure regression runs in a child process with an outer
+timeout so a future regression cannot hang the whole suite. The interrupted
+earlier run is not a passing result. Its small generated test library and raw
+stack sample are disposable diagnostics; the regression and this note retain
+the useful evidence in source.
+
+The local implementation now includes daemon credential loading, strict snapshot
+HTTP parsing, a structural Control-token reader and uhttpd Digest forwarding.
+The focused host suite passed 77 tests. A follow-up review found that the relay
+previously emitted the complete advertised body before checking the JPEG ending.
+It now withholds the final two bytes until validating the EOI marker. Regression
+tests cover both an ending received in the initial read and a fragmented ending;
+invalid images leave an incomplete response instead of a completed success.
+These host checks do not prove target compilation, the running HTTPS proxy or
+physical ONVIF acceptance. No new ONVIF firmware has been installed or published.
+
+Astra high's follow-up review accepted the revised JPEG tail handling but found
+a blocking lifetime issue in pinned upstream `conf.c`: `process_json_conf_file`
+retains its parsed JSON tree until process exit. Repeated requests in the
+persistent daemon therefore leak that tree. Retained configuration strings are
+copies, so the tree can be released on each post-load exit. Before rebuilding,
+also correct failed profile reallocation and relay-event overflow counts, plus
+pointer-owned relay token, event and PTZ cleanup. These findings remain open;
+passing host snapshot tests do not cover this upstream configuration lifecycle.
+
+The full source check passed policy, documentation, source-lock and Control
+contract checks, then ran 950 tests with one failure: the ingress manifest lacked
+the new uhttpd patch. The manifest now pins patch 0018 and its targeted test passes.
+The full suite has not yet been rerun after that manifest correction.
+
+## Target compile checks before configuration lifetime correction
+
+The ONVIF daemon with patches 0001 through 0003 compiled and linked with the
+existing MIPS toolchain and target mbedTLS library. Two media include hunks first
+failed GNU `patch -F0`; their context and coordinates were corrected, then the
+entire patch sequence applied with zero fuzz and the daemon build passed.
+uhttpd with patch 0018 also compiled and linked with TLS enabled and Lua, ubus and
+ucode disabled. Both outputs are MIPS32r2 ELF executables. Neither successful
+compile log contains a compiler warning or error.
+
+These checks used immutable builder image
+`sha256:8abae43028bd1155572c76e268b9b8c5dce4686efe70ff68c0b7c5f9b93b361e`
+and the earlier 38607f3468cf build-a workspace mounted read-only with
+`loop,ro,noload`. New build trees were separate scratch copies. The pristine
+ONVIF source archive from that workspace has SHA-256
+`67998a0e2a2a7edf2641e32532fdbf2ebd0297f82f62dca1d6fb383e4b59229d`.
+This is a component compile check, not a clean firmware rebuild, runtime HTTPS
+test or camera acceptance. The configuration lifetime finding remains open.
+
+The subsequent full `scripts/check.sh` run passed all 950 tests after the
+manifest and patch-context corrections, along with source policy, source-lock,
+documentation and Control contract checks. This run precedes the pending
+configuration-lifetime patch and does not close its regression requirement.
+
+## Native HTTPS process integration before lifetime correction
+
+Seven tests passed using actual native Linux uhttpd and ONVIF daemon processes,
+an actual TLS connection and a bounded fake Control HTTP server. Both snapshot
+routes authenticated with curl Digest and relayed an exact 1,048,580-byte body.
+Missing/wrong credentials, plaintext HTTP, duplicate Authorization, a query
+suffix and a forged proxy marker did not reach the snapshot backend. Effective
+credential rotation worked without a process restart. A backend 503 produced
+502, not a successful JPEG. The test is retained as
+`scripts/check_onvif_https_chain.py`; the promoted copy was rerun successfully.
+
+This tests proxy, authentication and byte transport, not camera capture or JPEG
+decoding. It used patches 0001 through 0003 and uhttpd 0018, before the pending
+configuration-lifetime correction. It must be rerun after that correction.
+The test uses generated short-lived TLS credentials and dummy service credentials
+only, and refuses to run without `RAPTOR_TEST_CONTAINER=1` and `/deps` present.
+
+The isolated `--network none` ARM64 builder reused cached mbedTLS 3.6.6,
+Mini-XML 4.0.4, JCT 1.2.0, libubox 1fe93d2fefb213ec987763e7e94ce5eaa757bfc3
+and ustream-ssl 99f1c0db5a729f615bc5114b3b52fd8ac8083f34 sources. Native uhttpd
+needed `-Wno-error=stringop-overread` for the host GCC warning in the existing
+blob header iterator. The warning remained visible. Production MIPS flags were
+unchanged and both earlier MIPS component builds passed without warnings.
+
+Reproduction requires the native binaries at `/deps/build-uhttpd/uhttpd` and
+`/deps/onvif-host/onvif_httpd`, with their native libraries at `/deps/prefix/lib`.
+Mount these task-owned test builds into the immutable builder, set
+`LD_LIBRARY_PATH=/deps/prefix/lib` and `TMPDIR=/deps/tmp`, mount the retained
+script read-only, then run it with Python 3. The script starts and terminates its
+own processes and removes generated certificates and response fixtures.
+
+## Configuration lifetime correction and revalidation
+
+ONVIF patch 0004 now frees the parsed JSON tree on every post-load exit, preserves
+allocation ownership and valid counts on failure, and frees relay tokens and
+disabled PTZ/event configuration. The previous relay capacity is preserved.
+Configured credentials that are incomplete, invalid, empty or unsuccessfully
+copied cause loading to fail before SOAP dispatch. Existing per-field nested
+server precedence is unchanged. Both credential fields absent still retains the
+upstream anonymous-configuration behavior; snapshots separately reject absent
+credentials. Astra high reviewed the correction and closed its credential-copy
+finding without reporting another blocker in that delta.
+
+Five explicit lifecycle tests passed using the pinned full `conf.c` and JCT
+sources, not only extracted snippets. The harness tracks allocations through
+repeated loads and sweeps allocation-failure positions, including root, nested
+and overriding credential fixtures. Each successful credentialed load must
+retain the exact expected pair. Disabled PTZ/events, relay-event overflow and
+cleanup are covered. These full-source tests require `ONVIF_LIFECYCLE_SOURCE`,
+`ONVIF_LIFECYCLE_JCT` and `TMPDIR`; an ordinary run without them skips that class.
+
+The corrected daemon compiled and linked for MIPS and native ARM64. A forced
+`make -B` rebuild compiled every daemon translation unit again. Make reported a
+14–16 ms future timestamp on the shared scratch Makefile, but no compiler or
+linker errors occurred; the forced rebuild did not rely on timestamp freshness.
+All seven actual-process HTTPS tests then passed with patch 0004 included.
+This still does not constitute two clean firmware builds or device acceptance.
+
+The complete `scripts/check.sh` run with both lifecycle source environment
+variables explicitly set passed 955 tests, along with policy, source-lock,
+documentation and Control contract checks. The corrected source is ready for
+the next full firmware build, not for a firmware release declaration.

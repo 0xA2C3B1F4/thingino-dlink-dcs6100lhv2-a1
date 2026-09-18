@@ -1,0 +1,81 @@
+diff --git a/control_proxy.c b/control_proxy.c
+--- a/control_proxy.c
++++ b/control_proxy.c
+@@ -305,6 +305,16 @@
+ 			   origin[length] && !strcasecmp(origin + length, host));
+ }
+ 
++static bool control_proxy_single_authorization(struct client *cl)
++{
++	struct blob_attr *cur;
++	unsigned int rem, count = 0;
++	blob_for_each_attr(cur, cl->hdr.head, rem)
++		if (!strcasecmp(blobmsg_name(cur), "authorization") && ++count > 1)
++			return false;
++	return true;
++}
++
+ static bool control_proxy_status(struct dispatch_control_proxy *proxy, char *line)
+ {
+ 	char *code, *message, *end;
+@@ -361,7 +371,10 @@
+ 
+ 	if (!strcasecmp(line, "Content-Type")) {
+ 		if (proxy->content_type_seen ||
+-		    ((!proxy->onvif &&
++		    (proxy->onvif_snapshot &&
++		     !control_proxy_content_type(value, "image/jpeg") &&
++		     !control_proxy_content_type(value, "text/plain")) ||
++		    ((!proxy->onvif && !proxy->onvif_snapshot &&
+ 		      !control_proxy_content_type(value, "application/json") &&
+ 		      !control_proxy_content_type(value, "image/jpeg") &&
+ 		      !control_proxy_content_type(value, "application/sdp") &&
+@@ -411,7 +424,7 @@
+ 	}
+ 
+ 	if (!strcasecmp(line, "WWW-Authenticate")) {
+-		if (!proxy->onvif || proxy->www_authenticate_seen || !*value ||
++		if ((!proxy->onvif && !proxy->onvif_snapshot) || proxy->www_authenticate_seen || !*value ||
+ 		    strlen(value) > 255 || strpbrk(value, "\r\n"))
+ 			return false;
+ 		proxy->www_authenticate_seen = true;
+@@ -842,9 +855,7 @@
+ {
+ 	return !strncmp(url, "/media/v1/", 10) ||
+ 	       !strcmp(url, "/api/v1/actions/snapshot?stream_id=0") ||
+-	       !strcmp(url, "/api/v1/actions/snapshot?stream_id=1") ||
+-	       !strcmp(url, "/onvif/image.cgi") ||
+-	       !strcmp(url, "/onvif/image1.cgi");
++	       !strcmp(url, "/api/v1/actions/snapshot?stream_id=1");
+ }
+ 
+ static void control_proxy_reset_response(struct dispatch_control_proxy *proxy)
+@@ -1065,7 +1076,7 @@
+ 	remote_address = cl->peer_addr.family == AF_INET6 ?
+ 		(const void *) &cl->peer_addr.in6 : (const void *) &cl->peer_addr.in;
+ 	if (inet_ntop(cl->peer_addr.family, remote_address, remote, sizeof(remote))) {
+-		if (proxy->onvif)
++		if (proxy->onvif || proxy->onvif_snapshot)
+ 			ustream_printf(&proxy->backend.stream,
+ 				"X-Thingino-Remote-Addr: %s\r\n", remote);
+ 		else
+@@ -1112,6 +1123,10 @@
+ 	proxy->media = media;
+ 	proxy->onvif = onvif && !onvif_snapshot;
+ 	proxy->onvif_snapshot = onvif_snapshot;
++	if (onvif_snapshot && !control_proxy_single_authorization(cl)) {
++		control_proxy_fail(cl, 400, "Bad Request", "duplicate_authorization");
++		return;
++	}
+ 	host = control_proxy_header(cl, "host");
+ 	origin = control_proxy_header(cl, "origin");
+ 
+@@ -1159,7 +1174,7 @@
+ 		return;
+ 	}
+ 
+-	proxy->backend_port = onvif && !onvif_snapshot ? CONTROL_ONVIF_PORT :
++	proxy->backend_port = onvif ? CONTROL_ONVIF_PORT :
+ 		CONTROL_PROXY_PORT;
+ 	proxy->request_remaining = cl->request.content_length;
+ 	proxy->request_body_size = cl->request.content_length;

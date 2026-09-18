@@ -764,8 +764,23 @@
     },
     {
       "destination": "package/thingino-onvif/0001-persistent-httpd-no-request-children.patch",
-      "sha256": "f73803ad08104c2d855cc6340459f69143cc5030932e57688638fbca49a23d05",
+      "sha256": "86e8125238fc3af6a45d16a2867dbf29280ef50cc201aa4e196f8008d35069ea",
       "source": "patches/onvif/0001-persistent-httpd-no-request-children.patch"
+    },
+    {
+      "destination": "package/thingino-onvif/0002-snapshot-digest.patch",
+      "sha256": "dca818f05b5837ba983e79d4b62f6dcd187b1b5cbe6c904ed144fdd893686e5b",
+      "source": "patches/onvif/0002-snapshot-digest.patch"
+    },
+    {
+      "destination": "package/thingino-onvif/0003-control-token-reader.patch",
+      "sha256": "eac21e65c4f4b67de47c61d3fcc1deca4abc3a41309942ab30cba4a31d0c4c77",
+      "source": "patches/onvif/0003-control-token-reader.patch"
+    },
+    {
+      "destination": "package/thingino-onvif/0004-config-lifetime.patch",
+      "sha256": "e66553c3f290ec364ced385cdabe886fa0a4fdc5ed07f49158d16a375c8f2b10",
+      "source": "patches/onvif/0004-config-lifetime.patch"
     },
     {
       "destination": "package/thingino-uhttpd/0007-proxy-thingino-control.patch",
@@ -821,6 +836,11 @@
       "destination": "package/thingino-uhttpd/0017-bind-recording-file-identity.patch",
       "sha256": "25901c3da4080bbd75f9693f927bda3aa05b8cb93a80aafdbf6ed957c8cf9c0b",
       "source": "patches/uhttpd/0017-bind-recording-file-identity.patch"
+    },
+    {
+      "destination": "package/thingino-uhttpd/0018-onvif-snapshot-digest.patch",
+      "sha256": "752ad4480e3aff553bcba4469e119fd50019a107e8e1fa05a0b5cfbc496df438",
+      "source": "patches/uhttpd/0018-onvif-snapshot-digest.patch"
     }
   ],
   "model": "DCS-6100LHV2",

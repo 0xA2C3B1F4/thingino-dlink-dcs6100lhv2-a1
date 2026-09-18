@@ -2,19 +2,24 @@ diff --git a/Makefile b/Makefile
 index f1376b40c90275ce51eee28e573d09eecebeb4d7..9c8e7c572e135e3a825a24d1e17c9594f00597e0 100644
 --- a/Makefile
 +++ b/Makefile
-@@ -19,7 +19,10 @@ OBJECTS_O	 = $(SRC_DIR)/onvif_simple_server.o \
+@@ -19,7 +19,15 @@ OBJECTS_O	 = $(SRC_DIR)/onvif_simple_server.o \
  		   $(SRC_DIR)/mxml_wrapper.o \
  		   $(SRC_DIR)/xml_logger.o \
  		   $(SRC_DIR)/audio_output_enabled.o \
 -		   $(SRC_DIR)/prudynt_bridge.o
-+		   $(SRC_DIR)/control_imaging_bridge.o
++		   $(SRC_DIR)/control_imaging_bridge.o \
++		   $(SRC_DIR)/onvif_control_token.o
 +
 +OBJECTS_H	 = $(filter-out $(SRC_DIR)/onvif_simple_server.o,$(OBJECTS_O)) \
-+		   $(SRC_DIR)/onvif_httpd.o
++		   $(SRC_DIR)/onvif_httpd.o \
++		   $(SRC_DIR)/onvif_digest.o \
++		   $(SRC_DIR)/onvif_digest_mbedtls.o \
++		   $(SRC_DIR)/onvif_snapshot_io.o \
++		   $(SRC_DIR)/onvif_snapshot_http.o
  
  OBJECTS_N	 = $(SRC_DIR)/onvif_notify_server.o \
  		   $(SRC_DIR)/conf.o \
-@@ -107,7 +110,7 @@ ifeq ($(STRIP), )
+@@ -107,7 +115,7 @@ ifeq ($(STRIP), )
      STRIP=echo
  endif
  
@@ -23,7 +28,7 @@ index f1376b40c90275ce51eee28e573d09eecebeb4d7..9c8e7c572e135e3a825a24d1e17c9594
  
  # Debug build with AddressSanitizer and debugging symbols
  debug: CFLAGS_DEBUG = -g -O0 -fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer -DDEBUG
-@@ -130,6 +133,11 @@ onvif_simple_server: $(OBJECTS_O)
+@@ -130,6 +138,11 @@ onvif_simple_server: $(OBJECTS_O)
  	$(CC) $(OBJECTS_O) $(LIBS_O) -fPIC -Os -o $@
  	$(STRIP) $@
  
@@ -35,7 +40,7 @@ index f1376b40c90275ce51eee28e573d09eecebeb4d7..9c8e7c572e135e3a825a24d1e17c9594
  onvif_notify_server: $(OBJECTS_N)
  	$(CC) $(OBJECTS_N) $(LIBS_N) -fPIC -Os -o $@
  	$(STRIP) $@
-@@ -162,9 +170,11 @@ wsd_simple_server_debug: $(OBJECTS_W_DEBUG)
+@@ -162,9 +175,11 @@ wsd_simple_server_debug: $(OBJECTS_W_DEBUG)
  
  clean:
  	rm -f onvif_simple_server onvif_simple_server_debug
@@ -43,7 +48,7 @@ index f1376b40c90275ce51eee28e573d09eecebeb4d7..9c8e7c572e135e3a825a24d1e17c9594
  	rm -f onvif_notify_server onvif_notify_server_debug
  	rm -f wsd_simple_server wsd_simple_server_debug
  	rm -f $(OBJECTS_O) $(OBJECTS_O_DEBUG)
-+	rm -f $(SRC_DIR)/onvif_httpd.o
++	rm -f $(OBJECTS_H)
  	rm -f $(OBJECTS_N) $(OBJECTS_N_DEBUG)
  	rm -f $(OBJECTS_W) $(OBJECTS_W_DEBUG)
  	$(MAKE) -C libtomcrypt clean
@@ -52,8 +57,9 @@ new file mode 100644
 index 0000000000000000000000000000000000000000..697a6c50490bd32137e73e1e490536a714d20cdd
 --- /dev/null
 +++ b/src/control_imaging_bridge.c
-@@ -0,0 +1,422 @@
+@@ -0,0 +1,451 @@
 +#include "control_imaging_bridge.h"
++#include "onvif_control_token.h"
 +
 +#include "log.h"
 +
@@ -102,48 +108,10 @@ index 0000000000000000000000000000000000000000..697a6c50490bd32137e73e1e490536a7
 +
 +static bool extract_control_token(char token[65])
 +{
-+    char config[CONFIG_LIMIT + 1];
-+    int fd = open(CONTROL_CONFIG_PATH, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
-+    ssize_t length;
-+    char *control;
-+    char *key;
-+    char *value;
-+    size_t index;
-+
-+    if (fd < 0)
-+        return false;
-+    length = read(fd, config, CONFIG_LIMIT + 1);
-+    close(fd);
-+    if (length <= 0 || length > CONFIG_LIMIT)
-+        return false;
-+    config[length] = '\0';
-+    control = strstr(config, "\"control\"");
-+    if (!control || !(key = strstr(control, "\"token\"")))
-+        return false;
-+    value = strchr(key + 7, ':');
-+    if (!value)
-+        return false;
-+    do {
-+        value++;
-+    } while (*value == ' ' || *value == '\t' || *value == '\r' || *value == '\n');
-+    if (*value++ != '"')
-+        return false;
-+    if (strlen(value) < 65)
-+        return false;
-+    for (index = 0; index < 64; index++) {
-+        unsigned char byte = (unsigned char)value[index];
-+        if (!((byte >= '0' && byte <= '9') || (byte >= 'a' && byte <= 'f') ||
-+              (byte >= 'A' && byte <= 'F')))
-+            return false;
-+        token[index] = (char)byte;
-+    }
-+    if (value[64] != '"')
-+        return false;
-+    token[64] = '\0';
-+    return true;
++    return onvif_control_token(CONTROL_CONFIG_PATH, token);
 +}
 +
-+static int control_request(const char *method, const char *body,
++static int control_request_path(const char *method, const char *path, const char *body,
 +                           char response[RESPONSE_LIMIT + 1])
 +{
 +    struct sockaddr_in address = {
@@ -162,10 +130,10 @@ index 0000000000000000000000000000000000000000..697a6c50490bd32137e73e1e490536a7
 +    if (!extract_control_token(token))
 +        return -1;
 +    request_length = snprintf(request, sizeof(request),
-+        "%s /api/v1/imaging HTTP/1.1\r\nHost: 127.0.0.1:%d\r\n"
++        "%s %s HTTP/1.1\r\nHost: 127.0.0.1:%d\r\n"
 +        "Authorization: Bearer %s\r\nContent-Type: application/json\r\n"
 +        "Content-Length: %zu\r\nConnection: close\r\n\r\n%s",
-+        method, CONTROL_PORT, token, body_length, body ? body : "");
++        method, path, CONTROL_PORT, token, body_length, body ? body : "");
 +    memset(token, 0, sizeof(token));
 +    if (request_length < 0 || (size_t)request_length >= sizeof(request))
 +        return -1;
@@ -210,6 +178,12 @@ index 0000000000000000000000000000000000000000..697a6c50490bd32137e73e1e490536a7
 +    body_start += 4;
 +    memmove(response, body_start, used - (size_t)(body_start - response) + 1);
 +    return 0;
++}
++
++static int control_request(const char *method, const char *body,
++                           char response[RESPONSE_LIMIT + 1])
++{
++    return control_request_path(method, "/api/v1/imaging", body, response);
 +}
 +
 +static const char *skip_space(const char *cursor, const char *end)
@@ -305,15 +279,14 @@ index 0000000000000000000000000000000000000000..697a6c50490bd32137e73e1e490536a7
 +    const char *value;
 +    if (named_value(object, end, name, &value))
 +        return -1;
-+    const char *tail = skip_space(value + 4, end);
++    const char *tail;
 +    if ((size_t)(end - value) >= 4 && !memcmp(value, "true", 4) &&
-+        tail < end && strchr(",}", *tail)) {
++        (tail = skip_space(value + 4, end)) < end && strchr(",}", *tail)) {
 +        *result = true;
 +        return 0;
 +    }
-+    tail = skip_space(value + 5, end);
 +    if ((size_t)(end - value) >= 5 && !memcmp(value, "false", 5) &&
-+        tail < end && strchr(",}", *tail)) {
++        (tail = skip_space(value + 5, end)) < end && strchr(",}", *tail)) {
 +        *result = false;
 +        return 0;
 +    }
@@ -416,6 +389,67 @@ index 0000000000000000000000000000000000000000..697a6c50490bd32137e73e1e490536a7
 +    return 0;
 +}
 +
++int control_rtsp_uri(unsigned int stream, const char *address, char *uri, size_t size)
++{
++    char response[RESPONSE_LIMIT + 1];
++    char endpoint[65];
++    struct in_addr checked_address;
++    const char *root, *end, *rtsp, *rtsp_end, *streams, *streams_end;
++    const char *channel, *channel_end, *value, *tail;
++    unsigned int port = 0;
++    size_t length = 0;
++    bool available, enabled;
++    if (uri && size) uri[0] = '\0';
++    if (!uri || !size || stream > 1 || !address ||
++        inet_pton(AF_INET, address, &checked_address) != 1 ||
++        control_request_path("GET", "/api/v1/runtime/media", NULL, response))
++        return -1;
++    end = response + strlen(response);
++    root = skip_space(response, end);
++    if (named_object(root, end, "rtsp", &rtsp, &rtsp_end) ||
++        named_value(rtsp, rtsp_end, "port", &value)) return -1;
++    tail = value;
++    while (tail < rtsp_end && *tail >= '0' && *tail <= '9') {
++        if (port > 6553) return -1;
++        port = port * 10 + (unsigned int)(*tail++ - '0');
++    }
++    if (tail == value || !port || port > 65535) return -1;
++    tail = skip_space(tail, rtsp_end);
++    if (tail >= rtsp_end || !strchr(",}", *tail) ||
++        named_object(root, end, "streams", &streams, &streams_end) ||
++        named_object(streams, streams_end, stream ? "ch1" : "ch0", &channel, &channel_end) ||
++        named_bool(channel, channel_end, "available", &available) || !available ||
++        named_bool(channel, channel_end, "enabled", &enabled) || !enabled ||
++        named_value(channel, channel_end, "rtsp_endpoint", &value) || *value++ != '"')
++        return -1;
++    while (value < channel_end && *value != '"') {
++        unsigned char c = (unsigned char)*value++;
++        if (length == sizeof(endpoint) - 1 ||
++            !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
++              (c >= '0' && c <= '9') || c == '_' || c == '-' || c == '.')) return -1;
++        endpoint[length++] = (char)c;
++    }
++    if (!length || value >= channel_end || *value++ != '"') return -1;
++    tail = skip_space(value, channel_end);
++    if (tail >= channel_end || !strchr(",}", *tail)) return -1;
++    endpoint[length] = '\0';
++    if (!strcmp(endpoint, ".") || !strcmp(endpoint, "..")) return -1;
++    int count = snprintf(uri, size, "rtsp://%s:%u/%s", address, port, endpoint);
++    if (count < 0 || (size_t)count >= size) { uri[0] = '\0'; return -1; }
++    return 0;
++}
++
++int control_snapshot_uri(unsigned stream, const char *address, char *uri, size_t size)
++{
++    struct in_addr parsed;
++    if (!uri || !size) return -1;
++    uri[0] = '\0';
++    if (stream > 1 || !address || inet_pton(AF_INET, address, &parsed) != 1) return -1;
++    int count = snprintf(uri, size, "https://%s/onvif/image%s.cgi", address, stream ? "1" : "");
++    if (count < 0 || (size_t)count >= size) { uri[0] = '\0'; return -1; }
++    return 0;
++}
++
 +int control_load_imaging_state(control_imaging_state_t *state)
 +{
 +    char response[RESPONSE_LIMIT + 1];
@@ -480,7 +514,7 @@ new file mode 100644
 index 0000000000000000000000000000000000000000..e817fd753ed558d73bc03cc923edc9ddd8057b50
 --- /dev/null
 +++ b/src/control_imaging_bridge.h
-@@ -0,0 +1,26 @@
+@@ -0,0 +1,28 @@
 +#pragma once
 +
 +#include <stddef.h>
@@ -505,6 +539,8 @@ index 0000000000000000000000000000000000000000..e817fd753ed558d73bc03cc923edc9dd
 +} control_imaging_command_t;
 +
 +int control_load_imaging_state(control_imaging_state_t *state);
++int control_rtsp_uri(unsigned int stream, const char *address, char *uri, size_t size);
++int control_snapshot_uri(unsigned stream, const char *address, char *uri, size_t size);
 +int control_apply_imaging_changes(const control_imaging_command_t *commands,
 +                                  size_t command_count);
 diff --git a/src/imaging_service.c b/src/imaging_service.c
@@ -880,7 +916,7 @@ new file mode 100644
 index 0000000000000000000000000000000000000000..5352bd9e7833297faafa131c8dbd6961433bee38
 --- /dev/null
 +++ b/src/onvif_httpd.c
-@@ -0,0 +1,567 @@
+@@ -0,0 +1,541 @@
 +#define _GNU_SOURCE
 +
 +#include <arpa/inet.h>
@@ -900,6 +936,9 @@ index 0000000000000000000000000000000000000000..5352bd9e7833297faafa131c8dbd6961
 +#include <sys/types.h>
 +#include <time.h>
 +#include <unistd.h>
++#include "onvif_snapshot_http.h"
++#include "onvif_control_token.h"
++#include "onvif_snapshot_io.h"
 +
 +#define ONVIF_LISTEN_PORT 1999
 +#define CONTROL_PORT 1998
@@ -912,6 +951,8 @@ index 0000000000000000000000000000000000000000..5352bd9e7833297faafa131c8dbd6961
 +
 +static jmp_buf request_exit_point;
 +static volatile sig_atomic_t request_active;
++static int64_t request_deadline;
++static bool extract_control_token(char token[65]);
 +
 +static void onvif_request_exit(int status)
 +{
@@ -934,7 +975,7 @@ index 0000000000000000000000000000000000000000..5352bd9e7833297faafa131c8dbd6961
 +    size_t used = 0;
 +
 +    while (used < length) {
-+        ssize_t count = read(fd, output + used, length - used);
++        ssize_t count = onvif_io_read(fd, output + used, length - used, request_deadline);
 +        if (count > 0) {
 +            used += (size_t) count;
 +            continue;
@@ -948,20 +989,7 @@ index 0000000000000000000000000000000000000000..5352bd9e7833297faafa131c8dbd6961
 +
 +static int write_all(int fd, const void *buffer, size_t length)
 +{
-+    const unsigned char *input = buffer;
-+    size_t used = 0;
-+
-+    while (used < length) {
-+        ssize_t count = write(fd, input + used, length - used);
-+        if (count > 0) {
-+            used += (size_t) count;
-+            continue;
-+        }
-+        if (count < 0 && errno == EINTR)
-+            continue;
-+        return -1;
-+    }
-+    return 0;
++    return onvif_io_write(fd, buffer, length, request_deadline);
 +}
 +
 +static ssize_t find_header_end(const unsigned char *buffer, size_t length)
@@ -1168,11 +1196,14 @@ index 0000000000000000000000000000000000000000..5352bd9e7833297faafa131c8dbd6961
 +    int result = -1;
 +    bool invoked = false;
 +
++    request_deadline = onvif_io_deadline(3500);
++    if (request_deadline < 0) return -1;
++
 +    while (header_offset < 0) {
 +        ssize_t count;
 +        if (used >= HEADER_LIMIT)
 +            goto bad_request;
-+        count = read(fd, request + used, HEADER_LIMIT - used);
++        count = onvif_io_read(fd, request + used, HEADER_LIMIT - used, request_deadline);
 +        if (count > 0) {
 +            used += (size_t) count;
 +            header_offset = find_header_end(request, used);
@@ -1183,7 +1214,22 @@ index 0000000000000000000000000000000000000000..5352bd9e7833297faafa131c8dbd6961
 +        goto bad_request;
 +    }
 +    body_offset = (size_t) header_offset + 4;
++    if (memchr(request, 0, (size_t)header_offset)) goto bad_request;
 +    request[header_offset] = '\0';
++    if (!strncmp((char *)request, "GET ", 4)) {
++        /* Match the CGI argv[0] directory lookup after our resource chdir. */
++        char local_config[] = "./onvif.json";
++        char default_config[] = DEFAULT_JSON_CONF_FILE;
++        char *config = access(local_config, F_OK) == 0 ? local_config : default_config;
++        memset(&service_ctx, 0, sizeof(service_ctx));
++        invoked = true;
++        int loaded = process_json_conf_file(config);
++        result = onvif_snapshot_http(fd, (char *)request, (size_t)header_offset,
++            used - body_offset, loaded < 0 ? NULL : service_ctx.username,
++            loaded < 0 ? NULL : service_ctx.password, onvif_digest_md5,
++            extract_control_token, request_deadline);
++        goto cleanup;
++    }
 +    if (parse_content_length((char *) request, &content_length, service,
 +                             sizeof(service), remote, sizeof(remote)))
 +        goto bad_request;
@@ -1246,50 +1292,14 @@ index 0000000000000000000000000000000000000000..5352bd9e7833297faafa131c8dbd6961
 +        free_conf_file();
 +        memset(&service_ctx, 0, sizeof(service_ctx));
 +    }
++    for (volatile unsigned char *p = request; p < request + sizeof(request); p++)
++        *p = 0;
 +    return result;
 +}
 +
 +static bool extract_control_token(char token[65])
 +{
-+    char config[CONFIG_LIMIT + 1];
-+    int fd = open("/etc/thingino.json", O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
-+    ssize_t length;
-+    char *control;
-+    char *key;
-+    char *value;
-+    size_t index;
-+
-+    if (fd < 0)
-+        return false;
-+    length = read(fd, config, CONFIG_LIMIT + 1);
-+    close(fd);
-+    if (length <= 0 || length > CONFIG_LIMIT)
-+        return false;
-+    config[length] = '\0';
-+    control = strstr(config, "\"control\"");
-+    if (!control || !(key = strstr(control, "\"token\"")))
-+        return false;
-+    value = strchr(key + 7, ':');
-+    if (!value)
-+        return false;
-+    value++;
-+    while (*value == ' ' || *value == '\t' || *value == '\r' || *value == '\n')
-+        value++;
-+    if (*value++ != '"')
-+        return false;
-+    if (strlen(value) < 65)
-+        return false;
-+    for (index = 0; index < 64; index++) {
-+        unsigned char byte = (unsigned char) value[index];
-+        if (!((byte >= '0' && byte <= '9') || (byte >= 'a' && byte <= 'f') ||
-+              (byte >= 'A' && byte <= 'F')))
-+            return false;
-+        token[index] = (char) byte;
-+    }
-+    if (value[64] != '"')
-+        return false;
-+    token[64] = '\0';
-+    return true;
++    return onvif_control_token("/etc/thingino.json", token);
 +}
 +
 +static int control_daynight(const char *mode)
@@ -1448,6 +1458,136 @@ index 0000000000000000000000000000000000000000..5352bd9e7833297faafa131c8dbd6961
 +        close(client);
 +    }
 +}
+diff --git a/src/media2_service.c b/src/media2_service.c
+--- a/src/media2_service.c
++++ b/src/media2_service.c
+@@ -16,6 +16,7 @@
+ 
+ #include "media2_service.h"
+ 
++#include "control_imaging_bridge.h"
+ #include "conf.h"
+ #include "fault.h"
+ #include "log.h"
+@@ -1703,7 +1704,11 @@
+         }
+ 
+-        // Construct snapshot URL with token authentication
+-        construct_uri_with_token(line, MAX_LEN, service_ctx.profiles[0].snapurl, address);
++        /* Stable HTTPS resource; HTTP Digest credentials never enter the URI. */
++        if (control_snapshot_uri(0, address, line, sizeof(line))) {
++            send_fault("media2_service", "Receiver", "ter:Action", "ter:IncompleteConfiguration",
++                       "Media unavailable", "Snapshot address is unavailable");
++            return -5;
++        }
+ 
+         // Escape html chars
+         html_escape(line, MAX_LEN);
+@@ -1727,7 +1732,11 @@
+         }
+ 
+-        // Construct snapshot URL with token authentication
+-        construct_uri_with_token(line, MAX_LEN, service_ctx.profiles[1].snapurl, address);
++        /* Stable HTTPS resource; HTTP Digest credentials never enter the URI. */
++        if (control_snapshot_uri(1, address, line, sizeof(line))) {
++            send_fault("media2_service", "Receiver", "ter:Action", "ter:IncompleteConfiguration",
++                       "Media unavailable", "Snapshot address is unavailable");
++            return -5;
++        }
+ 
+         // Escape html chars
+         html_escape(line, MAX_LEN);
+@@ -1773,7 +1782,11 @@
+         }
+ 
+         // Construct RTSP URL
+-        construct_uri(line, MAX_LEN, service_ctx.profiles[0].url, address);
++        if (control_rtsp_uri(0, address, line, sizeof(line))) {
++            send_fault("media2_service", "Receiver", "ter:Action", "ter:IncompleteConfiguration",
++                       "Media unavailable", "Live RTSP endpoint is unavailable");
++            return -5;
++        }
+ 
+         // Escape html chars
+         html_escape(line, MAX_LEN);
+@@ -1796,7 +1809,11 @@
+         }
+ 
+         // Construct RTSP URL
+-        construct_uri(line, MAX_LEN, service_ctx.profiles[1].url, address);
++        if (control_rtsp_uri(1, address, line, sizeof(line))) {
++            send_fault("media2_service", "Receiver", "ter:Action", "ter:IncompleteConfiguration",
++                       "Media unavailable", "Live RTSP endpoint is unavailable");
++            return -5;
++        }
+ 
+         // Escape html chars
+         html_escape(line, MAX_LEN);
+diff --git a/src/media_service.c b/src/media_service.c
+--- a/src/media_service.c
++++ b/src/media_service.c
+@@ -16,6 +16,7 @@
+ 
+ #include "media_service.h"
+ 
++#include "control_imaging_bridge.h"
+ #include "conf.h"
+ #include "fault.h"
+ #include "log.h"
+@@ -1040,7 +1041,11 @@
+         }
+ 
+-        // Construct snapshot URL with token authentication
+-        construct_uri_with_token(line, MAX_LEN, service_ctx.profiles[0].snapurl, address);
++        /* Stable HTTPS resource; HTTP Digest credentials never enter the URI. */
++        if (control_snapshot_uri(0, address, line, sizeof(line))) {
++            send_fault("media_service", "Receiver", "ter:Action", "ter:IncompleteConfiguration",
++                       "Media unavailable", "Snapshot address is unavailable");
++            return -5;
++        }
+ 
+         // Escape html chars
+         html_escape(line, MAX_LEN);
+@@ -1064,7 +1069,11 @@
+         }
+ 
+-        // Construct snapshot URL with token authentication
+-        construct_uri_with_token(line, MAX_LEN, service_ctx.profiles[1].snapurl, address);
++        /* Stable HTTPS resource; HTTP Digest credentials never enter the URI. */
++        if (control_snapshot_uri(1, address, line, sizeof(line))) {
++            send_fault("media_service", "Receiver", "ter:Action", "ter:IncompleteConfiguration",
++                       "Media unavailable", "Snapshot address is unavailable");
++            return -5;
++        }
+ 
+         // Escape html chars
+         html_escape(line, MAX_LEN);
+@@ -1110,7 +1119,11 @@
+         }
+ 
+         // Construct RTSP URL
+-        construct_uri(line, MAX_LEN, service_ctx.profiles[0].url, address);
++        if (control_rtsp_uri(0, address, line, sizeof(line))) {
++            send_fault("media_service", "Receiver", "ter:Action", "ter:IncompleteConfiguration",
++                       "Media unavailable", "Live RTSP endpoint is unavailable");
++            return -5;
++        }
+ 
+         // Escape html chars
+         html_escape(line, MAX_LEN);
+@@ -1133,7 +1146,11 @@
+         }
+ 
+         // Construct RTSP URL
+-        construct_uri(line, MAX_LEN, service_ctx.profiles[1].url, address);
++        if (control_rtsp_uri(1, address, line, sizeof(line))) {
++            send_fault("media_service", "Receiver", "ter:Action", "ter:IncompleteConfiguration",
++                       "Media unavailable", "Live RTSP endpoint is unavailable");
++            return -5;
++        }
+ 
+         // Escape html chars
+         html_escape(line, MAX_LEN);
 diff --git a/src/prudynt_bridge.c b/src/prudynt_bridge.c
 deleted file mode 100644
 index 2722c9fb25f926328e2ff3011f9726ebff7c1e5d..0000000000000000000000000000000000000000

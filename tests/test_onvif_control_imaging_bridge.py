@@ -121,15 +121,32 @@ class OnvifControlImagingBridgeTests(unittest.TestCase):
         (self.root / "control_imaging_bridge.h").write_text(
             _added_file(patch, "src/control_imaging_bridge.h")
         )
+        token_patch = (ROOT / "patches/onvif/0003-control-token-reader.patch").read_text()
+        for name in ("onvif_control_token.c", "onvif_control_token.h"):
+            (self.root / name).write_text(_added_file(token_patch, f"src/{name}"))
         (self.root / "log.h").write_text("#define log_error(...) ((void)0)\n")
         (self.root / "harness.c").write_text(
             """
 #include "control_imaging_bridge.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 int main(int argc, char **argv) {
     control_imaging_state_t state;
+    if (argc == 4 && !strcmp(argv[1], "snapshot-uri")) {
+        char uri[256];
+        if (control_snapshot_uri((unsigned)strtoul(argv[2], NULL, 10), argv[3], uri, sizeof(uri))) return 4;
+        puts(uri);
+        return 0;
+    }
+    if ((argc == 3 || argc == 4) && !strcmp(argv[1], "uri")) {
+        char uri[256];
+        if (control_rtsp_uri((unsigned int)strtoul(argv[2], NULL, 10),
+                             argc == 4 ? argv[3] : "192.0.2.1", uri, sizeof(uri))) return 4;
+        puts(uri);
+        return 0;
+    }
     if (argc == 2 && !strcmp(argv[1], "get")) {
         if (control_load_imaging_state(&state)) return 2;
         printf("%d %.0f %.0f %.0f\\n", state.brightness.present,
@@ -151,6 +168,83 @@ int main(int argc, char **argv) {
 
     def tearDown(self) -> None:
         self.temp.cleanup()
+
+    def test_snapshot_uris_are_stable_https_and_have_no_credentials(self) -> None:
+        binary = self._compile(1)
+        for stream in (0, 1):
+            for _ in range(2):
+                result = subprocess.run(
+                    [str(binary), "snapshot-uri", str(stream), "192.0.2.1"],
+                    check=True, capture_output=True, text=True, timeout=2,
+                )
+                suffix = "1" if stream else ""
+                self.assertEqual(result.stdout, f"https://192.0.2.1/onvif/image{suffix}.cgi\n")
+        for stream, address in (("2", "192.0.2.1"), ("0", "bad/address")):
+            result = subprocess.run([str(binary), "snapshot-uri", stream, address], capture_output=True, timeout=2)
+            self.assertEqual(result.returncode, 4)
+
+    def test_rtsp_uri_uses_live_port_and_each_stream_endpoint(self) -> None:
+        for stream in (0, 1):
+            media = {"rtsp": {"port": 9554}, "streams": {
+                "ch0": {"available": True, "enabled": True, "rtsp_endpoint": "front-door"},
+                "ch1": {"available": True, "enabled": True, "rtsp_endpoint": "small_view"}}}
+            with _ControlServer([media]) as server:
+                result = subprocess.run([str(self._compile(server.port)), "uri", str(stream)], capture_output=True, text=True, check=True)
+            endpoint = "front-door" if stream == 0 else "small_view"
+            self.assertEqual(result.stdout.strip(), f"rtsp://192.0.2.1:9554/{endpoint}")
+            self.assertIn(b"GET /api/v1/runtime/media HTTP/1.1", server.requests[0])
+            self.assertIn(f"Authorization: Bearer {self.token}".encode(), server.requests[0])
+
+    def test_rtsp_uri_rejects_missing_disabled_and_unsafe_live_state(self) -> None:
+        good = {"rtsp": {"port": 554}, "streams": {"ch0": {
+            "available": True, "enabled": True, "rtsp_endpoint": "stream0"}}}
+        variants = [{}, {"rtsp": {"port": 554}, "streams": {}}]
+        for key, values in [("available", [False]), ("enabled", [False]),
+                            ("rtsp_endpoint", ["", ".", "..", "../bad", "x?token=y", "x\\r\\nHeader", "a" * 65])]:
+            for value in values:
+                item = json.loads(json.dumps(good))
+                item["streams"]["ch0"][key] = value
+                variants.append(item)
+        for port in (0, 65536, -1, 554.5, "554"):
+            item = json.loads(json.dumps(good))
+            item["rtsp"]["port"] = port
+            variants.append(item)
+        for media in variants:
+            with self.subTest(media=media), _ControlServer([media]) as server:
+                result = subprocess.run([str(self._compile(server.port)), "uri", "0"], capture_output=True)
+                self.assertEqual(result.returncode, 4)
+
+    def test_rtsp_uri_rejects_short_and_malformed_boolean_values(self) -> None:
+        for value in (b"", b"t", b"f", b"tru", b"fals", b"truex", b"falsex"):
+            media = (b'{"rtsp":{"port":554},"streams":{"ch0":{'
+                     b'"rtsp_endpoint":"stream0","enabled":true,"available":'
+                     + value + b'}}}')
+            with self.subTest(value=value), _ControlServer([media]) as server:
+                result = subprocess.run(
+                    [str(self._compile(server.port)), "uri", "0"],
+                    capture_output=True, timeout=5,
+                )
+                self.assertEqual(result.returncode, 4)
+
+    def test_rtsp_uri_rejects_invalid_stream_and_address_before_connecting(self) -> None:
+        binary = self._compile(1)
+        for stream, address in [("2", "192.0.2.1"), ("0", "camera.example"),
+                                ("0", "192.0.2.1/path"), ("0", "")]:
+            with self.subTest(stream=stream, address=address):
+                result = subprocess.run([str(binary), "uri", stream, address], capture_output=True, timeout=2)
+                self.assertEqual(result.returncode, 4)
+
+    def test_media1_and_media2_use_live_uri_bridge_for_both_profiles(self) -> None:
+        patch = PATCH.read_text()
+        for name in ("media_service", "media2_service"):
+            start = patch.index(f"diff --git a/src/{name}.c")
+            end = patch.find("\ndiff --git ", start)
+            section = patch[start:end] if end >= 0 else patch[start:]
+            for stream in (0, 1):
+                self.assertIn(f"+        if (control_rtsp_uri({stream}, address, line, sizeof(line)))", section)
+                self.assertIn(f"-        construct_uri(line, MAX_LEN, service_ctx.profiles[{stream}].url, address);", section)
+                self.assertIn(f"+        if (control_snapshot_uri({stream}, address, line, sizeof(line)))", section)
+                self.assertIn(f"-        construct_uri_with_token(line, MAX_LEN, service_ctx.profiles[{stream}].snapurl, address);", section)
 
     def test_fake_control_server_fails_immediately_on_request_eof(self) -> None:
         for iteration in range(100):
@@ -176,6 +270,7 @@ int main(int argc, char **argv) {
                 f"-DCONTROL_PORT={port}",
                 f"-I{self.root}",
                 str(self.root / "control_imaging_bridge.c"),
+                str(self.root / "onvif_control_token.c"),
                 str(self.root / "harness.c"),
                 "-o",
                 str(binary),
