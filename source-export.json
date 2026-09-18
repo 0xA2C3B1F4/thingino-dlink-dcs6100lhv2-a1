@@ -1641,6 +1641,10 @@
       "sha256": "dd76b73e747e662c9e98e59d9356c78024787d1789b801e99af8887638652f41",
       "source": "scripts/raptor_full_source_manifest.py"
     },
+    "scripts/raptor_private_source_archive.py": {
+      "sha256": "8f0a54452151cd7e89be7b2fae550f9b7b21d2697ac0249cd99d7afe5a4436d5",
+      "source": "scripts/raptor_private_source_archive.py"
+    },
     "scripts/release_closure.py": {
       "sha256": "1fe979dfbca9957550a2ff0c61bb9fad3544ad33344e7d065f38b9752c5199da",
       "source": "scripts/release_closure.py"
@@ -1917,6 +1921,10 @@
       "sha256": "e3b61e5640a919e7cc7515365a590256c67407d86feebe7dedcb3338871060ed",
       "source": "tests/test_raptor_full_source_manifest.py"
     },
+    "tests/test_raptor_private_source_archive.py": {
+      "sha256": "760d66bfc938dbc7bb11234f6d95ff59399e40f5d400810f620f21bf5b9926d5",
+      "source": "tests/test_raptor_private_source_archive.py"
+    },
     "tests/test_recording_file_guard.py": {
       "sha256": "253ad0aa5f00163f22ded120005b3e158052cb74fd9156449bd1d69069240de3",
       "source": "tests/test_recording_file_guard.py"
@@ -2058,7 +2066,7 @@
       "source": "tests/test_windows_media_preflight.py"
     },
     "third_party/LICENSE_REVIEW.md": {
-      "sha256": "8c18d00f139bc3780a4f45ef4afbdcfae01fac11a9c3a4941f1aa1d86a989a88",
+      "sha256": "8865377cd4ac4155fef0d8ccec61f6cbae0e22d77fb644e23436b4fa6e257101",
       "source": "third_party/LICENSE_REVIEW.md"
     },
     "third_party/NOTICE.md": {
@@ -2455,6 +2463,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "8449f15cc583b1eb36b6c616469ce35ba4bc3a50",
+  "source_commit": "d4d290c43b6747136d83f48f6d4d50575bfb17d1",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }

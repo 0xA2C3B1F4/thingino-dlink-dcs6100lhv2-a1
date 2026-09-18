@@ -25,6 +25,35 @@ delivery package. The `raptor-corresponding-source` firmware gate stays blocked
 until the exact binary closure, notices, and corresponding-source delivery are
 recorded.
 
+### Private source archive tooling
+
+`scripts/raptor_private_source_archive.py` packages the 13 locally reconstructed
+Raptor source trees, their exact source lock, headers input and reconstruction
+patches. It requires an existing verified cache and does not fetch sources.
+The command uses `TMPDIR` for temporary data and refuses an existing output.
+For example, with task-specific paths on the external build volume:
+
+```sh
+python3 scripts/raptor_private_source_archive.py \
+  --verified-cache-root "$RAPTOR_VERIFIED_CACHE" \
+  --output "$RAPTOR_PRIVATE_EVIDENCE/raptor-sources.tar"
+```
+
+The archive is private technical evidence. Its manifest records source-file
+digests and gitlinks, including omitted formatter submodules. It does not include
+the full Thingino, kernel or RTL source closure, nor does it bind those sources
+to a particular firmware binary. It does not settle the Ingenic headers license
+or the remaining notice review. Do not publish the generated archive or treat
+successful packaging as closure of the firmware corresponding-source gate.
+
+The 2026-09-18 private verification produced two byte-identical archives from
+the current source lock. Both were 75,622,400 bytes, with SHA-256
+`3b37cc50f9f1b676bfb3643fe1fd7a6f86505314ddf0fd307ab95fdcd2fc4d8c`.
+An independent archive reader compared all 3,440 source files and symlinks,
+including their modes and contents, against the retained canonical source tars.
+That comparison passed. These are source-package integrity results, not license
+clearance, binary-to-source correspondence or physical camera acceptance.
+
 ## RTL8188FU
 
 Pinned commit `6e3c1c2d244f5056d2a7ade3dbcf9daa3876fc06` has no top-level
