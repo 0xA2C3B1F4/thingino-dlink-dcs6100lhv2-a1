@@ -228,6 +228,25 @@ remain open.
 
 ## Required microphone-enable playback acceptance
 
+The later audio-transport correction was built from source commit
+`38607f3468cf4df58840d18ae5ea802732c67e9f` in two clean complete builds.
+The normal local-build command exited successfully. Its final comparison covers
+16 artifacts, including both signed installation packages, system image, full
+Raptor component and split kernels. All pairs were byte-identical, with
+`component_cache_used: false`. Independent host rehashing of all 32 files matched
+that report; both schema-2 install-set inspections passed.
+
+The new universal bundle is 7,938,129 bytes, SHA-256
+`a3a5696a53da55766a19e22ae0f3b97ec201a27bfca1a1c47fc9cc3b2c8566b7`.
+The system image is 6,356,992 bytes, SHA-256
+`dd4b4bdcb72c2344aa470e4679537ee04d0cf38dadaf9838b7df22bbac643672`.
+Its expected full 6,619,136-byte system-partition readback digest after padding
+with `0xff` is
+`67085cde490b1242bebf607788ed1d05943ccb528366bbfc2ab2429d0136280c`.
+This establishes host build reproducibility only. This newer candidate has not
+yet been staged, installed or physically accepted; the following installed-camera
+observations concern the earlier c1 candidate.
+
 The operator subsequently completed the two installation phases. Strict-pinned
 SSH readback of the full system partition matched the Preview candidate padded
 to 6,619,136 bytes, SHA-256
