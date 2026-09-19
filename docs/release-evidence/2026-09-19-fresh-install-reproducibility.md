@@ -120,8 +120,8 @@ with bootstrap SHA-256
 `58a195e10432b382bd14f399e890085092e90580b03b2533f7bd377d024097b6`.
 These builds are not a new signed release bundle, full-firmware reproducibility
 proof, or physical execution of the correction. A subsequent complete build is
-recorded below. The installed firmware remains the earlier `c4cf3ae` candidate;
-the corrected installer has not yet been physically exercised.
+recorded below. At that point the installed firmware was still `c4cf3ae`.
+The later corrected-package installation is recorded separately below.
 
 ## Complete build with the installer correction
 
@@ -145,6 +145,50 @@ installed `c4cf3ae` artifacts. Only the SD bootstrap container, stage1 SquashFS,
 install-set manifest and signed universal bundle changed. Existing runtime
 observations therefore concern the same immutable image bytes, but do not
 prove new installation, restored mutable configuration or the SD cleanup path.
-No candidate passes were automatically transferred. The corrected package still
-requires physical installer execution and readback, plus the remaining release
-gates. Technical closure manifests explicitly leave legal review unassessed.
+No candidate passes were automatically transferred. Technical closure manifests
+explicitly leave legal review unassessed.
+
+## Corrected-package installation and remaining FAT warning
+
+The operator completed the two-phase `cd516ef` installation with explicitly
+approved data initialization. The host verified six staged files again after
+remounting the card, both before its first boot and after the phase handoff.
+The preceding transaction's recovery checkpoint was validated against its old
+authorization and provisioning, archived with its backup and independently
+read back before retiring that pair from the card. No signature or checkpoint
+validation was bypassed.
+
+After the new boot, pinned management verification passed with an empty write
+set. Independent readback matched all 14 expected hashes: kernel, full system,
+three protected spans and nine runtime files. Private readback receipt SHA-256:
+`e31d88c829a2ad1c9ff07b19f9378720bfe19359b9fd32a37670787bff5a6020`.
+The transaction's authorization and provisioning files were absent from the
+card afterward. This does not establish stock-state first installation,
+audibility on this boot or successful execution of the final unmount syscall.
+
+The new boot still emitted the FAT unclean-unmount warning. Private log receipt
+SHA-256: `a93de8bba3a267957700a24187d3e3eee7632672e1230024c1179c07c692da46`.
+The retained build's Linux 3.10.14 source explains an important limitation:
+`fs/fat/inode.c:504` returns from `fat_set_state` without changing disk state
+if `sbi->dirty` was already set when mounting. `fat_put_super` calls that same
+function to clear the flag at unmount. Consequently, a successful normal
+unmount cannot clear a pre-existing dirty flag. That source file has SHA-256
+`b09443e6debe5d9e30cbaf0edbcb6d408215394b6033b54082181b20bbf17fa5`.
+It was inspected from the actual build workdisk mounted read-only with
+`ro,noload`, with container networking disabled.
+
+The warning alone therefore proves neither failure nor success of the new
+unmount path. The origin of the dirty flag is unresolved. A Mac read-only
+filesystem check before staging had passed, but no raw FAT state-byte evidence
+was captured at each installation boundary. Do not clear the flag blindly or
+suppress the warning. Clean-baseline, phase-specific filesystem evidence and
+installer completion evidence are still required before accepting this fix.
+
+A subsequent controlled runtime check found recording and timelapse disabled,
+verified the SD identity and found no filesystem users. Checked sync and normal
+unmount succeeded; a second SSH connection confirmed the volume was unmounted
+in the same boot. The FAT32 boot-sector state byte was `0x01` both before and
+after unmount, and both 512-byte boot-sector hashes were identical. This directly
+confirms persistence of the existing dirty flag across a successful runtime
+unmount on this card. It does not prove how the flag first arose or establish
+execution of the earlier installer's unmount. No filesystem repair was made.

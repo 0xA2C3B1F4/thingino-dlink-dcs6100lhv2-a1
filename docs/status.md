@@ -83,7 +83,11 @@ physical acceptance remains open. Source `f99b4cf` subsequently fixes a missing
 SD unmount before the installer's final reboot. Host tests and two targeted MIPS
 builds passed. Complete source `cd516ef` then passed two clean full builds and
 signed-package validation. Its runtime kernel and system image are byte-identical
-to installed `c4cf3ae`; the changed SD installer is not yet physically verified.
+to installed `c4cf3ae`. The corrected package has since been installed, and all
+14 kernel/system/protected/runtime readback hashes matched. Its new boot still
+emitted the FAT dirty warning. The kernel preserves a pre-existing dirty flag
+even on normal unmount, so clean-unmount acceptance remains open pending a
+clean-baseline, phase-specific check. The warning's origin is not yet proven.
 The dated evidence separates these artifacts and the remaining checks.
 
 On September 18, a single native microphone-enable command lost its response
