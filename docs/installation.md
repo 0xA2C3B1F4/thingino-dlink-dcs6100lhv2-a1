@@ -1,5 +1,10 @@
 # Installation
 
+The release-facing installation path is for new users starting from stock
+DCS-6100LHV2 A1 firmware. Upgrades and saved-setting migrations from earlier
+development firmware are not supported. Recovery and resumable first installation
+are still required; this scope does not waive backup or readback checks.
+
 There is no supported public installation package yet. Do not use generated
 development artifacts on a camera unless the exact candidate and operation
 have separate authorization.

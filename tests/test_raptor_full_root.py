@@ -184,6 +184,9 @@ class FullRootTests(unittest.TestCase):
         for relative in raptor_full_root.RETIRED_PATHS:
             self.assertFalse((self.packed / relative).exists())
         self.assertFalse((self.packed / SERVICE).stat().st_mode & 0o111)
+        source_onvif = json.loads((self.source / "etc/onvif.json").read_bytes())
+        packed_onvif = json.loads((self.packed / "etc/onvif.json").read_bytes())
+        self.assertEqual(packed_onvif, {**source_onvif, "adv_enable_media2": True})
         for relative in CONFIGS:
             self.assertTrue((self.packed / relative).is_file())
         for relative in (

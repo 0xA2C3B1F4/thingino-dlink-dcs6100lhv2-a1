@@ -17,6 +17,11 @@ Do not use its images or tools on another model or revision.
 
 ## Choose your installation
 
+This release targets new users installing full Raptor on a stock DCS-6100LHV2 A1.
+It does not support upgrading earlier development firmware or migrating its
+saved settings. Resuming an interrupted first installation and recovering the
+same camera remain part of the installation workflow.
+
 | Starting point | What to do |
 | --- | --- |
 | Stock A1 camera, no backup | Follow the UARTless procedure below. It replaces mtd1/mtd2 before capture and cannot preserve an exact original full-flash backup. |
@@ -309,12 +314,10 @@ thingino-dlink local-build build-universal \
   --vendor-bundle-dir "$DCS6100_RECOVERY_ROOT/vendor"
 ```
 
-That command defaults to `--data-mode initialize` for a first installation. For
-an already accepted split-layout installation whose settings must remain
-unchanged, build the update set with `--data-mode preserve`. The preserve set
-hashes the complete JFFS2 data region before the system update and requires the
-same complete-region hash afterward; it does not apply the staged provisioning
-JFFS2 image.
+That command defaults to `--data-mode initialize` for the supported first
+installation. This guide does not provide an upgrade path from older development
+firmware. Keep the same camera's validated recovery and provisioning inputs
+when resuming an interrupted first installation.
 
 The full-Raptor build does not accept a private media archive. Keep the vendor
 bundle and all other camera-specific inputs outside the checkout.

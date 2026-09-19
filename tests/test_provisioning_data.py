@@ -65,7 +65,11 @@ class ProvisioningDataTests(unittest.TestCase):
             encoding="ascii",
         )
         (root / "etc/onvif.json").write_text(
-            json.dumps({"server": {"username": "", "password": ""}}),
+            json.dumps({"server": {"username": "", "password": ""},
+                        "adv_enable_media2": False,
+                        "profiles": {"stream0": {"name": "Profile_0", "width": 1920},
+                                     "stream1": {"name": "Profile_1", "width": 640}},
+                        "unknown_fixture_field": {"keep": [False, "unchanged", 37]}}),
             encoding="utf-8",
         )
         (root / "etc/thingino.json").write_text(
@@ -153,6 +157,14 @@ class ProvisioningDataTests(unittest.TestCase):
             self.assertTrue((overlay / "etc/wpa_supplicant.conf").is_file())
             self.assertFalse((overlay / "root/etc/hostname").exists())
             self.assertFalse((overlay / "work").exists())
+            onvif = json.loads((overlay / "etc/onvif.json").read_bytes())
+            self.assertIs(onvif["adv_enable_media2"], True)
+            self.assertEqual(onvif["server"]["username"], "root")
+            self.assertEqual(onvif["server"]["password"], credential.decode("ascii").strip())
+            expected_onvif = json.loads((source / "etc/onvif.json").read_bytes())
+            expected_onvif["server"] = {"username": "root", "password": credential.decode("ascii").strip()}
+            expected_onvif["adv_enable_media2"] = True
+            self.assertEqual(onvif, expected_onvif)
             rwd = overlay / "etc/init.d/S96rwd"
             self.assertEqual(rwd.exists(), raptor and not full_raptor)
             if raptor and not full_raptor:

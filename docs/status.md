@@ -6,6 +6,11 @@ This repository provides source and host tools. There is no supported firmware
 download yet. The validated platform is DCS-6100LHV2 A1 with Apple Silicon macOS.
 Physical test coverage includes one camera.
 
+The release targets new users and clean first installations from stock firmware.
+Compatibility with earlier development firmware and migration of its settings
+are outside scope. First-installation, interrupted-installation recovery, and
+same-camera verification remain release requirements.
+
 The tables below describe named evidence, not blanket acceptance of later source
 changes. The full-Raptor source path has passed host composition checks and a
 source-built camera exercise. A new release candidate still needs its own image,

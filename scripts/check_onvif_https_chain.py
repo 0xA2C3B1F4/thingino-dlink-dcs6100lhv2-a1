@@ -1,4 +1,8 @@
 """Actual native uhttpd -> ONVIF -> fake Control, isolated container only."""
+import base64
+import datetime
+import hashlib
+import http.client
 import http.server
 import json
 import os
@@ -10,6 +14,7 @@ import tempfile
 import threading
 import time
 import unittest
+import xml.etree.ElementTree as ET
 
 ROOT = Path('/deps')
 TOKEN = 'a' * 64
@@ -18,6 +23,7 @@ IMAGE = b'\xff\xd8' + bytes(range(256)) * 4096 + b'\xff\xd9'
 
 
 class Backend(http.server.BaseHTTPRequestHandler):
+    protocol_version = 'HTTP/1.1'
     calls = []
     status = 200
 
@@ -28,6 +34,17 @@ class Backend(http.server.BaseHTTPRequestHandler):
         type(self).calls.append((self.path, self.headers.get('Authorization')))
         if self.headers.get('Authorization') != 'Bearer ' + TOKEN:
             self.send_error(403)
+            return
+        if self.path == '/api/v1/runtime/media':
+            body = json.dumps({'rtsp': {'port': 9554}, 'streams': {
+                f'ch{i}': {'available': True, 'enabled': True, 'rtsp_endpoint': f'fixture{i}'}
+                for i in range(2)
+            }}).encode()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
             return
         self.send_response(type(self).status)
         self.send_header('Content-Type', 'image/jpeg')
@@ -176,6 +193,69 @@ class HTTPSChain(unittest.TestCase):
         status, _, body = self.fetch()
         self.assertEqual(status, 502)
         self.assertNotEqual(body, IMAGE)
+
+    def test_media2_profiles_without_type_follow_configuration_gate(self):
+        namespace = 'http://www.onvif.org/ver20/media/wsdl'
+        for enabled in (False, True, False):
+            with self.subTest(enabled=enabled):
+                self.config.write_text(json.dumps({
+                    'server': {'username': 'root', 'password': PASSWORD, 'ifs': 'lo'},
+                    'adv_enable_media2': enabled,
+                    'adv_fault_if_unknown': False,
+                    'profiles': {
+                        f'stream{i}': {
+                            'name': f'Profile_{i}', 'type': 'H264',
+                            'width': width, 'height': height,
+                            'url': f'rtsp://%s/stream{i}',
+                            'snapurl': 'https://%s/onvif/image' + ('1' if i else '') + '.cgi',
+                            'audio_encoder': 'AAC', 'audio_decoder': 'AAC',
+                        }
+                        for i, (width, height) in enumerate(((1920, 1080), (640, 360)))
+                    },
+                }))
+                document = self.media2_soap('GetProfiles')
+                tokens = [item.get('token') for item in document.findall(f'.//{{{namespace}}}Profiles')]
+                self.assertEqual(tokens, ['Profile_0', 'Profile_1'] if enabled else [])
+                if enabled:
+                    for i in range(2):
+                        contents = f'<t:ProfileToken>Profile_{i}</t:ProfileToken>'
+                        stream = self.media2_soap('GetStreamUri', '<t:Protocol>RTSP</t:Protocol>' + contents)
+                        snapshot = self.media2_soap('GetSnapshotUri', contents)
+                        self.assertEqual(stream.findtext(f'.//{{{namespace}}}Uri'), f'rtsp://127.0.0.1:9554/fixture{i}')
+                        self.assertEqual(snapshot.findtext(f'.//{{{namespace}}}Uri'),
+                                         'https://127.0.0.1/onvif/image' + ('1' if i else '') + '.cgi')
+
+    def media2_soap(self, operation, contents=''):
+        namespace = 'http://www.onvif.org/ver20/media/wsdl'
+        nonce = os.urandom(16)
+        created = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+        digest = base64.b64encode(hashlib.sha1(nonce + created.encode() + PASSWORD.encode()).digest()).decode()
+        wsse = 'http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd'
+        wsu = 'http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd'
+        profile = 'http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0'
+        encoding = 'http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-soap-message-security-1.0'
+        payload = (
+            f'<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope" xmlns:t="{namespace}">'
+            f'<s:Header><w:Security xmlns:w="{wsse}" xmlns:u="{wsu}"><w:UsernameToken>'
+            f'<w:Username>root</w:Username><w:Password Type="{profile}#PasswordDigest">{digest}</w:Password>'
+            f'<w:Nonce EncodingType="{encoding}#Base64Binary">{base64.b64encode(nonce).decode()}</w:Nonce>'
+            f'<u:Created>{created}</u:Created></w:UsernameToken></w:Security></s:Header>'
+            f'<s:Body><t:{operation}>{contents}</t:{operation}></s:Body></s:Envelope>'
+        ).encode()
+        connection = http.client.HTTPSConnection(
+            'localhost', 8443, timeout=5, context=ssl.create_default_context(cafile=str(self.cert)))
+        try:
+            connection.request('POST', '/onvif/media2_service', payload,
+                               {'Content-Type': f'application/soap+xml; action="{namespace}/{operation}"'})
+            response = connection.getresponse()
+            body = response.read(1024 * 1024)
+            self.assertEqual(response.status, 200, body[:2048])
+        finally:
+            connection.close()
+        document = ET.fromstring(body)
+        self.assertIsNotNone(document.find(f'.//{{{namespace}}}{operation}Response'))
+        return document
+
 
 
 if __name__ == '__main__':

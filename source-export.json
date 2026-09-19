@@ -34,7 +34,7 @@
       "source": "Makefile"
     },
     "README.md": {
-      "sha256": "6db0deb8423c5d4837ff2687cf7ea4c44a0f3a3948b8171e7c41516f977760d3",
+      "sha256": "26598abbe12d13f97c8ff7121f116dc37b6902a6b7d6c52f6b23d0e37a964897",
       "source": "production/README.md"
     },
     "SECURITY.md": {
@@ -690,7 +690,7 @@
       "source": "production/docs/index.md"
     },
     "docs/installation.md": {
-      "sha256": "e4ef9e6854ad98956bf2ec50ddf61dc1bccf23081ca6ddd6c7b03488c4c00c20",
+      "sha256": "679b1a5f56b144e0c5c430ea0f392266fe9007ad9bbb78233cd63016eee94060",
       "source": "production/docs/installation.md"
     },
     "docs/installer-projects.md": {
@@ -714,7 +714,7 @@
       "source": "production/docs/release-evidence/2026-09-18-raptor-mic-acknowledgement.md"
     },
     "docs/status.md": {
-      "sha256": "28a1513a4bdb08a193f84fcc3f2c4832bf659c19830365e84a7cec465a4e9bb8",
+      "sha256": "e14b1c1bbe4c65ffc7b7076a12eb32a0aae13a576c35595ce1bb7f214a3a9042",
       "source": "production/docs/status.md"
     },
     "docs/testing.md": {
@@ -970,7 +970,7 @@
       "source": "installer/provisioning.py"
     },
     "installer/provisioning_data.py": {
-      "sha256": "9d59a40039e4eeef15c9b0f850c1800194ce93803d90238971104baea41f994b",
+      "sha256": "ab8105ca641f556d9401b886df2d5ee9047aa8e977b554d1df7302811b8fe742",
       "source": "installer/provisioning_data.py"
     },
     "installer/ram_boot.py": {
@@ -994,7 +994,7 @@
       "source": "installer/raptor_full_component.py"
     },
     "installer/raptor_full_root.py": {
-      "sha256": "cacdbefb0e1e93e600127b1cda7d676c83eda2f4678aafbaebb9d6719241ff90",
+      "sha256": "5315fbe3e0371da1c7b0e5d125658ca6cb8b84da660759f792d7c48943ce7901",
       "source": "installer/raptor_full_root.py"
     },
     "installer/raptor_provisioning.py": {
@@ -1542,7 +1542,7 @@
       "source": "scripts/check_docs.py"
     },
     "scripts/check_onvif_https_chain.py": {
-      "sha256": "b5d399ae3d87a210afe6db6310d005a643bc2957338b883f3f0cf2151db08ec9",
+      "sha256": "3fbe59b0c0743aa387f563eac2841c525fc438b9bde1744447b2637f14cae7e1",
       "source": "scripts/check_onvif_https_chain.py"
     },
     "scripts/check_public_tree.py": {
@@ -1882,7 +1882,7 @@
       "source": "tests/test_project.py"
     },
     "tests/test_provisioning_data.py": {
-      "sha256": "204f8bef5f1a1daebee3aef5f41cf932ec9545df395861807e8cb1c1d45f8424",
+      "sha256": "5a99b0194e949851d8bf0d607cf7f7e664c9b80f687503dc17c8358034549f65",
       "source": "tests/test_provisioning_data.py"
     },
     "tests/test_public_tree.py": {
@@ -1914,7 +1914,7 @@
       "source": "tests/test_raptor_full_pipeline.py"
     },
     "tests/test_raptor_full_root.py": {
-      "sha256": "cfeb9270be595621fbb60fefc7db95d13392e4c04ef5598c9c11be956ea6ce2a",
+      "sha256": "9012e1d494222059cecacd7436d52a231d2c845842ff445f5178ef69dd5dd72f",
       "source": "tests/test_raptor_full_root.py"
     },
     "tests/test_raptor_full_source_manifest.py": {
@@ -2463,6 +2463,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "d4d290c43b6747136d83f48f6d4d50575bfb17d1",
+  "source_commit": "c4cf3aea7d37bca3704f60d851c461ca0afd2029",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }

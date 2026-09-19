@@ -90,6 +90,11 @@ def _install_runtime(
         relative: (repository / "components/raptor" / Path(relative).name).read_bytes()
         for relative in CONFIGS
     }
+    onvif = json.loads(_path(root, "etc/onvif.json").read_bytes())
+    if not isinstance(onvif, dict):
+        raise final_root.FinalRootError("base ONVIF configuration is invalid")
+    onvif["adv_enable_media2"] = True
+    _write(root, "etc/onvif.json", (json.dumps(onvif, indent=2, sort_keys=True) + "\n").encode(), 0o600)
     for relative, raw in config_files.items():
         _write(root, relative, raw, 0o600)
     service = (repository / "components/raptor/S96raptor").read_bytes()

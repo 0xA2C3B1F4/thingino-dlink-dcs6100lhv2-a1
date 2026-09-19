@@ -173,6 +173,7 @@ def _patch_runtime(
             raise FinalRootError("provisioning ONVIF lacks server configuration")
         server["username"] = "root"
         server["password"] = password
+        document["adv_enable_media2"] = True
 
     def patch_thingino(document: dict[str, object]) -> None:
         gpio = document.get("gpio")
