@@ -1,6 +1,6 @@
 # Release status
 
-Historical runtime baseline validated: 2026-09-06. Documentation updated: 2026-09-17.
+Historical runtime baseline validated: 2026-09-06. Documentation updated: 2026-09-19.
 
 This repository provides source and host tools. There is no supported firmware
 download yet. The validated platform is DCS-6100LHV2 A1 with Apple Silicon macOS.
@@ -57,7 +57,8 @@ The operator heard audio with Listen on both Mainstream and Substream after
 the RWD, WebUI and profile changes were installed as overlays on the older
 September 16 whole image. This is bounded overlay acceptance, not acceptance
 of a new complete firmware image. The intermittent microphone transition or
-independent-readback failure remains unresolved.
+independent-readback failure was still unresolved at that checkpoint. See the
+September 19 candidate observations below for subsequent results.
 
 The new September 17 full-Raptor candidate completed the two-build comparison
 with the explicit host-packaging completion described in the
@@ -75,16 +76,22 @@ to distribute firmware. Independent kernel equality remains unverified.
 
 Fresh-install source `c4cf3ae` also passed two clean complete-firmware builds;
 see the [September 19 evidence](release-evidence/2026-09-19-fresh-install-reproducibility.md).
-That new candidate has not yet passed physical acceptance. The installation
-observations above belong to the earlier candidate, not this one.
+Subsequent installation of that candidate passed independent kernel/system and
+protected-span readback. The operator heard first-attempt Preview audio on both
+streams. Five of its twenty acceptance checks are recorded as passed; full
+physical acceptance remains open. Source `f99b4cf` subsequently fixes a missing
+SD unmount before the installer's final reboot. Host tests and two targeted MIPS
+builds passed, but that installer correction is not yet deployed. The dated
+evidence separates these artifacts and the remaining checks.
 
 On September 18, a single native microphone-enable command lost its response
 although independent RAD readback showed input enabled. A slow-handler IPC
 regression reproduced acknowledgement loss when handler work consumed the
 server's receive deadline. Separate bounded response transmission passed host
-tests. This source fix is not in the installed candidate; a matching build,
-microphone-transition test, both Preview streams and cold-boot acceptance remain
-required. See the dated evidence above for the boundaries of these results.
+tests. At that September 18 checkpoint it was not in the installed candidate.
+The September 19 build and operator checks supersede that installation state;
+they do not close every cold-boot, lifecycle or settings acceptance requirement.
+See the dated evidence above for the boundaries of these results.
 
 ## Historical tested installation
 

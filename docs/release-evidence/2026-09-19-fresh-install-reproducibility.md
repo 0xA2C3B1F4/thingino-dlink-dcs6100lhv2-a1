@@ -38,3 +38,65 @@ No previous camera acceptance results were imported. No SD or camera write
 occurred during this build. Its 20 candidate checks, physical first-install and
 recovery requirements, second-camera and host-platform acceptance, licensing
 review and complete corresponding-source delivery remain separate requirements.
+
+## Subsequent installation and bounded camera checks
+
+The same candidate was subsequently installed with explicitly authorized data
+initialization. Independent kernel and full system-span readback matched the
+built artifacts. Protected boot, vendor and factory spans matched the retained
+same-camera backups. Nine runtime file hashes matched the packed image, and
+running executables were checked separately. The private readback receipt has
+SHA-256 `77b965954c500f47e136b1de94e1d8153b7c365540ba910683de9e9a763564fe`.
+Mutable data is not claimed to remain byte-identical after boot.
+
+The operator confirmed first-Listen audio on both Main and Substream after
+microphone Off/On, without Reload or a second Listen click. This is operator
+audibility evidence, not a measured latency or long-running stability result.
+It is not stock-state first-installation or power-interruption evidence.
+
+Live Media1 and Media2 each returned two profiles and valid stream/snapshot
+URIs. Both authenticated JPEGs decoded at the expected resolutions; negative
+authentication tests rejected access. RTSP over interleaved TCP decoded three
+H.264 frames per stream at 1920x1080 and 640x360. ONVIF privacy and broader
+protocol acceptance remain open. RTSP receipt SHA-256:
+`148b7d195f6b7285c2871e3236b3aec34a558438dec6b1fcf1df9c379bc49d0f`.
+
+A real Safari 27.0 session returned from Information to Preview without Reload
+and switched from Main to Substream WebRTC. Audio packet counters increased
+on each connection. These counters do not prove audible playback or decoded
+video quality. Network-loss recovery and background suspension remain untested
+for this candidate.
+
+A bounded test held one slow MJPEG reader and disconnected one incomplete HTTP
+request while issuing three rounds of three concurrent authenticated API reads.
+All 15 total baseline, concurrent and recovery reads returned valid HTTP 200
+JSON. Maximum measured request/body latency was 0.690 seconds, excluding TLS
+establishment. Socket counts returned to baseline after closing the clients;
+boot identity and selected daemon PIDs did not change. The test session was
+logged out and invalidation checked. Receipt SHA-256:
+`b920de2552f55c8195208532cb5166a5e4fbb6d098fd8604654e55db0196adc8`.
+
+The candidate ledger has five passed checks: two snapshots, RTSP, a real browser
+session and bounded concurrency. Fifteen checks remain open. No broader pass
+is inferred from these observations. Private raw receipts are retained outside
+the exported source tree; they are not part of the public source artifact.
+
+## Installer correction after these checks
+
+Full kernel-log review found an SD FAT unclean-unmount warning. It does not
+alone prove filesystem corruption. The installer synced the card but rebooted
+without unmounting it. Source commit `f99b4cfd9754e54115092d27a6782a650f6b38f3`
+adds checked sync and a normal `/card` unmount before reboot, with a terminal
+failure if either fails. The verified NOR image is not rolled back on cleanup
+failure. No filesystem repair was performed on the mounted card.
+
+The commit passed 986 host tests with one existing skip. A native C test ran
+the actual cleanup statements with syscall doubles for success, sync failure
+and unmount failure. Two targeted MIPS installer builds were byte-identical,
+with bootstrap SHA-256
+`58a195e10432b382bd14f399e890085092e90580b03b2533f7bd377d024097b6`.
+These builds are not a new signed release bundle, full-firmware reproducibility
+proof, or physical execution of the correction. The installed firmware remains
+the earlier `c4cf3ae` candidate. A matching release build and physical installer
+test are still required; the earlier candidate's passes must not be silently
+transferred to a different artifact.

@@ -1337,7 +1337,12 @@ static void install_stage2(void)
     passivate_camera_install_files();
 #endif
 
-    call1(SYSCALL_SYNC, 0);
+    if (call1(SYSCALL_SYNC, 0) != 0)
+        FAIL("STAGE1 FAIL final_sync\n");
+    /* sync alone does not clear FAT's mounted/dirty state before reboot. */
+    if (call2(SYSCALL_UMOUNT2, (long)"/card", 0) != 0)
+        FAIL("STAGE1 FAIL card_unmount\n");
+    EMIT("STAGE1 sd_unmounted\n");
     EMIT("STAGE1 rebooting_final\n");
     call4(SYSCALL_REBOOT, REBOOT_MAGIC1, REBOOT_MAGIC2, REBOOT_RESTART, 0);
     FAIL("STAGE1 FAIL reboot\n");

@@ -3,6 +3,8 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -35,6 +37,88 @@ from tests.test_artifacts import test_squashfs, test_uimage
 
 
 class Stage1BuildTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("cc"), "native C compiler unavailable")
+    def test_compiled_install_cleanup_stops_on_sync_or_unmount_failure(self) -> None:
+        source = build.SOURCE.read_text(encoding="utf-8")
+        install = source.split("static void install_stage2(void)", 1)[1].split(
+            "static __attribute__((noreturn)) void switch_to_thingino", 1
+        )[0]
+        marker = install.index('FAIL("STAGE1 FAIL final_sync\\n");')
+        cleanup = install[install.rfind("    if (call1", 0, marker):]
+        # Execute the actual cleanup statements with harmless syscall doubles.
+        # This is not execution of MIPS syscalls or an on-device unmount test.
+        harness = r'''
+#include <setjmp.h>
+#include <stdio.h>
+#include <string.h>
+enum { SYSCALL_SYNC=1, SYSCALL_UMOUNT2=2, SYSCALL_REBOOT=3 };
+#define REBOOT_MAGIC1 10
+#define REBOOT_MAGIC2 20
+#define REBOOT_RESTART 30
+static jmp_buf done;
+static int mode, count;
+static char events[16];
+static const char *failure;
+static void record(char event) { events[count++] = event; }
+static long call1(long n, long arg) {
+    if (n != SYSCALL_SYNC || arg != 0) longjmp(done, 3);
+    record('S'); return mode == 1 ? -1 : 0;
+}
+static long call2(long n, long path, long flags) {
+    if (n != SYSCALL_UMOUNT2 || strcmp((char *)path, "/card") || flags != 0)
+        longjmp(done, 3);
+    record('U'); return mode == 2 ? -1 : 0;
+}
+static long call4(long n, long a, long b, long c, long d) {
+    if (n != SYSCALL_REBOOT || a != 10 || b != 20 || c != 30 || d != 0)
+        longjmp(done, 3);
+    record('R'); longjmp(done, 2);
+}
+#define FAIL(message) do { failure = (message); longjmp(done, 1); } while (0)
+#define EMIT(message) record('E')
+static void cleanup(void) {
+''' + cleanup + r'''
+int main(void) {
+    const char *expected[] = {"SUEER", "S", "SU"};
+    for (mode = 0; mode < 3; mode++) {
+        memset(events, 0, sizeof events); count = 0; failure = 0;
+        int outcome = setjmp(done);
+        if (!outcome) cleanup();
+        if (outcome != (mode ? 1 : 2) || strcmp(events, expected[mode])) return 1;
+        if (mode == 1 && strcmp(failure, "STAGE1 FAIL final_sync\n")) return 2;
+        if (mode == 2 && strcmp(failure, "STAGE1 FAIL card_unmount\n")) return 3;
+    }
+    return 0;
+}
+'''
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)
+            (path / "cleanup.c").write_text(harness, encoding="utf-8")
+            subprocess.run(
+                [shutil.which("cc"), "-std=c99", "-Wall", "-Wextra", "-Werror",
+                 str(path / "cleanup.c"), "-o", str(path / "cleanup")],
+                check=True, capture_output=True, timeout=30,
+            )
+            subprocess.run([str(path / "cleanup")], check=True, timeout=5)
+
+    def test_install_unmounts_card_after_passivation_before_reboot(self) -> None:
+        source = build.SOURCE.read_text(encoding="utf-8")
+        install = source.split("static void install_stage2(void)", 1)[1].split(
+            "static __attribute__((noreturn)) void switch_to_thingino", 1
+        )[0]
+        steps = (
+            'EMIT("STAGE1 activation_written_and_verified\\n");',
+            "passivate_camera_install_files();",
+            'FAIL("STAGE1 FAIL final_sync\\n");',
+            'if (call2(SYSCALL_UMOUNT2, (long)"/card", 0) != 0)',
+            'FAIL("STAGE1 FAIL card_unmount\\n");',
+            'EMIT("STAGE1 sd_unmounted\\n");',
+            "call4(SYSCALL_REBOOT, REBOOT_MAGIC1, REBOOT_MAGIC2, REBOOT_RESTART, 0);",
+        )
+        positions = [install.index(step) for step in steps]
+        self.assertEqual(positions, sorted(positions))
+        self.assertIn('if (call1(SYSCALL_SYNC, 0) != 0)', install)
+
     def test_matched_public_media_identity_contract_is_complete(self) -> None:
         self.assertEqual(
             set(build.MATCHED_STOCK_MEDIA_IDENTITIES),

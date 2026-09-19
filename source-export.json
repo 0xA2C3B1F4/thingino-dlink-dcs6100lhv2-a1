@@ -714,11 +714,11 @@
       "source": "production/docs/release-evidence/2026-09-18-raptor-mic-acknowledgement.md"
     },
     "docs/release-evidence/2026-09-19-fresh-install-reproducibility.md": {
-      "sha256": "70f75e7266dd710686db5a70d45e4fb4910c4f30c025a7ca1ea2192d518572e7",
+      "sha256": "b5a7f1bc689bd11febcb914bf0e15940c10eee7129e106bcfb1146e11b2efe4b",
       "source": "production/docs/release-evidence/2026-09-19-fresh-install-reproducibility.md"
     },
     "docs/status.md": {
-      "sha256": "ab79933f02e2d9891e949b9090d03f714cd3f740ec1c37147fb273e0b0a2cbdd",
+      "sha256": "75f96aaacee3c9365be173ce9e369ea34fb60d3a5641c1110ba464f307cd6c7d",
       "source": "production/docs/status.md"
     },
     "docs/testing.md": {
@@ -1118,7 +1118,7 @@
       "source": "installer/stage1/build.py"
     },
     "installer/stage1/init.c": {
-      "sha256": "ff21bf6494c056428165be53841ed7da44d15e9848678483faf5d1f2d42a0ccc",
+      "sha256": "30c65d45d68b47c0dbc1f6fc6d5f1e17ea101c85e0defd177f95f400f06728e1",
       "source": "installer/stage1/init.c"
     },
     "installer/stage1/linker.ld": {
@@ -2002,7 +2002,7 @@
       "source": "tests/test_split_kernel_build.py"
     },
     "tests/test_stage1_build.py": {
-      "sha256": "9dccb7e925b32f62060e6c0611d83781ed765dabeaac71570993b1596b5d824c",
+      "sha256": "930b8d26006c84c29c3fc369bfbad4faed6470fef16857526cdb1ed751bd53f7",
       "source": "tests/test_stage1_build.py"
     },
     "tests/test_stage2.py": {
@@ -2467,6 +2467,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "21ab50d52b647ccd13a7957b58eff500e55d6c7f",
+  "source_commit": "cd516efd1b3cf0bf3d581e6561b4c90b17f4e71a",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }
