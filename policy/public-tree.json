@@ -179,6 +179,7 @@
     "docs/release-evidence/2026-09-17-raptor-audio-reproducibility.json",
     "docs/release-evidence/2026-09-17-raptor-audio-reproducibility.md",
     "docs/release-evidence/2026-09-18-raptor-mic-acknowledgement.md",
+    "docs/release-evidence/2026-09-19-fresh-install-reproducibility.md",
     "docs/status.md",
     "docs/testing.md",
     "installer/__init__.py",

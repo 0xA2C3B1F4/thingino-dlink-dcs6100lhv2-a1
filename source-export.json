@@ -1,5 +1,5 @@
 {
-  "export_policy_sha256": "37b999a1964a2588b0cc3392c812405aa7d36b735a8e4978802a29da256a4dd1",
+  "export_policy_sha256": "fccc307a063d3e1b5d26b7bc774b5f5d32372b3568e2e87e7716b8d3d0c2a1d3",
   "files": {
     ".editorconfig": {
       "sha256": "77d71c2bd466915cf8363f0929ef8a1f6a25b92a21d01c6ae5c6c7f5c307fd8a",
@@ -713,8 +713,12 @@
       "sha256": "a9181b4f01ce8dcd4e4cb721baae8251bef9c4cf28d48fe51a8eeafc41470ed1",
       "source": "production/docs/release-evidence/2026-09-18-raptor-mic-acknowledgement.md"
     },
+    "docs/release-evidence/2026-09-19-fresh-install-reproducibility.md": {
+      "sha256": "70f75e7266dd710686db5a70d45e4fb4910c4f30c025a7ca1ea2192d518572e7",
+      "source": "production/docs/release-evidence/2026-09-19-fresh-install-reproducibility.md"
+    },
     "docs/status.md": {
-      "sha256": "e14b1c1bbe4c65ffc7b7076a12eb32a0aae13a576c35595ce1bb7f214a3a9042",
+      "sha256": "ab79933f02e2d9891e949b9090d03f714cd3f740ec1c37147fb273e0b0a2cbdd",
       "source": "production/docs/status.md"
     },
     "docs/testing.md": {
@@ -2463,6 +2467,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "c4cf3aea7d37bca3704f60d851c461ca0afd2029",
+  "source_commit": "21ab50d52b647ccd13a7957b58eff500e55d6c7f",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }

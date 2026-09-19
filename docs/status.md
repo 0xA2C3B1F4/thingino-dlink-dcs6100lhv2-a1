@@ -73,6 +73,11 @@ fixed system region, and live RWD matched the built executable. This establishes
 persistent system installation, not complete physical acceptance or permission
 to distribute firmware. Independent kernel equality remains unverified.
 
+Fresh-install source `c4cf3ae` also passed two clean complete-firmware builds;
+see the [September 19 evidence](release-evidence/2026-09-19-fresh-install-reproducibility.md).
+That new candidate has not yet passed physical acceptance. The installation
+observations above belong to the earlier candidate, not this one.
+
 On September 18, a single native microphone-enable command lost its response
 although independent RAD readback showed input enabled. A slow-handler IPC
 regression reproduced acknowledgement loss when handler work consumed the
