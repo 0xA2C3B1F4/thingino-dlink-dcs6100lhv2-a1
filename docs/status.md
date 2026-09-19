@@ -88,7 +88,13 @@ to installed `c4cf3ae`. The corrected package has since been installed, and all
 emitted the FAT dirty warning. The kernel preserves a pre-existing dirty flag
 even on normal unmount, so clean-unmount acceptance remains open pending a
 clean-baseline, phase-specific check. The warning's origin is not yet proven.
-The dated evidence separates these artifacts and the remaining checks.
+After an approved card-specific correction of the existing state flag, a normal
+runtime boot no longer emitted the warning and the operator reported working
+audio. Both recorder channels subsequently passed start/stop, full MP4 decode
+and host-side file-list checks. Four checks are directly recorded for `cd516ef`;
+its candidate matrix remains incomplete. These observations do not close the
+installer's phase-specific cleanup requirement. The dated evidence separates
+these artifacts, prior tests of identical runtime bytes and the remaining checks.
 
 On September 18, a single native microphone-enable command lost its response
 although independent RAD readback showed input enabled. A slow-handler IPC

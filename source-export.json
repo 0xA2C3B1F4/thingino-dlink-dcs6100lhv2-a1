@@ -714,11 +714,11 @@
       "source": "production/docs/release-evidence/2026-09-18-raptor-mic-acknowledgement.md"
     },
     "docs/release-evidence/2026-09-19-fresh-install-reproducibility.md": {
-      "sha256": "f297812d72aee8cce1ea9217063394a45f26890abb524cd1f0961488c0870b71",
+      "sha256": "da9cda11632d752429f13a2d6af25c57ffae60b81b81215506198034fa1c0f12",
       "source": "production/docs/release-evidence/2026-09-19-fresh-install-reproducibility.md"
     },
     "docs/status.md": {
-      "sha256": "a3dedca0d1345f84b9cd13771a349477c6d8f1f13ecc952dc44111bd17c55f43",
+      "sha256": "b458145b61ef36b9d75faac5409f7a0204a3388f3dd53330b8e6d2050abd06b2",
       "source": "production/docs/status.md"
     },
     "docs/testing.md": {
@@ -2467,6 +2467,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "57f9e093ebfc8de11b816f4b2518b77e60f843a3",
+  "source_commit": "48dbcf9779011d521a2cb3f63a18060486661b9d",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }

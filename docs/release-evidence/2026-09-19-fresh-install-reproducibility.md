@@ -192,3 +192,45 @@ after unmount, and both 512-byte boot-sector hashes were identical. This directl
 confirms persistence of the existing dirty flag across a successful runtime
 unmount on this card. It does not prove how the flag first arose or establish
 execution of the earlier installer's unmount. No filesystem repair was made.
+
+## Later normal boot and recorder acceptance
+
+After a separately approved, backed-up correction of the card's existing FAT
+state flag, a normal runtime boot no longer emitted the FAT warning. Independent
+readback confirmed that only the approved state byte changed. This was a
+card-specific recovery action, not an installer fix or a general instruction to
+clear filesystem flags. It does not replace the phase-specific installer checks
+above. The operator subsequently reported that the requested audio test worked;
+no latency measurement or new stream-by-stream detail was supplied in that reply.
+The earlier explicit first-Listen confirmations on both streams remain retained.
+
+On this boot, both recording channels started and stopped through Control.
+Fresh writer-state reads confirmed recording during each test and closed files
+after stopping. The two resulting H.264 MP4s decoded fully without FFmpeg errors:
+142 main-stream frames at 1920x1080 and 147 substream frames at 640x360. Their
+downloaded bytes matched camera-side SHA-256 values. Host-side authenticated
+HTTPS listed both closed files, and final readback confirmed both recorders off.
+This is start/stop acceptance, not retention, deletion, timelapse, recording
+audio, power-loss recovery or long-running stability acceptance.
+
+Initial file-list checks using curl inside the camera timed out. A separate
+read-only probe of the actual list implementation completed in about 13 ms,
+and host-side HTTPS checks subsequently passed without running camera-local curl.
+The diagnostic process is a possible load confounder; the exact timeout cause
+was not established. No production timeout or firmware change was made on this
+evidence. Prefer host-side requests for device acceptance measurements.
+
+The retained kernel log still contained the complete earlier boot log. Only five
+codec setup/stop messages had been added, with no new media, SD I/O, OOM or oops
+errors. Baseline CPU reset-PC and USB clock-gate diagnostics were retained, not
+claimed repaired. This observation covers the completed tests, not endurance.
+
+The `cd516ef` candidate ledger records four directly observed checks: both
+snapshots, recorder start/stop and kernel media-error review. It remains
+incomplete. Rehashing the actual artifacts confirmed unchanged system bytes and
+final-kernel SHA-256
+`faf28040e59639fb9818b3cc12ead8c1c5a0f8109d01ab693fb579797dd3e383`.
+All 14 shared identities in the two installed-readback records also match.
+Earlier runtime evidence remains applicable to those immutable bytes without
+being relabelled as a new installation or mutable-configuration test. Private
+receipts, diagnostic sources and operator reports are retained outside the export.
