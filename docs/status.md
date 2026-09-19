@@ -78,11 +78,13 @@ Fresh-install source `c4cf3ae` also passed two clean complete-firmware builds;
 see the [September 19 evidence](release-evidence/2026-09-19-fresh-install-reproducibility.md).
 Subsequent installation of that candidate passed independent kernel/system and
 protected-span readback. The operator heard first-attempt Preview audio on both
-streams. Five of its twenty acceptance checks are recorded as passed; full
+streams. Ten of its twenty acceptance checks are recorded as passed; full
 physical acceptance remains open. Source `f99b4cf` subsequently fixes a missing
 SD unmount before the installer's final reboot. Host tests and two targeted MIPS
-builds passed, but that installer correction is not yet deployed. The dated
-evidence separates these artifacts and the remaining checks.
+builds passed. Complete source `cd516ef` then passed two clean full builds and
+signed-package validation. Its runtime kernel and system image are byte-identical
+to installed `c4cf3ae`; the changed SD installer is not yet physically verified.
+The dated evidence separates these artifacts and the remaining checks.
 
 On September 18, a single native microphone-enable command lost its response
 although independent RAD readback showed input enabled. A slow-handler IPC
