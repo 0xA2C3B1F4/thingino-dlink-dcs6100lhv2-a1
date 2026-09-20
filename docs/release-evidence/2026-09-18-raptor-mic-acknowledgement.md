@@ -1,13 +1,15 @@
 # Raptor microphone acknowledgement candidate, September 18
 
-## September 20 cold-boot candidate: host verification only
+## September 20 cold-boot candidate: installed and audio observed
 
 Firmware-input commit `9902268604fd9eae52d671c616eee2e865dec933` adds a
 bounded 300-second IPv4 wait before starting RWD. The installed older candidate
 was observed with eight media owners alive but no RWD configuration or Control
 process. Its boot log showed DHCP continuing in the background and IPv4 readiness
 after the login prompt. This supports a startup race; the exact shell exit was
-not traced. No successful physical boot of the new candidate is claimed here.
+not traced. The new candidate subsequently completed installation and booted
+successfully, as recorded below. That boot alone does not prove that the
+delayed-DHCP branch was exercised.
 
 The normal universal build completed two clean builds with `--data-mode
 initialize`, intended for new installations. Both build containers exited zero
@@ -30,9 +32,30 @@ without changing MIPS flag values. This is local Linux evidence, not hosted CI,
 Windows acceptance or camera acceptance. The temporary test image contained
 Mosquitto; it did not replace the locked firmware builder.
 
-Deployment, cold-boot readiness, candidate-specific device acceptance and the
-remaining firmware release gates are still pending. Prior physical acceptance
-below belongs to its named older artifacts, not automatically this candidate.
+The normal staged installation and handoff completed on the first camera.
+Passive installation output recorded provisioning readback, final system/kernel
+readback, activation verification, installation-file passivation, SD unmount,
+automatic reboot and verified switch root. The normal pinned `universal verify`
+then passed application, Control, health, media and WebUI gates without writes.
+An independent host readback matched the complete padded kernel and system
+partitions to this build, and three protected partitions to the same camera's
+retained pre-installation copies. The boot identity did not change during that
+readback. The full system-span SHA-256 was
+`1ca92528ef0f2a93d3f21caa94126312bfc5fc60c89da47408b85457e39a674b`.
+The Raptor ready marker and live Control, storage and RWD processes were checked
+after boot. No manual service restart was used.
+
+On September 20 the operator reported audible playback on both main and
+substream in response to the request to use Listen once without Reload on this
+installed version. This is human audibility evidence, not a packet-count
+inference. Browser version and measured audio-start latency were not recorded;
+microphone-Off connection establishment and delayed-DHCP timing were not
+independently observed. Do not treat this observation as the entire first-attempt
+audio matrix, resource soak or failure-recovery acceptance.
+
+The full candidate checklist and remaining firmware release gates stay open.
+Prior physical acceptance below belongs to its named older artifacts, not
+automatically this candidate.
 
 ## Earlier candidate evidence
 
