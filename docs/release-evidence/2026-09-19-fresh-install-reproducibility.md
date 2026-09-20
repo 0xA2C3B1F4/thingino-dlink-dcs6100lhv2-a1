@@ -277,11 +277,37 @@ started. This run is not successful installation evidence.
 
 The host plan used earlier recovery and authorization inputs. Its validation
 does not observe current camera flash. Authorization binds full protected
-partition bytes, including writable stock configuration; changes after stock
-boot are a possible cause, not yet proven by fresh device readback. The public
+partition bytes, including writable stock configuration. At this point, changes
+after stock boot were only a hypothesis; the subsequent capture below tests it. The public
 reuse instructions now exclude a subsequent return to stock, and stage/handoff
 plans explicitly report `live_camera_verified: false` within
 `camera_binding_evidence`. These changes do not bypass device HMAC validation
 or establish a successful retry. The camera recovery and fresh-install gate
 remain open. A FAT unclean-unmount warning was also observed during this boot
 despite successful host eject; its cause is unresolved.
+
+### Fresh capture confirms stale authorization binding
+
+The existing UARTless capture package passed the current package and manifest
+validator. Its first updater boot completed, the host performed the supported
+handoff, and the second boot reported `COLLECT COMPLETE host_validation_required`.
+The host then validated both partition copies, preserved readback, package
+binding and vendor material into a new private recovery directory. It accepted
+functional recovery, not an exact-original backup. The earlier recovery remains
+retained separately.
+
+Comparing the two validated preserved sets found identical stock mtd0 bytes,
+510 changed bytes in stock mtd4 and 78,022 changed bytes in stock mtd5, with
+unchanged partition sizes. Both camera identity and authorization-key derivation
+changed. Independently calculating the archived authorization binary's HMAC
+with its digest field zeroed matched the earlier capture's key and rejected
+the fresh capture's key. This establishes that the archived authorization is
+stale for the newly captured protected bytes. It does not identify which stock
+process changed each byte or establish successful reinstallation.
+
+The old UARTless provisioning session is also bound to the earlier identity;
+`universal provision` rejects using it with the fresh capture. The supported
+new-user route requires a fresh session and newly generated private setup,
+followed by provisioning and authorization against that capture. This evidence
+does not approve reusing or manually editing old session bindings. Physical
+installation and recovery acceptance remain open.
