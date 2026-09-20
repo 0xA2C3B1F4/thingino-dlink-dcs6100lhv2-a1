@@ -311,3 +311,33 @@ new-user route requires a fresh session and newly generated private setup,
 followed by provisioning and authorization against that capture. This evidence
 does not approve reusing or manually editing old session bindings. Physical
 installation and recovery acceptance remain open.
+
+## Fresh-bound installation and independent readback
+
+After the fresh functional capture, the operator approved a new provisioning
+session. Supported commands generated new private configuration, provisioning
+and camera authorization against that capture. The existing model-universal
+`cd516ef` firmware artifact was reused without modification.
+
+Both SD staging and handoff passed independent remount readback. Passive UART
+then observed authorization verification, provisioning write/readback, final
+system and kernel writes, preactivation verification, activation readback,
+installation-file passivation, SD unmount, reboot and verified switch-root.
+The previous authorization HMAC failure did not recur. These are installer
+observations, not power-interruption or filesystem-repair evidence.
+
+The pinned installed-camera verifier passed with an empty write set, including
+system-partition readback. Its private receipt has SHA-256
+`46069c2d7390f94c2e439648c9740911c3a1340ef0f5292484b9bc32be23efd3`.
+A separate read-only pinned SSH check then compared all five complete partition
+hashes. Kernel mtd1 and system mtd3 matched the immutable build, padded with
+`0xff` to their partition spans. Runtime mtd0, mtd5 and mtd6 matched the fresh
+capture's stock mtd0, mtd4 and mtd5 respectively. Boot identity was unchanged
+throughout that readback. Its private receipt has SHA-256
+`45bda98866fb096c5ea35c7846b7a663a5bead0aa577793be857eb52c6d10448`.
+
+This establishes successful reinstallation from the fresh binding and preserved
+protected bytes. It does not establish exact-original capture, interrupted-write
+recovery, a second camera, host-platform coverage or license clearance. Audible
+playback on this newly provisioned installation remains pending operator
+confirmation. No release gate is closed solely by these bounded observations.
