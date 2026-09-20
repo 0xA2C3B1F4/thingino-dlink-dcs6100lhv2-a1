@@ -511,10 +511,12 @@ fn management_credential_update_shares_the_config_lock() {
     started_rx.recv_timeout(Duration::from_secs(1)).unwrap();
     assert!(result_rx.recv_timeout(Duration::from_millis(100)).is_err());
     drop(guard);
-    assert!(matches!(
-        result_rx.recv_timeout(Duration::from_secs(1)).unwrap(),
-        Ok(_)
-    ));
+    assert!(
+        result_rx
+            .recv_timeout(Duration::from_secs(1))
+            .unwrap()
+            .is_ok()
+    );
     worker.join().unwrap();
     let onvif = json::parse(&fs::read(&onvif_config).unwrap()).unwrap();
     assert_eq!(

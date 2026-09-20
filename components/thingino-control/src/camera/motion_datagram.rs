@@ -2,9 +2,17 @@ pub(crate) const PROTOCOL_VERSION: u8 = 1;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ObservationState {
+    #[expect(
+        dead_code,
+        reason = "Retained state-machine input; Raptor currently infers monitoring from events"
+    )]
     Monitoring,
     Detected,
     Clear,
+    #[expect(
+        dead_code,
+        reason = "Retained motor-suppression state for producers with motor feedback"
+    )]
     Suppressed,
     Stopped,
 }

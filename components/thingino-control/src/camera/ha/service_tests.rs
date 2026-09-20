@@ -561,7 +561,7 @@ fn worker_exit_serializes_before_enqueue_can_observe_the_dead_receiver() {
         .recv_timeout(Duration::from_secs(1))
         .expect("HA worker did not reach the exit transition");
 
-    let service = Arc::clone(&backend.ha_service());
+    let service = Arc::clone(backend.ha_service());
     let (result_sender, result_receiver) = mpsc::channel();
     let enqueue = thread::spawn(move || {
         result_sender

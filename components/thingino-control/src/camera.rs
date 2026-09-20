@@ -4,7 +4,7 @@ use std::io::{self, Write};
 use std::net::{TcpStream, ToSocketAddrs, UdpSocket};
 #[cfg(target_os = "linux")]
 use std::os::raw::{c_char, c_int, c_void};
-use std::os::unix::fs::{FileTypeExt, MetadataExt, OpenOptionsExt, PermissionsExt};
+use std::os::unix::fs::{FileTypeExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 #[cfg(test)]
 use std::sync::Arc;

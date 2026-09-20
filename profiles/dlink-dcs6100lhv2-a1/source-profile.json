@@ -284,7 +284,7 @@
     },
     {
       "destination": "package/thingino-control/rust/src/camera.rs",
-      "sha256": "ccaea0fd0074d27c3a550a03b4d33b951c742053602af81763afb9bdae8ae2e2",
+      "sha256": "ac47ccefc8ab0976eecbcc3e1bcb0ef51d516bca12bf89df31ebdd227af47b47",
       "source": "components/thingino-control/src/camera.rs"
     },
     {
@@ -359,7 +359,7 @@
     },
     {
       "destination": "package/thingino-control/rust/src/camera/ha/mod.rs",
-      "sha256": "e7027533fa7ddbc470bcd88b8f2737c6260d36f22f1c17f775eba39a11b49207",
+      "sha256": "86df10b71401fd3501f77b7ee6aeae4b20938dc9535767e7719e6814c56d4b57",
       "source": "components/thingino-control/src/camera/ha/mod.rs"
     },
     {
@@ -404,7 +404,7 @@
     },
     {
       "destination": "package/thingino-control/rust/src/camera/ha/service_tests.rs",
-      "sha256": "305bcca365d2da3305132366af64180b8959095369bd93f0cb4cf51e7cd16a6d",
+      "sha256": "d0b98d04a818d48405d43457d96c8b4a0f7ebcbda81fb1bc254a31c5a56c3e4e",
       "source": "components/thingino-control/src/camera/ha/service_tests.rs"
     },
     {
@@ -429,7 +429,7 @@
     },
     {
       "destination": "package/thingino-control/rust/src/camera/motion_datagram.rs",
-      "sha256": "a2282cc5154b96b7542c6c3f39093fb74d906c03935bb452f79018dca82c97a1",
+      "sha256": "5d776ff236dced5dca0ab9aab4c8d20c095e17b3815380320fd9bb722516e892",
       "source": "components/thingino-control/src/camera/motion_datagram.rs"
     },
     {
@@ -454,22 +454,22 @@
     },
     {
       "destination": "package/thingino-control/rust/src/camera/platform/abi.rs",
-      "sha256": "122e193d5561dba54a2f0a889447e9805207a31ec8e2a17ed9aa62c4d405de3a",
+      "sha256": "c454dc2c10ae4dc4a2fbf05900daacddc02a35291b7398c7055b0a718c804467",
       "source": "components/thingino-control/src/camera/platform/abi.rs"
     },
     {
       "destination": "package/thingino-control/rust/src/camera/platform/file_io.rs",
-      "sha256": "0b9bcb2314e2c974be3c55ca0e68fc3fd9aa5d9c1c670aaea6e8bfb0136b727f",
+      "sha256": "d7da7d04970a693fcca97c287f835166201d60fc5a1676eb9de33f5db713da87",
       "source": "components/thingino-control/src/camera/platform/file_io.rs"
     },
     {
       "destination": "package/thingino-control/rust/src/camera/platform/logs.rs",
-      "sha256": "637e2d71a982bbf94f3c917e0bd679cb730e2a3ea2bfbb235cfd211b96574e59",
+      "sha256": "4e2cc9ec02da47293e4148ddff0e412a5eceba81dda0add20d9b95aa28c14bff",
       "source": "components/thingino-control/src/camera/platform/logs.rs"
     },
     {
       "destination": "package/thingino-control/rust/src/camera/platform/socket_io.rs",
-      "sha256": "6da7e05f0511eb14c1f14f933c69e347fd9b6ca1e6c835f97eceb98c32e36045",
+      "sha256": "a863317b921a97389b35223906f6cbaee4105f9c6948eb583ffdb03af465b6a2",
       "source": "components/thingino-control/src/camera/platform/socket_io.rs"
     },
     {
@@ -514,7 +514,7 @@
     },
     {
       "destination": "package/thingino-control/rust/src/camera_tests.rs",
-      "sha256": "54bf970f79baeda0020a8e10ed0789da4f71430bb2600b7d57ce25a9cf14955e",
+      "sha256": "107a5c07108a6dcb78069c7b13e4def55c383f8fa792395de8acb1f2a84271a7",
       "source": "components/thingino-control/src/camera_tests.rs"
     },
     {
@@ -560,7 +560,7 @@
     {
       "source": "components/thingino-control/src/raptor_backend/audio.rs",
       "destination": "package/thingino-control/rust/src/raptor_backend/audio.rs",
-      "sha256": "faece1c77c76c2f15e8c8046a87e3a25c3a10ba519bad340b0fc292f81b25e0b"
+      "sha256": "9fa969a2639932acf98d371d3e8c924456601a50fcf049a406ca625450f75ee8"
     },
     {
       "destination": "package/thingino-control/rust/src/raptor_backend/browser_bridge.rs",
@@ -704,7 +704,7 @@
     },
     {
       "destination": "package/thingino-control/rust/src/raptor_backend/timelapse/storage.rs",
-      "sha256": "b543992895468668b800027d851f0166a307c6b06f27e722ea4b87ffd3a637b1",
+      "sha256": "8f47152e26b43a35919d33667d2a589937210bc1f4a5cd54e63a852245a3757c",
       "source": "components/thingino-control/src/raptor_backend/timelapse/storage.rs"
     },
     {
@@ -744,12 +744,12 @@
     },
     {
       "destination": "package/thingino-control/rust/src/web_auth.rs",
-      "sha256": "4c345b5ed8a764debf2e66a83d06855eeab01c880b7940c16b5c147b2b68734b",
+      "sha256": "062f5e01cc299ef14e825259eb06098b761efecaab68804e59b67ba43e5c13fc",
       "source": "components/thingino-control/src/web_auth.rs"
     },
     {
       "destination": "package/thingino-control/rust/src/web_auth_tests.rs",
-      "sha256": "1abc6c7cf2f24747ef0257edf99effcf143d98703a71d2ea5c79f56d259546cf",
+      "sha256": "b6d213f3d9a9e118d4cfda98945c0ce9f1f04819f9875ce4f0f6466d7862a134",
       "source": "components/thingino-control/src/web_auth_tests.rs"
     },
     {

@@ -26,7 +26,9 @@ const LOGIN_SOURCE_LIMIT: u16 = 5;
 const LOGIN_GLOBAL_LIMIT: u16 = 32;
 static SYSTEM_CRYPT_LOCK: Mutex<()> = Mutex::new(());
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+const O_NOFOLLOW: i32 = 0x8000;
+#[cfg(all(target_os = "linux", not(target_arch = "aarch64")))]
 const O_NOFOLLOW: i32 = 0x20000;
 #[cfg(target_os = "macos")]
 const O_NOFOLLOW: i32 = 0x100;

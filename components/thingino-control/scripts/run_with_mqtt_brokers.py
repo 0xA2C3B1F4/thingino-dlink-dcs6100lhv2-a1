@@ -83,8 +83,10 @@ def main() -> int:
         username = f"ha-test-{secrets.token_hex(6)}"
         password = secrets.token_urlsafe(24)
         password_file = root / "passwords"
-        password_file.write_text(f"{username}:{password}\n", encoding="utf-8")
-        run_quiet([mosquitto_passwd, "-U", str(password_file)])
+        # These are random disposable fixture credentials, never camera secrets.
+        # Create the hashed file directly: -U uses temporary storage outside
+        # the fixture on some Mosquitto versions, ignoring TMPDIR.
+        run_quiet([mosquitto_passwd, "-b", "-c", str(password_file), username, password])
         ca_cert, invalid_ca, server_cert, server_key = certificates(root, openssl)
         broker_log = root / "broker.log"
         broker_config = root / "mosquitto.conf"

@@ -948,7 +948,8 @@ pub(super) mod tests {
             other => panic!("expected exact audio partial-apply error, got {other:?}"),
         };
 
-        let cases: [(&str, Vec<(&'static [u8], Vec<u8>)>); 4] = [
+        type TransitionCase = (&'static str, Vec<(&'static [u8], Vec<u8>)>);
+        let cases: [TransitionCase; 4] = [
             (
                 "rad-acknowledgement",
                 vec![

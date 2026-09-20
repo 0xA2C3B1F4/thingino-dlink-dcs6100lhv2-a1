@@ -1,22 +1,19 @@
-use std::path::Path;
-#[cfg(target_os = "linux")]
-use std::{
-    fs::OpenOptions,
-    io::{self, Read},
-    os::{
-        raw::{c_char, c_int},
-        unix::fs::{FileTypeExt, OpenOptionsExt},
-    },
-};
-
-#[cfg(target_os = "linux")]
-use super::abi::{O_NOFOLLOW, O_NONBLOCK};
 use super::{abi::FILE_LIMIT, file_io::read_bounded, read_busybox_syslog};
 use crate::BackendError;
+#[cfg(target_os = "linux")]
+use std::os::raw::{c_char, c_int};
+use std::path::Path;
 
+#[cfg(any(
+    test,
+    all(target_os = "linux", any(target_arch = "x86_64", target_arch = "mips"))
+))]
 pub(super) const SYSLOG_LIMIT: usize = 64 * 1024;
 
-#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+#[cfg(any(
+    test,
+    all(target_os = "linux", any(target_arch = "x86_64", target_arch = "mips"))
+))]
 pub(in crate::camera) fn parse_busybox_syslog_ring(
     size: usize,
     tail: usize,
@@ -108,7 +105,7 @@ pub(in crate::camera) fn read_kernel_log() -> Result<Vec<u8>, BackendError> {
     Err(BackendError::Unavailable)
 }
 
-#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+#[cfg(test)]
 pub(in crate::camera) fn parse_android_log_entry(entry: &[u8]) -> Result<String, BackendError> {
     const LEGACY_HEADER: usize = 20;
     if entry.len() < LEGACY_HEADER {
@@ -167,41 +164,4 @@ pub(in crate::camera) fn parse_android_log_entry(entry: &[u8]) -> Result<String,
     Ok(format!(
         "{seconds}.{nanoseconds:09} {priority}/{tag}({pid:>5}): {message}\n"
     ))
-}
-
-#[cfg(target_os = "linux")]
-pub(in crate::camera) fn read_streamer_log(path: &Path) -> Result<Vec<u8>, BackendError> {
-    let mut file = OpenOptions::new()
-        .read(true)
-        .custom_flags(O_NONBLOCK | O_NOFOLLOW)
-        .open(path)
-        .map_err(|_| BackendError::Unavailable)?;
-    let metadata = file.metadata().map_err(|_| BackendError::Unavailable)?;
-    if !metadata.file_type().is_char_device() {
-        return Err(BackendError::Protocol);
-    }
-    let mut output = Vec::new();
-    let mut record = vec![0u8; 8192];
-    for _ in 0..1024 {
-        match file.read(&mut record) {
-            Ok(0) => break,
-            Ok(length) => {
-                let line = parse_android_log_entry(&record[..length])?;
-                output.extend_from_slice(line.as_bytes());
-                if output.len() >= 64 * 1024 {
-                    output.truncate(64 * 1024);
-                    break;
-                }
-            }
-            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
-            Err(error) if error.kind() == io::ErrorKind::WouldBlock => break,
-            Err(_) => return Err(BackendError::Unavailable),
-        }
-    }
-    Ok(output)
-}
-
-#[cfg(not(target_os = "linux"))]
-pub(in crate::camera) fn read_streamer_log(_path: &Path) -> Result<Vec<u8>, BackendError> {
-    Err(BackendError::Unavailable)
 }

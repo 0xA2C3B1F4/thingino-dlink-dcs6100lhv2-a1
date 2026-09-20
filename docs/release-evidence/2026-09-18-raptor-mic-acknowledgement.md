@@ -1,5 +1,41 @@
 # Raptor microphone acknowledgement candidate, September 18
 
+## September 20 cold-boot candidate: host verification only
+
+Firmware-input commit `9902268604fd9eae52d671c616eee2e865dec933` adds a
+bounded 300-second IPv4 wait before starting RWD. The installed older candidate
+was observed with eight media owners alive but no RWD configuration or Control
+process. Its boot log showed DHCP continuing in the background and IPv4 readiness
+after the login prompt. This supports a startup race; the exact shell exit was
+not traced. No successful physical boot of the new candidate is claimed here.
+
+The normal universal build completed two clean builds with `--data-mode
+initialize`, intended for new installations. Both build containers exited zero
+without OOM. All 16 complete-firmware comparison files were byte-identical,
+without compiled Raptor component cache reuse. An independent host verifier
+rehashed all 32 files against the recorded comparison; both schema-2 install-set
+inspections passed. The builder image remains
+`sha256:8abae43028bd1155572c76e268b9b8c5dce4686efe70ff68c0b7c5f9b93b361e`.
+
+- Universal bundle SHA-256: `c331dbd21df864c424471d76e0af8198dc5d335b59be6d6c1c670af08881b5de`.
+- Complete comparison report SHA-256: `0aec3f7bdbc744150e21e2a079ae5a84ef566f7b4f4568d779db91021cd9c20b`.
+
+Source checks passed 1010 tests with one skip. The locked Rust 1.95 Linux ARM64
+Control gate passed Clippy, release builds, real local MQTT fixtures and both
+host-soak runs. Each of its default/explicit-Raptor rounds passed 438 library
+tests with one ignored test, 17 binary tests and 22 contract tests. These two
+rounds select the same Raptor backend; they are not independent backend coverage.
+The gate also exposed ARM64-specific file-open flag errors. Those were corrected
+without changing MIPS flag values. This is local Linux evidence, not hosted CI,
+Windows acceptance or camera acceptance. The temporary test image contained
+Mosquitto; it did not replace the locked firmware builder.
+
+Deployment, cold-boot readiness, candidate-specific device acceptance and the
+remaining firmware release gates are still pending. Prior physical acceptance
+below belongs to its named older artifacts, not automatically this candidate.
+
+## Earlier candidate evidence
+
 The normal `thingino-dlink local-build build-universal` workflow completed
 successfully from firmware-input commit
 `72e3025359bcc14065a78d7f5d60e104d18b7a6e`, with `--build-count 2` and

@@ -74,6 +74,7 @@ pub(in crate::camera) fn write_deadline(
     Ok(())
 }
 
+#[cfg(test)]
 pub(in crate::camera) fn read_line(
     stream: &mut UnixStream,
     deadline: Instant,
@@ -117,6 +118,7 @@ pub(in crate::camera) fn read_exact_deadline(
     Ok(())
 }
 
+#[cfg(test)]
 pub(in crate::camera) fn read_to_end_deadline(
     stream: &mut UnixStream,
     deadline: Instant,

@@ -479,6 +479,7 @@
     "tests/test_provisioning_data.py",
     "tests/test_public_tree.py",
     "tests/test_ram_boot.py",
+    "tests/test_raptor_boot_network.py",
     "tests/test_raptor_development.py",
     "tests/test_raptor_full_acquire.py",
     "tests/test_raptor_full_build.py",

@@ -14,6 +14,7 @@ pub(in crate::camera) use config::{
 };
 pub(crate) use service::HaService;
 
+#[cfg(test)]
 use super::*;
 
 #[cfg(all(test, feature = "raptor-backend"))]

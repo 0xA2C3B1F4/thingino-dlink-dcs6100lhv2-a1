@@ -6,11 +6,16 @@ use std::os::fd::{AsRawFd, FromRawFd};
 use std::os::unix::fs::{FileTypeExt, MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 
-#[cfg(target_os = "linux")]
+// AArch64 uses the ARM fcntl layout, unlike MIPS and x86_64.
+#[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+const NOFOLLOW: i32 = 0x8000;
+#[cfg(all(target_os = "linux", not(target_arch = "aarch64")))]
 const NOFOLLOW: i32 = 0x20000;
 #[cfg(target_os = "macos")]
 const NOFOLLOW: i32 = 0x100;
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+const DIRECTORY: i32 = 0x4000;
+#[cfg(all(target_os = "linux", not(target_arch = "aarch64")))]
 const DIRECTORY: i32 = 0x10000;
 #[cfg(target_os = "macos")]
 const DIRECTORY: i32 = 0x100000;

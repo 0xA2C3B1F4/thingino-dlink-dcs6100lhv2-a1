@@ -19,12 +19,10 @@ pub(in crate::camera) const MSG_DONTWAIT: c_int = 0x40;
 pub(in crate::camera) const EINTR: i32 = 4;
 #[cfg(target_os = "linux")]
 pub(in crate::camera) const EAGAIN: i32 = 11;
-#[cfg(all(target_os = "linux", target_arch = "mips"))]
-pub(in crate::camera) const O_NONBLOCK: i32 = 0x80;
-#[cfg(all(target_os = "linux", not(target_arch = "mips")))]
-pub(in crate::camera) const O_NONBLOCK: i32 = 0x800;
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+pub(in crate::camera) const O_NOFOLLOW: i32 = 0x8000;
+#[cfg(all(target_os = "linux", not(target_arch = "aarch64")))]
 pub(in crate::camera) const O_NOFOLLOW: i32 = 0x20000;
 #[cfg(target_os = "macos")]
 pub(in crate::camera) const O_NOFOLLOW: i32 = 0x100;

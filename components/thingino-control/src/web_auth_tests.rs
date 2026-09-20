@@ -263,7 +263,9 @@ impl PasswordVerifier for ClockTestVerifier {
 
 // Keep simulated wall time separate from elapsed time. Neither NTP steps nor
 // Time settings are allowed to affect the process-local session clock.
-fn clock_test_auth(name: &str) -> (PathBuf, WebAuth, Arc<Mutex<(u64, i64)>>, String) {
+type ClockTestAuth = (PathBuf, WebAuth, Arc<Mutex<(u64, i64)>>, String);
+
+fn clock_test_auth(name: &str) -> ClockTestAuth {
     let (root, paths) = test_paths(name);
     let mut auth = WebAuth::with_password_verifier(paths, Arc::new(ClockTestVerifier));
     let clocks = Arc::new(Mutex::new((0_u64, 1_786_006_608_i64)));
