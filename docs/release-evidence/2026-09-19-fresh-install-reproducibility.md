@@ -338,6 +338,10 @@ throughout that readback. Its private receipt has SHA-256
 
 This establishes successful reinstallation from the fresh binding and preserved
 protected bytes. It does not establish exact-original capture, interrupted-write
-recovery, a second camera, host-platform coverage or license clearance. Audible
-playback on this newly provisioned installation remains pending operator
-confirmation. No release gate is closed solely by these bounded observations.
+recovery, a second camera, host-platform coverage or license clearance.
+
+The operator subsequently confirmed that microphone and speaker worked on both
+streams on this newly provisioned installation. This closes the pending bounded
+operator audio confirmation for this install. The reply does not separately
+establish measured latency, first-click behavior, two-way talkback or cold-boot
+recovery. No complete release gate is closed solely by these observations.
