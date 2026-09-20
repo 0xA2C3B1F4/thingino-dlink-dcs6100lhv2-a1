@@ -698,7 +698,7 @@
       "source": "production/docs/installer-projects.md"
     },
     "docs/recovery.md": {
-      "sha256": "26e36f60ff3a3610eb1d4460026b5948608fbd6f7d28aa579c1ce4da5a12298e",
+      "sha256": "f010f3eaeee1216aee87438f113ef9a3b6b4ddfc60a5440027d6363cfa2f2b02",
       "source": "production/docs/recovery.md"
     },
     "docs/release-evidence/2026-09-17-raptor-audio-reproducibility.json": {
@@ -836,6 +836,10 @@
     "installer/full_backup.py": {
       "sha256": "cd83a66496d352e13f30ea7cb4d6dfb61a4fa3a5dc37312e9c3ae59e06573f63",
       "source": "installer/full_backup.py"
+    },
+    "installer/functional_stock_restore.py": {
+      "sha256": "31f1b098370ed9b77f162ee91a4a1c3452ef5eae86bc4493c79591e47bb646b7",
+      "source": "installer/functional_stock_restore.py"
     },
     "installer/install_actions.py": {
       "sha256": "1aa3618439f721838e16766fe99cb6ea6d70581899cd0130ae0ec69bc97318d3",
@@ -1190,7 +1194,7 @@
       "source": "installer/stock_restore/runtime.inc"
     },
     "installer/stock_restore/set.py": {
-      "sha256": "d59b4672f3a72314bec0a79d57ab2c929dffbe22bdf492a60b9a6418b0f85b2c",
+      "sha256": "ef449bf80d8a0dc0beb967f399bf2616df0bde823d5ce0787d75b40ef6a41522",
       "source": "installer/stock_restore/set.py"
     },
     "installer/stock_restore/staging.py": {
@@ -1270,7 +1274,7 @@
       "source": "installer/user_cli_parser.py"
     },
     "installer/user_cli_parser_stock_recovery.py": {
-      "sha256": "efcbf60fff1352e791b3cd7acfbb9e21e2b02461a3b3e6e8d43bc7b657f5a67c",
+      "sha256": "365c587e823dcae406aaa0a8f4651ac91561689185d696b7ca8a1a07b8d7ec55",
       "source": "installer/user_cli_parser_stock_recovery.py"
     },
     "installer/user_cli_project.py": {
@@ -1278,7 +1282,7 @@
       "source": "installer/user_cli_project.py"
     },
     "installer/user_cli_stock_recovery.py": {
-      "sha256": "dc9ab383bceb2bc411b659841f0b57eb7dab32f6ef3cef5d4335b4f73c227f54",
+      "sha256": "7c4f27c07ef03b9d40de31977d4f5cde44ed72d99f1efcd44e0d9155fc455399",
       "source": "installer/user_cli_stock_recovery.py"
     },
     "installer/user_cli_universal.py": {
@@ -1764,6 +1768,10 @@
     "tests/test_full_backup.py": {
       "sha256": "7c8e050057242181368dfb9dda04d159297adf6372cfc597151b113e04c06e65",
       "source": "tests/test_full_backup.py"
+    },
+    "tests/test_functional_stock_restore.py": {
+      "sha256": "461af5f31ac9f25c4262f27eea8b839456620832ff12375d3a64a26ca482673c",
+      "source": "tests/test_functional_stock_restore.py"
     },
     "tests/test_install_actions.py": {
       "sha256": "6e3d2649e15bbb701853219545eb9a3c459a4e032ece1d74c4f9ff9ccdedd354",
@@ -2467,6 +2475,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "48dbcf9779011d521a2cb3f63a18060486661b9d",
+  "source_commit": "b6b6c095b6251cba87cb83cdcde8145a7312583f",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }

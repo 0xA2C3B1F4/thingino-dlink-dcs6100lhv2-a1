@@ -195,7 +195,9 @@ def register_stock_recovery_commands(facade: object, commands: object) -> None:
     _add_common(sd_prepare, inherited=True)
     sd_prepare.add_argument("--recovery-dir", type=Path, required=True)
     sd_prepare.add_argument("--preserved-readback-dir", type=Path, required=True)
-    sd_prepare.add_argument("--restore-output-dir", type=Path, required=True)
+    sd_source = sd_prepare.add_mutually_exclusive_group(required=True)
+    sd_source.add_argument("--restore-output-dir", type=Path)
+    sd_source.add_argument("--functional-stock-selection", type=Path)
     sd_prepare.add_argument("--kernel", type=Path, required=True)
     sd_prepare.add_argument("--linux-config", type=Path, required=True)
     sd_prepare.add_argument("--mmc-module", type=Path, required=True)
@@ -228,7 +230,9 @@ def register_stock_recovery_commands(facade: object, commands: object) -> None:
         sd_command.add_argument(
             "--preserved-readback-dir", type=Path, required=True
         )
-        sd_command.add_argument("--restore-output-dir", type=Path, required=True)
+        sd_source = sd_command.add_mutually_exclusive_group(required=True)
+        sd_source.add_argument("--restore-output-dir", type=Path)
+        sd_source.add_argument("--functional-stock-selection", type=Path)
         sd_command.add_argument("--linux-config", type=Path, required=True)
         sd_command.add_argument("--input-dir", type=Path, required=True)
         sd_command.add_argument("--mount-root", type=Path, required=True)

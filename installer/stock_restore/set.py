@@ -12,6 +12,7 @@ import struct
 import tempfile
 
 from installer.fake_mtd import StockRestoreImages
+from installer.functional_stock_restore import FunctionalStockPlan, FunctionalStockSelection
 from installer.live_ram import (
     KERNEL_SD_NAME,
     LiveRamPlan,
@@ -94,7 +95,7 @@ def _require_authorization(raw: bytes) -> bytes:
     return raw
 
 
-def _images(plan: SameDeviceStockRestorePlan) -> StockRestoreImages:
+def _images(plan: SameDeviceStockRestorePlan | FunctionalStockPlan) -> StockRestoreImages:
     result = StockRestoreImages(
         mtd1=plan.mtd1,
         mtd2=plan.mtd2,
@@ -312,15 +313,14 @@ def prepare_stock_restore_bootstrap_set(
     mksquashfs: Path | None = None,
     unsquashfs: Path | None = None,
     authorization: bytes | None = None,
+    functional_selection: FunctionalStockSelection | None = None,
 ) -> StockRestoreBootstrapSet:
     """Build one unarmed, no-UART stock-restorer SD transport."""
 
     if output_dir.exists() or output_dir.is_symlink():
         raise StockRestoreSetError("refusing to overwrite a stock restore bootstrap")
-    plan = inspect_same_device_stock_restore(
-        recovery_dir=recovery_dir,
-        preserved_readback_dir=preserved_readback_dir,
-        output_dir=restore_output_dir,
+    plan = _bootstrap_restore_plan(
+        recovery_dir, preserved_readback_dir, restore_output_dir, functional_selection,
     )
     images = _images(plan)
     validate_stock_restore_kernel(kernel=kernel, linux_config=linux_config)
@@ -381,6 +381,9 @@ def prepare_stock_restore_bootstrap_set(
             "transport_write_set": [1, 2],
             "write_set": [3, 2, 1],
         }
+        if isinstance(plan, FunctionalStockPlan):
+            manifest["purpose"] = "functional-stock-uartless-bootstrap-private"
+            manifest["origin"] = plan.private_origin()
         manifest_raw = (
             json.dumps(manifest, indent=2, sort_keys=True) + "\n"
         ).encode()
@@ -407,11 +410,10 @@ def inspect_stock_restore_bootstrap_set(
     restore_output_dir: Path,
     linux_config: bytes,
     output_dir: Path,
+    functional_selection: FunctionalStockSelection | None = None,
 ) -> StockRestoreBootstrapSet:
-    plan = inspect_same_device_stock_restore(
-        recovery_dir=recovery_dir,
-        preserved_readback_dir=preserved_readback_dir,
-        output_dir=restore_output_dir,
+    plan = _bootstrap_restore_plan(
+        recovery_dir, preserved_readback_dir, restore_output_dir, functional_selection,
     )
     images = _images(plan)
     expected_names = {
@@ -432,6 +434,16 @@ def inspect_stock_restore_bootstrap_set(
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise StockRestoreSetError("stock restore bootstrap manifest is invalid") from exc
     artifacts = manifest.get("artifacts") if isinstance(manifest, dict) else None
+    expected_origin = plan.private_origin() if isinstance(plan, FunctionalStockPlan) else None
+    expected_purpose = (
+        "functional-stock-uartless-bootstrap-private" if expected_origin is not None
+        else "same-device-stock-1.02.02-uartless-bootstrap-private"
+    )
+    if not isinstance(manifest, dict) or (
+        manifest.get("purpose") != expected_purpose
+        or manifest.get("origin") != expected_origin
+    ):
+        raise StockRestoreSetError("stock restore input provenance differs")
     if not isinstance(artifacts, dict) or set(artifacts) != expected_names - {
         BOOTSTRAP_MANIFEST_NAME
     }:
@@ -479,4 +491,20 @@ def inspect_stock_restore_bootstrap_set(
         images=images,
         authorization=files[AUTH_PRIVATE_NAME],
         files=files,
+    )
+
+
+def _bootstrap_restore_plan(
+    recovery_dir: Path, preserved_readback_dir: Path, restore_output_dir: Path,
+    selection: FunctionalStockSelection | None,
+) -> SameDeviceStockRestorePlan | FunctionalStockPlan:
+    if selection is not None:
+        if not isinstance(selection, FunctionalStockSelection):
+            raise StockRestoreSetError("functional stock selection is invalid")
+        return selection.validate(
+            recovery_dir=recovery_dir, preserved_readback_dir=preserved_readback_dir,
+        )
+    return inspect_same_device_stock_restore(
+        recovery_dir=recovery_dir, preserved_readback_dir=preserved_readback_dir,
+        output_dir=restore_output_dir,
     )

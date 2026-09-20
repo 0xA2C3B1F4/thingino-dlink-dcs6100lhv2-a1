@@ -449,6 +449,25 @@ def _stock_live_passivate(
     )
 
 
+def _functional_options(arguments):
+    from .functional_stock_restore import load_functional_stock_selection
+    path = getattr(arguments, "functional_stock_selection", None)
+    return {} if path is None else {"functional_selection": load_functional_stock_selection(path)}
+
+
+def _functional_result(arguments):
+    if getattr(arguments, "functional_stock_selection", None) is None:
+        return {}
+    return {
+        "restoration_class": "functional-stock",
+        "original_complete_backup_accepted": False,
+        "source_partition_selection": {
+            "validated_stock_source": [1, 2],
+            "current_camera_capture": [0, 3, 4, 5],
+        },
+    }
+
+
 def _load_sd(facade: object, arguments: argparse.Namespace):
     inspect = getattr(facade, "inspect_stock_restore_bootstrap_set")
     read_snapshot = getattr(facade, "read_snapshot")
@@ -458,6 +477,7 @@ def _load_sd(facade: object, arguments: argparse.Namespace):
         restore_output_dir=arguments.restore_output_dir,
         linux_config=read_snapshot(arguments.linux_config),
         output_dir=arguments.input_dir,
+        **_functional_options(arguments),
     )
 
 
@@ -481,6 +501,7 @@ def _stock_sd_prepare(
         lld=arguments.lld,
         mksquashfs=arguments.mksquashfs,
         unsquashfs=arguments.unsquashfs,
+        **_functional_options(arguments),
     )
     preflight = load_media_preflight(
         arguments.media_preflight, expected_root=arguments.mount_root
@@ -502,6 +523,7 @@ def _stock_sd_prepare(
             restore_status="prepared-and-staged-unarmed",
             safe_next_action="review-exact-confirmation-before-sd-authorize",
         )
+        | _functional_result(arguments)
         | {
             "armed": False,
             "nor_writes": False,
@@ -541,6 +563,7 @@ def _stock_sd_authorize(
             restore_status="armed-not-executed",
             safe_next_action="run-stock-uboot-update-then-return-sd-for-handoff",
         )
+        | _functional_result(arguments)
         | {
             "armed": True,
             "confirmation_contract": expected(preflight),
@@ -616,6 +639,7 @@ def _stock_sd_handoff(
             restore_status="bootstrap-transport-written-not-read-back",
             safe_next_action="power-off-camera-insert-confirmed-sd-then-power-on-restorer",
         )
+        | _functional_result(arguments)
         | {
             "armed": True,
             "confirmation_contract": expected(preflight),
@@ -657,6 +681,7 @@ def _stock_sd_retry(
             restore_status="retry-armed-from-start",
             safe_next_action="run-stock-uboot-update-then-return-sd-for-handoff",
         )
+        | _functional_result(arguments)
         | {
             "armed": True,
             "confirmation_contract": expected(preflight),
@@ -694,6 +719,7 @@ def _stock_sd_passivate(
             restore_status="completion-marker-accepted-card-passivated",
             safe_next_action="boot-without-sd-then-verify-stock-runtime",
         )
+        | _functional_result(arguments)
         | {
             "active_restore_files": 0,
             "already_passivated": result.already_passivated,

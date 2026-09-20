@@ -38,6 +38,19 @@ it is not a D-Link stock restoration source. Never pass this schema to the
 exact same-device stock-restorer. A D-Link-functional restore requires a
 separately cataloged kernel/rootfs pair and physical acceptance.
 
+A separate, host-tested preparation path now accepts an explicit private
+`--functional-stock-selection` instead of `--restore-output-dir` for the SD
+restore commands. It validates a complete stock-source backup and a current
+schema-3 camera capture, requires identical source/current bootloader and vendor
+bytes, and selects only kernel/rootfs from the stock source. Application data
+and protected partitions remain those of the current camera capture. The
+selection binds both validated manifests and the expected current camera
+identity; inspection rejects changes. Its private manifest and CLI results say
+`restoration_class: functional-stock` and
+`original_complete_backup_accepted: false`. This path has not yet passed a
+physical restoration and must not be treated as exact-original recovery.
+The default exact-original path remains unchanged and still rejects schema 3.
+
 ## Current split-layout behavior
 
 The permanent mtd2 is a verifier and direct Thingino handoff. It does not run
