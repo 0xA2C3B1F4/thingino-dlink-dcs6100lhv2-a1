@@ -86,6 +86,42 @@ struct RaptorMediaState {
 }
 // MIPS32 has no native AtomicU64. This counter is diagnostic-only and may wrap.
 static SNAPSHOT_IO_FAILURES: AtomicU32 = AtomicU32::new(0);
+static HEARTBEAT_RIC_FAILURES: AtomicU32 = AtomicU32::new(0);
+static HEARTBEAT_PRIVACY_FAILURES: AtomicU32 = AtomicU32::new(0);
+
+fn heartbeat_failure_record(
+    counter: &AtomicU32,
+    field: &'static str,
+    stage: &'static str,
+    error: &BackendError,
+    elapsed: Duration,
+) -> Option<String> {
+    // Saturation prevents counter wrap from repeatedly reopening the initial burst.
+    let previous = counter
+        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |count| {
+            Some(count.saturating_add(1))
+        })
+        .unwrap();
+    let count = previous.saturating_add(1);
+    if previous == u32::MAX || (count > 8 && !count.is_power_of_two()) {
+        return None;
+    }
+    // Never format error payloads, upstream status bodies or daemon replies.
+    let category = match error {
+        BackendError::Connection => "connection",
+        BackendError::Timeout => "timeout",
+        BackendError::Protocol => "protocol",
+        BackendError::Unavailable => "unavailable",
+        BackendError::Busy => "busy",
+        BackendError::Unsupported(_) => "unsupported",
+        BackendError::PartialApply(_) => "partial",
+        BackendError::Upstream(_) => "upstream",
+    };
+    Some(format!(
+        "heartbeat-read field={field} stage={stage} error={category} elapsed_ms={} count={count}",
+        elapsed.as_millis()
+    ))
+}
 
 pub struct RaptorBackend {
     ha: std::sync::Arc<crate::camera::ha::HaService>,
@@ -456,12 +492,13 @@ impl RaptorBackend {
         );
         // Optional daemon failure leaves only its state unknown. Budget each
         // read so one daemon cannot consume the entire heartbeat deadline.
+        let ric_started = Instant::now();
         let ric = self.command(
             RaptorDaemon::Ric,
             br#"{"cmd":"mode"}"#,
             deadline.min(Instant::now() + Duration::from_millis(150)),
         );
-        if let Ok(reply) = ric {
+        let ric_result = ric.and_then(|reply| {
             let mode = reply.value.get_path("mode").and_then(Value::as_str);
             let parsed = match mode {
                 Some("auto") => Some(DayNightMode::Auto),
@@ -469,7 +506,8 @@ impl RaptorBackend {
                 Some("night") => Some(DayNightMode::Night),
                 _ => None,
             };
-            if let Some(mode) = parsed.filter(|mode| validate_ric_mode(&reply, *mode).is_ok()) {
+            if let Some(mode) = parsed {
+                validate_ric_mode(&reply, mode)?;
                 fields.insert(
                     "daynight_mode".to_owned(),
                     reply.value.get_path("state").unwrap().clone(),
@@ -478,7 +516,21 @@ impl RaptorBackend {
                     "daynight_enabled".to_owned(),
                     Value::Bool(mode == DayNightMode::Auto),
                 );
+                Ok(())
+            } else {
+                Err(BackendError::Protocol)
             }
+        });
+        if let Err(error) = ric_result
+            && let Some(record) = heartbeat_failure_record(
+                &HEARTBEAT_RIC_FAILURES,
+                "daynight",
+                "query-or-validation",
+                &error,
+                ric_started.elapsed(),
+            )
+        {
+            eprintln!("{record}");
         }
         let mut supported = std::collections::BTreeMap::new();
         supported.insert("daynight".to_owned(), Value::Bool(true));
@@ -513,6 +565,7 @@ impl RaptorBackend {
             }
         }
         supported.insert("privacy".to_owned(), Value::Bool(true));
+        let privacy_started = Instant::now();
         let privacy = self.privacy_state(deadline.min(Instant::now() + Duration::from_millis(150)));
         match privacy {
             Ok(enabled) => {
@@ -521,7 +574,17 @@ impl RaptorBackend {
             Err(BackendError::Unsupported(_)) => {
                 supported.insert("privacy".to_owned(), Value::Bool(false));
             }
-            Err(_) => {}
+            Err(error) => {
+                if let Some(record) = heartbeat_failure_record(
+                    &HEARTBEAT_PRIVACY_FAILURES,
+                    "privacy",
+                    "participants",
+                    &error,
+                    privacy_started.elapsed(),
+                ) {
+                    eprintln!("{record}");
+                }
+            }
         }
         if let Ok(color) =
             self.color_state(deadline.min(Instant::now() + Duration::from_millis(100)))
@@ -1317,6 +1380,47 @@ fn classify_io_error(error: &io::Error) -> BackendError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn heartbeat_diagnostics_are_bounded_and_redact_error_details() {
+        let counter = AtomicU32::new(0);
+        let mut emitted = Vec::new();
+        for count in 1..=32 {
+            if let Some(record) = heartbeat_failure_record(
+                &counter,
+                "privacy",
+                "participants",
+                &BackendError::PartialApply("DO_NOT_LOG_PRIVATE_DETAIL"),
+                Duration::from_millis(151),
+            ) {
+                assert!(!record.contains("DO_NOT_LOG"));
+                assert!(record.contains("error=partial elapsed_ms=151"));
+                emitted.push(count);
+            }
+        }
+        assert_eq!(emitted, vec![1, 2, 3, 4, 5, 6, 7, 8, 16, 32]);
+        counter.store(u32::MAX, Ordering::Relaxed);
+        assert!(
+            heartbeat_failure_record(
+                &counter,
+                "daynight",
+                "query-or-validation",
+                &BackendError::Timeout,
+                Duration::ZERO,
+            )
+            .is_none()
+        );
+        assert_eq!(counter.load(Ordering::Relaxed), u32::MAX);
+        let timeout = heartbeat_failure_record(
+            &AtomicU32::new(0),
+            "daynight",
+            "query-or-validation",
+            &BackendError::Timeout,
+            Duration::from_millis(150),
+        )
+        .unwrap();
+        assert!(timeout.contains("error=timeout elapsed_ms=150 count=1"));
+    }
     use std::net::TcpListener;
     use std::os::unix::net::{UnixListener, UnixStream};
     use std::path::Path;

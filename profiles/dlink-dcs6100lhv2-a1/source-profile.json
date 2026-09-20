@@ -549,7 +549,7 @@
     },
     {
       "destination": "package/thingino-control/rust/src/raptor_backend.rs",
-      "sha256": "fa16e018a8026e3df6ae79be72cf0dbb464f9948aebc0e4f434e4924e97961a5",
+      "sha256": "a74d8d61c67ff6a2eac53e6c09543129fdcaa228d577edd5227113de0a28f5e6",
       "source": "components/thingino-control/src/raptor_backend.rs"
     },
     {

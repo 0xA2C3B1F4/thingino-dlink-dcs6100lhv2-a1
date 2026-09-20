@@ -470,7 +470,7 @@
       "source": "components/thingino-control/src/raptor.rs"
     },
     "components/thingino-control/src/raptor_backend.rs": {
-      "sha256": "fa16e018a8026e3df6ae79be72cf0dbb464f9948aebc0e4f434e4924e97961a5",
+      "sha256": "a74d8d61c67ff6a2eac53e6c09543129fdcaa228d577edd5227113de0a28f5e6",
       "source": "components/thingino-control/src/raptor_backend.rs"
     },
     "components/thingino-control/src/raptor_backend/access.rs": {
@@ -678,7 +678,7 @@
       "source": "production/docs/build.md"
     },
     "docs/features.md": {
-      "sha256": "8a57d48af1440a02f33c04907ca004c059fbc3d9d4c312499e3a1c44de1897a4",
+      "sha256": "35dad0786fe6a7c0b86d33920150c843939d3aa91d6ce2bb65c02b93226de358",
       "source": "production/docs/features.md"
     },
     "docs/hardware.md": {
@@ -690,7 +690,7 @@
       "source": "production/docs/index.md"
     },
     "docs/installation.md": {
-      "sha256": "4383d6cee94e4f4a7b3709f375ad122689dab5ae0aeef61af07d9beacd4153a5",
+      "sha256": "985dcdc6482050fcd7549051679e4508675d7831b1db88cc90a6e11dc0477494",
       "source": "production/docs/installation.md"
     },
     "docs/installer-projects.md": {
@@ -1498,7 +1498,7 @@
       "source": "profiles/dlink-dcs6100lhv2-a1/recovery-ap-kernel.fragment"
     },
     "profiles/dlink-dcs6100lhv2-a1/source-profile.json": {
-      "sha256": "31d255a7392e7325842c0f48c8ee9c8f8633a61dd2efc852ae8a745f295b7cd1",
+      "sha256": "b0e906acb73a23d2ddca02fff20e19dbbae86a2c0aad348c97aef63afea4ca58",
       "source": "profiles/dlink-dcs6100lhv2-a1/source-profile.json"
     },
     "profiles/dlink-dcs6100lhv2-a1/stock-restore-kernel.fragment": {
@@ -2479,6 +2479,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "0d7c3f22832be0e7ed636373ce673f606d5cbdb6",
+  "source_commit": "6a66809702ed152c3b85199d15bcc30ccb1fed69",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }

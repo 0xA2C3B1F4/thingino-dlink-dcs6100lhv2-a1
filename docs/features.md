@@ -7,6 +7,17 @@ Raptor source changes. The full-Raptor profile owns the sensor, encoder, audio,
 RTSP and recording services. See
 [historical acceptance](status.md#historical-tested-installation) for measured results and limits.
 
+The default installation is local-network-only: DHCP supplies the camera address
+and subnet, but not a default route or DNS resolver. The inherited Internet NTP
+hostname therefore cannot synchronize the clock in this profile. In Settings >
+Time, configure the numeric address of an NTP server reachable on the camera's
+directly connected subnet, save it, then use Sync time now and check the returned
+camera time. Do not assume that the router provides NTP, or that a running NTP
+process means the clock is synchronized. Timezone selection does not set the
+date. Until synchronization is verified, timestamps and time-based schedules
+must be treated as unverified. Do not add Internet routing merely to bypass
+this local-network policy.
+
 | Feature | Source state | Validation boundary |
 | --- | --- | --- |
 | H.264 stream0 and stream1 | Raptor RVD | Both ran at the selected 15 fps on the September 6 baseline |

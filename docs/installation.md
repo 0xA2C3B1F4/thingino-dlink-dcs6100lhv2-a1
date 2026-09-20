@@ -528,8 +528,9 @@ key is derived independently inside the host recovery gate and Stage 1 from the
 same camera's complete preserved mtd0/mtd4/mtd5 bytes; the key is not printed or
 written into the authorization. Before any final write, Stage 1 loads exact
 stage 2 and the full 1,507,328-byte `THINGINO.PROVISION` JFFS2 into bounded RAM,
-then verifies camera identity, HMAC, compiled stage-2 SHA-256, `initialize`, and
-the data image SHA-256. A sidecar, data image, or authorization swapped between
+then verifies camera identity, HMAC, compiled stage-2 SHA-256, the bound
+`initialize` or `preserve` data action, and the data image SHA-256. A sidecar,
+data image, or authorization swapped between
 cameras therefore fails before bootstrap removal and before NOR erase.
 
 The immutable universal root initially has no usable private credential or
@@ -537,9 +538,13 @@ network startup. Private values are not members of the signed universal bundle.
 Create the per-camera configuration with `universal configure`; the command
 accepts Wi-Fi values only through hidden prompts or an inherited secrets file
 descriptor and binds the generated credentials to that recovery session.
-After authorization, Stage 1 commits a read-back stock-mtd3 backup and
-checkpoint, writes and verifies the complete private data overlay, writes the
-system and kernel tail, and writes the final kernel activation eraseblock last.
+For `initialize`, Stage 1 commits a read-back stock-mtd3 backup and checkpoint,
+then writes and verifies the complete private data overlay. For `preserve`, it
+validates the same authorization and provisioning tuple but does not write the
+staged data image. It hashes the complete existing data region before installing
+the system and requires an identical readback afterward. Both actions write and
+verify the system and kernel tail, then write the final kernel activation
+eraseblock last.
 It removes the active bootstrap before writes and passivates the per-camera card
 files after verified activation. This provides crash/retry and one-active-card
 transaction semantics; it is not clone-resistant anti-replay.
@@ -568,9 +573,12 @@ The universal install set binds exactly one mtd3 data action:
 - `initialize` creates the first private stock-mtd3 backup and checkpoint,
   installs the fixed system, and erases the new data region;
 - `preserve` installs the fixed system while requiring the complete data region
-  to remain byte-identical; or
-- `factory-reset` installs the fixed system and explicitly erases only the data
-  region.
+  to remain byte-identical.
+
+The build, install set and camera authorization must agree on this action.
+An `initialize` package cannot be used as a preserving update by changing a
+staging option. `factory-reset` exists in the lower-level split installer but
+is rejected for camera-authorized universal install sets.
 
 No mode silently repairs or reformats corrupt JFFS2 data.
 
