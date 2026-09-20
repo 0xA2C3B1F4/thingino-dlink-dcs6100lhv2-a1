@@ -690,7 +690,7 @@
       "source": "production/docs/index.md"
     },
     "docs/installation.md": {
-      "sha256": "ac63c5b8fb252f9c9204f2e9bcb0ca7f79d18eb9a75da66a9ea379575863402f",
+      "sha256": "4383d6cee94e4f4a7b3709f375ad122689dab5ae0aeef61af07d9beacd4153a5",
       "source": "production/docs/installation.md"
     },
     "docs/installer-projects.md": {
@@ -842,7 +842,7 @@
       "source": "installer/functional_stock_restore.py"
     },
     "installer/install_actions.py": {
-      "sha256": "7c2f72de786dc6813ec762090c1dc67b50327486319c73b9be424c7f57ea020a",
+      "sha256": "68f727b2a89c78477a76f3a53b7f799944ac0f2dfe5b730291e36e5f7512e149",
       "source": "installer/install_actions.py"
     },
     "installer/install_policy.py": {
@@ -910,7 +910,7 @@
       "source": "installer/macos_wifi.py"
     },
     "installer/media.py": {
-      "sha256": "28dd1912ab19850ccb97932b9fa9d91d5e2c882fe63d5ea4646da3bce52fb504",
+      "sha256": "b0d507ae9da32ae26dc44a0b90f30e18444ce758fe36782468c14b1fe3f62d54",
       "source": "installer/media.py"
     },
     "installer/media_capture.py": {
@@ -1270,7 +1270,7 @@
       "source": "installer/user_cli_media.py"
     },
     "installer/user_cli_parser.py": {
-      "sha256": "ba2ff6e74221a59afadef2e403be9d1981d93a9295f23759493f522cae79d06f",
+      "sha256": "147dbcf0961d8316daa5571345635e89649eea2b325b852c842fd57e08bbb507",
       "source": "installer/user_cli_parser.py"
     },
     "installer/user_cli_parser_stock_recovery.py": {
@@ -1830,7 +1830,7 @@
       "source": "tests/test_macos_wifi.py"
     },
     "tests/test_media.py": {
-      "sha256": "3980b9b96593a1cd8e0d970354d8cddb91f6d33bfeb463711cae7d4a195a7793",
+      "sha256": "5c419eb800814af7a3562e4f78fd3410a2d865dd2e6902f48a47f6ba7f70c547",
       "source": "tests/test_media.py"
     },
     "tests/test_media_dependencies.py": {
@@ -2062,7 +2062,7 @@
       "source": "tests/test_universal_artifacts.py"
     },
     "tests/test_user_cli.py": {
-      "sha256": "6d6c6511e1c2264f19499314dd4d734170119143ace2fe9cdc1ae967cb65d85a",
+      "sha256": "9badc7a6eef3855243199cd0e5e8b217d085b880f43c636a2a8bc210e25a4a92",
       "source": "tests/test_user_cli.py"
     },
     "tests/test_user_cli_build.py": {
@@ -2475,6 +2475,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "36582433b94b4a7887a0b40d6dfe0c1ded7bdcd7",
+  "source_commit": "97e1a23ce8b8ce9729b932fcc289bc895619352e",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }

@@ -135,7 +135,9 @@ failed-install cleanup command: it requires the specific mismatched recovery
 checkpoint described below. Do not manufacture that checkpoint or delete the
 authorization files to get past staging. Recovery from this pre-write HMAC
 failure remains unverified; retain the failed media and private inputs until
-a supported recovery procedure has been validated. A normal first capture
+a supported recovery procedure has been validated. For a card whose universal
+checkpoint still matches the old inputs, the host-only archive option below
+can clear those inputs without claiming that camera recovery has passed. A normal first capture
 on a stock camera is a different starting state.
 
 ## Private input through a file descriptor
@@ -232,6 +234,24 @@ thingino-dlink universal evacuate-recovery \
 This verifies the backup, checkpoint, and any archived backup before removing
 those reserved card paths. It preserves unrelated files and writes no NOR.
 Retain the private output. Do not manually delete a mismatching checkpoint.
+
+If deliberately abandoning old camera-bound inputs, add
+`--include-install-inputs` to `universal evacuate-recovery`, first with
+`--plan-only`. Review that the plan also lists `INSTALL.AUTH`,
+`INSTALL.AUTH.SIG`, `INSTALL.AUTH.BIN`, and `THINGINO.PROVISION` before confirming
+it. This option requires a universal checkpoint that matches both the binary
+authorization and provisioning data as well as the stock backup and stage 2.
+It copies these files into the private archive and independently reopens all
+copies before removal. The default command still removes only the backups and
+checkpoint. Neither form changes NOR or validates the camera's current state.
+The passive bootstrap, stage 2 and unrelated files remain on the card. After
+archiving, do not boot that card until the next supported preparation and
+handoff are complete. Missing or mismatched checkpoints require diagnosis;
+this option is not a general-purpose cleanup override.
+If a handled removal error occurs, the command attempts to restore removed
+files and retains the host archive. A host crash or unplug is different: keep
+the archive and card unchanged for diagnosis. This operation does not provide
+an automatic crash-resume command or prove physical recovery acceptance.
 
 If `evacuate-recovery` reports that a universal checkpoint binds the stock
 backup but names a different same-size `THINGINO2.BIN`, stop. That tuple is not

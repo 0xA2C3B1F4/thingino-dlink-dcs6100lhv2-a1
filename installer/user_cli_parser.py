@@ -518,6 +518,10 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
         "--mount-root", type=Path, required=True, help="mounted FAT32 card root"
     )
     universal_evacuate.add_argument("--output-dir", type=Path, required=True)
+    universal_evacuate.add_argument(
+        "--include-install-inputs", action="store_true",
+        help="also archive and remove old authorization/provisioning files bound by the universal checkpoint",
+    )
     universal_evacuate.add_argument("--confirm-physical-device")
     universal_evacuate.set_defaults(handler=_universal_evacuate_recovery)
 

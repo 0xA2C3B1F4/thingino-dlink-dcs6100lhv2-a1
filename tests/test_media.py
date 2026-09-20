@@ -1425,6 +1425,77 @@ class MediaTests(unittest.TestCase):
             self.assertFalse(root.joinpath("STOCKM3.BIN").exists())
             self.assertFalse(root.joinpath("STOCKM3.OK").exists())
 
+    def test_evacuation_option_archives_bound_inputs_and_rejects_mismatch(self) -> None:
+        for scenario in ("success", "mismatch", "missing-checkpoint", "default", "rollback", "oversize"):
+            with self.subTest(scenario=scenario), tempfile.TemporaryDirectory() as directory_name:
+                parent = Path(directory_name)
+                root = parent / "card"
+                root.mkdir()
+                backup, stage2 = b"S" * 0x007C0000, b"stage2"
+                inputs = {"INSTALL.AUTH": b"manifest", "INSTALL.AUTH.SIG": b"S" * 64,
+                          "INSTALL.AUTH.BIN": b"A" * 256, "THINGINO.PROVISION": b"private-data"}
+                checkpoint = self._recovery_checkpoint(
+                    backup, stage2, authorization=inputs["INSTALL.AUTH.BIN"],
+                    provisioning=inputs["THINGINO.PROVISION"])
+                if scenario == "mismatch":
+                    inputs["INSTALL.AUTH.BIN"] = b"B" * 256
+                if scenario == "oversize":
+                    inputs["INSTALL.AUTH"] = b"X" * (64 * 1024 + 1)
+                originals = {**inputs, "STOCKM3.BIN": backup, "STOCKM3.OK": checkpoint,
+                             STAGE2_FILENAME: stage2, "recording.mp4": b"keep"}
+                if scenario == "missing-checkpoint":
+                    del originals["STOCKM3.OK"]
+                for name, raw in originals.items():
+                    (root / name).write_bytes(raw)
+                preflight = load_media_preflight(self._preflight(root), expected_root=root)
+                destination = parent / "private-archive"
+                if scenario in ("mismatch", "missing-checkpoint", "oversize"):
+                    error = {"mismatch": "checkpoint does not bind",
+                             "missing-checkpoint": "requires a universal recovery checkpoint",
+                             "oversize": "size limit"}[scenario]
+                    with self.assertRaisesRegex(MediaError, error):
+                        evacuate_existing_stock_backups(
+                            root=root, destination_dir=destination, preflight=preflight,
+                            confirmed_physical_device="/dev/test-external-media",
+                            include_install_inputs=True)
+                    self.assertFalse(destination.exists())
+                    for name, raw in originals.items():
+                        self.assertEqual((root / name).read_bytes(), raw)
+                elif scenario == "rollback":
+                    original_unlink = Path.unlink
+                    def fail_one(path, *args, **kwargs):
+                        if path == root / "INSTALL.AUTH.BIN":
+                            raise OSError("synthetic removal failure")
+                        return original_unlink(path, *args, **kwargs)
+                    with mock.patch.object(Path, "unlink", fail_one):
+                        with self.assertRaisesRegex(MediaError, "card state was restored"):
+                            evacuate_existing_stock_backups(
+                                root=root, destination_dir=destination, preflight=preflight,
+                                confirmed_physical_device="/dev/test-external-media",
+                                include_install_inputs=True)
+                    for name, raw in originals.items():
+                        self.assertEqual((root / name).read_bytes(), raw)
+                    for name in (*inputs, "STOCKM3.BIN", "STOCKM3.OK"):
+                        self.assertEqual((destination / name).read_bytes(), originals[name])
+                else:
+                    result = evacuate_existing_stock_backups(
+                        root=root, destination_dir=destination, preflight=preflight,
+                        confirmed_physical_device="/dev/test-external-media",
+                        include_install_inputs=scenario != "default")
+                    removed = ["STOCKM3.BIN", "STOCKM3.OK"]
+                    if scenario != "default":
+                        removed.extend(inputs)
+                    else:
+                        for name, raw in inputs.items():
+                            self.assertEqual((root / name).read_bytes(), raw)
+                            self.assertNotIn(name, result)
+                    for name in removed:
+                        self.assertIn(name, result)
+                        self.assertEqual((destination / name).read_bytes(), originals[name])
+                        self.assertFalse((root / name).exists())
+                    self.assertEqual((root / STAGE2_FILENAME).read_bytes(), stage2)
+                    self.assertEqual((root / "recording.mp4").read_bytes(), b"keep")
+
     def test_evacuation_refuses_destination_on_sd_root(self) -> None:
         with tempfile.TemporaryDirectory() as directory_name:
             root = Path(directory_name)

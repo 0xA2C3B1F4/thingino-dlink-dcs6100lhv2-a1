@@ -124,7 +124,9 @@ def archive_existing_stock_backup(
         raise
 
 
-def inspect_stock_backup_evacuation(*, root: Path, destination_dir: Path) -> dict[str, bytes]:
+def inspect_stock_backup_evacuation(
+    *, root: Path, destination_dir: Path, include_install_inputs: bool = False
+) -> dict[str, bytes]:
     root_resolved = root.resolve(strict=True)
     validate_sd_root(root)
     if destination_dir.exists() or destination_dir.is_symlink():
@@ -168,6 +170,27 @@ def inspect_stock_backup_evacuation(*, root: Path, destination_dir: Path) -> dic
             allow_unverified_universal_bindings=True,
         )
 
+    if include_install_inputs:
+        checkpoint_bytes = snapshots.get(RECOVERY_CHECKPOINT_FILENAME, b"")
+        if (len(checkpoint_bytes) != UNIVERSAL_RECOVERY_CHECKPOINT_SIZE
+                or checkpoint_bytes[:8] != UNIVERSAL_RECOVERY_CHECKPOINT_MAGIC):
+            raise MediaError("install-input evacuation requires a universal recovery checkpoint")
+        limits = {"INSTALL.AUTH": 64 * 1024, "INSTALL.AUTH.SIG": 64,
+                  "INSTALL.AUTH.BIN": 256, "THINGINO.PROVISION": 0x170000}
+        for name, limit in limits.items():
+            path = root / name
+            ambiguous = (root / ("._" + name), root / ("." + name + ".part"))
+            if any(item.exists() or item.is_symlink() for item in ambiguous):
+                raise MediaError("install-input evacuation has an ambiguous sidecar or partial file")
+            raw, _ = _read_stable_regular(path, max_size=limit)
+            if not raw or len(raw) > limit:
+                raise MediaError("install-input evacuation file size is invalid: " + name)
+            snapshots[name] = raw
+        _validate_recovery_checkpoint(
+            root, stage2.read_bytes(),
+            authorization_bytes=snapshots["INSTALL.AUTH.BIN"],
+            provisioning_bytes=snapshots["THINGINO.PROVISION"],
+        )
     return snapshots
 
 
@@ -177,6 +200,7 @@ def evacuate_existing_stock_backups(
     destination_dir: Path,
     preflight: MediaPreflight,
     confirmed_physical_device: str,
+    include_install_inputs: bool = False,
 ) -> dict[str, str]:
     """Copy private stock backups off-card, verify them, then clear reserved paths."""
 
@@ -184,7 +208,8 @@ def evacuate_existing_stock_backups(
         raise MediaError("exact physical-device confirmation does not match preflight")
     if root.resolve(strict=True) != preflight.mount_root:
         raise MediaError("evacuation root changed after preflight")
-    snapshots = inspect_stock_backup_evacuation(root=root, destination_dir=destination_dir)
+    snapshots = inspect_stock_backup_evacuation(root=root, destination_dir=destination_dir,
+        include_install_inputs=include_install_inputs)
     destination_parent = destination_dir.parent.resolve(strict=True)
 
     hashes = {
@@ -228,13 +253,17 @@ def evacuate_existing_stock_backups(
 
     removed: list[str] = []
     try:
-        for name in (
-            RECOVERY_CHECKPOINT_FILENAME,
-            STOCK_BACKUP_FILENAME,
-            ARCHIVED_STOCK_BACKUP_FILENAME,
-        ):
-            if name not in snapshots:
-                continue
+        # Reopen the published archive and every source before deleting anything.
+        for name, raw in snapshots.items():
+            archived_raw, _ = _read_stable_regular(destination_dir / name)
+            current_raw, _ = _read_stable_regular(root / name)
+            if archived_raw != raw or current_raw != raw:
+                raise MediaError("evacuation source or archive changed before removal")
+        removal_order = sorted(snapshots, key=lambda name: (name != RECOVERY_CHECKPOINT_FILENAME, name))
+        for name in removal_order:
+            current_raw, _ = _read_stable_regular(root / name)
+            if current_raw != snapshots[name]:
+                raise MediaError("evacuation source changed during removal")
             (root / name).unlink()
             removed.append(name)
             _sync_directory(root)
@@ -294,8 +323,10 @@ def _safe_media_relative(path: Path, root: Path) -> str:
     return relative
 
 
-def _read_stable_regular(path: Path) -> tuple[bytes, tuple[int, int, int, int, int]]:
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+def _read_stable_regular(
+    path: Path, *, max_size: int | None = None
+) -> tuple[bytes, tuple[int, int, int, int, int]]:
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
     try:
         descriptor = os.open(path, flags)
     except OSError as exc:
@@ -304,11 +335,17 @@ def _read_stable_regular(path: Path) -> tuple[bytes, tuple[int, int, int, int, i
         before = os.fstat(descriptor)
         if not stat.S_ISREG(before.st_mode):
             raise MediaError("inconsistent media contains a non-regular path")
+        if max_size is not None and before.st_size > max_size:
+            raise MediaError("media file exceeds its size limit")
         chunks: list[bytes] = []
+        total = 0
         while True:
             chunk = os.read(descriptor, 1024 * 1024)
             if not chunk:
                 break
+            total += len(chunk)
+            if max_size is not None and total > max_size:
+                raise MediaError("media file exceeds its size limit")
             chunks.append(chunk)
         after = os.fstat(descriptor)
     finally:

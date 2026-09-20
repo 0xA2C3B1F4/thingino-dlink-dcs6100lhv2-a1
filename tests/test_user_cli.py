@@ -679,6 +679,7 @@ class UserCliTests(unittest.TestCase):
                 mount_root=card,
                 output_dir=output,
                 resume=False,
+                include_install_inputs=True,
                 confirm_physical_device="/dev/test-card",
                 work_dir=work,
                 json=True,
@@ -698,6 +699,7 @@ class UserCliTests(unittest.TestCase):
             ):
                 result = user_cli._universal_evacuate_recovery(arguments)
             self.assertEqual(result["phase"], "completed-recovery-checkpoint-evacuated")
+            self.assertTrue(evacuate.call_args.kwargs["include_install_inputs"])
             self.assertEqual(result["result"]["evacuated_files"], {"fixture": "c" * 64})
             self.assertTrue(result["result"]["sd_modified"])
             self.assertEqual(result["result"]["write_set"], [])

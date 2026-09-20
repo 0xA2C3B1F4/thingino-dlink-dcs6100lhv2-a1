@@ -200,6 +200,7 @@ class EvacuationInputs:
     mount_root: Path
     whole_device: str
     output_dir: Path
+    include_install_inputs: bool = False
 
 
 @dataclass(frozen=True)
@@ -214,7 +215,8 @@ def plan_evacuation(inputs: EvacuationInputs) -> WritePlan:
     from .media import inspect_stock_backup_evacuation
     media = validate_media_preflight_document(create_preflight_document(
         whole_device=inputs.whole_device, mount_root=inputs.mount_root), expected_root=inputs.mount_root)
-    snapshots = inspect_stock_backup_evacuation(root=inputs.mount_root, destination_dir=inputs.output_dir)
+    snapshots = inspect_stock_backup_evacuation(root=inputs.mount_root, destination_dir=inputs.output_dir,
+        include_install_inputs=inputs.include_install_inputs)
     return WritePlan("backup-content-bound; camera identity not independently observed",
         "existing-stock-checkpoint", media,
         tuple((name, hashlib.sha256(raw).hexdigest()) for name, raw in sorted(snapshots.items()))
@@ -233,7 +235,8 @@ def execute_evacuation(inputs: EvacuationInputs, confirmation: WriteConfirmation
     if emit:
         emit("copying-verifying-removing")
     result = evacuate_existing_stock_backups(root=inputs.mount_root, destination_dir=inputs.output_dir,
-        preflight=plan.media, confirmed_physical_device=confirmation.physical_device)
+        preflight=plan.media, confirmed_physical_device=confirmation.physical_device,
+        include_install_inputs=inputs.include_install_inputs)
     if emit:
         emit("readback-completed")
     return result
