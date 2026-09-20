@@ -70,6 +70,10 @@ const RHD_STATUS_FIELDS: &[&str] = &[
 ];
 const RSD_STATUS_FIELDS: &[&str] = &["status", "clients", "port", "tls", "endpoints"];
 const RAPTOR_HTTP_PORT: u64 = 8080;
+// Leave room for camera-side scheduling and the three serial privacy readers.
+// The caller's absolute deadline still caps both observations.
+const HEARTBEAT_RIC_BUDGET: Duration = Duration::from_millis(300);
+const HEARTBEAT_PRIVACY_BUDGET: Duration = Duration::from_millis(600);
 
 #[derive(Clone, Copy)]
 struct RaptorStream {
@@ -496,7 +500,7 @@ impl RaptorBackend {
         let ric = self.command(
             RaptorDaemon::Ric,
             br#"{"cmd":"mode"}"#,
-            deadline.min(Instant::now() + Duration::from_millis(150)),
+            deadline.min(Instant::now() + HEARTBEAT_RIC_BUDGET),
         );
         let ric_result = ric.and_then(|reply| {
             let mode = reply.value.get_path("mode").and_then(Value::as_str);
@@ -566,7 +570,7 @@ impl RaptorBackend {
         }
         supported.insert("privacy".to_owned(), Value::Bool(true));
         let privacy_started = Instant::now();
-        let privacy = self.privacy_state(deadline.min(Instant::now() + Duration::from_millis(150)));
+        let privacy = self.privacy_state(deadline.min(Instant::now() + HEARTBEAT_PRIVACY_BUDGET));
         match privacy {
             Ok(enabled) => {
                 fields.insert("privacy_enabled".to_owned(), Value::Bool(enabled));
@@ -1479,6 +1483,66 @@ mod tests {
         })
     }
 
+    type DaemonExchange = (&'static [u8], Option<&'static [u8]>, Duration);
+
+    fn serve_daemon_sequence(
+        root: &Path,
+        socket_name: &str,
+        exchanges: Vec<DaemonExchange>,
+    ) -> thread::JoinHandle<()> {
+        let listener = UnixListener::bind(root.join(socket_name)).unwrap();
+        listener.set_nonblocking(true).unwrap();
+        thread::spawn(move || {
+            for (expected, response, delay) in exchanges {
+                let until = Instant::now() + Duration::from_secs(2);
+                let mut stream = loop {
+                    match listener.accept() {
+                        Ok((stream, _)) => break stream,
+                        Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+                            assert!(Instant::now() < until, "expected fixture request absent");
+                            thread::sleep(Duration::from_millis(1));
+                        }
+                        Err(error) => panic!("fixture accept: {error}"),
+                    }
+                };
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(1)))
+                    .unwrap();
+                stream
+                    .set_write_timeout(Some(Duration::from_secs(1)))
+                    .unwrap();
+                assert_eq!(read_request(&mut stream), expected);
+                thread::sleep(delay);
+                if let Some(response) = response {
+                    match stream.write_all(&framed(response)) {
+                        Ok(()) => stream.shutdown(std::net::Shutdown::Write).unwrap(),
+                        // A deadline test deliberately closes before the valid reply.
+                        Err(error) => assert!(matches!(
+                            error.kind(),
+                            io::ErrorKind::BrokenPipe | io::ErrorKind::ConnectionReset
+                        )),
+                    }
+                }
+            }
+        })
+    }
+
+    fn heartbeat_backend(root: &Path) -> RaptorBackend {
+        let uptime = root.join("uptime");
+        fs::write(&uptime, b"123.5 12.0\n").unwrap();
+        let mut backend = backend(root, "127.0.0.1:9".parse().unwrap());
+        backend.host = crate::camera::HostBackend::new(crate::camera::CameraPaths {
+            uptime,
+            ..crate::camera::CameraPaths::default()
+        });
+        backend
+    }
+
+    fn heartbeat_value(backend: &RaptorBackend, deadline: Instant) -> Value {
+        let response = backend.heartbeat(deadline).unwrap();
+        crate::json::parse(&response.body).unwrap()
+    }
+
     pub(super) fn backend(root: &Path, snapshot_address: SocketAddr) -> RaptorBackend {
         RaptorBackend::new(
             root.to_path_buf(),
@@ -1493,6 +1557,40 @@ mod tests {
     pub(super) const RHD_OK: &[u8] = br#"{"status":"ok","clients":0,"mjpeg":0,"audio":0,"port":8080,"jpeg_rings":2,"jpeg_available":[true,true],"exif_timestamp":false,"sign_snapshots":false,"privacy":false,"tls":false}"#;
     const RSD_OK: &[u8] =
         br#"{"status":"ok","clients":0,"port":8554,"tls":false,"endpoints":["stream0","stream1"]}"#;
+    const HEARTBEAT_MOTION_OK: &[u8] =
+        br#"{"status":"ok","active":false,"motion":false,"supported":true,"receiving":false}"#;
+    const HEARTBEAT_PRIVACY_AUDIO: &[u8] =
+        br#"{"status":"ok","supported":true,"video":[true,true],"audio_required":true,"jpeg_required":false}"#;
+    const HEARTBEAT_PRIVACY_ALL: &[u8] =
+        br#"{"status":"ok","supported":true,"video":[true,true],"audio_required":true,"jpeg_required":true}"#;
+    const HEARTBEAT_PRIVACY_VIDEO_ONLY: &[u8] =
+        br#"{"status":"ok","supported":true,"video":[true,true],"audio_required":false,"jpeg_required":false}"#;
+    const HEARTBEAT_RHD_PRIVACY: &[u8] = br#"{"status":"ok","privacy":true}"#;
+    const HEARTBEAT_RAD_MUTED: &[u8] = br#"{"status":"ok","muted":true}"#;
+    const HEARTBEAT_RAD_UNMUTED: &[u8] = br#"{"status":"ok","muted":false}"#;
+
+    fn serve_heartbeat_rvd(
+        root: &Path,
+        privacy_response: Option<&'static [u8]>,
+        privacy_delay: Duration,
+    ) -> thread::JoinHandle<()> {
+        serve_daemon_sequence(
+            root,
+            "rvd.sock",
+            vec![
+                (
+                    br#"{"cmd":"ivs-status"}"#,
+                    Some(HEARTBEAT_MOTION_OK),
+                    Duration::ZERO,
+                ),
+                (
+                    br#"{"cmd":"privacy-status"}"#,
+                    privacy_response,
+                    privacy_delay,
+                ),
+            ],
+        )
+    }
 
     #[test]
     fn status_capabilities_are_mapped_from_strict_rvd_and_rhd_replies() {
@@ -2055,6 +2153,168 @@ mod tests {
         rvd.join().unwrap();
         rhd.join().unwrap();
         rsd.join().unwrap();
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn heartbeat_delayed_ric_readback_over_150ms_still_succeeds() {
+        let root = task_temp("heartbeat-ric-budget");
+        let ric = serve_daemon_sequence(
+            &root,
+            "ric.sock",
+            vec![(
+                br#"{"cmd":"mode"}"#,
+                Some(br#"{"status":"ok","mode":"day","state":"day"}"#),
+                Duration::from_millis(220),
+            )],
+        );
+        let value = heartbeat_value(
+            &heartbeat_backend(&root),
+            Instant::now() + Duration::from_secs(2),
+        );
+        assert_eq!(
+            value.get_path("daynight_mode").and_then(Value::as_str),
+            Some("day")
+        );
+        ric.join().unwrap();
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn heartbeat_privacy_allows_sequential_required_peer_delays() {
+        let root = task_temp("heartbeat-privacy-budget");
+        let rvd = serve_heartbeat_rvd(
+            &root,
+            Some(HEARTBEAT_PRIVACY_ALL),
+            Duration::from_millis(100),
+        );
+        let rhd = serve_daemon_sequence(
+            &root,
+            "rhd.sock",
+            vec![(
+                br#"{"cmd":"status"}"#,
+                Some(HEARTBEAT_RHD_PRIVACY),
+                Duration::from_millis(100),
+            )],
+        );
+        let rad = serve_daemon_sequence(
+            &root,
+            "rad.sock",
+            vec![(
+                br#"{"cmd":"status"}"#,
+                Some(HEARTBEAT_RAD_MUTED),
+                Duration::from_millis(100),
+            )],
+        );
+        let value = heartbeat_value(
+            &heartbeat_backend(&root),
+            Instant::now() + Duration::from_secs(2),
+        );
+        assert_eq!(value.get_path("privacy_enabled"), Some(&Value::Bool(true)));
+        rvd.join().unwrap();
+        rhd.join().unwrap();
+        rad.join().unwrap();
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn heartbeat_stalled_ric_keeps_privacy_observable() {
+        let root = task_temp("heartbeat-ric-stalled");
+        let ric = serve_daemon_sequence(
+            &root,
+            "ric.sock",
+            vec![(br#"{"cmd":"mode"}"#, None, Duration::from_millis(350))],
+        );
+        let rvd = serve_heartbeat_rvd(&root, Some(HEARTBEAT_PRIVACY_VIDEO_ONLY), Duration::ZERO);
+        let value = heartbeat_value(
+            &heartbeat_backend(&root),
+            Instant::now() + Duration::from_secs(2),
+        );
+        assert_eq!(
+            value.get_path("daynight_mode").and_then(Value::as_str),
+            Some("unknown")
+        );
+        assert_eq!(value.get_path("privacy_enabled"), Some(&Value::Bool(true)));
+        ric.join().unwrap();
+        rvd.join().unwrap();
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn heartbeat_stalled_privacy_stays_unknown() {
+        let root = task_temp("heartbeat-privacy-stalled");
+        let rvd = serve_heartbeat_rvd(&root, None, Duration::from_millis(700));
+        let value = heartbeat_value(
+            &heartbeat_backend(&root),
+            Instant::now() + Duration::from_secs(2),
+        );
+        assert_eq!(value.get_path("privacy_enabled"), Some(&Value::Null));
+        rvd.join().unwrap();
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn heartbeat_mismatching_privacy_stays_unknown() {
+        let root = task_temp("heartbeat-privacy-mismatch");
+        let rvd = serve_heartbeat_rvd(&root, Some(HEARTBEAT_PRIVACY_AUDIO), Duration::ZERO);
+        let rad = serve_daemon_sequence(
+            &root,
+            "rad.sock",
+            vec![(
+                br#"{"cmd":"status"}"#,
+                Some(HEARTBEAT_RAD_UNMUTED),
+                Duration::ZERO,
+            )],
+        );
+        let value = heartbeat_value(
+            &heartbeat_backend(&root),
+            Instant::now() + Duration::from_secs(2),
+        );
+        assert_eq!(value.get_path("privacy_enabled"), Some(&Value::Null));
+        rvd.join().unwrap();
+        rad.join().unwrap();
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn heartbeat_short_global_deadline_bounds_extended_read_budgets() {
+        let root = task_temp("heartbeat-short-deadline");
+        let ric = serve_daemon_sequence(
+            &root,
+            "ric.sock",
+            vec![(
+                br#"{"cmd":"mode"}"#,
+                Some(br#"{"status":"ok","mode":"day","state":"day"}"#),
+                Duration::from_millis(220),
+            )],
+        );
+        let backend = heartbeat_backend(&root);
+        let started = Instant::now();
+        let value = heartbeat_value(&backend, started + Duration::from_millis(50));
+        assert!(started.elapsed() < Duration::from_millis(500));
+        assert_eq!(
+            value.get_path("daynight_mode").and_then(Value::as_str),
+            Some("unknown")
+        );
+        assert_eq!(value.get_path("privacy_enabled"), Some(&Value::Null));
+        ric.join().unwrap();
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn heartbeat_short_global_deadline_bounds_privacy_read() {
+        let root = task_temp("heartbeat-privacy-deadline");
+        let rvd = serve_heartbeat_rvd(
+            &root,
+            Some(HEARTBEAT_PRIVACY_VIDEO_ONLY),
+            Duration::from_millis(220),
+        );
+        let backend = heartbeat_backend(&root);
+        let started = Instant::now();
+        let value = heartbeat_value(&backend, started + Duration::from_millis(100));
+        assert!(started.elapsed() < Duration::from_millis(500));
+        assert_eq!(value.get_path("privacy_enabled"), Some(&Value::Null));
+        rvd.join().unwrap();
         fs::remove_dir_all(root).unwrap();
     }
 

@@ -1,6 +1,6 @@
 # Release status
 
-Historical runtime baseline validated: 2026-09-06. Documentation updated: 2026-09-19.
+Historical runtime baseline validated: 2026-09-06. Documentation updated: 2026-09-20.
 
 This repository provides source and host tools. There is no supported firmware
 download yet. The validated platform is DCS-6100LHV2 A1 with Apple Silicon macOS.
@@ -15,6 +15,14 @@ The tables below describe named evidence, not blanket acceptance of later source
 changes. The full-Raptor source path has passed host composition checks and a
 source-built camera exercise. A new release candidate still needs its own image,
 installation, browser, and physical checks.
+
+The latest host-built candidate is `aad992b6`. Its two clean complete-firmware
+builds produced 16 byte-identical artifact pairs. It increases the heartbeat
+Day/Night and Privacy read allowances after the installed `fb43b075` candidate
+failed a bounded state-completeness check. The caller's deadline and unknown/null
+failure states remain unchanged. The new candidate has not been installed or
+device-accepted. See the [dated evidence](release-evidence/2026-09-18-raptor-mic-acknowledgement.md#september-20-heartbeat-read-budget-candidate).
+Earlier audio observations remain evidence for their named older versions.
 
 The September 12 full-Raptor check included ROD and its font in the installed
 image. Main and substream WebRTC decoded at approximately 15 fps. OSD format
@@ -162,12 +170,13 @@ The full acceptance scope is in [testing](testing.md#candidate-acceptance).
   authorization, Stage-1 contract and manifest paths. Those results do not
   establish physical acceptance of the latest complete source candidate; universal
   `factory-reset` install sets remain rejected.
-- The complete candidate has operator-audible Mainstream and Substream
+- Candidate `38607f3` has operator-audible Mainstream and Substream
   acceptance after a cold boot: connect while microphone Off, enable it and
   press Listen once, without Reload or retry. Running RWD and the full system
   partition independently match the new build. This required approved removal
   of a preserved old RWD binary override; existing configuration was retained.
   See the [candidate evidence](release-evidence/2026-09-18-raptor-mic-acknowledgement.md).
+  This result does not establish audio acceptance of `fb43b075` or `aad992b6`.
   Other controls, settings and the full acceptance matrix remain open.
 - Linux and Windows staging adapters have host coverage, not equivalent physical
   installation acceptance. The full guided build targets Apple Silicon macOS.

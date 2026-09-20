@@ -1,5 +1,48 @@
 # Raptor microphone acknowledgement candidate, September 18
 
+## September 20 heartbeat read-budget candidate
+
+Firmware-input commit `aad992b6ec46676fe8ad81319302cc91d3ca949f` completed
+the normal two-clean-build universal workflow with `--data-mode initialize`.
+Both base-build containers exited zero without OOM. All 16 complete-firmware
+artifact pairs were byte-identical, without compiled Raptor component cache
+reuse. A separate host check reopened and rehashed all 32 files, compared each
+pair's bytes, and independently validated both schema-2 install sets.
+
+- Universal bundle SHA-256: `e4933a663622b3c501fb890026ae1bb2f1f9ec48cda719e35c65e5aa4cb367ce`.
+- Complete comparison report SHA-256: `3d1c7caae55c93d9709af23d15b08eba3e9762909dd2679813e6a96461bc3d31`.
+
+The preceding diagnostic candidate, `fb43b075`, also passed two clean builds
+and complete kernel, system and protected-partition readback after installation.
+Its bounded concurrent-client test nevertheless returned unknown Day/Night and
+null Privacy observations. The payload-free Control diagnostics recorded a
+Day/Night/RIC timeout at 151 ms and aggregate Privacy timeouts at 150 and 151 ms.
+All 15 HTTP responses succeeded and checked process IDs stayed unchanged. Those
+transport results did not pass the state-completeness check. The candidate was
+rejected for release evaluation, with the failed test retained.
+
+The correction increases the optional RIC read allowance from 150 to 300 ms and
+the aggregate allowance for the sequential Privacy participants from 150 to
+600 ms. Both remain capped by the caller's absolute deadline. Participant
+agreement, unknown/null results on failure and bounded diagnostics are unchanged.
+These values are a candidate correction, not proof of runtime reliability.
+
+The final pinned Rust 1.95 Linux ARM64 Control gate passed both the default and
+explicit Raptor configurations. Each round passed 446 library tests with one
+ignored test, 17 binary tests and 22 contract tests, plus formatting, strict
+Clippy, release builds and a 1,000-request resource soak. Seven new tests cover
+delayed replies, serial Privacy participants, stalled or disagreeing readers,
+and independent RIC and Privacy enforcement of the caller deadline. WebUI
+typechecking, its packaging test, 237 tests and the production build passed.
+The source commit's normal checks passed 1,010 Python tests with one skip.
+
+The technical closure and notice manifests were generated locally. They do not
+authorize redistribution or close legal review. The new schema-2 candidate has
+not been installed, and no older audio or physical-control passes were imported.
+Its first required device check is the failed state-completeness scenario on the
+new bytes, followed by the remaining full candidate matrix. Card staging and all
+firmware-release gates still require their own evidence.
+
 ## September 20 cold-boot candidate: installed and audio observed
 
 Firmware-input commit `9902268604fd9eae52d671c616eee2e865dec933` adds a
