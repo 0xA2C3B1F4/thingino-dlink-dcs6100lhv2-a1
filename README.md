@@ -207,9 +207,15 @@ same variables and define any additional paths next to the relevant example.
 
 ### 3. Capture this camera's recovery and stock media files
 
-Skip only if you already have this camera's validated functional recovery.
+Skip only if you already have this camera's validated functional recovery and
+the camera has not returned to stock firmware since that capture.
 In that case, set `DCS6100_RECOVERY_ROOT` to that existing directory; do not
 create an empty recovery directory or substitute another camera's files.
+After a stock restore and stock boot, do not reuse the earlier camera
+authorization. Stock can update writable configuration partitions whose exact
+bytes are part of the camera binding. A successful host plan validates the
+provided backup, not the camera's current flash. Obtain a new validated capture
+and regenerate the camera-bound provisioning and authorization before staging.
 This UARTless route overwrites physical mtd1/mtd2 before collecting the current
 partitions twice. It preserves original mtd0/mtd3/mtd4/mtd5, but does not promise
 restoration to D-Link stock. For an exact original backup, choose the

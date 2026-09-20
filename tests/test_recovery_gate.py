@@ -38,10 +38,13 @@ def identity(raw: bytes) -> dict[str, object]:
     }
 
 
-def fixture(root: Path) -> tuple[Path, Path]:
+def fixture(root: Path, *, stock_config: bytes | None = None) -> tuple[Path, Path]:
     recovery = root / "recovery"
     recovery.mkdir()
     chunks = [bytes([mtd + 1]) * 7 for mtd in range(6)]
+    if stock_config is not None:
+        assert len(stock_config) == TARGET.partition(5).size
+        chunks[5] = stock_config
     full = b"".join(chunks)
     files: dict[str, object] = {}
     for copy in ("a", "b"):
@@ -92,6 +95,52 @@ def fixture(root: Path) -> tuple[Path, Path]:
 
 
 class RecoveryGateTests(unittest.TestCase):
+    def test_changed_stock_config_requires_new_capture_binding(self) -> None:
+        # Synthetic snapshots model a stock configuration change, not a live
+        # camera probe. Both snapshots retain the same model and boot bytes.
+        with tempfile.TemporaryDirectory() as directory_name:
+            root = Path(directory_name)
+            before_root, after_root = root / "before", root / "after"
+            before_root.mkdir()
+            after_root.mkdir()
+            old_recovery, old_readback = fixture(before_root)
+            new_recovery, new_readback = fixture(
+                after_root, stock_config=b"changed"
+            )
+            old = validate_existing_recovery_boundary(
+                recovery_dir=old_recovery,
+                preserved_readback_dir=old_readback,
+                target=TARGET,
+            )
+            with self.assertRaisesRegex(RecoveryGateError, "mtd5 differs"):
+                validate_existing_recovery_boundary(
+                    recovery_dir=old_recovery,
+                    preserved_readback_dir=new_readback,
+                    target=TARGET,
+                )
+            fresh = validate_existing_recovery_boundary(
+                recovery_dir=new_recovery,
+                preserved_readback_dir=new_readback,
+                target=TARGET,
+            )
+            self.assertNotEqual(old.camera_identity_sha256, fresh.camera_identity_sha256)
+            self.assertNotEqual(
+                old.camera_authorization_key_sha256,
+                fresh.camera_authorization_key_sha256,
+            )
+            # A consistent old pair still passes offline. Host validation must
+            # not be advertised as evidence of the current camera's bytes.
+            repeated = validate_existing_recovery_boundary(
+                recovery_dir=old_recovery,
+                preserved_readback_dir=old_readback,
+                target=TARGET,
+            )
+            self.assertEqual(old.camera_identity_sha256, repeated.camera_identity_sha256)
+            self.assertEqual(
+                old.camera_authorization_key_sha256,
+                repeated.camera_authorization_key_sha256,
+            )
+
     def test_existing_verified_pair_replaces_redundant_new_backup(self) -> None:
         with tempfile.TemporaryDirectory() as directory_name:
             recovery, readback = fixture(Path(directory_name))

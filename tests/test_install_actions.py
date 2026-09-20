@@ -44,6 +44,20 @@ class ActionTests(unittest.TestCase):
                 if isinstance(node, ast.Name):
                     self.assertNotIn(node.id, {"argparse", "print", "input", "facade"}, module.__name__)
 
+    def test_install_plans_do_not_claim_live_camera_binding(self):
+        for operation in ("universal stage", "universal handoff"):
+            with self.subTest(operation=operation):
+                plan = replace(self.plan, operation=operation)
+                evidence = plan.document()["camera_binding_evidence"]
+                self.assertEqual(evidence["scope"], "supplied-recovery-and-preserved-readback")
+                self.assertIs(evidence["live_camera_verified"], False)
+                self.assertIs(evidence["stock_boot_since_capture_supported"], False)
+                self.assertEqual(evidence["after_stock_boot"], "recapture-and-regenerate-camera-bound-inputs")
+
+    def test_non_install_plans_do_not_inherit_camera_binding_claims(self):
+        plan = replace(self.plan, operation="stock-recovery uartless-prepare")
+        self.assertNotIn("camera_binding_evidence", plan.document())
+
     def test_revalidates_then_uses_existing_writer_and_static_events(self):
         validated = object()
         events = []

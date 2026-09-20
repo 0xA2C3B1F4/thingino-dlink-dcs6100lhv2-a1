@@ -52,6 +52,13 @@ class WritePlan:
     def document(self) -> dict[str, object]:
         value = asdict(self)
         value["media"]["mount_root"] = str(self.media.mount_root)
+        if self.operation in {"universal stage", "universal handoff"}:
+            value["camera_binding_evidence"] = {
+                "scope": "supplied-recovery-and-preserved-readback",
+                "live_camera_verified": False,
+                "stock_boot_since_capture_supported": False,
+                "after_stock_boot": "recapture-and-regenerate-camera-bound-inputs",
+            }
         return value
 
     @property

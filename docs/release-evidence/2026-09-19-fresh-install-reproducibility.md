@@ -1,5 +1,30 @@
 # September 19 fresh-install build
 
+## September 20 host regression scope
+
+The recovery-gate regression uses two synthetic snapshots with identical model,
+layout and boot bytes but changed stock configuration. It verifies that old
+recovery rejects new readback, a complete new snapshot produces new identity
+and authorization bindings, and the internally consistent old snapshot still
+passes offline. This demonstrates why host success cannot establish live
+camera freshness. It does not establish the physical HMAC failure's cause.
+
+The following host checks passed after documenting that boundary:
+
+```sh
+python3 -m unittest tests.test_recovery_gate tests.test_install_actions tests.test_user_cli tests.test_universal_artifacts tests.test_stage1_build tests.test_capture_reuse -q
+python3 scripts/check_docs.py
+git diff --check
+```
+
+Result: 123 tests and the 108-file documentation check passed. No camera or SD
+write was part of these checks. The existing capture archival command leaves
+old authorization files in place, while inconsistent-media quarantine accepts
+only its specific checkpoint mismatch. Neither command is yet a validated
+general recovery route from the observed pre-write HMAC failure.
+
+## September 19 build record
+
 Source commit: `c4cf3aea7d37bca3704f60d851c461ca0afd2029`.
 Data mode: `initialize`. This candidate targets new-user installations, not
 migration from previous development firmware. The repository remains private;
@@ -234,3 +259,29 @@ All 14 shared identities in the two installed-readback records also match.
 Earlier runtime evidence remains applicable to those immutable bytes without
 being relabelled as a new installation or mutable-configuration test. Private
 receipts, diagnostic sources and operator reports are retained outside the export.
+
+## September 20 restored-stock reinstall stopped before final writes
+
+A separate restored-stock run reached D-Link V1.02.02 startup and answered an
+unauthenticated RTSP OPTIONS request with 200 OK. This establishes service
+responsiveness, not stock video/audio acceptance or an explanation of the
+operator's earlier repeated-click report.
+
+The unchanged `cd516ef` install set passed host validation. Six staged SD files
+and six post-handoff files passed independent unmount/remount readback. Passive
+UART confirmed the stock updater's first-phase completion. On the second boot,
+Stage 1 verified the stage-2 snapshot but stopped at
+`STAGE1 FAIL camera_authorization_hmac`, before `final_write_phase`. The first
+phase's mtd1/mtd2 writes had completed; final system/data/kernel writes had not
+started. This run is not successful installation evidence.
+
+The host plan used earlier recovery and authorization inputs. Its validation
+does not observe current camera flash. Authorization binds full protected
+partition bytes, including writable stock configuration; changes after stock
+boot are a possible cause, not yet proven by fresh device readback. The public
+reuse instructions now exclude a subsequent return to stock, and stage/handoff
+plans explicitly report `live_camera_verified: false` within
+`camera_binding_evidence`. These changes do not bypass device HMAC validation
+or establish a successful retry. The camera recovery and fresh-install gate
+remain open. A FAT unclean-unmount warning was also observed during this boot
+despite successful host eject; its cause is unresolved.

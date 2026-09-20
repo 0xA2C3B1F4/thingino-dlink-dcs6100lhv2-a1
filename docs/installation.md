@@ -117,6 +117,27 @@ Read-only diagnosis is allowed. Do not repeat physical writes until the cause
 and the exact safe retry path are established. A successful terminal command
 may have `next_command: null`; that alone is not a failure.
 
+`STAGE1 FAIL camera_authorization_hmac` stops before the final write phase.
+It does not identify the cause by itself. Preserve the card and compare its
+authorization bytes with the staged receipt; do not bypass the check or retry
+unchanged media. The authorization binds the full protected partition bytes,
+including writable stock configuration. Returning to stock and booting it can
+invalidate an earlier capture's binding even on the same physical camera.
+Host plan success alone does not establish that the current camera still has
+those bytes. A post-restore installation needs a new validated capture and newly
+bound provisioning and authorization. Retain the earlier backup separately.
+
+This is not an instruction to run capture immediately on the failed card.
+`uartless-reuse` archives collector output only; it does not clear
+`INSTALL.AUTH*` or `THINGINO.PROVISION`. Those files prevent a new
+`universal stage`. `quarantine-inconsistent-media` is also not a general
+failed-install cleanup command: it requires the specific mismatched recovery
+checkpoint described below. Do not manufacture that checkpoint or delete the
+authorization files to get past staging. Recovery from this pre-write HMAC
+failure remains unverified; retain the failed media and private inputs until
+a supported recovery procedure has been validated. A normal first capture
+on a stock camera is a different starting state.
+
 ## Private input through a file descriptor
 
 Prefer `universal configure` in an interactive terminal. Its SSID and Wi-Fi

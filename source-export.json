@@ -34,7 +34,7 @@
       "source": "Makefile"
     },
     "README.md": {
-      "sha256": "26598abbe12d13f97c8ff7121f116dc37b6902a6b7d6c52f6b23d0e37a964897",
+      "sha256": "70a85c3055fff8287c4a7d31e88b461957a57d9b2760222ad83769d92eedfad4",
       "source": "production/README.md"
     },
     "SECURITY.md": {
@@ -690,7 +690,7 @@
       "source": "production/docs/index.md"
     },
     "docs/installation.md": {
-      "sha256": "679b1a5f56b144e0c5c430ea0f392266fe9007ad9bbb78233cd63016eee94060",
+      "sha256": "ac63c5b8fb252f9c9204f2e9bcb0ca7f79d18eb9a75da66a9ea379575863402f",
       "source": "production/docs/installation.md"
     },
     "docs/installer-projects.md": {
@@ -714,7 +714,7 @@
       "source": "production/docs/release-evidence/2026-09-18-raptor-mic-acknowledgement.md"
     },
     "docs/release-evidence/2026-09-19-fresh-install-reproducibility.md": {
-      "sha256": "da9cda11632d752429f13a2d6af25c57ffae60b81b81215506198034fa1c0f12",
+      "sha256": "cd4448a95836e5386a246a48e6e286fea540be6bbc6932fdadbe9abfb7633319",
       "source": "production/docs/release-evidence/2026-09-19-fresh-install-reproducibility.md"
     },
     "docs/status.md": {
@@ -842,7 +842,7 @@
       "source": "installer/functional_stock_restore.py"
     },
     "installer/install_actions.py": {
-      "sha256": "1aa3618439f721838e16766fe99cb6ea6d70581899cd0130ae0ec69bc97318d3",
+      "sha256": "7c2f72de786dc6813ec762090c1dc67b50327486319c73b9be424c7f57ea020a",
       "source": "installer/install_actions.py"
     },
     "installer/install_policy.py": {
@@ -1774,7 +1774,7 @@
       "source": "tests/test_functional_stock_restore.py"
     },
     "tests/test_install_actions.py": {
-      "sha256": "6e3d2649e15bbb701853219545eb9a3c459a4e032ece1d74c4f9ff9ccdedd354",
+      "sha256": "ca5477d6f6e452b66eb67b9afeec78bbdd4c0f9fe7e96a82e7416f48857e2a93",
       "source": "tests/test_install_actions.py"
     },
     "tests/test_install_project.py": {
@@ -1962,7 +1962,7 @@
       "source": "tests/test_recovery_ap_session.py"
     },
     "tests/test_recovery_gate.py": {
-      "sha256": "5efb437efaa61274e4af1791ca68d06164a2747280d2307d7d1d013a8aad8cbd",
+      "sha256": "f8c07ef79e7ef39f3558aa4cdc0376ab7afaed0c005dd384664b545fea9942c9",
       "source": "tests/test_recovery_gate.py"
     },
     "tests/test_release_closure.py": {
@@ -2475,6 +2475,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "b6b6c095b6251cba87cb83cdcde8145a7312583f",
+  "source_commit": "36582433b94b4a7887a0b40d6dfe0c1ded7bdcd7",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }
