@@ -113,6 +113,7 @@ def ssh_arguments(
     command: str,
     allow_uartless_station_health: bool = False,
     allow_uartless_raptor_runtime: bool = False,
+    allow_uartless_post_install_readback: bool = False,
 ) -> list[str]:
     from .transport import ssh_arguments as _impl
 
@@ -123,6 +124,7 @@ def ssh_arguments(
         command=command,
         allow_uartless_station_health=allow_uartless_station_health,
         allow_uartless_raptor_runtime=allow_uartless_raptor_runtime,
+        allow_uartless_post_install_readback=allow_uartless_post_install_readback,
     )
 
 
@@ -135,6 +137,7 @@ def _exchange(
     timeout: float = 30.0,
     allow_uartless_station_health: bool = False,
     allow_uartless_raptor_runtime: bool = False,
+    allow_uartless_post_install_readback: bool = False,
 ) -> bytes:
     from .transport import _exchange as _impl
 
@@ -147,6 +150,7 @@ def _exchange(
         timeout=timeout,
         allow_uartless_station_health=allow_uartless_station_health,
         allow_uartless_raptor_runtime=allow_uartless_raptor_runtime,
+        allow_uartless_post_install_readback=allow_uartless_post_install_readback,
     )
 
 

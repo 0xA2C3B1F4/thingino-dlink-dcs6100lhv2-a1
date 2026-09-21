@@ -37,6 +37,7 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
     _universal_provision = getattr(facade, '_universal_provision')
     _universal_stage = getattr(facade, '_universal_stage')
     _universal_verify = getattr(facade, '_universal_verify')
+    _universal_verify_readback = getattr(facade, '_universal_verify_readback')
     _preflight = getattr(facade, '_preflight')
     _prepare_card = getattr(facade, '_prepare_card')
     _private_config_inspect = getattr(facade, '_private_config_inspect')
@@ -592,6 +593,22 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
     universal_verify.add_argument("--dropbearkey", type=Path)
     universal_verify.set_defaults(handler=_universal_verify)
 
+    universal_verify_readback = universal_commands.add_parser(
+        "verify-readback",
+        help="read-only selected-partition comparison for an installed split layout",
+        description=(
+            "Validate signed host inputs and same-camera recovery before a fixed, "
+            "pinned SSH read of kernel, system and protected partitions. Mutable "
+            "data and physical mtd2 are not compared."
+        ),
+    )
+    _add_common(universal_verify_readback, inherited=True)
+    add_recovery_inputs(universal_verify_readback)
+    universal_verify_readback.add_argument("--install-set-dir", type=Path, required=True)
+    universal_verify_readback.add_argument("--universal-public-key", type=Path, required=True)
+    universal_verify_readback.add_argument("--session-dir", type=Path, required=True)
+    universal_verify_readback.set_defaults(handler=_universal_verify_readback)
+
     runtime = commands.add_parser("runtime-candidate")
     runtime_commands = runtime.add_subparsers(dest="runtime_command", required=True)
     runtime_stage = runtime_commands.add_parser("stage")
@@ -746,6 +763,7 @@ def _installation_help(parser):
         "universal evacuate-recovery": "Copy and validate an existing recovery checkpoint into --output-dir before removing its SD copy. Requires current media and exact device confirmation. Next: stage the new camera-bound install set.",
         "universal quarantine-inconsistent-media": "Archive a card file tree whose universal checkpoint no longer binds its current stage 2. The archive is not validated recovery. After independent readback, remove only the reviewed installer paths while preserving recordings and other user data. Use --resume with the same destination after an interrupted pending receipt; unrelated changes force rollback. Next: stage only after completed quarantine.",
         "universal verify": "Discover the selected session's mDNS name and verify the running camera using its retained SSH key and station pin. Requires dropbearkey, completed physical installation and network reachability. There is no host override. Host project status does not replace this check.",
+        "universal verify-readback": "Read and compare the installed kernel, system and protected NOR partitions using the signed install set, same-camera recovery and pinned session. The command and timeout are fixed. Mutable data and physical mtd2 remain outside this exact comparison; this is not a full-flash readback claim.",
         "project init": "Create a new private camera path project. Supply --project or DCS6100_PROJECT and a local --name; optionally --build-root or a command-specific --paths JSON map. Creates project metadata and its private output directory. Next: local-build prepare or project status.",
         "project status": "Read remembered completion and content identities without resuming work. Changed inputs or outputs require review. A completed record does not confirm a physical boot or authorize writing.",
         "project attach": "Select existing inputs once for all dependent installation stages. Requires explicit role paths; validates available same-camera recovery. Writes private project metadata. Changed inputs invalidate dependent completion. Next: project status.",

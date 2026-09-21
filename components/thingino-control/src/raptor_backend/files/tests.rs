@@ -27,10 +27,9 @@ impl Fixture {
                 ..Store::default()
             },
         ));
-        Self {
-            path,
-            backend: Arc::new(backend),
-        }
+        let backend = Arc::new(backend);
+        backend.start_storage_reader().unwrap();
+        Self { path, backend }
     }
     fn disk(&self, relative: &str) -> PathBuf {
         self.path.join("sd/raptor").join(relative)
@@ -159,6 +158,7 @@ fn timelapse_pending_and_internal_markers_are_never_offered_even_after_restart()
             ..Store::default()
         },
     ));
+    restarted.start_storage_reader().unwrap();
     assert!(
         restarted
             .recording_identity(

@@ -181,7 +181,11 @@ Follow the returned physical actions. Run `universal handoff` only after observi
 the stock updater's mtd1/mtd2 completion. The handoff plan is a separate operation
 with its own confirmation. After the final boot, run `thingino-dlink universal verify`.
 It discovers the session's mDNS name and uses the retained SSH key and station pin;
-there is no `--host` override. `universal evacuate-recovery` also provides
+there is no `--host` override. Then use `universal verify-readback` for a fixed,
+read-only comparison of the installed kernel, system and protected partitions
+against the signed install set and same-camera preserved inputs. That additional
+check excludes mutable data and physical mtd2 and is not a full-flash claim.
+`universal evacuate-recovery` also provides
 a reviewable plan before copying and removing reserved SD recovery files.
 
 ## Reuse one card for camera A and camera B

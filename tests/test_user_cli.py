@@ -964,6 +964,7 @@ class UserCliTests(unittest.TestCase):
         self.assertEqual(result["result"]["safe_next_action"], "installation-complete")
         self.assertFalse(result["result"]["uart_required"])
         self.assertEqual(result["result"]["write_set"], [])
+        self.assertFalse(result["nor"]["full_physical_readback_verified"])
 
     def test_local_build_prepare_defaults_to_one_clean_build(self) -> None:
         parser = user_cli.build_parser()

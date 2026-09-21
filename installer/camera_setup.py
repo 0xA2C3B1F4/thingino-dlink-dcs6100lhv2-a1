@@ -368,7 +368,9 @@ def verify_camera(request: VerifyInputs, *, emit: EventSink | None = None) -> In
         "universal verify",
         ok=True,
         phase="camera-bound-universal-management-verified",
-        read_back_verified=health.get("mtd3_read_back_verified") is True,
+        # The normal verifier checks only logical mtd3. Do not label that as a
+        # complete physical-flash readback in the shared result envelope.
+        read_back_verified=False,
         next_command=None,
         result={
             **health,

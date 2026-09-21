@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex, Weak, mpsc};
 use std::thread;
 
 pub(super) const WAIT: Duration = Duration::from_millis(150);
+const STARTUP_WAIT: Duration = Duration::from_secs(1);
 #[cfg(test)]
 type Hook = Arc<dyn Fn() + Send + Sync>;
 pub(in crate::raptor_backend) struct Reads {
@@ -18,6 +19,10 @@ pub(in crate::raptor_backend) struct Reads {
     pub(super) hook: Arc<Mutex<Option<Hook>>>,
     #[cfg(test)]
     admission_hook: Arc<Mutex<Option<Hook>>>,
+    #[cfg(test)]
+    startup_hook: Arc<Mutex<Option<Hook>>>,
+    #[cfg(test)]
+    worker_shutdown: Arc<std::sync::atomic::AtomicUsize>,
     #[cfg(test)]
     pub(super) submitted: std::sync::atomic::AtomicUsize,
 }
@@ -33,6 +38,10 @@ impl Default for Reads {
             hook: Arc::new(Mutex::new(None)),
             #[cfg(test)]
             admission_hook: Arc::new(Mutex::new(None)),
+            #[cfg(test)]
+            startup_hook: Arc::new(Mutex::new(None)),
+            #[cfg(test)]
+            worker_shutdown: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
             #[cfg(test)]
             submitted: std::sync::atomic::AtomicUsize::new(0),
         }
@@ -188,12 +197,147 @@ impl Reader {
     }
 }
 impl Reads {
-    fn submit(
-        &self,
-        backend: &RaptorBackend,
-        operation: Operation,
-        deadline: Instant,
-    ) -> Result<Reply, BackendError> {
+    fn start(&self, backend: &RaptorBackend, deadline: Instant) -> Result<(), BackendError> {
+        if Instant::now() >= deadline {
+            return Err(BackendError::Timeout);
+        }
+        let mut slot = self.sender.lock().map_err(|_| BackendError::Unavailable)?;
+        if slot.is_some() {
+            return Ok(());
+        }
+        if Instant::now() >= deadline {
+            return Err(BackendError::Timeout);
+        }
+
+        let (send, receive) = mpsc::sync_channel::<Job>(1);
+        let (ready_send, ready_receive) = mpsc::sync_channel(0);
+        let mut reader = Reader {
+            timelapse: Arc::clone(&backend.timelapse),
+            conflicts: [
+                backend.conflicting_owner_socket.clone(),
+                backend.conflicting_owner_pid.clone(),
+            ],
+            pages: VecDeque::new(),
+            cursor_serial: 0,
+            cursor_nonce: String::new(),
+        };
+        #[cfg(test)]
+        let hook = Arc::clone(&self.hook);
+        #[cfg(test)]
+        let startup_hook = Arc::clone(&self.startup_hook);
+        #[cfg(test)]
+        let worker_shutdown = Arc::clone(&self.worker_shutdown);
+        let diagnostics = Arc::clone(&self.diagnostics);
+        thread::Builder::new()
+            .name("raptor-sd-read".into())
+            .spawn(move || {
+                #[cfg(test)]
+                {
+                    let callback = startup_hook.lock().unwrap().clone();
+                    if let Some(callback) = callback {
+                        callback();
+                    }
+                }
+                let mut ready_send = Some(ready_send);
+                loop {
+                    if let Some(ready) = ready_send.take()
+                        && ready.send(()).is_err()
+                    {
+                        #[cfg(test)]
+                        worker_shutdown.fetch_add(1, Ordering::AcqRel);
+                        return;
+                    }
+                    reader
+                        .pages
+                        .retain(|(_, page)| page.expires > Instant::now());
+                    let job = match receive.recv_timeout(Duration::from_secs(1)) {
+                        Ok(job) => job,
+                        Err(mpsc::RecvTimeoutError::Timeout) => continue,
+                        Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                    };
+                    let route = job.operation.diagnostic_route();
+                    // Expired queued work must not touch the disk after a stalled read returns.
+                    if Instant::now() >= job.deadline {
+                        diagnostics.log(
+                            &diagnostics.queued_expiry,
+                            route,
+                            "queue",
+                            "expired",
+                            job.submitted.elapsed(),
+                        );
+                        continue;
+                    }
+                    let worker_started = Instant::now();
+                    diagnostics.log(
+                        &diagnostics.worker_start,
+                        route,
+                        "worker",
+                        "start",
+                        job.submitted.elapsed(),
+                    );
+                    #[cfg(test)]
+                    {
+                        let callback = hook.lock().unwrap().clone();
+                        if let Some(callback) = callback {
+                            callback();
+                        }
+                    }
+                    let result = reader.run(job.operation, job.deadline);
+                    let worker_elapsed = worker_started.elapsed();
+                    let error = result.as_ref().err().map(StorageDiagnostics::error);
+                    let before_deadline = Instant::now() < job.deadline;
+                    let receiver_gone = before_deadline && job.reply.try_send(result).is_err();
+                    if let Some(error) = error {
+                        diagnostics.log(
+                            &diagnostics.worker_error,
+                            route,
+                            "worker",
+                            error,
+                            worker_elapsed,
+                        );
+                    } else {
+                        diagnostics.log(
+                            &diagnostics.worker_end,
+                            route,
+                            "worker",
+                            "success",
+                            worker_elapsed,
+                        );
+                    }
+                    if !before_deadline {
+                        diagnostics.log(
+                            &diagnostics.late_completion,
+                            route,
+                            "completion",
+                            "deadline-expired",
+                            job.submitted.elapsed(),
+                        );
+                    } else if receiver_gone {
+                        diagnostics.log(
+                            &diagnostics.late_completion,
+                            route,
+                            "completion",
+                            "receiver-gone",
+                            job.submitted.elapsed(),
+                        );
+                    }
+                }
+                #[cfg(test)]
+                worker_shutdown.fetch_add(1, Ordering::AcqRel);
+            })
+            .map_err(|_| BackendError::Unavailable)?;
+
+        match ready_receive.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
+            Ok(()) => {
+                *slot = Some(send);
+                Ok(())
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => Err(BackendError::Timeout),
+            Err(mpsc::RecvTimeoutError::Disconnected) => Err(BackendError::Unavailable),
+        }
+    }
+
+    fn submit(&self, operation: Operation, deadline: Instant) -> Result<Reply, BackendError> {
         let started = Instant::now();
         let route = operation.diagnostic_route();
         let drain = matches!(&operation, Operation::Drain);
@@ -220,7 +364,7 @@ impl Reads {
             }
         }
         let (reply, receive) = mpsc::sync_channel(1);
-        let mut slot = match self.sender.lock() {
+        let slot = match self.sender.lock() {
             Ok(slot) => slot,
             Err(_) => {
                 self.diagnostics.log(
@@ -237,113 +381,15 @@ impl Reads {
             return Err(BackendError::Busy);
         }
         if slot.is_none() {
-            let (send, receive) = mpsc::sync_channel::<Job>(1);
-            let mut reader = Reader {
-                timelapse: Arc::clone(&backend.timelapse),
-                conflicts: [
-                    backend.conflicting_owner_socket.clone(),
-                    backend.conflicting_owner_pid.clone(),
-                ],
-                pages: VecDeque::new(),
-                cursor_serial: 0,
-                cursor_nonce: String::new(),
-            };
-            #[cfg(test)]
-            let hook = Arc::clone(&self.hook);
-            let diagnostics = Arc::clone(&self.diagnostics);
-            if thread::Builder::new()
-                .name("raptor-sd-read".into())
-                .spawn(move || {
-                    loop {
-                        reader
-                            .pages
-                            .retain(|(_, page)| page.expires > Instant::now());
-                        let job = match receive.recv_timeout(Duration::from_secs(1)) {
-                            Ok(job) => job,
-                            Err(mpsc::RecvTimeoutError::Timeout) => continue,
-                            Err(mpsc::RecvTimeoutError::Disconnected) => break,
-                        };
-                        let route = job.operation.diagnostic_route();
-                        // Expired queued work must not touch the disk after a stalled read returns.
-                        if Instant::now() >= job.deadline {
-                            diagnostics.log(
-                                &diagnostics.queued_expiry,
-                                route,
-                                "queue",
-                                "expired",
-                                job.submitted.elapsed(),
-                            );
-                            continue;
-                        }
-                        let worker_started = Instant::now();
-                        diagnostics.log(
-                            &diagnostics.worker_start,
-                            route,
-                            "worker",
-                            "start",
-                            job.submitted.elapsed(),
-                        );
-                        #[cfg(test)]
-                        {
-                            let callback = hook.lock().unwrap().clone();
-                            if let Some(callback) = callback {
-                                callback();
-                            }
-                        }
-                        let result = reader.run(job.operation, job.deadline);
-                        let worker_elapsed = worker_started.elapsed();
-                        let error = result.as_ref().err().map(StorageDiagnostics::error);
-                        let before_deadline = Instant::now() < job.deadline;
-                        let receiver_gone = before_deadline && job.reply.try_send(result).is_err();
-                        if let Some(error) = error {
-                            diagnostics.log(
-                                &diagnostics.worker_error,
-                                route,
-                                "worker",
-                                error,
-                                worker_elapsed,
-                            );
-                        } else {
-                            diagnostics.log(
-                                &diagnostics.worker_end,
-                                route,
-                                "worker",
-                                "success",
-                                worker_elapsed,
-                            );
-                        }
-                        if !before_deadline {
-                            diagnostics.log(
-                                &diagnostics.late_completion,
-                                route,
-                                "completion",
-                                "deadline-expired",
-                                job.submitted.elapsed(),
-                            );
-                        } else if receiver_gone {
-                            diagnostics.log(
-                                &diagnostics.late_completion,
-                                route,
-                                "completion",
-                                "receiver-gone",
-                                job.submitted.elapsed(),
-                            );
-                        }
-                    }
-                })
-                .is_err()
-            {
-                drop(slot);
-                self.diagnostics.log(
-                    &self.diagnostics.submit_unavailable,
-                    route,
-                    "submit",
-                    "unavailable",
-                    started.elapsed(),
-                );
-                return Err(BackendError::Unavailable);
-            }
-            *slot = Some(send);
+            drop(slot);
+            self.diagnostics.log(
+                &self.diagnostics.submit_unavailable,
+                route,
+                "submit",
+                "unavailable",
+                started.elapsed(),
+            );
+            return Err(BackendError::Unavailable);
         }
         let submitted = Instant::now();
         match slot.as_ref().unwrap().try_send(Job {
@@ -440,7 +486,7 @@ impl RaptorBackend {
         }
         match self
             .file_reads
-            .submit(self, Operation::Identity(target.into()), deadline)?
+            .submit(Operation::Identity(target.into()), deadline)?
         {
             Reply::Identity(value) => Ok(value),
             _ => Err(BackendError::Protocol),
@@ -465,18 +511,17 @@ impl RaptorBackend {
                 // Serialize user mutations while the bounded worker performs the
                 // final descriptor-anchored identity checks and unlink.
                 let _guard = self.lock_mutation()?;
-                return match self.file_reads.submit(
-                    self,
-                    Operation::Delete(target.into()),
-                    deadline,
-                )? {
+                return match self
+                    .file_reads
+                    .submit(Operation::Delete(target.into()), deadline)?
+                {
                     Reply::Json(value) => Ok(value),
                     _ => Err(BackendError::Protocol),
                 };
             }
             _ => return Err(BackendError::Protocol),
         };
-        match self.file_reads.submit(self, operation, deadline)? {
+        match self.file_reads.submit(operation, deadline)? {
             Reply::Json(value) => Ok(value),
             _ => Err(BackendError::Protocol),
         }
@@ -500,10 +545,14 @@ impl RaptorBackend {
                 .file_reads
                 .decorate_sd(self, BackendResponse::json(body));
         }
-        match self.file_reads.submit(self, Operation::Sd, deadline)? {
+        match self.file_reads.submit(Operation::Sd, deadline)? {
             Reply::Json(value) => self.file_reads.decorate_sd(self, value),
             _ => Err(BackendError::Protocol),
         }
+    }
+
+    pub fn start_storage_reader(&self) -> Result<(), BackendError> {
+        self.file_reads.start(self, Instant::now() + STARTUP_WAIT)
     }
 
     pub fn start_storage_format(self: &Arc<Self>) -> Result<(), BackendError> {
@@ -540,7 +589,7 @@ impl RaptorBackend {
         {
             return Err(BackendError::Protocol);
         }
-        let sd_snapshot = match self.file_reads.submit(self, Operation::Sd, deadline)? {
+        let sd_snapshot = match self.file_reads.submit(Operation::Sd, deadline)? {
             Reply::Json(value) => value.body,
             _ => return Err(BackendError::Protocol),
         };
@@ -577,7 +626,6 @@ impl RaptorBackend {
         let pause_deadline = deadline.min(Instant::now() + Duration::from_secs(3));
         let _timelapse_pause = self.timelapse.pause_storage(pause_deadline)?;
         match self.file_reads.submit(
-            self,
             Operation::Drain,
             deadline.min(Instant::now() + Duration::from_secs(2)),
         )? {
@@ -901,9 +949,111 @@ mod tests {
     }
 
     #[test]
+    fn startup_waits_for_loop_entry_and_repeated_start_keeps_one_worker() {
+        let root = task_temp("storage-reader-ready");
+        let backend = Arc::new(backend(&root, "127.0.0.1:9".parse().unwrap()));
+        let starts = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let observed = Arc::clone(&starts);
+        let (entered_send, entered_receive) = mpsc::sync_channel(1);
+        let (release_send, release_receive) = mpsc::sync_channel(1);
+        let release_receive = Arc::new(Mutex::new(release_receive));
+        let release = Arc::clone(&release_receive);
+        *backend.file_reads.startup_hook.lock().unwrap() = Some(Arc::new(move || {
+            observed.fetch_add(1, Ordering::AcqRel);
+            entered_send.send(()).unwrap();
+            release
+                .lock()
+                .unwrap()
+                .recv_timeout(Duration::from_secs(1))
+                .unwrap();
+        }));
+
+        let start_backend = Arc::clone(&backend);
+        let (done_send, done_receive) = mpsc::sync_channel(1);
+        let startup = thread::spawn(move || {
+            done_send
+                .send(start_backend.start_storage_reader())
+                .unwrap();
+        });
+        entered_receive
+            .recv_timeout(Duration::from_secs(1))
+            .unwrap();
+        assert!(matches!(
+            done_receive.try_recv(),
+            Err(mpsc::TryRecvError::Empty)
+        ));
+        assert_eq!(backend.file_reads.submitted.load(Ordering::Acquire), 0);
+        release_send.send(()).unwrap();
+        assert_eq!(
+            done_receive.recv_timeout(Duration::from_secs(1)).unwrap(),
+            Ok(())
+        );
+        startup.join().unwrap();
+
+        backend.start_storage_reader().unwrap();
+        assert_eq!(starts.load(Ordering::Acquire), 1);
+        let _ = backend.recording_sd(Instant::now() + Duration::from_secs(1));
+        assert_eq!(backend.file_reads.submitted.load(Ordering::Acquire), 1);
+        assert_eq!(
+            backend
+                .file_reads
+                .diagnostics
+                .worker_start
+                .load(Ordering::Acquire),
+            1
+        );
+        drop(backend);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn startup_timeout_drops_sender_and_late_worker_shuts_down() {
+        let root = task_temp("storage-reader-startup-timeout");
+        let backend = Arc::new(backend(&root, "127.0.0.1:9".parse().unwrap()));
+        let (entered_send, entered_receive) = mpsc::sync_channel(1);
+        let (release_send, release_receive) = mpsc::sync_channel(1);
+        let release_receive = Arc::new(Mutex::new(release_receive));
+        let release = Arc::clone(&release_receive);
+        *backend.file_reads.startup_hook.lock().unwrap() = Some(Arc::new(move || {
+            entered_send.send(()).unwrap();
+            release
+                .lock()
+                .unwrap()
+                .recv_timeout(Duration::from_secs(1))
+                .unwrap();
+        }));
+
+        let start_backend = Arc::clone(&backend);
+        let startup = thread::spawn(move || {
+            start_backend
+                .file_reads
+                .start(&start_backend, Instant::now() + Duration::from_millis(30))
+        });
+        entered_receive
+            .recv_timeout(Duration::from_secs(1))
+            .unwrap();
+        assert_eq!(startup.join().unwrap(), Err(BackendError::Timeout));
+        assert!(backend.file_reads.sender.lock().unwrap().is_none());
+        assert_eq!(
+            backend.recording_sd(Instant::now() + Duration::from_secs(1)),
+            Err(BackendError::Unavailable)
+        );
+        release_send.send(()).unwrap();
+        let until = Instant::now() + Duration::from_secs(1);
+        while backend.file_reads.worker_shutdown.load(Ordering::Acquire) == 0 {
+            assert!(Instant::now() < until, "late worker did not shut down");
+            thread::yield_now();
+        }
+        assert!(backend.file_reads.sender.lock().unwrap().is_none());
+        drop(backend);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn caller_deadline_below_wait_stays_bounded_and_queued_job_expires() {
         let root = task_temp("short-storage-deadline");
         let backend = Arc::new(backend(&root, "127.0.0.1:9".parse().unwrap()));
+        backend.start_storage_reader().unwrap();
         let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let observed = Arc::clone(&calls);
         let (started_send, started_receive) = mpsc::sync_channel(1);
@@ -1108,7 +1258,9 @@ mod tests {
                 ..timelapse::storage::Store::default()
             },
         ));
-        (Arc::new(value), listener)
+        let value = Arc::new(value);
+        value.start_storage_reader().unwrap();
+        (value, listener)
     }
 
     #[test]
@@ -1164,6 +1316,7 @@ mod tests {
     fn format_activation_closes_the_reader_admission_race_before_drain() {
         let root = task_temp("format-reader-admission");
         let backend = Arc::new(backend(&root, "127.0.0.1:9".parse().unwrap()));
+        backend.start_storage_reader().unwrap();
         let (entered_send, entered_receive) = mpsc::sync_channel(1);
         let (release_send, release_receive) = mpsc::sync_channel(1);
         let release_receive = Mutex::new(release_receive);

@@ -212,6 +212,9 @@ fn run() -> Result<(), String> {
             .start_timelapse()
             .map_err(|error| error.to_string())?;
         backend
+            .start_storage_reader()
+            .map_err(|error| error.to_string())?;
+        backend
             .start_storage_format()
             .map_err(|error| error.to_string())?;
         backend

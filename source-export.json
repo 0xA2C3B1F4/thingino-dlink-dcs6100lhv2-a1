@@ -458,7 +458,7 @@
       "source": "components/thingino-control/src/lib.rs"
     },
     "components/thingino-control/src/main.rs": {
-      "sha256": "7ebb70ba4009bda89cf690d38724c4b21750954826ec688cd4362e47d05a5263",
+      "sha256": "7de2bbc13c2d0a0481386de4bd7a3a7af59f69cb08ce4c3d9f999ee8bae2b649",
       "source": "components/thingino-control/src/main.rs"
     },
     "components/thingino-control/src/protocol.rs": {
@@ -494,11 +494,11 @@
       "source": "components/thingino-control/src/raptor_backend/files.rs"
     },
     "components/thingino-control/src/raptor_backend/files/tests.rs": {
-      "sha256": "62444180c9e569d432e3c4e62a8fc8ad2ea7d4dd1de646dd6a85592affbaf37f",
+      "sha256": "5721d5caab388b2de51a606e81ade6d5df4b28328d13de580404d9559b9fdcdd",
       "source": "components/thingino-control/src/raptor_backend/files/tests.rs"
     },
     "components/thingino-control/src/raptor_backend/files/worker.rs": {
-      "sha256": "fc2beb15e9fbaa9adfd4135b32e8ee5fbe1184184825e1dbd332d3508cb4bef3",
+      "sha256": "6de034a75ced07b369e68badbff7f9de94dc4f4eab92ae49716e4ed74709b8b8",
       "source": "components/thingino-control/src/raptor_backend/files/worker.rs"
     },
     "components/thingino-control/src/raptor_backend/ha.rs": {
@@ -598,7 +598,7 @@
       "source": "components/thingino-control/src/raptor_backend/timelapse/storage.rs"
     },
     "components/thingino-control/src/raptor_backend/timelapse/tests.rs": {
-      "sha256": "ef297a016fdc047d9e6b1ca30fc0eb908ff1feeb9c49fe7cd78e72c1c858b929",
+      "sha256": "7abb45149af26aa19f6d3c9972455b6a93edf701ce3e34e82512e4ffa8701201",
       "source": "components/thingino-control/src/raptor_backend/timelapse/tests.rs"
     },
     "components/thingino-control/src/raptor_backend/timezone.rs": {
@@ -690,11 +690,11 @@
       "source": "production/docs/index.md"
     },
     "docs/installation.md": {
-      "sha256": "3b509ca3f5f686e0543091cadcf2c5b179f4a5dbdc749d5312ba9fda34651055",
+      "sha256": "19229c4cf154f155baa84ddcafc32a1d19d907587937c88eaf60829d8a2f20aa",
       "source": "production/docs/installation.md"
     },
     "docs/installer-projects.md": {
-      "sha256": "88296eed7d319a5ad1189e4ec1dfea1c0722b0fa27137caffa4bf3667f0c8af2",
+      "sha256": "ad7fbb436cf376ab7241a4146f54ae9fba6e3b6919f402d48b6383e4a6978f6e",
       "source": "production/docs/installer-projects.md"
     },
     "docs/recovery.md": {
@@ -710,7 +710,7 @@
       "source": "production/docs/release-evidence/2026-09-17-raptor-audio-reproducibility.md"
     },
     "docs/release-evidence/2026-09-18-raptor-mic-acknowledgement.md": {
-      "sha256": "bb50360dea9735160cd9c0caa0fcf58bfa5769ef0bff40d6a187a693ee6e615b",
+      "sha256": "3598476bd577f8d939a0fda60306d5fb2eb412bc086cdb25195cf5fef61b6ebb",
       "source": "production/docs/release-evidence/2026-09-18-raptor-mic-acknowledgement.md"
     },
     "docs/release-evidence/2026-09-19-fresh-install-reproducibility.md": {
@@ -718,7 +718,7 @@
       "source": "production/docs/release-evidence/2026-09-19-fresh-install-reproducibility.md"
     },
     "docs/status.md": {
-      "sha256": "102e785afab92522ed766d0bd13c5e604f1c4d9e88c7329b24c55296b7f9601d",
+      "sha256": "6146ed723acaf7e37739ad71090439ba475ac897ac9ec0d25e6f0873a91aacfb",
       "source": "production/docs/status.md"
     },
     "docs/testing.md": {
@@ -742,7 +742,7 @@
       "source": "installer/camera_authorization.py"
     },
     "installer/camera_setup.py": {
-      "sha256": "8709389cba53f3a9b50713310ecb7e131e2f403a7211b6df3f410ac943b3538b",
+      "sha256": "084df3bc776e5bf3cbd49ea71bae985dfaaf244068c917bdd0b14fce2bd5b6d0",
       "source": "installer/camera_setup.py"
     },
     "installer/candidate_log.py": {
@@ -969,6 +969,10 @@
       "sha256": "9295efe955420bcbb04bceda5a22d093739e3253966ec4cab634d3882e58339e",
       "source": "installer/platform_wifi.py"
     },
+    "installer/post_install_readback.py": {
+      "sha256": "6fedb1ad5f0273b32ca6af79fa5d0b67e83d8aa27542bdf28cab3a64a461d130",
+      "source": "installer/post_install_readback.py"
+    },
     "installer/private_config.py": {
       "sha256": "c23b021c68898f13ac0bdadc092c5994014bdd30de8bbd7258060bcc415d0ebd",
       "source": "installer/private_config.py"
@@ -1038,7 +1042,7 @@
       "source": "installer/recovery_ap/entropy_seed.c"
     },
     "installer/recovery_ap/host.py": {
-      "sha256": "a5623a4e7a53dca2879bfc65b91bb33202f45c708fab2226b714e698fcc1c8f0",
+      "sha256": "4af774a8e78b96d0fe31f7bfcba8b8bf2892499775400c03be32cbdc23131c88",
       "source": "installer/recovery_ap/host.py"
     },
     "installer/recovery_ap/ingenic_t31_dtrng.c": {
@@ -1074,7 +1078,7 @@
       "source": "installer/recovery_ap/thingino_enter.c"
     },
     "installer/recovery_ap/transport.py": {
-      "sha256": "69b49c09839ebebebe31ee60a345da9f8181456f5c98b3e54472ba77361af7c6",
+      "sha256": "4790e20bceea10f1e81a10be4a83cb71634c6928c5862ce5c74b8e11863914c6",
       "source": "installer/recovery_ap/transport.py"
     },
     "installer/recovery_gate.py": {
@@ -1254,7 +1258,7 @@
       "source": "installer/universal_install.py"
     },
     "installer/user_cli.py": {
-      "sha256": "d6365cb90879dcb4daa7f37ec0d5e5161cd0b077b431c6ecabb3186f63807f67",
+      "sha256": "476a7f10a4d24f1b0821e54bf061c9b974a18e038cc6a2d8601cc2f4274caf0d",
       "source": "installer/user_cli.py"
     },
     "installer/user_cli_build.py": {
@@ -1270,7 +1274,7 @@
       "source": "installer/user_cli_media.py"
     },
     "installer/user_cli_parser.py": {
-      "sha256": "477c2a89fae0049c7efbbff63dd3d8560b7f8b76c19dd13800782748371e8ab0",
+      "sha256": "cfd200aca37766007b5ef299845452527bd7b9e357f945fd8c06941a2e6b6bfa",
       "source": "installer/user_cli_parser.py"
     },
     "installer/user_cli_parser_stock_recovery.py": {
@@ -1286,7 +1290,7 @@
       "source": "installer/user_cli_stock_recovery.py"
     },
     "installer/user_cli_universal.py": {
-      "sha256": "6cd436c247763e259c88592ac3e31419149448564cbfa6080aeea8eedf24f6c2",
+      "sha256": "dc0f6a1c47e6e375237caeae1da1c186efce2ab17bed889cab1d494f47c7703a",
       "source": "installer/user_cli_universal.py"
     },
     "installer/vendor_bundle.py": {
@@ -1498,7 +1502,7 @@
       "source": "profiles/dlink-dcs6100lhv2-a1/recovery-ap-kernel.fragment"
     },
     "profiles/dlink-dcs6100lhv2-a1/source-profile.json": {
-      "sha256": "783b513673078dab372412e740f852ba616636445928952ef2f20f06f5f3eb88",
+      "sha256": "65b5f5794df01b92993ee003de9b6de708f0cb8431d0dcf2f1dae6b99814d094",
       "source": "profiles/dlink-dcs6100lhv2-a1/source-profile.json"
     },
     "profiles/dlink-dcs6100lhv2-a1/stock-restore-kernel.fragment": {
@@ -1881,6 +1885,10 @@
       "sha256": "91229a9120a69f7dbe89f8736436f16e416447daa756cbb8d04ee78c2488ec77",
       "source": "tests/test_platform_wifi.py"
     },
+    "tests/test_post_install_readback.py": {
+      "sha256": "40b93dce395470adac2673cbe1b54a9eff0a7ddc8472905b7a9ece91e4072785",
+      "source": "tests/test_post_install_readback.py"
+    },
     "tests/test_private_config.py": {
       "sha256": "000939d4d3813f01a52a9e22d8e114248aac3486622648206a6bef48393c5cb7",
       "source": "tests/test_private_config.py"
@@ -2066,7 +2074,7 @@
       "source": "tests/test_universal_artifacts.py"
     },
     "tests/test_user_cli.py": {
-      "sha256": "cde5b7f9257014ece65f8f7d01b3d7126661db55c7a62733578125a5f225b190",
+      "sha256": "fa11405bc6f844dfca478bc0eb71f50122fe8cd333a8ceefcc48f0a1ef4e583d",
       "source": "tests/test_user_cli.py"
     },
     "tests/test_user_cli_build.py": {
@@ -2479,6 +2487,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "9d4c39f54459d751ffd86ad90c911b0b21031c97",
+  "source_commit": "b2d4f244453525d67a4ed3851c2ca461c524945a",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }

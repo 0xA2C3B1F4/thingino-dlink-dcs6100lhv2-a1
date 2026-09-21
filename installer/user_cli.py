@@ -811,6 +811,12 @@ def _universal_verify(arguments: argparse.Namespace) -> dict[str, object]:
     return implementation(sys.modules[__name__], arguments)
 
 
+def _universal_verify_readback(arguments: argparse.Namespace) -> dict[str, object]:
+    from .user_cli_universal import _universal_verify_readback as implementation
+
+    return implementation(sys.modules[__name__], arguments)
+
+
 def _build_personal_mtd3(arguments: argparse.Namespace) -> dict[str, object]:
     from .user_cli_build import _build_personal_mtd3 as implementation
 

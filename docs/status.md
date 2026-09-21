@@ -16,20 +16,20 @@ changes. The full-Raptor source path has passed host composition checks and a
 source-built camera exercise. A new release candidate still needs its own image,
 installation, browser, and physical checks.
 
-The installed candidate remains `aad992b6`. Its two clean complete-firmware
-builds produced 16 byte-identical artifact pairs. It increases the heartbeat
-Day/Night and Privacy read allowances after the earlier `fb43b075` candidate
-failed a bounded state-completeness check. The caller's deadline and unknown/null
-failure states remain unchanged. Candidate ID
-`69726e9a5b738f3db8fa8eaebd141399bc8b67f8f38a4462d35b9143d3518b11`
-is now installed on the first camera. Both normal installation stages completed,
-the supported universal verifier passed every application, Control, health,
-media and WebUI gate, and independent comparison matched the exact kernel and
-system plus the same camera's three protected originals. The installer did not
-write the protected partitions.
+The first camera now runs source `385ba106`. It includes bounded, payload-free
+files and storage-SD diagnostics and reports unavailable collector logs as
+`null` with source status. The earlier `aad992b6` heartbeat-read allowance
+remains part of the source history; its runtime observations do not transfer to
+this image. After installation, the supported read-only
+split-layout verifier matched the complete padded kernel and system plus the
+same camera's three protected originals. The boot identity stayed stable during
+the check. Mutable data and physical mtd2 were outside the comparison, so this
+is selected-partition evidence rather than a full-flash readback claim. The
+installer did not write the protected partitions.
 
-Bounded checks on these exact bytes returned 15 successful concurrent API
-responses and five complete heartbeat states without a checked process restart.
+Historical checks on the installed `aad992b6` bytes returned 15 successful
+concurrent API responses and five complete heartbeat states without a checked
+process restart.
 Safari playback was audible on both streams after connecting with the microphone
 off, enabling it and pressing Listen once without Reload. Both snapshot and
 MJPEG endpoints decoded at their expected sizes. Both RTSP streams enforced
@@ -43,6 +43,9 @@ A later read-only session verified the two existing videos from the bounded
 recorder trial without making another recording or rebooting the camera. Both
 videos decoded as H.264 at their expected main and substream sizes, while the
 six older files remained present with unchanged sizes and modification times.
+These recorder and Safari observations belong to `aad992b6`; they do not
+transfer to the currently installed `385ba106` image.
+
 The immediate post-stop inventory ended in an assertion failure without a
 retained HTTP response. A separate later read-only diagnostic returned HTTP 504,
 while the eventual readback succeeded. The failures remain unresolved, so this
@@ -63,14 +66,35 @@ the 6,365,184-byte raw system SHA-256 is
 `23cb7d1604351a031fe183a4c8650c2086ef5a7358030f361472739a009ae586`,
 and the 7,950,417-byte universal bundle SHA-256 is
 `651072af35c04822106681ecde2830344b3d31985a029025a40517a445fc11bf`.
-This is host-build evidence only. It is not installed, the first camera remains
-on `aad992b6`, and the diagnostics neither explain nor fix the earlier recorder
-failures or close recorder acceptance.
+The installed selected-partition readback described above binds this build to
+the first camera. An API-only storage preflight on these bytes returned HTTP 504.
+The diagnostic record showed a zero-millisecond gate, a reply timeout at 150 ms
+and queued expiry at 157 ms before `Reader.run`.
+Both stream-root directory listings then succeeded; worker execution took 81 ms
+and 20 ms. No recording was started. This does not explain or fix the earlier
+recorder failures or close recorder acceptance.
+
+Later source `c4b6d6ea` starts the Raptor SD reader and waits for its bounded
+readiness result before the server begins accepting requests. It also adds the
+supported read-only verifier used for the selected-partition check. Source
+`c4b6d6eaa95396968d857c4e64e7e6d633014ccd` completed its full two-clean-build
+workflow without component-cache reuse. Independent verification rehashed all
+32 files, compared all 16 raw artifact pairs byte-for-byte and freshly inspected
+both install sets. The 6,369,280-byte raw system SHA-256 is
+`9b769de5b84791c941b3074da311ceb03636560e0f1c969672b91e245fea6037`;
+the 7,954,513-byte universal bundle SHA-256 is
+`a5843451d6ab8086edb39bf9cf151b38c1f7e19e47b97afd1fdb102db8dfd859`.
+Build A emitted a tolerated host-finalization `patchelf` warning; build B did
+not, and the retained artifact pairs were byte-identical. This does not claim a
+clean host SDK run. The technical closure check passed, but it does not close
+legal, notice or binary-distribution gates. The c4b6 firmware has not been
+installed or accepted on the camera.
 
 These are same-image bounded observations. They do not transfer results from an
 older candidate, establish every control or setting, prove persistence, or close
-long-duration resource stability, endurance or release acceptance. Three resource samples around one
-slow MJPEG connection showed stable process IDs and restored thread and descriptor
+long-duration resource stability, endurance or release acceptance. Three historical
+`aad992b6` resource samples around one slow MJPEG connection showed stable process
+IDs and restored thread and descriptor
 counts. The collector's error counters are inconclusive because its expected
 log file was unavailable; actual kernel and component log review remains open.
 Some service memory remained above baseline. A follow-up with four sequential
@@ -82,9 +106,11 @@ Earlier audio observations remain evidence only for their named older versions.
 The source collector now distinguishes an unavailable log from a readable scan
 with no matches: unavailable or failed reads return `null` with source status.
 Legacy snapshots remain readable but gain no proof of log availability. This
-source change is included in the `385ba106` host build above but is not installed
-on the camera. The counters still cover only the syslog file, not Raptor's
-per-process logs or the kernel ring.
+source change is included in the installed `385ba106` image. Two supported
+runtime snapshots reported `null` counts and a missing `/var/log/messages`
+source. A separate pinned Control-log scan captured the storage HTTP 504. These
+checks do not provide complete kernel or media logs. The counters still cover
+only the syslog file, not Raptor's per-process logs or the kernel ring.
 
 The September 12 full-Raptor check included ROD and its font in the installed
 image. Main and substream WebRTC decoded at approximately 15 fps. OSD format

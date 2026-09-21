@@ -107,6 +107,15 @@ The probe is read-only and does not restart failed services. Older images withou
 the application probe cannot pass this check. Browser login, WebRTC playback and
 controls still require their separate acceptance tests.
 
+For a stronger, still read-only partition check, run `universal verify-readback`
+with the exact signed install set and public key, same-camera recovery and
+preserved readbacks, and the pinned session. It validates the split `/proc/mtd`
+layout and compares the final kernel, final system, and protected boot, vendor,
+and factory partitions. It uses one fixed SSH read and timeout with no host or
+command override. Mutable data and physical mtd2 are deliberately outside the
+exact comparison, so this does not claim a full-flash readback. Run normal
+`universal verify` as well for management and application readiness.
+
 The stock updater's completion loop and Stage 1 failure indications are
 different states. Red blinking can indicate stock-updater completion, but is
 not a universal success indicator. Stage 1 requests

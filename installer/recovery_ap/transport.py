@@ -216,6 +216,7 @@ def ssh_arguments(facade: object,
     command: str,
     allow_uartless_station_health: bool = False,
     allow_uartless_raptor_runtime: bool = False,
+    allow_uartless_post_install_readback: bool = False,
 ) -> list[str]:
     RecoveryApHostError = getattr(facade, 'RecoveryApHostError')
     RecoveryApHostSession = getattr(facade, 'RecoveryApHostSession')
@@ -232,12 +233,18 @@ def ssh_arguments(facade: object,
         }
     )
     from ..raptor_runtime_protocol import is_runtime_command
+    from ..post_install_readback import POST_INSTALL_READBACK_COMMAND
     uartless_raptor_runtime = (
         allow_uartless_raptor_runtime
         and session.session_kind == "uartless-functional-provisioning"
         and is_runtime_command(command)
     )
-    uartless_station = uartless_station_health or uartless_raptor_runtime
+    uartless_readback = (
+        allow_uartless_post_install_readback
+        and session.session_kind == "uartless-functional-provisioning"
+        and command == POST_INSTALL_READBACK_COMMAND
+    )
+    uartless_station = uartless_station_health or uartless_raptor_runtime or uartless_readback
     if (not session.transport_enabled
             or session.session_kind == "uartless-functional-provisioning") and not uartless_station:
         raise RecoveryApHostError("UARTless provisioning session has no recovery-AP transport")
@@ -258,6 +265,7 @@ def ssh_arguments(facade: object,
         "dlink-media-verify",
         "dlink-application-verify",
         "dlink-runtime-snapshot",
+        POST_INSTALL_READBACK_COMMAND,
     }
     transfer = re.fullmatch(
         r"(?:receive [1-9][0-9]{0,6} [0-9a-f]{64}|send [0-9a-f]{64}|install-recovery [0-9a-f]{64}|install-mtd3 [0-9a-f]{64}|activate-mtd3 [0-9a-f]{64})",
@@ -325,6 +333,7 @@ def _exchange(facade: object,
     timeout: float = 30.0,
     allow_uartless_station_health: bool = False,
     allow_uartless_raptor_runtime: bool = False,
+    allow_uartless_post_install_readback: bool = False,
 ) -> bytes:
     RecoveryApHostError = getattr(facade, 'RecoveryApHostError')
     RecoveryApHostSession = getattr(facade, 'RecoveryApHostSession')
@@ -347,6 +356,7 @@ def _exchange(facade: object,
                 command=command,
                 allow_uartless_station_health=allow_uartless_station_health,
                 allow_uartless_raptor_runtime=allow_uartless_raptor_runtime,
+                allow_uartless_post_install_readback=allow_uartless_post_install_readback,
             ),
             input=payload,
             stdout=subprocess.PIPE,

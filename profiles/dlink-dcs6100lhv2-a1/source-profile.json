@@ -534,7 +534,7 @@
     },
     {
       "destination": "package/thingino-control/rust/src/main.rs",
-      "sha256": "7ebb70ba4009bda89cf690d38724c4b21750954826ec688cd4362e47d05a5263",
+      "sha256": "7de2bbc13c2d0a0481386de4bd7a3a7af59f69cb08ce4c3d9f999ee8bae2b649",
       "source": "components/thingino-control/src/main.rs"
     },
     {
@@ -579,13 +579,13 @@
     },
     {
       "destination": "package/thingino-control/rust/src/raptor_backend/files/tests.rs",
-      "sha256": "62444180c9e569d432e3c4e62a8fc8ad2ea7d4dd1de646dd6a85592affbaf37f",
+      "sha256": "5721d5caab388b2de51a606e81ade6d5df4b28328d13de580404d9559b9fdcdd",
       "source": "components/thingino-control/src/raptor_backend/files/tests.rs"
     },
     {
       "source": "components/thingino-control/src/raptor_backend/files/worker.rs",
       "destination": "package/thingino-control/rust/src/raptor_backend/files/worker.rs",
-      "sha256": "fc2beb15e9fbaa9adfd4135b32e8ee5fbe1184184825e1dbd332d3508cb4bef3"
+      "sha256": "6de034a75ced07b369e68badbff7f9de94dc4f4eab92ae49716e4ed74709b8b8"
     },
     {
       "destination": "package/thingino-control/rust/src/raptor_backend/ha.rs",
@@ -709,7 +709,7 @@
     },
     {
       "destination": "package/thingino-control/rust/src/raptor_backend/timelapse/tests.rs",
-      "sha256": "ef297a016fdc047d9e6b1ca30fc0eb908ff1feeb9c49fe7cd78e72c1c858b929",
+      "sha256": "7abb45149af26aa19f6d3c9972455b6a93edf701ce3e34e82512e4ffa8701201",
       "source": "components/thingino-control/src/raptor_backend/timelapse/tests.rs"
     },
     {

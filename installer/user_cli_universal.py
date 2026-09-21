@@ -44,6 +44,12 @@ def _universal_verify(facade, arguments):
     return _setup_call(arguments, camera_setup.VerifyInputs, camera_setup.verify_camera)
 
 
+def _universal_verify_readback(facade, arguments):
+    from .post_install_readback import PostInstallReadbackInputs, verify_post_install_readback
+
+    return _setup_call(arguments, PostInstallReadbackInputs, verify_post_install_readback)
+
+
 def _media_call(arguments, request_type, planner, operation):
     select_media(arguments)
     request = request_type(**{field.name: getattr(arguments, field.name) for field in fields(request_type)})

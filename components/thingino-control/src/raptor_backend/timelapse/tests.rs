@@ -35,6 +35,7 @@ impl Fixture {
             },
         ));
         let backend = Arc::new(backend);
+        backend.start_storage_reader().unwrap();
         let stop = Arc::new(AtomicBool::new(false));
         let mut threads = Vec::new();
         let outputs = Arc::new(Mutex::new([false; 3]));

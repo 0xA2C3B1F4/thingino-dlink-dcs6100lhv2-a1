@@ -2,6 +2,10 @@
 
 ## September 21 installed aad992b6 candidate
 
+This section preserves the bounded `aad992b6` observations as historical
+evidence. The first camera now runs `385ba106`; the Safari, audio, recorder and
+Control observations below do not transfer to that later image.
+
 Firmware-input commit `aad992b6ec46676fe8ad81319302cc91d3ca949f`, candidate
 ID `69726e9a5b738f3db8fa8eaebd141399bc8b67f8f38a4462d35b9143d3518b11`,
 completed both normal installation stages on the first camera. The supported
@@ -59,9 +63,10 @@ with successful events counted separately from failures. The records distinguish
 gate success and timeout, submission full and unavailable, accepted-reply timeout
 and disconnect, queued expiry, worker start and result, and late completion. No
 deadline, retry, worker, route, response body or error mapping changes. This
-instrumentation is now included in the host-built `385ba106` candidate but is not
-installed. The first camera remains on `aad992b6`; the new records do not resolve
-the assertion failure, HTTP 504 or full recorder acceptance.
+instrumentation is included in the installed `385ba106` candidate. The new
+records do not resolve the historical assertion failure and separate HTTP 504
+or close full recorder acceptance. The earlier recording trial was not repeated
+on the new image.
 
 The exact diagnostic source passed the full pinned Rust 1.95 Control gate in both
 default and Raptor configurations. Each configuration passed 450 library tests
@@ -80,19 +85,47 @@ schema-2 inspection on both install sets.
 - Raw system SquashFS, 6,365,184 bytes: `23cb7d1604351a031fe183a4c8650c2086ef5a7358030f361472739a009ae586`.
 - Signed universal bundle, 7,950,417 bytes: `651072af35c04822106681ecde2830344b3d31985a029025a40517a445fc11bf`.
 
-This proves host reproducibility and inspection for these exact bytes only. No
-installation or live-camera acceptance has been performed for `385ba106`, and
-the older recorder failure is not fixed by adding diagnostics. Legal, notice,
-binary-distribution and other release gates are unchanged.
+This proves host reproducibility and inspection for these exact bytes only. The
+same source was later installed on the first camera. The supported read-only
+split-layout verifier matched the complete padded kernel and system plus the
+same camera's three protected originals, with a stable boot identity throughout
+the check. It did not compare mutable data or physical mtd2 and therefore does
+not claim a full-flash readback. No new Safari or recording trial was run on
+these bytes. An API-only storage preflight returned HTTP 504, with a
+zero-millisecond gate, a reply timeout at 150 ms and queued expiry at 157 ms
+before `Reader.run`.
+Both stream-root directory listings then succeeded; worker execution took 81 ms
+and 20 ms. No recording was started. This does not fix the older recorder
+failure or close recorder acceptance. Legal, notice, binary-distribution and
+other release gates are unchanged.
 
-One probe session remained authenticated at 0, 10, 20 and 40 seconds, then logout
-revoked it. That checks the early-session regression only. Natural expiry and
-clock-change behavior remain open. The transient Privacy exercise also does not
+Source `c4b6d6eaa95396968d857c4e64e7e6d633014ccd` subsequently adds bounded
+startup readiness for the Raptor SD reader before the server accepts requests,
+along with the supported selected-partition verifier. Its full two-clean-build
+workflow completed without component-cache reuse. Independent verification
+rehashed all 32 files, compared all 16 raw artifact pairs byte-for-byte and ran
+fresh inspection on both install sets.
+
+- Raw system SquashFS, 6,369,280 bytes: `9b769de5b84791c941b3074da311ceb03636560e0f1c969672b91e245fea6037`.
+- Signed universal bundle, 7,954,513 bytes: `a5843451d6ab8086edb39bf9cf151b38c1f7e19e47b97afd1fdb102db8dfd859`.
+
+Build A emitted a tolerated host-finalization `patchelf` warning; build B did
+not, and the retained artifact pairs were byte-identical. This does not claim a
+clean host SDK run. The technical closure check passed, but it does not close
+legal, notice or binary-distribution gates. The c4b6 firmware has not been
+installed or accepted on the camera, so it adds no new device, recorder, audio
+or Safari evidence.
+
+One `aad992b6` probe session remained authenticated at 0, 10, 20 and 40 seconds,
+then logout revoked it. That checks the early-session regression only. Natural
+expiry and clock-change behavior remain open. The transient Privacy exercise
+also does not
 establish every control, the configuration field matrix or persistence across a
 restart.
 
-Three supported runtime snapshots covered a baseline, one held slow MJPEG
-connection, and 15 seconds after closing it and revoking the probe's session.
+Three historical `aad992b6` supported runtime snapshots covered a baseline, one
+held slow MJPEG connection, and 15 seconds after closing it and revoking the
+probe's session.
 All 12 measured processes retained their IDs. Thread and file-descriptor counts
 returned to baseline, as did established TCP connections and the 8,500 KiB
 available-memory proxy. The collector reported zero error counts, but review
@@ -132,11 +165,11 @@ as verified evidence.
 
 Focused regression tests cover those cases, malformed scanner output, invalid
 metadata, and legacy schema-1 input. The collector still does not read Raptor's
-per-process logs or the kernel ring. Those require separate evidence. The live
-diagnostic command invokes the installed collector, so this source correction
-does not change the current camera or close its kernel/media acceptance row.
-It is included in the `385ba106` host build described above; installation and
-physical verification remain pending.
+per-process logs or the kernel ring. Those require separate evidence. The
+correction is included in the installed `385ba106` image described above. Two
+supported runtime snapshots reported `null` counts with source
+`/var/log/messages` marked missing. A separate pinned Control-log scan captured
+the storage HTTP 504. This is not complete kernel or media log acceptance.
 
 ## September 20 heartbeat read-budget candidate
 
