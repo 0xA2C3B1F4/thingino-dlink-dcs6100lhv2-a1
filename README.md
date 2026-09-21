@@ -423,6 +423,12 @@ If the card holds `STOCKM3.BIN` and `STOCKM3.OK` from an earlier install,
 first use [the verified backup-copy command](docs/installation.md#reusing-an-installation-card).
 Do not delete recovery files to make a validation error disappear.
 
+For a non-writing preflight, run the command below with `--plan-only`. This
+step runs on the host and does not require a powered-on or network-connected
+camera. It validates the supplied recovery, signed artifacts and current card,
+not the camera's live state. Review the plan before executing the write; keep
+the separate boot, handoff and post-install verification steps below.
+
 ```bash
 thingino-dlink universal stage \
   --work-dir "$DCS6100_CAMERA_ROOT/stage-state" \
@@ -455,6 +461,10 @@ install the final system or prove the WebUI is ready.
 Power off, return the card to the Mac, and
 [identify it again](#identify-the-card-each-time).
 Use exactly the same artifacts for handoff:
+
+Handoff also runs on the host without a live camera connection. Use
+`--plan-only` to inspect its current plan, but confirm stock-updater completion
+from the physical run, not from a successful host plan.
 
 ```bash
 thingino-dlink universal handoff \

@@ -53,7 +53,9 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
         "Install DCS-6100LHV2 A1 using validated local artifacts and same-camera recovery. "
         "Start with local-build prepare, then follow each command's next_command. "
         "Use project init to remember explicit paths for one camera. "
-        "SD operations require current media identity and exact confirmations."
+        "SD operations require current media identity and exact confirmations. "
+        "universal stage --plan-only is an offline signed-artifact and media check; "
+        "use universal verify after physical installation to check a running camera."
     ), epilog=(
         'After selecting DCS6100_PROJECT: Interactive: thingino-dlink universal configure. '
         'Automation: thingino-dlink --non-interactive --json local-build status. '
@@ -227,7 +229,17 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
     personal_build.add_argument("--session-dir", type=Path)
     personal_build.set_defaults(handler=_build_personal_mtd3)
 
-    workflow = commands.add_parser("workflow-preflight")
+    workflow = commands.add_parser(
+        "workflow-preflight",
+        help=(
+            "preflight the host workflow; recovery-preflight --observe-camera "
+            "provides a live-camera scope"
+        ),
+        description=(
+            "Run host workflow checks. recovery-preflight --observe-camera is the "
+            "live observation path; universal stage --plan-only is offline."
+        ),
+    )
     _add_common(workflow, inherited=True)
     workflow.add_argument("--mode", choices=WORKFLOW_MODES, required=True)
     workflow.add_argument("--project-root", type=Path, default=Path.cwd())
@@ -389,7 +401,7 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
     local_build_universal.set_defaults(handler=_local_build_build_universal)
 
     universal = commands.add_parser("universal", help="provision and stage one camera's universal installation",
-        description="Use an inspected universal build and validated same-camera recovery. Run init-session, configure, provision and authorize before stage. Stage writes SD files; physical boot later writes stock mtd1/mtd2 and final mtd1/mtd3. Handoff requires an observed stock-updater result; verify checks the running camera.")
+        description="Use an inspected universal build and validated same-camera recovery. Run init-session, configure, provision and authorize before stage. universal stage --plan-only is an offline preflight of the signed artifact tuple, recovery evidence and current media; it does not resolve DNS/mDNS or open SSH and reports live_camera_verified:false. Stage writes SD files; physical boot later writes stock mtd1/mtd2 and final mtd1/mtd3. Handoff requires an observed stock-updater result; verify checks the running camera.")
     universal_commands = universal.add_subparsers(
         dest="universal_command", required=True
     )
@@ -481,7 +493,15 @@ def build_parser(facade: object) -> argparse.ArgumentParser:
     )
     universal_authorize.set_defaults(handler=_universal_authorize)
 
-    universal_stage = universal_commands.add_parser("stage")
+    universal_stage = universal_commands.add_parser(
+        "stage",
+        help="offline signed-artifact and media preflight; --plan-only performs no live probe",
+        description=(
+            "Validate the signed universal artifact tuple, same-camera recovery and "
+            "current media. --plan-only is host-only and offline; use universal "
+            "verify after physical installation to check the running camera."
+        ),
+    )
     _add_common(universal_stage, inherited=True)
     add_recovery_inputs(universal_stage)
     universal_stage.add_argument("--install-set-dir", type=Path, required=True)
@@ -716,12 +736,13 @@ def _installation_help(parser):
         "local-build configure": "Select private paths, data action and confirmed Wi-Fi input. Writes private configuration and build settings. Interactive mode asks for missing choices; automation supplies every selection and --secrets-fd. Next: build.",
         "local-build build": "Build and inspect a camera-specific install set from validated settings or explicit private inputs. Writes the selected build workspace. Requires independent current Wi-Fi confirmation. Next: inspect and stage that install set.",
         "local-build build-universal": "Build and inspect model-universal artifacts from validated vendor inputs. Writes the selected build workspace and model signing files. Next: universal init-session.",
+        "workflow-preflight": "Run host workflow checks. recovery-preflight with --observe-camera provides a live-camera scope: it resolves the session-pinned station and authenticates a read-only SSH probe. Other workflow modes may use the same observation path. Failed or ambiguous observation stops without a next command. universal stage --plan-only is a separate offline signed-artifact and media preflight.",
         "universal init-session": "Validate functional recovery and protected readbacks, then create a camera-bound private session in --output-dir. Requires ssh-keygen and dropbearkey. Next: configure.",
         "universal configure": "Generate camera-private configuration in --output-dir using the selected session and confirmed Wi-Fi input. Next: provision.",
         "universal provision": "Validate the universal bundle and recovery, then write the signed camera sidecar and JFFS2 data image. Requires configured private inputs, signing tools, unsquashfs and mkfs.jffs2. On macOS pass --mkfs-jffs2 scripts/run_container_mkfs_jffs2.sh with DCS6100_BUILDER_IMAGE set to the recorded immutable image ID; see docs/installer-projects.md. Next: authorize.",
         "universal authorize": "Bind this camera, recovery session, universal firmware and provisioning in --output-dir. Writes authorization artifacts on the host. Next: inspect a stage --plan-only result.",
-        "universal stage": "Validate the complete camera/artifact tuple and current card. --plan-only is read-only. Execution writes verified SD files and arms a future bootstrap, activation last. Confirm the printed plan, then follow physical boot instructions before handoff.",
-        "universal handoff": "Revalidate the selected card and camera tuple after observing stock mtd1/mtd2 completion. Passivates the stock updater on SD for the next boot. Requires exact physical-result and device confirmations. Next: boot the final installer and verify.",
+        "universal stage": "Offline media preflight for the complete signed camera/artifact tuple. --plan-only validates signed artifacts, same-camera recovery and current media only; it does not resolve DNS/mDNS or open SSH and reports live_camera_verified:false. Live camera state is not claimed; use universal verify after physical installation to check the running camera. Execution writes verified SD files and arms a future bootstrap, activation last. Confirm the printed plan, then follow physical boot instructions before handoff.",
+        "universal handoff": "Revalidate the selected card and camera tuple offline after observing stock mtd1/mtd2 completion. --plan-only checks the host inputs and media, not live camera state or updater completion. Execution passivates the stock updater on SD for the next boot. Requires exact physical-result and device confirmations. Next: boot the final installer and verify.",
         "universal evacuate-recovery": "Copy and validate an existing recovery checkpoint into --output-dir before removing its SD copy. Requires current media and exact device confirmation. Next: stage the new camera-bound install set.",
         "universal quarantine-inconsistent-media": "Archive a card file tree whose universal checkpoint no longer binds its current stage 2. The archive is not validated recovery. After independent readback, remove only the reviewed installer paths while preserving recordings and other user data. Use --resume with the same destination after an interrupted pending receipt; unrelated changes force rollback. Next: stage only after completed quarantine.",
         "universal verify": "Discover the selected session's mDNS name and verify the running camera using its retained SSH key and station pin. Requires dropbearkey, completed physical installation and network reachability. There is no host override. Host project status does not replace this check.",

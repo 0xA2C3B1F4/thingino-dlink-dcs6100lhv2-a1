@@ -34,7 +34,7 @@
       "source": "Makefile"
     },
     "README.md": {
-      "sha256": "70a85c3055fff8287c4a7d31e88b461957a57d9b2760222ad83769d92eedfad4",
+      "sha256": "7ce3742638db373523139f87c64a01570a87851075df6136df4d8fc5705cf392",
       "source": "production/README.md"
     },
     "SECURITY.md": {
@@ -690,7 +690,7 @@
       "source": "production/docs/index.md"
     },
     "docs/installation.md": {
-      "sha256": "985dcdc6482050fcd7549051679e4508675d7831b1db88cc90a6e11dc0477494",
+      "sha256": "3b509ca3f5f686e0543091cadcf2c5b179f4a5dbdc749d5312ba9fda34651055",
       "source": "production/docs/installation.md"
     },
     "docs/installer-projects.md": {
@@ -1270,7 +1270,7 @@
       "source": "installer/user_cli_media.py"
     },
     "installer/user_cli_parser.py": {
-      "sha256": "147dbcf0961d8316daa5571345635e89649eea2b325b852c842fd57e08bbb507",
+      "sha256": "477c2a89fae0049c7efbbff63dd3d8560b7f8b76c19dd13800782748371e8ab0",
       "source": "installer/user_cli_parser.py"
     },
     "installer/user_cli_parser_stock_recovery.py": {
@@ -1782,7 +1782,7 @@
       "source": "tests/test_install_project.py"
     },
     "tests/test_installation_flow.py": {
-      "sha256": "5ea4d6e670372128f61a501281793e903716a5950266aa395e60e7d5ac699168",
+      "sha256": "9c2d8583756fd2025dc63ceaa5059baa00078074898ebf512960f60eb253c41e",
       "source": "tests/test_installation_flow.py"
     },
     "tests/test_installer_contracts.py": {
@@ -2066,7 +2066,7 @@
       "source": "tests/test_universal_artifacts.py"
     },
     "tests/test_user_cli.py": {
-      "sha256": "9badc7a6eef3855243199cd0e5e8b217d085b880f43c636a2a8bc210e25a4a92",
+      "sha256": "cde5b7f9257014ece65f8f7d01b3d7126661db55c7a62733578125a5f225b190",
       "source": "tests/test_user_cli.py"
     },
     "tests/test_user_cli_build.py": {
@@ -2479,6 +2479,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "eb58d1c4d22bce82bad8b50d16f963cc772f205c",
+  "source_commit": "a86c14534b0cb3d080fe44a0194fd33c3c29edf1",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }

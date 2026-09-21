@@ -31,6 +31,15 @@ Use the [README](../README.md#install-from-a-public-checkout) for the complete
 UARTless universal command sequence. This page explains the alternative backup
 transport, phase evidence, and write boundaries.
 
+`universal stage --plan-only` and `universal handoff --plan-only` are offline
+preflights for their respective SD phases. Each requires the complete documented
+inputs and current media identity, but no live camera connection. Its `live_camera_verified: false`
+result is intentional. Planning does not prove that the camera still matches
+an earlier capture, and does not replace post-install `universal verify`.
+A failed live observation remains a failed observation; do not turn it into
+an installation pass by running a host plan.
+Handoff still requires observed stock-updater completion before execution.
+
 ## Paths used in these examples
 
 First [set the shared paths](../README.md#set-paths-once), or

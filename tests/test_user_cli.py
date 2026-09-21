@@ -21,6 +21,7 @@ from installer import (
 class UserCliTests(unittest.TestCase):
     _LEGACY_TESTS = {
         "test_workflow_preflight_parser_accepts_collector_build",
+        "test_help_separates_live_recovery_preflight_from_offline_stage_plan",
         "test_parser_facade_preserves_help_and_dispatch_identity",
         "test_global_options_work_before_or_after_command",
         "test_guided_install_accepts_only_one_explicit_recovery_class",
@@ -422,6 +423,30 @@ class UserCliTests(unittest.TestCase):
         self.assertNotIn("RWD", help_text)
         self.assertNotIn("--webrtc", help_text)
         self.assertNotIn("--raptor-rwd-artifact", help_text)
+
+    def test_help_separates_live_recovery_preflight_from_offline_stage_plan(self) -> None:
+        parser = user_cli.build_parser()
+        commands = next(
+            action for action in parser._actions
+            if isinstance(action, user_cli.argparse._SubParsersAction)
+        ).choices
+        workflow_help = commands["workflow-preflight"].format_help()
+        universal = commands["universal"]
+        universal_commands = next(
+            action for action in universal._actions
+            if isinstance(action, user_cli.argparse._SubParsersAction)
+        ).choices
+        stage_help = universal_commands["stage"].format_help()
+
+        self.assertIn("recovery-preflight", workflow_help)
+        self.assertIn("--observe-camera", workflow_help)
+        self.assertIn("live-camera", workflow_help)
+        self.assertIn("without a next command", workflow_help)
+        self.assertIn("--plan-only", stage_help)
+        self.assertIn("offline", stage_help.lower())
+        self.assertIn("DNS/mDNS", stage_help)
+        self.assertIn("SSH", stage_help)
+        self.assertIn("live_camera_verified:false", stage_help)
 
     def test_universal_build_generates_a_stable_default_model_signer(self) -> None:
         root = Path("/external/build")

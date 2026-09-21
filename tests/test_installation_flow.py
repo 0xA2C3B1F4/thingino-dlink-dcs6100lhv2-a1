@@ -369,6 +369,43 @@ class SignedInstallationTests(unittest.TestCase):
             preserved_readback_dir=self.root / "preserved", functional_recovery_dir=self.root / "recovery",
             mount_root=self.card, whole_device="/dev/fixture")
 
+    def test_universal_media_plans_are_offline_and_report_no_live_camera(self):
+        inputs = self.prepared_inputs()
+
+        def fail_live_probe(*_args, **_kwargs):
+            raise AssertionError("universal media planner attempted a live probe")
+
+        with (
+            mock.patch(
+                "installer.recovery_ap.host.resolve_recovery_ap_station",
+                side_effect=fail_live_probe,
+            ),
+            mock.patch(
+                "installer.recovery_ap.host.resolve_recovery_ap_station_candidates",
+                side_effect=fail_live_probe,
+            ),
+            mock.patch(
+                "installer.recovery_ap.host._exchange",
+                side_effect=fail_live_probe,
+            ),
+            mock.patch("socket.getaddrinfo", side_effect=fail_live_probe),
+            mock.patch("socket.create_connection", side_effect=fail_live_probe),
+        ):
+            for operation, planner in (
+                ("universal stage", install_actions.plan_universal_stage),
+                ("universal handoff", install_actions.plan_universal_handoff),
+            ):
+                with self.subTest(operation=operation):
+                    plan, validated = planner(inputs)
+                    evidence = plan.document()["camera_binding_evidence"]
+                    self.assertEqual(plan.operation, operation)
+                    self.assertEqual(plan.media.physical_device, "/dev/fixture")
+                    self.assertIs(evidence["live_camera_verified"], False)
+                    self.assertEqual(
+                        evidence["scope"], "supplied-recovery-and-preserved-readback"
+                    )
+                    self.assertEqual(validated.bundle.sha256, plan.artifacts[0][1])
+
     def test_signed_tuple_rejects_other_camera_corrupt_artifact_and_replaced_mount(self):
         from dataclasses import replace
         inputs = self.prepared_inputs()
