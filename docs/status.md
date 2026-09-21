@@ -1,6 +1,6 @@
 # Release status
 
-Historical runtime baseline validated: 2026-09-06. Documentation updated: 2026-09-20.
+Historical runtime baseline validated: 2026-09-06. Documentation updated: 2026-09-21.
 
 This repository provides source and host tools. There is no supported firmware
 download yet. The validated platform is DCS-6100LHV2 A1 with Apple Silicon macOS.
@@ -18,11 +18,35 @@ installation, browser, and physical checks.
 
 The latest host-built candidate is `aad992b6`. Its two clean complete-firmware
 builds produced 16 byte-identical artifact pairs. It increases the heartbeat
-Day/Night and Privacy read allowances after the installed `fb43b075` candidate
+Day/Night and Privacy read allowances after the earlier `fb43b075` candidate
 failed a bounded state-completeness check. The caller's deadline and unknown/null
-failure states remain unchanged. The new candidate has not been installed or
-device-accepted. See the [dated evidence](release-evidence/2026-09-18-raptor-mic-acknowledgement.md#september-20-heartbeat-read-budget-candidate).
-Earlier audio observations remain evidence for their named older versions.
+failure states remain unchanged. Candidate ID
+`69726e9a5b738f3db8fa8eaebd141399bc8b67f8f38a4462d35b9143d3518b11`
+is now installed on the first camera. Both normal installation stages completed,
+the supported universal verifier passed every application, Control, health,
+media and WebUI gate, and independent comparison matched the exact kernel and
+system plus the same camera's three protected originals. The installer did not
+write the protected partitions.
+
+Bounded checks on these exact bytes returned 15 successful concurrent API
+responses and five complete heartbeat states without a checked process restart.
+Safari playback was audible on both streams after connecting with the microphone
+off, enabling it and pressing Listen once without Reload. Both snapshot and
+MJPEG endpoints decoded at their expected sizes. Both RTSP streams enforced
+Digest authentication and decoded three video frames. ONVIF Media1 and Media2
+returned working stream and snapshot URLs; 18 further snapshot checks confirmed
+and then restored Privacy behavior. A separate 40-second own-session check stayed
+authenticated and logout revoked that session. It did not test natural expiry or
+clock changes. See the [September 21 evidence](release-evidence/2026-09-18-raptor-mic-acknowledgement.md#september-21-installed-aad992b6-candidate).
+
+These are same-image bounded observations. They do not transfer results from an
+older candidate, establish every control or setting, prove persistence, or close
+resource, endurance or release acceptance. Three resource samples around one
+slow MJPEG connection showed stable process IDs and restored thread and descriptor
+counts. The collector's error counters are inconclusive because its expected
+log file was unavailable; actual kernel and component log review remains open.
+Some service memory remained above baseline, so repeated-cycle resource acceptance remains open. Earlier
+audio observations remain evidence only for their named older versions.
 
 The September 12 full-Raptor check included ROD and its font in the installed
 image. Main and substream WebRTC decoded at approximately 15 fps. OSD format
@@ -170,14 +194,15 @@ The full acceptance scope is in [testing](testing.md#candidate-acceptance).
   authorization, Stage-1 contract and manifest paths. Those results do not
   establish physical acceptance of the latest complete source candidate; universal
   `factory-reset` install sets remain rejected.
-- Candidate `38607f3` has operator-audible Mainstream and Substream
+- Candidate `38607f3` has historical operator-audible Mainstream and Substream
   acceptance after a cold boot: connect while microphone Off, enable it and
   press Listen once, without Reload or retry. Running RWD and the full system
   partition independently match the new build. This required approved removal
   of a preserved old RWD binary override; existing configuration was retained.
   See the [candidate evidence](release-evidence/2026-09-18-raptor-mic-acknowledgement.md).
-  This result does not establish audio acceptance of `fb43b075` or `aad992b6`.
-  Other controls, settings and the full acceptance matrix remain open.
+  This result did not transfer to `fb43b075` or `aad992b6`; the current
+  `aad992b6` audio result is separately recorded above. Other controls, settings
+  and the full acceptance matrix remain open.
 - Linux and Windows staging adapters have host coverage, not equivalent physical
   installation acceptance. The full guided build targets Apple Silicon macOS.
 

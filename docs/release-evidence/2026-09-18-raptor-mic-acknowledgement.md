@@ -1,5 +1,68 @@
 # Raptor microphone acknowledgement candidate, September 18
 
+## September 21 installed aad992b6 candidate
+
+Firmware-input commit `aad992b6ec46676fe8ad81319302cc91d3ca949f`, candidate
+ID `69726e9a5b738f3db8fa8eaebd141399bc8b67f8f38a4462d35b9143d3518b11`,
+completed both normal installation stages on the first camera. The supported
+universal verifier then passed its application, Control, health, media and WebUI
+gates. Independent readback compared five complete partitions: kernel and system
+matched this candidate, and the three protected partitions matched the same
+camera's retained originals. The install did not write protected partitions.
+
+The bounded reproduction of the earlier state-completeness failure passed on
+the new bytes. All 15 API responses succeeded, all five heartbeat samples
+contained Day/Night plus boolean Privacy, microphone and speaker state, and the
+checked service process IDs stayed stable through the 15-second settling period.
+The probe closed its slow client, logged out and confirmed revocation of its own
+session. This is short concurrent-client evidence, not overload or endurance
+acceptance.
+
+The operator used Safari with live WebRTC on both streams, connected while the
+microphone was off, enabled it and pressed Listen once. Sound was audible on the
+first press without Reload on each stream. This is a manual audibility result on
+the exact candidate, not an automated audio measurement or a browser settings
+matrix.
+
+Separate authenticated probes decoded complete snapshot and MJPEG images at the
+expected main and substream sizes without retaining frames. Both RTSP streams
+enforced Digest authentication, completed setup and playback over interleaved
+TCP, and decoded three H.264 video frames. The RTSP result does not cover audio,
+UDP or long duration.
+
+ONVIF Media1 and Media2 returned the expected profiles, stream URLs and snapshot
+URLs, and both snapshots decoded. A follow-up Privacy check decoded three normal,
+three Privacy-protected and three restored snapshots from each endpoint, 18 in
+total. It independently restored Privacy off, microphone and speaker on, and the
+two recorders and timelapse off. This closes the previously missing ONVIF Privacy
+case, but does not claim ONVIF certification or Privacy coverage for RTSP and
+WebRTC.
+
+One probe session remained authenticated at 0, 10, 20 and 40 seconds, then logout
+revoked it. That checks the early-session regression only. Natural expiry and
+clock-change behavior remain open. The transient Privacy exercise also does not
+establish every control, the configuration field matrix or persistence across a
+restart.
+
+Three supported runtime snapshots covered a baseline, one held slow MJPEG
+connection, and 15 seconds after closing it and revoking the probe's session.
+All 12 measured processes retained their IDs. Thread and file-descriptor counts
+returned to baseline, as did established TCP connections and the 8,500 KiB
+available-memory proxy. The collector reported zero error counts, but review
+found that it also emits zero for an unavailable log file. An independent read
+confirmed that the expected log file was absent. Those counters are missing
+evidence, not a kernel/media pass; the candidate ledger preserves and supersedes
+the initial interpretation. Actual kernel and component log review remains open.
+RHD RSS remained 348 KiB above baseline and
+uhttpd RSS 116 KiB above baseline; these measurements do not distinguish caching
+from growth over repeated cycles. Repeated-cycle resource acceptance remains
+open, and no endurance or zero-leak claim is made.
+
+No older candidate result was imported. The full
+candidate checklist and firmware release remain incomplete. Binary redistribution
+and license review, recovery and wider provisioning, second-camera evidence and
+equivalent claimed-host-platform checks remain open.
+
 ## September 20 heartbeat read-budget candidate
 
 Firmware-input commit `aad992b6ec46676fe8ad81319302cc91d3ca949f` completed
@@ -37,11 +100,12 @@ typechecking, its packaging test, 237 tests and the production build passed.
 The source commit's normal checks passed 1,010 Python tests with one skip.
 
 The technical closure and notice manifests were generated locally. They do not
-authorize redistribution or close legal review. The new schema-2 candidate has
-not been installed, and no older audio or physical-control passes were imported.
-Its first required device check is the failed state-completeness scenario on the
-new bytes, followed by the remaining full candidate matrix. Card staging and all
-firmware-release gates still require their own evidence.
+authorize redistribution or close legal review. At this September 20 checkpoint,
+the new schema-2 candidate had not been installed, and no older audio or
+physical-control passes were imported. Its first required device check was the
+failed state-completeness scenario on the new bytes, followed by the remaining
+full candidate matrix. The September 21 section above records subsequent
+installation and bounded checks without rewriting this historical state.
 
 ## September 20 cold-boot candidate: installed and audio observed
 
