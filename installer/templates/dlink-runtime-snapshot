@@ -69,11 +69,28 @@ exe_sha() {
 count_pattern() {
 	file=$1
 	pattern=$2
-	if [ -r "$file" ]; then
-		grep -Eic "$pattern" "$file" 2>/dev/null || true
-	else
-		printf '0'
+	if [ ! -e "$file" ]; then
+		printf 'null missing'
+		return
 	fi
+	if [ ! -f "$file" ] || [ ! -r "$file" ]; then
+		printf 'null unreadable'
+		return
+	fi
+	if count=$(grep -Eic "$pattern" "$file" 2>/dev/null); then
+		status=0
+	else
+		status=$?
+	fi
+	case "$status" in
+		0|1)
+			case "$count" in
+				''|*[!0-9]*) printf 'null read_error' ;;
+				*) printf '%s readable' "$count" ;;
+			esac
+			;;
+		*) printf 'null read_error' ;;
+	esac
 }
 
 raptor_pid() {
@@ -101,8 +118,12 @@ tcp_time_wait=$(awk 'NR>1 && $4 == "06" {count++} END {print count+0}' /proc/net
 udp_entries=$(awk 'NR>1 {count++} END {print count+0}' /proc/net/udp 2>/dev/null || printf '0')
 media_ready=false
 [ "$(cat /run/raptor-boot/ready 2>/dev/null || true)" = started ] && media_ready=true
-raptor_errors=$(count_pattern "$messages" '(Raptor|raptorctl|rvd|rhd|rod|rsd|ric|rad|rmr|rwd).*(error|fail|timeout)|jpeg.*(error|fail|timeout)|rtsp.*(error|fail|timeout)')
-isp_errors=$(count_pattern "$messages" 'IMP_|TISP|tx-isp|private_kmalloc|page allocation failure|encoder.*(error|fail)')
+set -- $(count_pattern "$messages" '(Raptor|raptorctl|rvd|rhd|rod|rsd|ric|rad|rmr|rwd).*(error|fail|timeout)|jpeg.*(error|fail|timeout)|rtsp.*(error|fail|timeout)')
+raptor_errors=$1
+raptor_error_status=$2
+set -- $(count_pattern "$messages" 'IMP_|TISP|tx-isp|private_kmalloc|page allocation failure|encoder.*(error|fail)')
+isp_errors=$1
+isp_error_status=$2
 m_total=0
 m_free=0
 m_buffers=0
@@ -190,8 +211,8 @@ printf ',"uhttpd_sha256":'
 exe_sha "$uhttpd_pid"
 printf '},'
 printf '"control":{"admission_metrics_available":false,"timeout_metrics_available":false},'
-printf '"kernel_media":{"error_count":%s,"rmem_device_present":%s,"rmem_reserved_kib":%s},' \
-	"$isp_errors" "$rmem_device_present" "$rmem_reserved_kib"
+printf '"kernel_media":{"error_count":%s,"error_count_source":{"path":"/var/log/messages","read_status":"%s"},"rmem_device_present":%s,"rmem_reserved_kib":%s},' \
+	"$isp_errors" "$isp_error_status" "$rmem_device_present" "$rmem_reserved_kib"
 printf '"memory":{"available_proxy_kib":%s,"buffers_kib":%s,"cached_kib":%s,"free_kib":%s,"reclaimable_kib":%s,"shmem_kib":%s,"total_kib":%s},' \
 	"$m_available_proxy" "$m_buffers" "$m_cached" "$m_free" "$m_reclaimable" "$m_shmem" "$m_total"
 printf '"network":{"tcp_entries":%s,"tcp_established":%s,"tcp_listen":%s,"tcp_time_wait":%s,"udp_entries":%s},' \
@@ -222,7 +243,8 @@ process_json "$control_pid"
 printf ',"uhttpd":'
 process_json "$uhttpd_pid"
 printf '},'
-printf '"raptor":{"error_count":%s,"media_ready":%s},' "$raptor_errors" "$media_ready"
+printf '"raptor":{"error_count":%s,"error_count_source":{"path":"/var/log/messages","read_status":"%s"},"media_ready":%s},' \
+	"$raptor_errors" "$raptor_error_status" "$media_ready"
 printf '"schema_version":1,'
 printf '"storage":{"data_jffs2_mounted":%s,"data_sha256":%s,"overlay_reset_pending":%s,"root_overlay_mounted":%s,"split_layout":%s,"system_sha256":%s},' \
 	"$data_jffs2_mounted" "$data_sha_json" "$overlay_reset_pending" "$root_overlay_mounted" "$split_layout" "$mtd3_json"

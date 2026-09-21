@@ -41,12 +41,21 @@ clock changes. See the [September 21 evidence](release-evidence/2026-09-18-rapto
 
 These are same-image bounded observations. They do not transfer results from an
 older candidate, establish every control or setting, prove persistence, or close
-resource, endurance or release acceptance. Three resource samples around one
+long-duration resource stability, endurance or release acceptance. Three resource samples around one
 slow MJPEG connection showed stable process IDs and restored thread and descriptor
 counts. The collector's error counters are inconclusive because its expected
 log file was unavailable; actual kernel and component log review remains open.
-Some service memory remained above baseline, so repeated-cycle resource acceptance remains open. Earlier
-audio observations remain evidence only for their named older versions.
+Some service memory remained above baseline. A follow-up with four sequential
+open/close cycles retained all 12 process IDs and unchanged thread/descriptor
+counts. RHD private memory returned to baseline and uhttpd memory did not grow
+across cycles. This is bounded resource evidence, not a general zero-leak claim.
+Earlier audio observations remain evidence only for their named older versions.
+
+The source collector now distinguishes an unavailable log from a readable scan
+with no matches: unavailable or failed reads return `null` with source status.
+Legacy snapshots remain readable but gain no proof of log availability. This
+source change is not yet built or installed on the camera. The counters still
+cover only the syslog file, not Raptor's per-process logs or the kernel ring.
 
 The September 12 full-Raptor check included ROD and its font in the installed
 image. Main and substream WebRTC decoded at approximately 15 fps. OSD format

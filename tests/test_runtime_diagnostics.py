@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import tempfile
 import unittest
@@ -36,7 +37,7 @@ def snapshot() -> dict[str, object]:
         "network": {"tcp_entries": 4, "udp_entries": 2},
         "observed_at": "2026-08-22T20:00:00Z",
         "processes": {},
-        "raptor": {"media_ready": True},
+        "raptor": {"error_count": 0, "media_ready": True},
         "schema_version": 1,
         "storage": {
             "data_jffs2_mounted": True,
@@ -51,6 +52,70 @@ def snapshot() -> dict[str, object]:
 
 
 class RuntimeDiagnosticsTests(unittest.TestCase):
+    @staticmethod
+    def run_count_pattern(
+        path: Path, pattern: str, *, grep_override: str = ""
+    ) -> tuple[str, str]:
+        script = (
+            Path(__file__).resolve().parents[1]
+            / "installer/templates/dlink-runtime-snapshot"
+        )
+        source = script.read_text(encoding="utf-8")
+        functions = source.split("\nraptor_pid() {", 1)[0]
+        completed = subprocess.run(
+            ["sh", "-s", str(path), pattern],
+            check=True,
+            input=functions + "\n" + grep_override + '\ncount_pattern "$1" "$2"\n',
+            text=True,
+            capture_output=True,
+        )
+        count, status = completed.stdout.split()
+        return count, status
+
+    def test_error_counter_distinguishes_zero_matches_from_missing_evidence(self) -> None:
+        with tempfile.TemporaryDirectory(dir=os.environ.get("TMPDIR")) as name:
+            root = Path(name)
+            empty = root / "empty.log"
+            empty.write_text("", encoding="utf-8")
+            no_match = root / "no-match.log"
+            no_match.write_text("normal startup\n", encoding="utf-8")
+            matches = root / "matches.log"
+            matches.write_text("Raptor error\nnormal\nrvd timeout\n", encoding="utf-8")
+
+            self.assertEqual(self.run_count_pattern(empty, "error"), ("0", "readable"))
+            self.assertEqual(
+                self.run_count_pattern(no_match, "error"), ("0", "readable")
+            )
+            self.assertEqual(
+                self.run_count_pattern(matches, "error|timeout"), ("2", "readable")
+            )
+            self.assertEqual(
+                self.run_count_pattern(root / "missing.log", "error"),
+                ("null", "missing"),
+            )
+            self.assertEqual(
+                self.run_count_pattern(root, "error"), ("null", "unreadable")
+            )
+            permission_denied = root / "permission-denied.log"
+            permission_denied.write_text("error\n", encoding="utf-8")
+            permission_denied.chmod(0o000)
+            if os.geteuid() != 0:
+                self.assertEqual(
+                    self.run_count_pattern(permission_denied, "error"),
+                    ("null", "unreadable"),
+                )
+            self.assertEqual(
+                self.run_count_pattern(matches, "["), ("null", "read_error")
+            )
+            self.assertEqual(
+                self.run_count_pattern(
+                    matches,
+                    "error",
+                    grep_override="grep() { printf '12oops\\n'; return 0; }",
+                ),
+                ("null", "read_error"),
+            )
+
     def test_target_snapshot_collects_memory_cpu_and_current_media_marker(self) -> None:
         script = Path(__file__).resolve().parents[1] / "installer/templates/dlink-runtime-snapshot"
         subprocess.run(["sh", "-n", str(script)], check=True)
@@ -124,6 +189,7 @@ class RuntimeDiagnosticsTests(unittest.TestCase):
     def test_legacy_snapshot_without_memory_section_remains_readable(self) -> None:
         legacy = snapshot()
         del legacy["memory"]
+        del legacy["raptor"]["error_count"]
         with tempfile.TemporaryDirectory() as name:
             stored = store_runtime_snapshot(
                 store_root=Path(name),
@@ -131,6 +197,115 @@ class RuntimeDiagnosticsTests(unittest.TestCase):
                 fault_class="unknown",
             )
         self.assertEqual(stored["schema_version"], 1)
+
+    def test_nullable_nonnegative_error_counts_and_sources_are_validated(self) -> None:
+        for section_name in ("kernel_media", "raptor"):
+            for status in ("missing", "read_error", "unreadable"):
+                with self.subTest(section=section_name, status=status):
+                    changed = snapshot()
+                    section = dict(changed[section_name])
+                    section["error_count"] = None
+                    section["error_count_source"] = {
+                        "path": "/var/log/messages",
+                        "read_status": status,
+                    }
+                    changed[section_name] = section
+                    self.assertIsNone(
+                        validate_runtime_snapshot(changed)[section_name][
+                            "error_count"
+                        ]
+                    )
+
+            with self.subTest(section=section_name, status="readable"):
+                changed = snapshot()
+                section = dict(changed[section_name])
+                section["error_count_source"] = {
+                    "path": "/var/log/messages",
+                    "read_status": "readable",
+                }
+                changed[section_name] = section
+                self.assertEqual(
+                    validate_runtime_snapshot(changed)[section_name]["error_count"],
+                    0,
+                )
+
+            with self.subTest(section=section_name, status="legacy-null"):
+                changed = snapshot()
+                section = dict(changed[section_name])
+                section["error_count"] = None
+                changed[section_name] = section
+                self.assertIsNone(
+                    validate_runtime_snapshot(changed)[section_name]["error_count"]
+                )
+
+            for invalid in (-1, True, "0", 0.5):
+                with self.subTest(section=section_name, invalid=invalid):
+                    changed = snapshot()
+                    section = dict(changed[section_name])
+                    section["error_count"] = invalid
+                    changed[section_name] = section
+                    with self.assertRaisesRegex(
+                        RuntimeDiagnosticsError, "error count is invalid"
+                    ):
+                        validate_runtime_snapshot(changed)
+
+            with self.subTest(section=section_name, status="inconsistent"):
+                changed = snapshot()
+                section = dict(changed[section_name])
+                section["error_count"] = 0
+                section["error_count_source"] = {
+                    "path": "/var/log/messages",
+                    "read_status": "read_error",
+                }
+                changed[section_name] = section
+                with self.assertRaisesRegex(
+                    RuntimeDiagnosticsError, "error evidence is inconsistent"
+                ):
+                    validate_runtime_snapshot(changed)
+
+            with self.subTest(section=section_name, status="readable-null"):
+                changed = snapshot()
+                section = dict(changed[section_name])
+                section["error_count"] = None
+                section["error_count_source"] = {
+                    "path": "/var/log/messages",
+                    "read_status": "readable",
+                }
+                changed[section_name] = section
+                with self.assertRaisesRegex(
+                    RuntimeDiagnosticsError, "error evidence is inconsistent"
+                ):
+                    validate_runtime_snapshot(changed)
+
+            for malformed in (
+                None,
+                [],
+                {"path": "/var/log/messages", "read_status": []},
+                {"path": "/var/log/messages", "read_status": "unknown"},
+            ):
+                with self.subTest(section=section_name, malformed=malformed):
+                    changed = snapshot()
+                    section = dict(changed[section_name])
+                    section["error_count_source"] = malformed
+                    changed[section_name] = section
+                    with self.assertRaisesRegex(
+                        RuntimeDiagnosticsError, "error source is invalid"
+                    ):
+                        validate_runtime_snapshot(changed)
+
+            with self.subTest(section=section_name, status="source-without-count"):
+                changed = snapshot()
+                section = dict(changed[section_name])
+                del section["error_count"]
+                section["error_count_source"] = {
+                    "path": "/var/log/messages",
+                    "read_status": "readable",
+                }
+                changed[section_name] = section
+                with self.assertRaisesRegex(
+                    RuntimeDiagnosticsError, "error count is missing"
+                ):
+                    validate_runtime_snapshot(changed)
 
     def test_unknown_snapshot_fields_fail_closed(self) -> None:
         changed = snapshot()

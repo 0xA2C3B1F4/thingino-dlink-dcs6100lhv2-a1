@@ -710,7 +710,7 @@
       "source": "production/docs/release-evidence/2026-09-17-raptor-audio-reproducibility.md"
     },
     "docs/release-evidence/2026-09-18-raptor-mic-acknowledgement.md": {
-      "sha256": "c6b2364ab1463f4b8de680c5910c220485e760e5ea19118315ac08354fc6b38c",
+      "sha256": "0efe8693313e1a66ff677465802977507e3d4cbc43f28e1edd01b98a855ff4f5",
       "source": "production/docs/release-evidence/2026-09-18-raptor-mic-acknowledgement.md"
     },
     "docs/release-evidence/2026-09-19-fresh-install-reproducibility.md": {
@@ -718,7 +718,7 @@
       "source": "production/docs/release-evidence/2026-09-19-fresh-install-reproducibility.md"
     },
     "docs/status.md": {
-      "sha256": "508208fd971b562e8f9ce2e3a7d80c9039b4e94a9bb49a16a5f1df37ea212e7d",
+      "sha256": "ef7756b3db9d99d26174ec4046a4fc7b79d6b80aaba0494a9462ff5ba5aac361",
       "source": "production/docs/status.md"
     },
     "docs/testing.md": {
@@ -1098,7 +1098,7 @@
       "source": "installer/runtime_candidate.py"
     },
     "installer/runtime_diagnostics.py": {
-      "sha256": "bdf5f0664856e8ab44674cdb47dda19bec020a97623b885299ab9d5c1b74d1c7",
+      "sha256": "3d297288eabe7682b3758b75ffe503050bb565fd78763c924a1b23843e20c7ae",
       "source": "installer/runtime_diagnostics.py"
     },
     "installer/runtime_gate.py": {
@@ -1230,7 +1230,7 @@
       "source": "installer/templates/dlink-media-verify"
     },
     "installer/templates/dlink-runtime-snapshot": {
-      "sha256": "80646e0d68e126a4cef8ad8cca24bb8b356ff07a834308ce03ca8655187c3827",
+      "sha256": "5c71186ef75f8b4a68ef5340faaf32d59a1ac40f8711f858a5e9e4ea15d6f830",
       "source": "installer/templates/dlink-runtime-snapshot"
     },
     "installer/templates/raptor-transfer.sh": {
@@ -1986,7 +1986,7 @@
       "source": "tests/test_runtime_candidate.py"
     },
     "tests/test_runtime_diagnostics.py": {
-      "sha256": "a4fe6c39afba5c2e85d94be79c252a39e475fa9f72b5aab33f370169ce510cef",
+      "sha256": "58bd95ea41973da5522fa852e1c798a342b2dd93575365d70f10c0e20acde62a",
       "source": "tests/test_runtime_diagnostics.py"
     },
     "tests/test_runtime_gate.py": {
@@ -2479,6 +2479,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "4f4f2a9e3f2281e9d5e9b93205c260a985a8374f",
+  "source_commit": "c44c1e3475b676d095aa0fe660e3ed28a24fed30",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }

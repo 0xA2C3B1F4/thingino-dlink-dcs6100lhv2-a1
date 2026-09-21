@@ -54,14 +54,41 @@ confirmed that the expected log file was absent. Those counters are missing
 evidence, not a kernel/media pass; the candidate ledger preserves and supersedes
 the initial interpretation. Actual kernel and component log review remains open.
 RHD RSS remained 348 KiB above baseline and
-uhttpd RSS 116 KiB above baseline; these measurements do not distinguish caching
-from growth over repeated cycles. Repeated-cycle resource acceptance remains
-open, and no endurance or zero-leak claim is made.
+uhttpd RSS 116 KiB above baseline; that single-cycle measurement did not
+distinguish caching from growth over repeated cycles.
+
+A second resource probe opened and closed one MJPEG reader four times, with
+15-second settling periods and six snapshots including its authenticated
+baseline and post-logout state. All 12 process IDs, thread counts and file
+descriptor counts stayed unchanged; established TCP connections stayed at one.
+CPU ticks, RSS, PSS, private/shared memory and system memory were retained for
+every sample. RHD private memory ended at its 656 KiB baseline. Its RSS reached
+1,424 KiB on cycles three and four, then fell to 1,412 KiB. uhttpd RSS varied
+between 848 and 952 KiB and ended below its baseline. The available-memory proxy
+varied between 8,280 and 8,340 KiB. This supports the bounded resource check;
+it establishes neither long-duration stability nor general absence of leaks.
+The missing syslog counters remain excluded from error-log acceptance.
 
 No older candidate result was imported. The full
 candidate checklist and firmware release remain incomplete. Binary redistribution
 and license review, recovery and wider provisioning, second-camera evidence and
 equivalent claimed-host-platform checks remain open.
+
+### Missing-log diagnostic correction, source only
+
+Review of the installed collector explained the misleading zero error counts:
+it emitted zero when its expected syslog file was absent. The corrected source
+emits `null` for missing, unreadable or failed scans and records the source's read
+status. A readable empty or no-match scan still emits zero. The host validator
+checks count types and provenance consistency without relabeling older snapshots
+as verified evidence.
+
+Focused regression tests cover those cases, malformed scanner output, invalid
+metadata, and legacy schema-1 input. The collector still does not read Raptor's
+per-process logs or the kernel ring. Those require separate evidence. The live
+diagnostic command invokes the installed collector, so this source correction
+does not change the current camera or close its kernel/media acceptance row.
+A rebuilt image and physical verification are pending.
 
 ## September 20 heartbeat read-budget candidate
 

@@ -35,6 +35,48 @@ def _canonical(value: object) -> bytes:
     return json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 
+def _validate_error_count(section: dict[str, object], section_name: str) -> None:
+    if "error_count" not in section:
+        if "error_count_source" in section:
+            raise RuntimeDiagnosticsError(
+                f"runtime snapshot {section_name} error count is missing"
+            )
+        return
+    count = section["error_count"]
+    if count is not None and (
+        not isinstance(count, int) or isinstance(count, bool) or count < 0
+    ):
+        raise RuntimeDiagnosticsError(
+            f"runtime snapshot {section_name} error count is invalid"
+        )
+    if "error_count_source" not in section:
+        return
+    source = section["error_count_source"]
+    if not isinstance(source, dict) or set(source) != {"path", "read_status"}:
+        raise RuntimeDiagnosticsError(
+            f"runtime snapshot {section_name} error source is invalid"
+        )
+    read_status = source.get("read_status")
+    if (
+        source.get("path") != "/var/log/messages"
+        or not isinstance(read_status, str)
+        or read_status not in {
+            "missing",
+            "read_error",
+            "readable",
+            "unreadable",
+        }
+    ):
+        raise RuntimeDiagnosticsError(
+            f"runtime snapshot {section_name} error source is invalid"
+        )
+    readable = read_status == "readable"
+    if readable != (count is not None):
+        raise RuntimeDiagnosticsError(
+            f"runtime snapshot {section_name} error evidence is inconsistent"
+        )
+
+
 def validate_runtime_snapshot(document: dict[str, object]) -> dict[str, object]:
     required = {
         "binary_identity",
@@ -68,6 +110,10 @@ def validate_runtime_snapshot(document: dict[str, object]) -> dict[str, object]:
     for name, value in identity.items():
         if value is not None and (not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{40,64}", value) is None):
             raise RuntimeDiagnosticsError(f"runtime binary identity is invalid: {name}")
+    for name in ("kernel_media", "raptor"):
+        section = document[name]
+        assert isinstance(section, dict)
+        _validate_error_count(section, name)
     memory = document.get("memory")
     if isinstance(memory, dict):
         expected_memory = {
