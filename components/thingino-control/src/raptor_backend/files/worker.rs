@@ -1,7 +1,7 @@
 //! One bounded SD reader. Timeouts abandon replies, never spawn replacement workers.
 use super::*;
 use std::collections::VecDeque;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, AtomicU32};
 use std::sync::{Arc, Mutex, Weak, mpsc};
 use std::thread;
 
@@ -10,6 +10,7 @@ pub(super) const WAIT: Duration = Duration::from_millis(150);
 type Hook = Arc<dyn Fn() + Send + Sync>;
 pub(in crate::raptor_backend) struct Reads {
     sender: Mutex<Option<mpsc::SyncSender<Job>>>,
+    diagnostics: Arc<StorageDiagnostics>,
     format_sender: Mutex<Option<mpsc::SyncSender<FormatJob>>>,
     format_active: AtomicBool,
     format_state: Mutex<FormatState>,
@@ -24,6 +25,7 @@ impl Default for Reads {
     fn default() -> Self {
         Self {
             sender: Mutex::new(None),
+            diagnostics: Arc::new(StorageDiagnostics::default()),
             format_sender: Mutex::new(None),
             format_active: AtomicBool::new(false),
             format_state: Mutex::new(FormatState::default()),
@@ -69,6 +71,16 @@ enum Operation {
     Sd,
     Drain,
 }
+impl Operation {
+    fn diagnostic_route(&self) -> &'static str {
+        match self {
+            Self::List(_) | Self::Delete(_) => "files",
+            Self::Identity(_) => "media-identity",
+            Self::Sd => "storage-sd",
+            Self::Drain => "storage-drain",
+        }
+    }
+}
 enum Reply {
     Json(BackendResponse),
     Identity(Option<MediaFileIdentity>),
@@ -76,7 +88,71 @@ enum Reply {
 struct Job {
     operation: Operation,
     deadline: Instant,
+    submitted: Instant,
     reply: mpsc::SyncSender<Result<Reply, BackendError>>,
+}
+#[derive(Default)]
+struct StorageDiagnostics {
+    submit_expired: AtomicU32,
+    submit_full: AtomicU32,
+    submit_unavailable: AtomicU32,
+    reply_timeout: AtomicU32,
+    reply_disconnect: AtomicU32,
+    queued_expiry: AtomicU32,
+    worker_start: AtomicU32,
+    worker_end: AtomicU32,
+    worker_error: AtomicU32,
+    late_completion: AtomicU32,
+}
+impl StorageDiagnostics {
+    fn record(
+        &self,
+        counter: &AtomicU32,
+        route: &'static str,
+        stage: &'static str,
+        outcome: &'static str,
+        elapsed: Duration,
+    ) -> Option<String> {
+        let previous = counter
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |count| {
+                Some(count.saturating_add(1))
+            })
+            .unwrap();
+        let count = previous.saturating_add(1);
+        if previous == u32::MAX || (count > 8 && !count.is_power_of_two()) {
+            return None;
+        }
+        Some(format!(
+            "storage-diagnostic component=sd-worker route={route} stage={stage} outcome={outcome} elapsed_ms={} count={count}",
+            elapsed.as_millis()
+        ))
+    }
+
+    fn log(
+        &self,
+        counter: &AtomicU32,
+        route: &'static str,
+        stage: &'static str,
+        outcome: &'static str,
+        elapsed: Duration,
+    ) {
+        if let Some(record) = self.record(counter, route, stage, outcome, elapsed) {
+            eprintln!("{record}");
+        }
+    }
+
+    fn error(error: &BackendError) -> &'static str {
+        match error {
+            BackendError::Connection => "connection",
+            BackendError::Timeout => "timeout",
+            BackendError::Protocol => "protocol",
+            BackendError::Unavailable => "unavailable",
+            BackendError::Busy => "busy",
+            BackendError::Unsupported(_) => "unsupported",
+            BackendError::PartialApply(_) => "partial",
+            BackendError::Upstream(_) => "upstream",
+        }
+    }
 }
 pub(super) struct Reader {
     pub(super) timelapse: Arc<timelapse::Service>,
@@ -118,6 +194,8 @@ impl Reads {
         operation: Operation,
         deadline: Instant,
     ) -> Result<Reply, BackendError> {
+        let started = Instant::now();
+        let route = operation.diagnostic_route();
         let drain = matches!(&operation, Operation::Drain);
         let deadline = if drain {
             deadline
@@ -125,6 +203,13 @@ impl Reads {
             deadline.min(Instant::now() + WAIT)
         };
         if Instant::now() >= deadline {
+            self.diagnostics.log(
+                &self.diagnostics.submit_expired,
+                route,
+                "submit",
+                "deadline-expired",
+                started.elapsed(),
+            );
             return Err(BackendError::Timeout);
         }
         #[cfg(test)]
@@ -135,7 +220,19 @@ impl Reads {
             }
         }
         let (reply, receive) = mpsc::sync_channel(1);
-        let mut slot = self.sender.lock().map_err(|_| BackendError::Unavailable)?;
+        let mut slot = match self.sender.lock() {
+            Ok(slot) => slot,
+            Err(_) => {
+                self.diagnostics.log(
+                    &self.diagnostics.submit_unavailable,
+                    route,
+                    "submit",
+                    "unavailable",
+                    started.elapsed(),
+                );
+                return Err(BackendError::Unavailable);
+            }
+        };
         if !drain && self.format_active.load(Ordering::Acquire) {
             return Err(BackendError::Busy);
         }
@@ -153,7 +250,8 @@ impl Reads {
             };
             #[cfg(test)]
             let hook = Arc::clone(&self.hook);
-            thread::Builder::new()
+            let diagnostics = Arc::clone(&self.diagnostics);
+            if thread::Builder::new()
                 .name("raptor-sd-read".into())
                 .spawn(move || {
                     loop {
@@ -165,10 +263,26 @@ impl Reads {
                             Err(mpsc::RecvTimeoutError::Timeout) => continue,
                             Err(mpsc::RecvTimeoutError::Disconnected) => break,
                         };
+                        let route = job.operation.diagnostic_route();
                         // Expired queued work must not touch the disk after a stalled read returns.
                         if Instant::now() >= job.deadline {
+                            diagnostics.log(
+                                &diagnostics.queued_expiry,
+                                route,
+                                "queue",
+                                "expired",
+                                job.submitted.elapsed(),
+                            );
                             continue;
                         }
+                        let worker_started = Instant::now();
+                        diagnostics.log(
+                            &diagnostics.worker_start,
+                            route,
+                            "worker",
+                            "start",
+                            job.submitted.elapsed(),
+                        );
                         #[cfg(test)]
                         {
                             let callback = hook.lock().unwrap().clone();
@@ -177,34 +291,117 @@ impl Reads {
                             }
                         }
                         let result = reader.run(job.operation, job.deadline);
-                        if Instant::now() < job.deadline {
-                            let _ = job.reply.try_send(result);
+                        let worker_elapsed = worker_started.elapsed();
+                        let error = result.as_ref().err().map(StorageDiagnostics::error);
+                        let before_deadline = Instant::now() < job.deadline;
+                        let receiver_gone = before_deadline && job.reply.try_send(result).is_err();
+                        if let Some(error) = error {
+                            diagnostics.log(
+                                &diagnostics.worker_error,
+                                route,
+                                "worker",
+                                error,
+                                worker_elapsed,
+                            );
+                        } else {
+                            diagnostics.log(
+                                &diagnostics.worker_end,
+                                route,
+                                "worker",
+                                "success",
+                                worker_elapsed,
+                            );
+                        }
+                        if !before_deadline {
+                            diagnostics.log(
+                                &diagnostics.late_completion,
+                                route,
+                                "completion",
+                                "deadline-expired",
+                                job.submitted.elapsed(),
+                            );
+                        } else if receiver_gone {
+                            diagnostics.log(
+                                &diagnostics.late_completion,
+                                route,
+                                "completion",
+                                "receiver-gone",
+                                job.submitted.elapsed(),
+                            );
                         }
                     }
                 })
-                .map_err(|_| BackendError::Unavailable)?;
+                .is_err()
+            {
+                drop(slot);
+                self.diagnostics.log(
+                    &self.diagnostics.submit_unavailable,
+                    route,
+                    "submit",
+                    "unavailable",
+                    started.elapsed(),
+                );
+                return Err(BackendError::Unavailable);
+            }
             *slot = Some(send);
         }
-        slot.as_ref()
-            .unwrap()
-            .try_send(Job {
-                operation,
-                deadline,
-                reply,
-            })
-            .map_err(|e| match e {
-                mpsc::TrySendError::Full(_) => BackendError::Busy,
-                mpsc::TrySendError::Disconnected(_) => BackendError::Unavailable,
-            })?;
+        let submitted = Instant::now();
+        match slot.as_ref().unwrap().try_send(Job {
+            operation,
+            deadline,
+            submitted,
+            reply,
+        }) {
+            Ok(()) => {}
+            Err(mpsc::TrySendError::Full(_)) => {
+                drop(slot);
+                self.diagnostics.log(
+                    &self.diagnostics.submit_full,
+                    route,
+                    "submit",
+                    "full",
+                    started.elapsed(),
+                );
+                return Err(BackendError::Busy);
+            }
+            Err(mpsc::TrySendError::Disconnected(_)) => {
+                drop(slot);
+                self.diagnostics.log(
+                    &self.diagnostics.submit_unavailable,
+                    route,
+                    "submit",
+                    "unavailable",
+                    started.elapsed(),
+                );
+                return Err(BackendError::Unavailable);
+            }
+        }
         drop(slot);
         #[cfg(test)]
         self.submitted.fetch_add(1, Ordering::AcqRel);
-        receive
-            .recv_timeout(deadline.saturating_duration_since(Instant::now()))
-            .map_err(|e| match e {
-                mpsc::RecvTimeoutError::Timeout => BackendError::Timeout,
-                mpsc::RecvTimeoutError::Disconnected => BackendError::Timeout,
-            })?
+        match receive.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
+            Ok(result) => result,
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                self.diagnostics.log(
+                    &self.diagnostics.reply_timeout,
+                    route,
+                    "reply",
+                    "timeout",
+                    started.elapsed(),
+                );
+                Err(BackendError::Timeout)
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                self.diagnostics.log(
+                    &self.diagnostics.reply_disconnect,
+                    route,
+                    "reply",
+                    "disconnected",
+                    started.elapsed(),
+                );
+                Err(BackendError::Timeout)
+            }
+        }
     }
 
     fn activate_format(&self, sd_snapshot: Vec<u8>) -> Result<(), BackendError> {
@@ -648,6 +845,159 @@ mod tests {
     use crate::raptor_backend::tests::{backend, framed, read_request, serve_daemon, task_temp};
     use std::os::unix::net::UnixListener;
     use std::path::Path;
+
+    #[test]
+    fn storage_diagnostics_are_bounded_redacted_and_category_independent() {
+        let diagnostics = StorageDiagnostics::default();
+        let emitted = (1..=32)
+            .filter(|_| {
+                diagnostics
+                    .record(
+                        &diagnostics.reply_timeout,
+                        "files",
+                        "reply",
+                        "timeout",
+                        Duration::from_millis(150),
+                    )
+                    .is_some()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(emitted, vec![1, 2, 3, 4, 5, 6, 7, 8, 16, 32]);
+        for _ in 0..32 {
+            diagnostics.record(
+                &diagnostics.worker_end,
+                "storage-sd",
+                "worker",
+                "success",
+                Duration::from_millis(2),
+            );
+        }
+        let private = BackendError::PartialApply("DO_NOT_LOG_PRIVATE_DETAIL");
+        let error = diagnostics
+            .record(
+                &diagnostics.worker_error,
+                "storage-sd",
+                "worker",
+                StorageDiagnostics::error(&private),
+                Duration::from_millis(3),
+            )
+            .unwrap();
+        assert!(error.contains("component=sd-worker route=storage-sd"));
+        assert!(error.contains("stage=worker outcome=partial elapsed_ms=3 count=1"));
+        assert!(!error.contains("DO_NOT_LOG") && !error.contains("component=router"));
+        diagnostics.reply_timeout.store(u32::MAX, Ordering::Relaxed);
+        assert!(
+            diagnostics
+                .record(
+                    &diagnostics.reply_timeout,
+                    "files",
+                    "reply",
+                    "timeout",
+                    Duration::ZERO,
+                )
+                .is_none()
+        );
+        assert_eq!(diagnostics.reply_timeout.load(Ordering::Relaxed), u32::MAX);
+    }
+
+    #[test]
+    fn caller_deadline_below_wait_stays_bounded_and_queued_job_expires() {
+        let root = task_temp("short-storage-deadline");
+        let backend = Arc::new(backend(&root, "127.0.0.1:9".parse().unwrap()));
+        let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let observed = Arc::clone(&calls);
+        let (started_send, started_receive) = mpsc::sync_channel(1);
+        let (release_send, release_receive) = mpsc::sync_channel(1);
+        let release_receive = Arc::new(Mutex::new(release_receive));
+        let release = Arc::clone(&release_receive);
+        *backend.file_reads.hook.lock().unwrap() = Some(Arc::new(move || {
+            if observed.fetch_add(1, Ordering::AcqRel) == 0 {
+                started_send.send(()).unwrap();
+                release
+                    .lock()
+                    .unwrap()
+                    .recv_timeout(Duration::from_secs(1))
+                    .unwrap();
+            }
+        }));
+        let request = |backend: Arc<RaptorBackend>| {
+            thread::spawn(move || {
+                let started = Instant::now();
+                let result = backend.recording_sd(Instant::now() + Duration::from_millis(40));
+                (result, started.elapsed())
+            })
+        };
+        let first = request(Arc::clone(&backend));
+        started_receive
+            .recv_timeout(Duration::from_secs(1))
+            .unwrap();
+        let second = request(Arc::clone(&backend));
+        let until = Instant::now() + Duration::from_secs(1);
+        while backend.file_reads.submitted.load(Ordering::Acquire) < 2 {
+            assert!(Instant::now() < until);
+            thread::yield_now();
+        }
+        assert_eq!(
+            backend.recording_sd(Instant::now() + Duration::from_millis(40)),
+            Err(BackendError::Busy)
+        );
+        assert_eq!(
+            backend
+                .file_reads
+                .diagnostics
+                .submit_full
+                .load(Ordering::Acquire),
+            1
+        );
+        for (result, elapsed) in [first.join().unwrap(), second.join().unwrap()] {
+            assert_eq!(result, Err(BackendError::Timeout));
+            assert!(elapsed < WAIT, "elapsed={elapsed:?}");
+        }
+        assert_eq!(
+            backend
+                .file_reads
+                .diagnostics
+                .reply_timeout
+                .load(Ordering::Acquire),
+            2
+        );
+        assert_eq!(
+            backend
+                .file_reads
+                .diagnostics
+                .worker_start
+                .load(Ordering::Acquire),
+            1
+        );
+        release_send.send(()).unwrap();
+        let until = Instant::now() + Duration::from_secs(1);
+        while backend
+            .file_reads
+            .diagnostics
+            .queued_expiry
+            .load(Ordering::Acquire)
+            == 0
+        {
+            assert!(Instant::now() < until);
+            thread::yield_now();
+        }
+        assert_eq!(
+            backend
+                .file_reads
+                .diagnostics
+                .late_completion
+                .load(Ordering::Acquire),
+            1
+        );
+        let _ = backend.recording_sd(Instant::now() + Duration::from_millis(100));
+        assert_eq!(
+            calls.load(Ordering::Acquire),
+            2,
+            "expired queued job must not reach the worker hook"
+        );
+        drop(backend);
+        fs::remove_dir_all(root).unwrap();
+    }
 
     fn recorder(
         root: &Path,

@@ -38,6 +38,36 @@ two recorders and timelapse off. This closes the previously missing ONVIF Privac
 case, but does not claim ONVIF certification or Privacy coverage for RTSP and
 WebRTC.
 
+A later read-only session verified exactly the two videos already created by the
+bounded recorder trial, without starting another recording or rebooting the
+camera. The main-channel video decoded 60 H.264 frames at 1920x1080, and the
+substream video decoded 55 H.264 frames at 640x360. All six files that predated
+the trial remained present with unchanged sizes and modification times. Both
+recorders were stopped with their files closed before and after the readback.
+The immediate post-stop inventory ended in a generic assertion failure and
+retained no HTTP response. A separate later read-only diagnostic returned HTTP
+504, while every file-list request in the eventual readback returned HTTP 200.
+The failures remain unresolved, so this does not establish immediate post-stop
+file availability or complete recorder acceptance for the installed `aad992b6`
+candidate.
+
+The subsequent source adds diagnostic-only records at the files and storage-SD
+backend gate and inside the Raptor SD worker. It uses static route, stage and
+outcome labels plus elapsed time; it never records a path, query, body, token or
+error payload. Each category logs its first eight events and then powers of two,
+with successful events counted separately from failures. The records distinguish
+gate success and timeout, submission full and unavailable, accepted-reply timeout
+and disconnect, queued expiry, worker start and result, and late completion. No
+deadline, retry, worker, route, response body or error mapping changes. This
+source-only instrumentation is not yet included in a firmware build or installed
+and does not resolve the assertion failure, HTTP 504 or full recorder acceptance.
+
+The exact diagnostic source passed the full pinned Rust 1.95 Control gate in both
+default and Raptor configurations. Each configuration passed 450 library tests
+with one ignored, 17 binary tests, 22 contract tests and its 1,000-request
+resource soak. The WebUI gate passed one packaging test, 237 tests, the production
+build and the bundle scan. These are host results, not camera evidence.
+
 One probe session remained authenticated at 0, 10, 20 and 40 seconds, then logout
 revoked it. That checks the early-session regression only. Natural expiry and
 clock-change behavior remain open. The transient Privacy exercise also does not

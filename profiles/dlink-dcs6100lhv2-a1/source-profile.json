@@ -585,7 +585,7 @@
     {
       "source": "components/thingino-control/src/raptor_backend/files/worker.rs",
       "destination": "package/thingino-control/rust/src/raptor_backend/files/worker.rs",
-      "sha256": "78bd91f78372f6c55719837ace6246aa0c789119b9ebd0a39c74501616f83084"
+      "sha256": "fc2beb15e9fbaa9adfd4135b32e8ee5fbe1184184825e1dbd332d3508cb4bef3"
     },
     {
       "destination": "package/thingino-control/rust/src/raptor_backend/ha.rs",
@@ -734,7 +734,7 @@
     },
     {
       "destination": "package/thingino-control/rust/src/router.rs",
-      "sha256": "bee65ab092a9b8752fd48ac0f25fde4a0bddff643527bce2967fc49fa8a788dd",
+      "sha256": "1d1e896056b5575a69686a2b09b128855d8804a4392d01aae84c859808128500",
       "source": "components/thingino-control/src/router.rs"
     },
     {

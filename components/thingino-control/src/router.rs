@@ -1,4 +1,71 @@
 use super::*;
+use std::sync::atomic::AtomicU32;
+
+struct StorageGateDiagnostics {
+    files_success: AtomicU32,
+    files_timeout: AtomicU32,
+    storage_success: AtomicU32,
+    storage_timeout: AtomicU32,
+}
+
+impl StorageGateDiagnostics {
+    const fn new() -> Self {
+        Self {
+            files_success: AtomicU32::new(0),
+            files_timeout: AtomicU32::new(0),
+            storage_success: AtomicU32::new(0),
+            storage_timeout: AtomicU32::new(0),
+        }
+    }
+
+    fn record(
+        &self,
+        route: &'static str,
+        outcome: &'static str,
+        elapsed: Duration,
+    ) -> Option<String> {
+        let counter = match (route, outcome) {
+            ("files", "success") => &self.files_success,
+            ("files", "timeout") => &self.files_timeout,
+            ("storage-sd", "success") => &self.storage_success,
+            ("storage-sd", "timeout") => &self.storage_timeout,
+            _ => return None,
+        };
+        let previous = counter
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |count| {
+                Some(count.saturating_add(1))
+            })
+            .unwrap();
+        let count = previous.saturating_add(1);
+        if previous == u32::MAX || (count > 8 && !count.is_power_of_two()) {
+            return None;
+        }
+        Some(format!(
+            "storage-diagnostic component=router route={route} stage=gate outcome={outcome} elapsed_ms={} count={count}",
+            elapsed.as_millis()
+        ))
+    }
+}
+
+static STORAGE_GATE_DIAGNOSTICS: StorageGateDiagnostics = StorageGateDiagnostics::new();
+
+fn storage_gate_route(target: &str) -> Option<&'static str> {
+    if target.starts_with("/api/v1/files?") || target.starts_with("/api/v1/files/text?") {
+        Some("files")
+    } else if target == "/api/v1/storage/sd" {
+        Some("storage-sd")
+    } else {
+        None
+    }
+}
+
+fn log_storage_gate(route: Option<&'static str>, outcome: &'static str, elapsed: Duration) {
+    if let Some(record) =
+        route.and_then(|route| STORAGE_GATE_DIAGNOSTICS.record(route, outcome, elapsed))
+    {
+        eprintln!("{record}");
+    }
+}
 
 pub(crate) fn request_authorized(request: &Request, state: &SharedState) -> bool {
     let browser_session = matches!(
@@ -679,7 +746,10 @@ pub(crate) fn handle_client(mut stream: TcpStream, state: &SharedState, deadline
     }
 
     let backend_deadline = deadline.checked_sub(RESPONSE_RESERVE).unwrap_or(deadline);
+    let storage_route = storage_gate_route(&request.target);
+    let gate_started = Instant::now();
     let Some(api_permit) = state.gate.acquire(backend_deadline) else {
+        log_storage_gate(storage_route, "timeout", gate_started.elapsed());
         let _ = send_error(
             &mut stream,
             deadline,
@@ -689,6 +759,7 @@ pub(crate) fn handle_client(mut stream: TcpStream, state: &SharedState, deadline
         );
         return;
     };
+    log_storage_gate(storage_route, "success", gate_started.elapsed());
     if let Some(result) = state.backend.api_request(
         &request.method,
         &request.target,
@@ -772,4 +843,48 @@ pub(crate) fn handle_client(mut stream: TcpStream, state: &SharedState, deadline
         state.backend.request(route, backend_deadline),
         snapshot,
     );
+}
+
+#[cfg(test)]
+mod diagnostic_tests {
+    use super::*;
+
+    #[test]
+    fn storage_gate_diagnostics_are_bounded_redacted_and_category_independent() {
+        let diagnostics = StorageGateDiagnostics::new();
+        let emitted = (1..=32)
+            .filter(|_| {
+                diagnostics
+                    .record("files", "success", Duration::from_millis(7))
+                    .is_some()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(emitted, vec![1, 2, 3, 4, 5, 6, 7, 8, 16, 32]);
+        let timeout = diagnostics
+            .record("files", "timeout", Duration::from_millis(500))
+            .unwrap();
+        assert_eq!(
+            timeout,
+            "storage-diagnostic component=router route=files stage=gate outcome=timeout elapsed_ms=500 count=1"
+        );
+        assert!(!timeout.contains("?cd=") && !timeout.contains("token"));
+        diagnostics.files_timeout.store(u32::MAX, Ordering::Relaxed);
+        assert!(
+            diagnostics
+                .record("files", "timeout", Duration::ZERO)
+                .is_none()
+        );
+        assert_eq!(diagnostics.files_timeout.load(Ordering::Relaxed), u32::MAX);
+    }
+
+    #[test]
+    fn storage_gate_route_labels_are_static_and_allowlisted() {
+        assert_eq!(storage_gate_route("/api/v1/files?cd=SECRET"), Some("files"));
+        assert_eq!(
+            storage_gate_route("/api/v1/files/text?file=SECRET"),
+            Some("files")
+        );
+        assert_eq!(storage_gate_route("/api/v1/storage/sd"), Some("storage-sd"));
+        assert_eq!(storage_gate_route("/api/v1/health"), None);
+    }
 }

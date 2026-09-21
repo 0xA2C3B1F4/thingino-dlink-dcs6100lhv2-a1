@@ -498,7 +498,7 @@
       "source": "components/thingino-control/src/raptor_backend/files/tests.rs"
     },
     "components/thingino-control/src/raptor_backend/files/worker.rs": {
-      "sha256": "78bd91f78372f6c55719837ace6246aa0c789119b9ebd0a39c74501616f83084",
+      "sha256": "fc2beb15e9fbaa9adfd4135b32e8ee5fbe1184184825e1dbd332d3508cb4bef3",
       "source": "components/thingino-control/src/raptor_backend/files/worker.rs"
     },
     "components/thingino-control/src/raptor_backend/ha.rs": {
@@ -618,7 +618,7 @@
       "source": "components/thingino-control/src/response.rs"
     },
     "components/thingino-control/src/router.rs": {
-      "sha256": "bee65ab092a9b8752fd48ac0f25fde4a0bddff643527bce2967fc49fa8a788dd",
+      "sha256": "1d1e896056b5575a69686a2b09b128855d8804a4392d01aae84c859808128500",
       "source": "components/thingino-control/src/router.rs"
     },
     "components/thingino-control/src/server.rs": {
@@ -710,7 +710,7 @@
       "source": "production/docs/release-evidence/2026-09-17-raptor-audio-reproducibility.md"
     },
     "docs/release-evidence/2026-09-18-raptor-mic-acknowledgement.md": {
-      "sha256": "0efe8693313e1a66ff677465802977507e3d4cbc43f28e1edd01b98a855ff4f5",
+      "sha256": "f836680e0261a776ee4740ebaca2c99905a212bc1c3c401f42412b0b901bfd3f",
       "source": "production/docs/release-evidence/2026-09-18-raptor-mic-acknowledgement.md"
     },
     "docs/release-evidence/2026-09-19-fresh-install-reproducibility.md": {
@@ -718,7 +718,7 @@
       "source": "production/docs/release-evidence/2026-09-19-fresh-install-reproducibility.md"
     },
     "docs/status.md": {
-      "sha256": "ef7756b3db9d99d26174ec4046a4fc7b79d6b80aaba0494a9462ff5ba5aac361",
+      "sha256": "4e22bb9e6d57c35e8f3d96177de57df1002ab7850e43434fc4b4208c12bb5b78",
       "source": "production/docs/status.md"
     },
     "docs/testing.md": {
@@ -1498,7 +1498,7 @@
       "source": "profiles/dlink-dcs6100lhv2-a1/recovery-ap-kernel.fragment"
     },
     "profiles/dlink-dcs6100lhv2-a1/source-profile.json": {
-      "sha256": "c9db99b64ba35394515da9d089ba389d9ad351388926cc6192eb95e60b808574",
+      "sha256": "783b513673078dab372412e740f852ba616636445928952ef2f20f06f5f3eb88",
       "source": "profiles/dlink-dcs6100lhv2-a1/source-profile.json"
     },
     "profiles/dlink-dcs6100lhv2-a1/stock-restore-kernel.fragment": {
@@ -2479,6 +2479,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "c44c1e3475b676d095aa0fe660e3ed28a24fed30",
+  "source_commit": "385ba1064a5a2a0d543681d89099be596473db19",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }

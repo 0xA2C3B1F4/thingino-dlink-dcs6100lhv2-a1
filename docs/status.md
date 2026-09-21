@@ -39,6 +39,23 @@ and then restored Privacy behavior. A separate 40-second own-session check staye
 authenticated and logout revoked that session. It did not test natural expiry or
 clock changes. See the [September 21 evidence](release-evidence/2026-09-18-raptor-mic-acknowledgement.md#september-21-installed-aad992b6-candidate).
 
+A later read-only session verified the two existing videos from the bounded
+recorder trial without making another recording or rebooting the camera. Both
+videos decoded as H.264 at their expected main and substream sizes, while the
+six older files remained present with unchanged sizes and modification times.
+The immediate post-stop inventory ended in an assertion failure without a
+retained HTTP response. A separate later read-only diagnostic returned HTTP 504,
+while the eventual readback succeeded. The failures remain unresolved, so this
+result does not prove immediate file availability or close full recorder
+acceptance.
+
+The source now adds bounded, payload-free diagnostics around the files and
+storage-SD backend gate and the Raptor SD worker. Static records distinguish
+gate waits, submission failures, reply failures, queued expiry, worker execution
+and late completion. This does not change deadlines, retries, workers, routes or
+responses. It is not yet included in a firmware build or installed and does not
+explain the observed failures or close recorder acceptance.
+
 These are same-image bounded observations. They do not transfer results from an
 older candidate, establish every control or setting, prove persistence, or close
 long-duration resource stability, endurance or release acceptance. Three resource samples around one
