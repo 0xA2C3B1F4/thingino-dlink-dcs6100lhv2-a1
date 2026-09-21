@@ -59,14 +59,31 @@ with successful events counted separately from failures. The records distinguish
 gate success and timeout, submission full and unavailable, accepted-reply timeout
 and disconnect, queued expiry, worker start and result, and late completion. No
 deadline, retry, worker, route, response body or error mapping changes. This
-source-only instrumentation is not yet included in a firmware build or installed
-and does not resolve the assertion failure, HTTP 504 or full recorder acceptance.
+instrumentation is now included in the host-built `385ba106` candidate but is not
+installed. The first camera remains on `aad992b6`; the new records do not resolve
+the assertion failure, HTTP 504 or full recorder acceptance.
 
 The exact diagnostic source passed the full pinned Rust 1.95 Control gate in both
 default and Raptor configurations. Each configuration passed 450 library tests
 with one ignored, 17 binary tests, 22 contract tests and its 1,000-request
 resource soak. The WebUI gate passed one packaging test, 237 tests, the production
 build and the bundle scan. These are host results, not camera evidence.
+
+Source `385ba1064a5a2a0d543681d89099be596473db19` subsequently completed the
+normal two-clean-build complete-firmware workflow with `--data-mode initialize`.
+Both base and split-kernel containers exited zero without OOM. All 16 artifact
+pairs were byte-identical without compiled component-cache reuse. An independent
+check rehashed all 32 files, compared the bytes of all 16 pairs, and ran fresh
+schema-2 inspection on both install sets.
+
+- Complete comparison report SHA-256: `ee46cecfdbeb4d61dc529abc98797157ba0faf53ba0763b9341ba49dfef3f279`.
+- Raw system SquashFS, 6,365,184 bytes: `23cb7d1604351a031fe183a4c8650c2086ef5a7358030f361472739a009ae586`.
+- Signed universal bundle, 7,950,417 bytes: `651072af35c04822106681ecde2830344b3d31985a029025a40517a445fc11bf`.
+
+This proves host reproducibility and inspection for these exact bytes only. No
+installation or live-camera acceptance has been performed for `385ba106`, and
+the older recorder failure is not fixed by adding diagnostics. Legal, notice,
+binary-distribution and other release gates are unchanged.
 
 One probe session remained authenticated at 0, 10, 20 and 40 seconds, then logout
 revoked it. That checks the early-session regression only. Natural expiry and
@@ -118,7 +135,8 @@ metadata, and legacy schema-1 input. The collector still does not read Raptor's
 per-process logs or the kernel ring. Those require separate evidence. The live
 diagnostic command invokes the installed collector, so this source correction
 does not change the current camera or close its kernel/media acceptance row.
-A rebuilt image and physical verification are pending.
+It is included in the `385ba106` host build described above; installation and
+physical verification remain pending.
 
 ## September 20 heartbeat read-budget candidate
 

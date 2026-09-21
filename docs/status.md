@@ -16,7 +16,7 @@ changes. The full-Raptor source path has passed host composition checks and a
 source-built camera exercise. A new release candidate still needs its own image,
 installation, browser, and physical checks.
 
-The latest host-built candidate is `aad992b6`. Its two clean complete-firmware
+The installed candidate remains `aad992b6`. Its two clean complete-firmware
 builds produced 16 byte-identical artifact pairs. It increases the heartbeat
 Day/Night and Privacy read allowances after the earlier `fb43b075` candidate
 failed a bounded state-completeness check. The caller's deadline and unknown/null
@@ -53,8 +53,19 @@ The source now adds bounded, payload-free diagnostics around the files and
 storage-SD backend gate and the Raptor SD worker. Static records distinguish
 gate waits, submission failures, reply failures, queued expiry, worker execution
 and late completion. This does not change deadlines, retries, workers, routes or
-responses. It is not yet included in a firmware build or installed and does not
-explain the observed failures or close recorder acceptance.
+responses. Source `385ba106` completed two clean `initialize` builds: both base
+and split-kernel containers exited zero without OOM, all 16 complete-firmware
+pairs were byte-identical without component-cache reuse, and an independent
+check rehashed all 32 files, compared all 16 pairs and freshly inspected both
+install sets. The comparison report SHA-256 is
+`ee46cecfdbeb4d61dc529abc98797157ba0faf53ba0763b9341ba49dfef3f279`;
+the 6,365,184-byte raw system SHA-256 is
+`23cb7d1604351a031fe183a4c8650c2086ef5a7358030f361472739a009ae586`,
+and the 7,950,417-byte universal bundle SHA-256 is
+`651072af35c04822106681ecde2830344b3d31985a029025a40517a445fc11bf`.
+This is host-build evidence only. It is not installed, the first camera remains
+on `aad992b6`, and the diagnostics neither explain nor fix the earlier recorder
+failures or close recorder acceptance.
 
 These are same-image bounded observations. They do not transfer results from an
 older candidate, establish every control or setting, prove persistence, or close
@@ -71,8 +82,9 @@ Earlier audio observations remain evidence only for their named older versions.
 The source collector now distinguishes an unavailable log from a readable scan
 with no matches: unavailable or failed reads return `null` with source status.
 Legacy snapshots remain readable but gain no proof of log availability. This
-source change is not yet built or installed on the camera. The counters still
-cover only the syslog file, not Raptor's per-process logs or the kernel ring.
+source change is included in the `385ba106` host build above but is not installed
+on the camera. The counters still cover only the syslog file, not Raptor's
+per-process logs or the kernel ring.
 
 The September 12 full-Raptor check included ROD and its font in the installed
 image. Main and substream WebRTC decoded at approximately 15 fps. OSD format
