@@ -5,8 +5,11 @@ import io
 import json
 import os
 import struct
+import subprocess
+import sys
 import tempfile
 import tarfile
+import time
 import unittest
 from dataclasses import replace
 from pathlib import Path
@@ -18,6 +21,10 @@ from installer.cli import build_parser
 from installer.recovery_ap.host import (
     RecoveryNorState,
     RecoveryApHostError,
+    UARTLESS_TLS_IDENTITY_COMMAND,
+    UARTLESS_TLS_IDENTITY_MAX_BYTES,
+    UARTLESS_TLS_IDENTITY_TIMEOUT_SECONDS,
+    _exchange,
     _digest,
     _station_payload,
     activate_personal_mtd3,
@@ -33,6 +40,7 @@ from installer.recovery_ap.host import (
     provision_recovery_ap,
     prove_thingino_health,
     resolve_recovery_ap_station,
+    read_uartless_tls_identity,
     ssh_arguments,
 )
 from installer.mtd3_image import build_personal_mtd3_image
@@ -98,6 +106,344 @@ def nor_report(*, kind: str, digest: str, payload: str = "-") -> bytes:
 
 
 class RecoveryApHostTests(unittest.TestCase):
+    def _local_uartless_tls_exchange(
+        self,
+        root: Path,
+        script: str,
+        *,
+        timeout: float = 2.0,
+        arguments: tuple[str, ...] = (),
+    ) -> bytes:
+        if os.name != "posix":
+            self.skipTest("bounded TLS subprocess capture is POSIX-only")
+        pin = root / "station_known_hosts"
+        pin.write_text("pinned\n", encoding="ascii")
+        pin.chmod(0o600)
+        session = replace(
+            load_host_session(private_session(root)),
+            session_kind="uartless-functional-provisioning",
+            camera_identity_sha256="a" * 64,
+            transport_enabled=False,
+            station_known_hosts=pin,
+        )
+        local_command = [sys.executable, "-c", script, *arguments]
+        with patch(
+            "installer.recovery_ap.host.ssh_arguments",
+            return_value=local_command,
+        ):
+            return _exchange(
+                session,
+                host="198.51.100.23",
+                command=UARTLESS_TLS_IDENTITY_COMMAND,
+                timeout=timeout,
+                allow_uartless_tls_identity=True,
+            )
+
+    def test_uartless_tls_identity_is_fixed_pinned_and_bounded(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            # Match S02ssl's real DER format, not a base64 framing fixture.
+            certificate = subprocess.run(
+                ["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes",
+                 "-keyout", str(root / "fixture.key"), "-outform", "DER",
+                 "-subj", "/CN=tls-fixture.invalid", "-days", "1"],
+                check=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            ).stdout
+            session_dir = private_session(root)
+            pin = root / "station_known_hosts"
+            pin.write_text("pinned\n", encoding="ascii")
+            pin.chmod(0o600)
+            session = replace(
+                load_host_session(session_dir),
+                session_kind="uartless-functional-provisioning",
+                camera_identity_sha256="a" * 64,
+                transport_enabled=False,
+                station_known_hosts=pin,
+            )
+            with patch(
+                "installer.recovery_ap.host.load_host_session",
+                return_value=session,
+            ), patch(
+                "installer.recovery_ap.host.resolve_recovery_ap_station",
+                return_value=(session.station_mdns_name, "198.51.100.23"),
+            ) as resolve, patch(
+                "installer.recovery_ap.host._exchange",
+                return_value=certificate,
+            ) as exchange:
+                result = read_uartless_tls_identity(session_dir=session_dir)
+            resolve.assert_called_once_with(
+                session_dir, allow_uartless_station=True
+            )
+            exchange.assert_called_once_with(
+                session,
+                host="198.51.100.23",
+                command=UARTLESS_TLS_IDENTITY_COMMAND,
+                timeout=UARTLESS_TLS_IDENTITY_TIMEOUT_SECONDS,
+                allow_uartless_tls_identity=True,
+            )
+            self.assertEqual(
+                result["certificate_der_sha256"], hashlib.sha256(certificate).hexdigest()
+            )
+            self.assertEqual(result["station_ipv4"], "198.51.100.23")
+            self.assertTrue(result["read_only"])
+            self.assertFalse(result["nor_writes"])
+
+            arguments = ssh_arguments(
+                session,
+                host="198.51.100.23",
+                command=UARTLESS_TLS_IDENTITY_COMMAND,
+                allow_uartless_tls_identity=True,
+            )
+            self.assertEqual(arguments[-1], UARTLESS_TLS_IDENTITY_COMMAND)
+            self.assertIn(f"UserKnownHostsFile={pin}", arguments)
+            for command, flag in (
+                (UARTLESS_TLS_IDENTITY_COMMAND, False),
+                (UARTLESS_TLS_IDENTITY_COMMAND + "; reboot", True),
+                ("reboot", True),
+            ):
+                with self.subTest(command=command, flag=flag), self.assertRaises(
+                    RecoveryApHostError
+                ):
+                    ssh_arguments(
+                        session,
+                        host="198.51.100.23",
+                        command=command,
+                        allow_uartless_tls_identity=flag,
+                    )
+
+    def test_uartless_tls_identity_rejects_invalid_or_oversized_output(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            session_dir = private_session(root)
+            pin = root / "station_known_hosts"
+            pin.write_text("pinned\n", encoding="ascii")
+            pin.chmod(0o600)
+            session = replace(
+                load_host_session(session_dir),
+                session_kind="uartless-functional-provisioning",
+                camera_identity_sha256="a" * 64,
+                transport_enabled=False,
+                station_known_hosts=pin,
+            )
+            common = (
+                patch("installer.recovery_ap.host.load_host_session", return_value=session),
+                patch(
+                    "installer.recovery_ap.host.resolve_recovery_ap_station",
+                    return_value=(session.station_mdns_name, "198.51.100.23"),
+                ),
+            )
+            for raw in (
+                b"not a certificate",
+                b"prefix\n-----BEGIN CERTIFICATE-----\nMAMCAQE=\n"
+                b"-----END CERTIFICATE-----\n",
+                b"x" * (UARTLESS_TLS_IDENTITY_MAX_BYTES + 1),
+            ):
+                with self.subTest(size=len(raw)), common[0], common[1], patch(
+                    "installer.recovery_ap.host._exchange", return_value=raw
+                ), self.assertRaises(RecoveryApHostError):
+                    read_uartless_tls_identity(session_dir=session_dir)
+
+    def test_uartless_tls_identity_rejects_session_change_before_exchange(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            session_dir = private_session(root)
+            pin = root / "station_known_hosts"
+            pin.write_text("pinned\n", encoding="ascii")
+            pin.chmod(0o600)
+            session = replace(
+                load_host_session(session_dir),
+                session_kind="uartless-functional-provisioning",
+                camera_identity_sha256="a" * 64,
+                transport_enabled=False,
+                station_known_hosts=pin,
+            )
+            loads = 0
+
+            def load(_path: Path):
+                nonlocal loads
+                loads += 1
+                if loads == 2:
+                    pin.write_text("changed\n", encoding="ascii")
+                    pin.chmod(0o600)
+                return session
+
+            with patch(
+                "installer.recovery_ap.host.load_host_session", side_effect=load
+            ), patch(
+                "installer.recovery_ap.host.resolve_recovery_ap_station",
+                return_value=(session.station_mdns_name, "198.51.100.23"),
+            ), patch("installer.recovery_ap.host._exchange") as exchange, self.assertRaisesRegex(
+                RecoveryApHostError, "changed before retrieval"
+            ):
+                read_uartless_tls_identity(session_dir=session_dir)
+            exchange.assert_not_called()
+
+    def test_uartless_tls_identity_exchange_rejects_non_posix_before_process(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            pin = root / "station_known_hosts"
+            pin.write_text("pinned\n", encoding="ascii")
+            pin.chmod(0o600)
+            session = replace(
+                load_host_session(private_session(root)),
+                session_kind="uartless-functional-provisioning",
+                camera_identity_sha256="a" * 64,
+                transport_enabled=False,
+                station_known_hosts=pin,
+            )
+            with patch(
+                "installer.recovery_ap.host.os",
+                SimpleNamespace(name="nt"),
+            ), patch(
+                "installer.recovery_ap.host.ssh_arguments"
+            ) as arguments, patch(
+                "installer.recovery_ap.host.subprocess.Popen"
+            ) as popen, self.assertRaisesRegex(
+                RecoveryApHostError,
+                "^UARTless TLS identity capture requires a POSIX host$",
+            ):
+                _exchange(
+                    session,
+                    host="198.51.100.23",
+                    command=UARTLESS_TLS_IDENTITY_COMMAND,
+                    timeout=UARTLESS_TLS_IDENTITY_TIMEOUT_SECONDS,
+                    allow_uartless_tls_identity=True,
+                )
+            arguments.assert_not_called()
+            popen.assert_not_called()
+
+    def test_uartless_tls_identity_exchange_captures_success(self) -> None:
+        with tempfile.TemporaryDirectory(
+            dir=Path(os.environ["TMPDIR"]).resolve(strict=True)
+        ) as name:
+            output = self._local_uartless_tls_exchange(
+                Path(name),
+                "import os; os.write(1, b'certificate')",
+            )
+        self.assertEqual(output, b"certificate")
+
+    def test_uartless_tls_identity_exchange_accepts_exact_boundary(self) -> None:
+        with tempfile.TemporaryDirectory(
+            dir=Path(os.environ["TMPDIR"]).resolve(strict=True)
+        ) as name:
+            output = self._local_uartless_tls_exchange(
+                Path(name),
+                "import os, sys; os.write(1, b'x' * int(sys.argv[1]))",
+                arguments=(str(UARTLESS_TLS_IDENTITY_MAX_BYTES),),
+            )
+        self.assertEqual(len(output), UARTLESS_TLS_IDENTITY_MAX_BYTES)
+
+    def test_uartless_tls_identity_exchange_rejects_stdout_overflow_and_reaps(self) -> None:
+        with tempfile.TemporaryDirectory(
+            dir=Path(os.environ["TMPDIR"]).resolve(strict=True)
+        ) as name:
+            root = Path(name)
+            pid_path = root / "child.pid"
+            script = (
+                "import os, pathlib, sys, time; "
+                "pathlib.Path(sys.argv[1]).write_text(str(os.getpid())); "
+                "os.write(1, b'x' * (int(sys.argv[2]) + 1)); time.sleep(30)"
+            )
+            with self.assertRaisesRegex(
+                RecoveryApHostError, "^authenticated recovery-AP exchange was rejected$"
+            ) as raised:
+                self._local_uartless_tls_exchange(
+                    root,
+                    script,
+                    arguments=(str(pid_path), str(UARTLESS_TLS_IDENTITY_MAX_BYTES)),
+                )
+            self.assertNotIn("x" * 32, str(raised.exception))
+            with self.assertRaises(ProcessLookupError):
+                os.kill(int(pid_path.read_text(encoding="ascii")), 0)
+
+    def test_uartless_tls_identity_exchange_rejects_stderr_overflow(self) -> None:
+        with tempfile.TemporaryDirectory(
+            dir=Path(os.environ["TMPDIR"]).resolve(strict=True)
+        ) as name, self.assertRaisesRegex(
+            RecoveryApHostError, "^authenticated recovery-AP exchange was rejected$"
+        ) as raised:
+            self._local_uartless_tls_exchange(
+                Path(name),
+                "import os, sys; os.write(2, b'secret' * int(sys.argv[1]))",
+                arguments=(str(UARTLESS_TLS_IDENTITY_MAX_BYTES),),
+            )
+        self.assertNotIn("secret", str(raised.exception))
+
+    def test_uartless_tls_identity_exchange_drains_streams_together(self) -> None:
+        with tempfile.TemporaryDirectory(
+            dir=Path(os.environ["TMPDIR"]).resolve(strict=True)
+        ) as name:
+            output = self._local_uartless_tls_exchange(
+                Path(name),
+                "import os; [(os.write(1, b'o' * 1024), "
+                "os.write(2, b'e' * 1024)) for _ in range(16)]",
+            )
+        self.assertEqual(output, b"o" * UARTLESS_TLS_IDENTITY_MAX_BYTES)
+
+    def test_uartless_tls_identity_exchange_times_out_and_reaps(self) -> None:
+        with tempfile.TemporaryDirectory(
+            dir=Path(os.environ["TMPDIR"]).resolve(strict=True)
+        ) as name:
+            root = Path(name)
+            pid_path = root / "child.pid"
+            script = (
+                "import os, pathlib, sys, time; "
+                "pathlib.Path(sys.argv[1]).write_text(str(os.getpid())); time.sleep(30)"
+            )
+            with self.assertRaisesRegex(
+                RecoveryApHostError, "^authenticated recovery-AP exchange failed$"
+            ) as raised:
+                self._local_uartless_tls_exchange(
+                    root,
+                    script,
+                    timeout=0.1,
+                    arguments=(str(pid_path),),
+                )
+            self.assertNotIn(str(pid_path), str(raised.exception))
+            with self.assertRaises(ProcessLookupError):
+                os.kill(int(pid_path.read_text(encoding="ascii")), 0)
+
+    def test_uartless_tls_identity_exchange_kills_inherited_pipe_descendant(self) -> None:
+        with tempfile.TemporaryDirectory(
+            dir=Path(os.environ["TMPDIR"]).resolve(strict=True)
+        ) as name:
+            root = Path(name)
+            pid_path = root / "processes.pid"
+            script = (
+                "import os, pathlib, subprocess, sys; "
+                "child = subprocess.Popen([sys.executable, '-c', "
+                "'import signal, time; signal.signal(signal.SIGTERM, signal.SIG_IGN); "
+                "time.sleep(30)']); "
+                "pathlib.Path(sys.argv[1]).write_text(f'{os.getpid()} {child.pid}')"
+            )
+            with self.assertRaisesRegex(
+                RecoveryApHostError, "^authenticated recovery-AP exchange failed$"
+            ):
+                self._local_uartless_tls_exchange(
+                    root,
+                    script,
+                    timeout=0.1,
+                    arguments=(str(pid_path),),
+                )
+            leader_pid, child_pid = (
+                int(value)
+                for value in pid_path.read_text(encoding="ascii").split()
+            )
+            reap_deadline = time.monotonic() + 2.0
+            while True:
+                survivors = []
+                for pid in (leader_pid, child_pid):
+                    try:
+                        os.kill(pid, 0)
+                    except ProcessLookupError:
+                        continue
+                    survivors.append(pid)
+                if not survivors:
+                    break
+                if time.monotonic() >= reap_deadline:
+                    self.fail(f"bounded TLS subprocesses survived cleanup: {survivors}")
+                time.sleep(0.01)
+
     def test_service_credential_is_private_and_exactly_framed(self) -> None:
         with tempfile.TemporaryDirectory() as name:
             session_dir = private_session(Path(name))

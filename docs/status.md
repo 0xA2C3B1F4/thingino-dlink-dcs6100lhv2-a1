@@ -1,6 +1,6 @@
 # Release status
 
-Historical runtime baseline validated: 2026-09-06. Documentation updated: 2026-09-21.
+Historical runtime baseline validated: 2026-09-06. Documentation updated: 2026-09-22.
 
 This repository provides source and host tools. There is no supported firmware
 download yet. The validated platform is DCS-6100LHV2 A1 with Apple Silicon macOS.
@@ -87,8 +87,24 @@ the 7,954,513-byte universal bundle SHA-256 is
 Build A emitted a tolerated host-finalization `patchelf` warning; build B did
 not, and the retained artifact pairs were byte-identical. This does not claim a
 clean host SDK run. The technical closure check passed, but it does not close
-legal, notice or binary-distribution gates. The c4b6 firmware has not been
-installed or accepted on the camera.
+legal, notice or binary-distribution gates. The c4b6 firmware was subsequently
+installed on the first camera. The supported management verifier and selected
+logical MTD 0/1/3/5/6 readback passed. That readback did not cover all flash,
+mutable data or physical mtd2. The user reported immediate audio after switching
+the microphone from Off to On and pressing Listen once on both streams in Safari,
+without Reload. A separate native Chromium test failed with HTTP 413 on both
+WHIP routes; the cause of a subsequent MJPEG Offline result remains unresolved.
+Source `a091c826` limits the larger request body to those two supported WHIP POST
+routes, with passing host and native HTTPS tests. Its two clean builds completed
+successfully. Independent verification rehashed all 32 files, compared all 16
+artifact pairs byte-for-byte and freshly inspected both install sets. The raw
+system is 6,369,280 bytes with SHA-256
+`663b2052c68d802c0a5ff26ca6579dd251c3e75541bf9f7f0563979d8661bcc8`;
+the universal bundle SHA-256 is
+`57593fa34b7ed40985eb3c3c4b8bec71f932251391d7aa7663f3a49f541b7dd0`.
+Exact-firmware runtime acceptance remains pending. The Safari observation does
+not transfer to that new firmware, and these host checks do not close licensing
+or binary-distribution gates.
 
 These are same-image bounded observations. They do not transfer results from an
 older candidate, establish every control or setting, prove persistence, or close

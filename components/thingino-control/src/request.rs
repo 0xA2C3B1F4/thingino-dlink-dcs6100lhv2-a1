@@ -3,6 +3,7 @@ use super::*;
 #[cfg(test)]
 use crate::decode::decode_hex;
 pub(crate) use crate::decode::percent_decode_path as percent_decode;
+use crate::request_parse::MAX_WHIP_SDP_BODY_BYTES;
 use crate::request_parse::parse_request;
 pub(crate) use crate::request_parse::{Request, RequestError, find_bytes};
 
@@ -138,7 +139,7 @@ pub(crate) fn drain_pending_input(stream: &mut TcpStream) {
     }
     let mut drained = 0;
     let mut buffer = [0_u8; 1024];
-    while drained <= MAX_HEADER_BYTES + MAX_BODY_BYTES {
+    while drained <= MAX_HEADER_BYTES + MAX_WHIP_SDP_BODY_BYTES {
         match stream.read(&mut buffer) {
             Ok(0) => break,
             Ok(count) => drained += count,

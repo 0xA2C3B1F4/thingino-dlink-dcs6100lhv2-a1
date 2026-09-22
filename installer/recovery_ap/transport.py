@@ -217,6 +217,7 @@ def ssh_arguments(facade: object,
     allow_uartless_station_health: bool = False,
     allow_uartless_raptor_runtime: bool = False,
     allow_uartless_post_install_readback: bool = False,
+    allow_uartless_tls_identity: bool = False,
 ) -> list[str]:
     RecoveryApHostError = getattr(facade, 'RecoveryApHostError')
     RecoveryApHostSession = getattr(facade, 'RecoveryApHostSession')
@@ -234,6 +235,7 @@ def ssh_arguments(facade: object,
     )
     from ..raptor_runtime_protocol import is_runtime_command
     from ..post_install_readback import POST_INSTALL_READBACK_COMMAND
+    TLS_IDENTITY_COMMAND = getattr(facade, 'UARTLESS_TLS_IDENTITY_COMMAND')
     uartless_raptor_runtime = (
         allow_uartless_raptor_runtime
         and session.session_kind == "uartless-functional-provisioning"
@@ -244,7 +246,18 @@ def ssh_arguments(facade: object,
         and session.session_kind == "uartless-functional-provisioning"
         and command == POST_INSTALL_READBACK_COMMAND
     )
-    uartless_station = uartless_station_health or uartless_raptor_runtime or uartless_readback
+    uartless_tls_identity = (
+        allow_uartless_tls_identity
+        and session.session_kind == "uartless-functional-provisioning"
+        and not session.transport_enabled
+        and command == TLS_IDENTITY_COMMAND
+    )
+    uartless_station = (
+        uartless_station_health
+        or uartless_raptor_runtime
+        or uartless_readback
+        or uartless_tls_identity
+    )
     if (not session.transport_enabled
             or session.session_kind == "uartless-functional-provisioning") and not uartless_station:
         raise RecoveryApHostError("UARTless provisioning session has no recovery-AP transport")
@@ -266,7 +279,7 @@ def ssh_arguments(facade: object,
         "dlink-application-verify",
         "dlink-runtime-snapshot",
         POST_INSTALL_READBACK_COMMAND,
-    }
+    } or uartless_tls_identity
     transfer = re.fullmatch(
         r"(?:receive [1-9][0-9]{0,6} [0-9a-f]{64}|send [0-9a-f]{64}|install-recovery [0-9a-f]{64}|install-mtd3 [0-9a-f]{64}|activate-mtd3 [0-9a-f]{64})",
         command,
@@ -324,6 +337,121 @@ def _runtime_stderr_category(raw: bytes) -> str:
     return "other" if raw else "empty"
 
 
+def _bounded_tls_identity_exchange(
+    facade: object,
+    arguments: list[str],
+    *,
+    timeout: float,
+    limit: int,
+) -> tuple[int, bytes, bytes]:
+    """Capture the fixed certificate command on POSIX without unbounded buffers."""
+
+    RecoveryApHostError = getattr(facade, 'RecoveryApHostError')
+    os = getattr(facade, 'os')
+    subprocess = getattr(facade, 'subprocess')
+    time = getattr(facade, 'time')
+    import selectors
+    import signal
+
+    def stop_and_reap(process: object, *, terminate_group: bool) -> None:
+        if terminate_group:
+            try:
+                os.killpg(process.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+            grace_deadline = time.monotonic() + 0.5
+            while time.monotonic() < grace_deadline:
+                process.poll()
+                try:
+                    os.killpg(process.pid, 0)
+                except (ProcessLookupError, PermissionError):
+                    break
+                time.sleep(0.01)
+            else:
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            process.wait()
+            return
+        if process.poll() is not None:
+            process.wait()
+            return
+        process.terminate()
+        try:
+            process.wait(timeout=0.5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+
+    deadline = time.monotonic() + timeout
+    selector = None
+    streams = {}
+    terminate_group = True
+    try:
+        process = subprocess.Popen(
+            arguments,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            start_new_session=True,
+        )
+    except OSError as exc:
+        raise RecoveryApHostError("authenticated recovery-AP exchange failed") from exc
+    try:
+        captured = {"stdout": bytearray(), "stderr": bytearray()}
+        streams = {"stdout": process.stdout, "stderr": process.stderr}
+        selector = selectors.DefaultSelector()
+        for label, stream in streams.items():
+            os.set_blocking(stream.fileno(), False)
+            selector.register(stream, selectors.EVENT_READ, label)
+        while selector.get_map():
+            remaining_time = deadline - time.monotonic()
+            if remaining_time <= 0:
+                raise RecoveryApHostError("authenticated recovery-AP exchange failed")
+            ready = selector.select(remaining_time)
+            if not ready:
+                raise RecoveryApHostError("authenticated recovery-AP exchange failed")
+            for key, _ in ready:
+                label = key.data
+                remaining_bytes = limit - len(captured[label])
+                try:
+                    chunk = os.read(key.fd, min(4096, remaining_bytes + 1))
+                except BlockingIOError:
+                    continue
+                except OSError as exc:
+                    raise RecoveryApHostError(
+                        "authenticated recovery-AP exchange failed"
+                    ) from exc
+                if not chunk:
+                    selector.unregister(key.fileobj)
+                    continue
+                if len(chunk) > remaining_bytes:
+                    captured[label].extend(chunk[:remaining_bytes])
+                    raise RecoveryApHostError(
+                        "authenticated recovery-AP exchange was rejected"
+                    )
+                captured[label].extend(chunk)
+
+        remaining_time = deadline - time.monotonic()
+        if remaining_time <= 0:
+            raise RecoveryApHostError("authenticated recovery-AP exchange failed")
+        try:
+            returncode = process.wait(timeout=remaining_time)
+        except subprocess.TimeoutExpired:
+            raise RecoveryApHostError(
+                "authenticated recovery-AP exchange failed"
+            ) from None
+        terminate_group = returncode != 0
+        return returncode, bytes(captured["stdout"]), bytes(captured["stderr"])
+    finally:
+        stop_and_reap(process, terminate_group=terminate_group)
+        if selector is not None:
+            selector.close()
+        for stream in streams.values():
+            stream.close()
+
+
 def _exchange(facade: object,
     session: RecoveryApHostSession,
     *,
@@ -334,12 +462,16 @@ def _exchange(facade: object,
     allow_uartless_station_health: bool = False,
     allow_uartless_raptor_runtime: bool = False,
     allow_uartless_post_install_readback: bool = False,
+    allow_uartless_tls_identity: bool = False,
 ) -> bytes:
     RecoveryApHostError = getattr(facade, 'RecoveryApHostError')
     RecoveryApHostSession = getattr(facade, 'RecoveryApHostSession')
+    os = getattr(facade, 'os')
     ssh_arguments = getattr(facade, 'ssh_arguments')
     subprocess = getattr(facade, 'subprocess')
     from ..raptor_runtime_protocol import is_runtime_command
+    TLS_IDENTITY_COMMAND = getattr(facade, 'UARTLESS_TLS_IDENTITY_COMMAND')
+    TLS_IDENTITY_MAX_BYTES = getattr(facade, 'UARTLESS_TLS_IDENTITY_MAX_BYTES')
     import shlex
 
     runtime_label = None
@@ -348,16 +480,35 @@ def _exchange(facade: object,
         runtime_label = f"Raptor runtime operation={parts[4]}"
         if parts[4] == "receive":
             runtime_label += f" member={parts[6]}"
+    tls_identity = allow_uartless_tls_identity and command == TLS_IDENTITY_COMMAND
+    if tls_identity and os.name != "posix":
+        raise RecoveryApHostError(
+            "UARTless TLS identity capture requires a POSIX host"
+        )
+    arguments = ssh_arguments(
+        session,
+        host=host,
+        command=command,
+        allow_uartless_station_health=allow_uartless_station_health,
+        allow_uartless_raptor_runtime=allow_uartless_raptor_runtime,
+        allow_uartless_post_install_readback=allow_uartless_post_install_readback,
+        allow_uartless_tls_identity=allow_uartless_tls_identity,
+    )
+    if tls_identity:
+        if payload:
+            raise RecoveryApHostError("authenticated recovery-AP exchange was rejected")
+        returncode, stdout, _stderr = _bounded_tls_identity_exchange(
+            facade,
+            arguments,
+            timeout=timeout,
+            limit=TLS_IDENTITY_MAX_BYTES,
+        )
+        if returncode:
+            raise RecoveryApHostError("authenticated recovery-AP exchange was rejected")
+        return stdout
     try:
         result = subprocess.run(
-            ssh_arguments(
-                session,
-                host=host,
-                command=command,
-                allow_uartless_station_health=allow_uartless_station_health,
-                allow_uartless_raptor_runtime=allow_uartless_raptor_runtime,
-                allow_uartless_post_install_readback=allow_uartless_post_install_readback,
-            ),
+            arguments,
             input=payload,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -369,7 +520,8 @@ def _exchange(facade: object,
             reason = "timeout" if isinstance(exc, subprocess.TimeoutExpired) else "transport-error"
             raise RecoveryApHostError(f"{runtime_label} {reason}") from None
         raise RecoveryApHostError("authenticated recovery-AP exchange failed") from exc
-    if result.returncode or len(result.stdout) > 16 * 1024 * 1024:
+    stdout_limit = 16 * 1024 * 1024
+    if result.returncode or len(result.stdout) > stdout_limit:
         if runtime_label is not None:
             raise RecoveryApHostError(
                 f"{runtime_label} rejected ssh_returncode={result.returncode}"

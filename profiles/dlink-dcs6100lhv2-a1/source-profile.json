@@ -529,7 +529,7 @@
     },
     {
       "destination": "package/thingino-control/rust/src/lib.rs",
-      "sha256": "70440e4f2a86c45a85c8be0b2af650d8076e92128e34bb1488c95832f41a4578",
+      "sha256": "e1b3f2fbf89846f294bff545c5b088e9a03cf78b9a72b08b1dc243c95591a5d3",
       "source": "components/thingino-control/src/lib.rs"
     },
     {
@@ -719,12 +719,12 @@
     },
     {
       "destination": "package/thingino-control/rust/src/request.rs",
-      "sha256": "8ddd10dc303b5580b253579450e5b5133a2ca6abcc62098e7899657618f8bb5c",
+      "sha256": "27ea426c3e7ffdc4698fef5ab5263cca07be1632329834f40123fe4b8c1c3cbb",
       "source": "components/thingino-control/src/request.rs"
     },
     {
       "destination": "package/thingino-control/rust/src/request_parse.rs",
-      "sha256": "d5763b620170664ac2623a7dffc9ae0bc8658659556214a65081f967dd834033",
+      "sha256": "03196d5462393c4f7b9cf2bcf8e6192e78be64892791b22af1499c4d9dff1fc0",
       "source": "components/thingino-control/src/request_parse.rs"
     },
     {
@@ -754,7 +754,7 @@
     },
     {
       "destination": "package/thingino-control/rust/src/whip.rs",
-      "sha256": "a40a290b368a1e3a198feee695bc393b4ca491b1d9fa454cb9ee509536e08fd4",
+      "sha256": "6e2ef7cefa3f41098f61f3b4b42aaa5875c59626b455115377c9c9569a79d5c7",
       "source": "components/thingino-control/src/whip.rs"
     },
     {
@@ -841,6 +841,11 @@
       "destination": "package/thingino-uhttpd/0018-onvif-snapshot-digest.patch",
       "sha256": "752ad4480e3aff553bcba4469e119fd50019a107e8e1fa05a0b5cfbc496df438",
       "source": "patches/uhttpd/0018-onvif-snapshot-digest.patch"
+    },
+    {
+      "destination": "package/thingino-uhttpd/0019-bound-whip-sdp-body.patch",
+      "sha256": "df0202e13d9760fd25785b23ba41d2d2a40ad76a24f387c31c8b36eb1e88e519",
+      "source": "patches/uhttpd/0019-bound-whip-sdp-body.patch"
     }
   ],
   "model": "DCS-6100LHV2",

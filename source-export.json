@@ -210,7 +210,7 @@
       "source": "components/thingino-control/fuzz/fuzz_targets/decoders.rs"
     },
     "components/thingino-control/fuzz/fuzz_targets/http_request.rs": {
-      "sha256": "a5ab5726c2770d4e3f033f936c2a26208d0edeed80c13850b5f54bd5bba9393e",
+      "sha256": "9895c482b9dd6a086f03955fc5865c1988ae23176789579274fa590e63ad2339",
       "source": "components/thingino-control/fuzz/fuzz_targets/http_request.rs"
     },
     "components/thingino-control/fuzz/fuzz_targets/json_parse.rs": {
@@ -246,8 +246,12 @@
       "source": "components/thingino-control/scripts/host_soak.py"
     },
     "components/thingino-control/scripts/host_uhttpd_proxy.py": {
-      "sha256": "23cb11370c0778c548fa8f2a9fba8217fbf522d7d1ed6985ea945c4ce0a309c6",
+      "sha256": "e540c507bb419faf91c8d0729e40484852dfacc0439d8d80f0c9d48291658622",
       "source": "components/thingino-control/scripts/host_uhttpd_proxy.py"
+    },
+    "components/thingino-control/scripts/run_native_uhttpd_proxy.py": {
+      "sha256": "2fd33729963369bafe8cec0b6e763b72355d5c57ac68a3258ee23dea74ea5658",
+      "source": "components/thingino-control/scripts/run_native_uhttpd_proxy.py"
     },
     "components/thingino-control/scripts/run_with_mqtt_brokers.py": {
       "sha256": "ecd52e6379803959cb58620d7050593b36b53f42f3c363ec98b556f1fc385af0",
@@ -454,7 +458,7 @@
       "source": "components/thingino-control/src/json.rs"
     },
     "components/thingino-control/src/lib.rs": {
-      "sha256": "70440e4f2a86c45a85c8be0b2af650d8076e92128e34bb1488c95832f41a4578",
+      "sha256": "e1b3f2fbf89846f294bff545c5b088e9a03cf78b9a72b08b1dc243c95591a5d3",
       "source": "components/thingino-control/src/lib.rs"
     },
     "components/thingino-control/src/main.rs": {
@@ -606,11 +610,11 @@
       "source": "components/thingino-control/src/raptor_backend/timezone.rs"
     },
     "components/thingino-control/src/request.rs": {
-      "sha256": "8ddd10dc303b5580b253579450e5b5133a2ca6abcc62098e7899657618f8bb5c",
+      "sha256": "27ea426c3e7ffdc4698fef5ab5263cca07be1632329834f40123fe4b8c1c3cbb",
       "source": "components/thingino-control/src/request.rs"
     },
     "components/thingino-control/src/request_parse.rs": {
-      "sha256": "d5763b620170664ac2623a7dffc9ae0bc8658659556214a65081f967dd834033",
+      "sha256": "03196d5462393c4f7b9cf2bcf8e6192e78be64892791b22af1499c4d9dff1fc0",
       "source": "components/thingino-control/src/request_parse.rs"
     },
     "components/thingino-control/src/response.rs": {
@@ -634,7 +638,7 @@
       "source": "components/thingino-control/src/web_auth_tests.rs"
     },
     "components/thingino-control/src/whip.rs": {
-      "sha256": "a40a290b368a1e3a198feee695bc393b4ca491b1d9fa454cb9ee509536e08fd4",
+      "sha256": "6e2ef7cefa3f41098f61f3b4b42aaa5875c59626b455115377c9c9569a79d5c7",
       "source": "components/thingino-control/src/whip.rs"
     },
     "components/thingino-control/storage-worker/mod.rs": {
@@ -642,7 +646,7 @@
       "source": "components/thingino-control/storage-worker/mod.rs"
     },
     "components/thingino-control/tests/contract.rs": {
-      "sha256": "19ae0ef70509e2293621b4ddf9df561aef55472fae6cc428a0e67c360a678608",
+      "sha256": "a52a06fdd74734d8f256683115d2610bab4eda2be5f279b2af3fe4f8263d2e0e",
       "source": "components/thingino-control/tests/contract.rs"
     },
     "containers/thingino-builder-amd64.Containerfile": {
@@ -662,7 +666,7 @@
       "source": "contracts/raptor-stream-profile-v1.json"
     },
     "contracts/thingino-control-api-v1.json": {
-      "sha256": "09de1fc60fda805719f1a383bdd801ed34a84a11127400a62f06f618d90d3129",
+      "sha256": "39123dfd3d25bdbfe674c16df2434c1a3c343588bf9a74f63d7e55ae9b79daa6",
       "source": "contracts/thingino-control-api-v1.json"
     },
     "docs/api.md": {
@@ -718,7 +722,7 @@
       "source": "production/docs/release-evidence/2026-09-19-fresh-install-reproducibility.md"
     },
     "docs/status.md": {
-      "sha256": "6146ed723acaf7e37739ad71090439ba475ac897ac9ec0d25e6f0873a91aacfb",
+      "sha256": "b2f19ee335a1f717878e493390d17f95423fe9d6d15299deff28ee46a5df746e",
       "source": "production/docs/status.md"
     },
     "docs/testing.md": {
@@ -1042,7 +1046,7 @@
       "source": "installer/recovery_ap/entropy_seed.c"
     },
     "installer/recovery_ap/host.py": {
-      "sha256": "4af774a8e78b96d0fe31f7bfcba8b8bf2892499775400c03be32cbdc23131c88",
+      "sha256": "537eab73665e505b9bd2a0ff4fa11dfae35d4f41d08c8d0e3fa9ea3f61eb6302",
       "source": "installer/recovery_ap/host.py"
     },
     "installer/recovery_ap/ingenic_t31_dtrng.c": {
@@ -1078,7 +1082,7 @@
       "source": "installer/recovery_ap/thingino_enter.c"
     },
     "installer/recovery_ap/transport.py": {
-      "sha256": "4790e20bceea10f1e81a10be4a83cb71634c6928c5862ce5c74b8e11863914c6",
+      "sha256": "78af29d9474886b58291cf827e221dc3443a448378a0449e0dd0129407d793bc",
       "source": "installer/recovery_ap/transport.py"
     },
     "installer/recovery_gate.py": {
@@ -1465,6 +1469,10 @@
       "sha256": "752ad4480e3aff553bcba4469e119fd50019a107e8e1fa05a0b5cfbc496df438",
       "source": "patches/uhttpd/0018-onvif-snapshot-digest.patch"
     },
+    "patches/uhttpd/0019-bound-whip-sdp-body.patch": {
+      "sha256": "df0202e13d9760fd25785b23ba41d2d2a40ad76a24f387c31c8b36eb1e88e519",
+      "source": "patches/uhttpd/0019-bound-whip-sdp-body.patch"
+    },
     "policy/release-gates.json": {
       "sha256": "de61602909d97e4e7b94e9a8073a7062269c6312bfc46066833079f1d477abb4",
       "source": "policy/release-gates.json"
@@ -1502,7 +1510,7 @@
       "source": "profiles/dlink-dcs6100lhv2-a1/recovery-ap-kernel.fragment"
     },
     "profiles/dlink-dcs6100lhv2-a1/source-profile.json": {
-      "sha256": "65b5f5794df01b92993ee003de9b6de708f0cb8431d0dcf2f1dae6b99814d094",
+      "sha256": "d75e04539fbdb0ff5aafc1884f13de63da6a9e356e96be9903f9e366ddce5c9c",
       "source": "profiles/dlink-dcs6100lhv2-a1/source-profile.json"
     },
     "profiles/dlink-dcs6100lhv2-a1/stock-restore-kernel.fragment": {
@@ -1601,6 +1609,10 @@
       "sha256": "bb0e6b3536de5eb27018cb8add6673cfd280a15e6f06b0aaca2142241e1fe49d",
       "source": "scripts/container_build_thingino_toolchain.sh"
     },
+    "scripts/container_collect_buildroot_legal_info.sh": {
+      "sha256": "1c45359bd2e2b47bda13ea223e7b20a102c6679f825376200bd879e1d933639a",
+      "source": "scripts/container_collect_buildroot_legal_info.sh"
+    },
     "scripts/container_fetch_thingino_downloads.sh": {
       "sha256": "e4b132b0e9d258fdde34aaec49582ef3d47fd0392276edc89f99eb0787cd2cb2",
       "source": "scripts/container_fetch_thingino_downloads.sh"
@@ -1665,6 +1677,10 @@
       "sha256": "80ee29c7319ecc8899b1322beb589f12f9da8434948585febab2846b2b96ad1a",
       "source": "scripts/run_container_mkfs_jffs2.sh"
     },
+    "scripts/run_macos_buildroot_legal_info.sh": {
+      "sha256": "98046ed044a8df384a99adb137858306e7837d51e13b336748bd00ac1d38eae2",
+      "source": "scripts/run_macos_buildroot_legal_info.sh"
+    },
     "scripts/run_macos_collector_kernel_build.sh": {
       "sha256": "0f178b97b4fe7af373ba3f5c2d19af9faf9391bce07558a1e228fe285f7bfbbb",
       "source": "scripts/run_macos_collector_kernel_build.sh"
@@ -1728,6 +1744,10 @@
     "tests/test_build_thingino_control.py": {
       "sha256": "2292a40dfae77f61e369041c5dd226c94c42f4940de456c06cd7d190fdd24a57",
       "source": "tests/test_build_thingino_control.py"
+    },
+    "tests/test_buildroot_legal_info.py": {
+      "sha256": "267e1ade8e6e7ad1f57043fb2d3bd54b151fc01415a35d82a6292fbcc98b1244",
+      "source": "tests/test_buildroot_legal_info.py"
     },
     "tests/test_candidate_log.py": {
       "sha256": "9793683337c3c8be0a4686f289ff1f6632f4751e564e7579acd513ad953ba6ba",
@@ -1853,6 +1873,10 @@
       "sha256": "42c3f8cc55f0ee394d55c1aadfda77a036aa0114ee689051157dcb28881c013d",
       "source": "tests/test_mtd3_image.py"
     },
+    "tests/test_native_uhttpd_proxy.py": {
+      "sha256": "2ae7c897c4279cbdf41c403de779d27caf4edbb0a1ada6000470c0854b11115a",
+      "source": "tests/test_native_uhttpd_proxy.py"
+    },
     "tests/test_official_input.py": {
       "sha256": "56de48745483173c1e501ba6dcab99f8f3bd0045960605bd98ce2c9f17eabd70",
       "source": "tests/test_official_input.py"
@@ -1958,7 +1982,7 @@
       "source": "tests/test_recovery.py"
     },
     "tests/test_recovery_ap_host.py": {
-      "sha256": "7ec224b85c613083d8b362aba6fab3a9d4b63886e89424e5b2bb40ab3f06b7c3",
+      "sha256": "eb0211fd5d55bfe0b495407d3ac8da521edabdb7af43534323a2d0c771360aa5",
       "source": "tests/test_recovery_ap_host.py"
     },
     "tests/test_recovery_ap_kernel.py": {
@@ -2014,7 +2038,7 @@
       "source": "tests/test_source_delivery_inventory.py"
     },
     "tests/test_source_prepare.py": {
-      "sha256": "f8aa7ecce8f6b040c6aca504500032345724d908d8adc88b5c835a0d5ef761ce",
+      "sha256": "bed1cf8f7e81e48a3643204101cc5900006234b849443bc7a393154cc509224e",
       "source": "tests/test_source_prepare.py"
     },
     "tests/test_split_kernel_build.py": {
@@ -2090,7 +2114,7 @@
       "source": "tests/test_windows_media_preflight.py"
     },
     "third_party/LICENSE_REVIEW.md": {
-      "sha256": "8865377cd4ac4155fef0d8ccec61f6cbae0e22d77fb644e23436b4fa6e257101",
+      "sha256": "d7d8205a4d44b2d225cc91e1ef20975a90b2feaa6518ed09dfac00892b8aecfe",
       "source": "third_party/LICENSE_REVIEW.md"
     },
     "third_party/NOTICE.md": {
@@ -2487,6 +2511,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "b2d4f244453525d67a4ed3851c2ca461c524945a",
+  "source_commit": "fa8a0abc93c1d1a78817e7696dd6bdea68b70743",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }

@@ -22,6 +22,20 @@ pub(crate) enum RequestError {
 
 pub const MAX_HEADER_BYTES: usize = 8 * 1024;
 pub const MAX_BODY_BYTES: usize = 4 * 1024;
+pub const MAX_WHIP_SDP_BODY_BYTES: usize = 15 * 1024;
+
+fn body_limit(method: &str, target: &str) -> usize {
+    if method == "POST"
+        && matches!(
+            target,
+            "/api/v1/media/webrtc/whip?stream=0" | "/api/v1/media/webrtc/whip?stream=1"
+        )
+    {
+        MAX_WHIP_SDP_BODY_BYTES
+    } else {
+        MAX_BODY_BYTES
+    }
+}
 
 pub(crate) fn parse_request(input: &[u8]) -> Result<Option<Request>, RequestError> {
     let Some(header_end) = find_bytes(input, b"\r\n\r\n") else {
@@ -116,7 +130,7 @@ pub(crate) fn parse_request(input: &[u8]) -> Result<Option<Request>, RequestErro
     }
 
     let content_length = content_length.unwrap_or(0);
-    if content_length > MAX_BODY_BYTES {
+    if content_length > body_limit(&method, &target) {
         return Err(RequestError::PayloadTooLarge);
     }
     let body_start = header_end + 4;
@@ -191,6 +205,40 @@ mod tests {
             b"POST / HTTP/1.1\r\nX-Requested-With: Thingino-WebUI\r\nX-Requested-With: Thingino-WebUI\r\nContent-Length: 0\r\n\r\n".as_slice(),
         ] {
             assert_eq!(parse_request(rejected), Err(RequestError::BadRequest));
+        }
+    }
+
+    #[test]
+    fn only_canonical_whip_posts_receive_the_sdp_body_limit() {
+        fn declared(method: &str, target: &str, length: usize) -> Vec<u8> {
+            format!("{method} {target} HTTP/1.1\r\nContent-Length: {length}\r\n\r\n").into_bytes()
+        }
+
+        for target in [
+            "/api/v1/media/webrtc/whip?stream=0",
+            "/api/v1/media/webrtc/whip?stream=1",
+        ] {
+            assert_eq!(
+                parse_request(&declared("POST", target, MAX_WHIP_SDP_BODY_BYTES)),
+                Ok(None)
+            );
+            assert_eq!(
+                parse_request(&declared("POST", target, MAX_WHIP_SDP_BODY_BYTES + 1)),
+                Err(RequestError::PayloadTooLarge)
+            );
+        }
+
+        for (method, target) in [
+            ("PUT", "/api/v1/media/webrtc/whip?stream=0"),
+            ("POST", "/api/v1/media/webrtc/whip?stream=2"),
+            ("POST", "/api/v1/media/webrtc/whip?stream=0&extra=1"),
+            ("POST", "/api/v1/media/webrtc/whip/stream=0"),
+        ] {
+            assert_eq!(
+                parse_request(&declared(method, target, MAX_BODY_BYTES + 1)),
+                Err(RequestError::PayloadTooLarge),
+                "accepted widened body for {method} {target}"
+            );
         }
     }
 }

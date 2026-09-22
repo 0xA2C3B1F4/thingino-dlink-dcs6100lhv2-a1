@@ -10,8 +10,8 @@ use std::time::{Duration, Instant};
 
 use thingino_control::{
     Backend, BackendError, BackendResponse, BackendRoute, MAX_BACKEND_OPERATIONS, MAX_BODY_BYTES,
-    MAX_HEADER_BYTES, PasswordHasher, PasswordVerifier, WebAuth, WebAuthPaths, WhipProxy, serve,
-    serve_with_web_auth, serve_with_web_auth_and_whip,
+    MAX_HEADER_BYTES, MAX_WHIP_SDP_BODY_BYTES, PasswordHasher, PasswordVerifier, WebAuth,
+    WebAuthPaths, WhipProxy, serve, serve_with_web_auth, serve_with_web_auth_and_whip,
 };
 
 const TOKEN: &str = "fixture-token-public-poc";
@@ -743,6 +743,95 @@ fn whip_proxy_rejects_unauthorized_and_malformed_requests_before_upstream() {
         unused.accept().unwrap_err().kind(),
         std::io::ErrorKind::WouldBlock
     );
+}
+
+#[test]
+fn whip_sdp_body_limit_is_exact_and_route_specific() {
+    fn whip_request(method: &str, target: &str, body_len: usize) -> Vec<u8> {
+        let mut request = format!(
+            "{method} {target} HTTP/1.1\r\nHost: fixture\r\nAuthorization: Bearer {TOKEN}\r\nContent-Type: application/sdp\r\nContent-Length: {body_len}\r\n\r\n"
+        )
+        .into_bytes();
+        request.extend(std::iter::repeat_n(b'a', body_len));
+        request
+    }
+
+    let upstream = TcpListener::bind("127.0.0.1:0").unwrap();
+    let upstream_address = upstream.local_addr().unwrap();
+    let forwarded_lengths = Arc::new(Mutex::new(Vec::new()));
+    let thread_lengths = Arc::clone(&forwarded_lengths);
+    let upstream_thread = thread::spawn(move || {
+        for _ in 0..2 {
+            let (mut stream, _) = upstream.accept().unwrap();
+            let request = read_http_request(&stream);
+            let body_start = request
+                .windows(4)
+                .position(|window| window == b"\r\n\r\n")
+                .unwrap()
+                + 4;
+            thread_lengths
+                .lock()
+                .unwrap()
+                .push(request.len() - body_start);
+            stream
+                .write_all(
+                    b"HTTP/1.1 201 Created\r\nContent-Type: application/sdp\r\nContent-Length: 5\r\nLocation: /whip/0123456789abcdef0123456789abcdef\r\n\r\nv=0\r\n",
+                )
+                .unwrap();
+        }
+    });
+    let server = RunningServer::start_with_whip(
+        Arc::new(FakeBackend::new(Behavior::Success)),
+        upstream_address,
+    );
+
+    for (target, body_len) in [
+        ("/api/v1/media/webrtc/whip?stream=0", 4439),
+        (
+            "/api/v1/media/webrtc/whip?stream=1",
+            MAX_WHIP_SDP_BODY_BYTES,
+        ),
+    ] {
+        assert_eq!(
+            raw_request(&server, &whip_request("POST", target, body_len)).0,
+            201
+        );
+    }
+    upstream_thread.join().unwrap();
+    assert_eq!(
+        *forwarded_lengths.lock().unwrap(),
+        [4439, MAX_WHIP_SDP_BODY_BYTES]
+    );
+
+    for (method, target, body_len) in [
+        (
+            "POST",
+            "/api/v1/media/webrtc/whip?stream=0",
+            MAX_WHIP_SDP_BODY_BYTES + 1,
+        ),
+        (
+            "POST",
+            "/api/v1/media/webrtc/whip?stream=2",
+            MAX_BODY_BYTES + 1,
+        ),
+        (
+            "POST",
+            "/api/v1/media/webrtc/whip?stream=0&extra=1",
+            MAX_BODY_BYTES + 1,
+        ),
+        (
+            "PUT",
+            "/api/v1/media/webrtc/whip?stream=0",
+            MAX_BODY_BYTES + 1,
+        ),
+    ] {
+        let request = whip_request(method, target, body_len);
+        assert_eq!(
+            raw_request(&server, &request[..request.len() - body_len]).0,
+            413,
+            "wrong body limit for {method} {target}"
+        );
+    }
 }
 
 #[test]

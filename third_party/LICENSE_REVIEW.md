@@ -148,6 +148,49 @@ The bundled copies were retrieved from the primary sources on 2026-08-29:
 - `RTL8188FU-hostap-BSD-3-Clause.txt` has SHA-256
   `2c2b3640a8256edb409356a7e3f3dfe762a489bd2cd9586aa1647b0f1128caf8`.
 
+## Selected local-package gaps
+
+Three selected local packages name license files that are absent from their
+retained package directories. `mbedtls-certgen` declares `GPL-2.0+` and
+`LICENSE`, but its C header contains a functional description without a located
+author or grant; the mbedTLS dependency's license does not answer that
+provenance question. `thingino-daynightd` declares `GPL-2.0` and `LICENSE`; its C
+header names the Thingino Project and GPL version 2 or later, while its README
+refers to the missing file. That header does not document the package's other
+scripts, configuration and WebUI files. `thingino-sounds` declares `CC0` and
+`LICENSE`, but no rights or source declaration was located for its media assets;
+the selected output set and authoritative asset provenance still need review.
+
+These are source and metadata observations, not new grants or legal conclusions.
+This review has not accepted the root MIT license as sufficient evidence to
+resolve conflicting metadata or imported-file provenance. The license and
+firmware distribution gates remain open.
+
+## Buildroot legal-info collection
+
+The offline collector passes the retained Thingino `mxml` 4.0.4 hash file to
+Buildroot as `MXML_HASH_FILES`. Before running `legal-info`, it checks the
+Thingino version override, the pinned source archive, and the extracted
+`LICENSE` and `NOTICE` against that file. The receipt records this selection and
+its scope. For Linux 3.10.14, the collector selects its top-level `COPYING`
+instead of newer kernel `LICENSES/` paths that do not exist in that release. It
+checks the retained archive and built-tree copies against the same pinned hash.
+The APFS export copies file bytes into private, exclusive paths and verifies the
+exported path set, sizes, and hashes without applying source metadata. These
+collector-only corrections do not revise failed prior receipts, approve the
+license review, or establish a complete corresponding-source delivery.
+GNU make keep-going mode gathers independent package failures in one attempt;
+any failure still leaves the collection nonzero and incomplete and closes no
+review gate.
+
+The retained `logcat-mini` commit contains an MIT `LICENSE` (Copyright 2024
+wltechblog), although its package recipe declares `GPL-2.0` and names an absent
+`COPYING`. The collector binds a command-line-only metadata correction to the
+exact recipe declarations, source archive hash, and matching archive/build
+`LICENSE` hashes, then verifies the archive is unchanged. This does not create
+a grant, alter package sources, or resolve other packages' missing license
+files or provenance.
+
 ## Evidence sources
 
 - [Pinned RTL8188FU repository](https://github.com/gtxaspec/rtl8188ftv-wifi/tree/6e3c1c2d244f5056d2a7ade3dbcf9daa3876fc06)

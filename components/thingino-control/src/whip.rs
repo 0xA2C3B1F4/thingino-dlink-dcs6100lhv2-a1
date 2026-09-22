@@ -1,6 +1,22 @@
 use super::*;
 
 const MAX_WHIP_RESPONSE_BYTES: usize = 16 * 1024;
+// Locked Raptor base 17b36386f980a24c7c90adb7c9b46f31b41c3b24 uses a
+// 16 KiB aggregate RWD HTTP request buffer and rejects at buffer size minus one.
+#[cfg(test)]
+const RWD_MAX_ACCEPTED_HTTP_REQUEST_BYTES: usize = 16 * 1024 - 2;
+
+fn request_headers(
+    method: &str,
+    path: &str,
+    content_type: &str,
+    body_len: usize,
+    address: SocketAddr,
+) -> String {
+    format!(
+        "{method} {path} HTTP/1.1\r\nHost: {address}\r\nConnection: close\r\nAccept: application/sdp\r\nContent-Type: {content_type}\r\nContent-Length: {body_len}\r\n\r\n"
+    )
+}
 
 #[derive(Clone, Debug)]
 pub struct WhipProxy {
@@ -56,11 +72,7 @@ impl WhipProxy {
             .min(CONNECTION_TIMEOUT);
         let mut stream = TcpStream::connect_timeout(&self.address, connect_budget)
             .map_err(classify_connect_error)?;
-        let request = format!(
-            "{method} {path} HTTP/1.1\r\nHost: {}\r\nConnection: close\r\nAccept: application/sdp\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\n\r\n",
-            self.address,
-            body.len(),
-        );
+        let request = request_headers(method, path, content_type, body.len(), self.address);
         write_all_deadline(&mut stream, request.as_bytes(), deadline)?;
         write_all_deadline(&mut stream, body, deadline)?;
 
@@ -213,5 +225,20 @@ mod tests {
         assert_eq!(session.session_id, "0123456789abcdef0123456789abcdef");
         assert!(parse_create_response(&response[..response.len() - 1]).is_err());
         assert!(!valid_session_id("../session"));
+    }
+
+    #[test]
+    fn maximum_whip_offer_and_generated_headers_fit_rwd_request_buffer() {
+        let largest_loopback: SocketAddr = "127.255.255.255:65535".parse().unwrap();
+        for path in ["/whip?stream=0", "/whip?stream=1"] {
+            let headers = request_headers(
+                "POST",
+                path,
+                "application/sdp",
+                MAX_WHIP_SDP_BODY_BYTES,
+                largest_loopback,
+            );
+            assert!(headers.len() + MAX_WHIP_SDP_BODY_BYTES <= RWD_MAX_ACCEPTED_HTTP_REQUEST_BYTES);
+        }
     }
 }

@@ -63,7 +63,7 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-pub use request_parse::{MAX_BODY_BYTES, MAX_HEADER_BYTES};
+pub use request_parse::{MAX_BODY_BYTES, MAX_HEADER_BYTES, MAX_WHIP_SDP_BODY_BYTES};
 pub const MAX_BACKEND_RESPONSE_BYTES: usize = 64 * 1024;
 pub const MAX_SNAPSHOT_BYTES: usize = 2 * 1024 * 1024;
 pub const CONNECTION_TIMEOUT: Duration = Duration::from_secs(1);

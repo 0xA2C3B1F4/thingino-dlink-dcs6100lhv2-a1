@@ -14,6 +14,13 @@ import threading
 import time
 
 
+ONVIF_DIGEST_AUTHORIZATION = 'Digest username="fixture", response="opaque-fixture"'
+ONVIF_DIGEST_CHALLENGE = (
+    'Digest realm="Thingino ONVIF", nonce="fixture-nonce", algorithm=MD5, qop="auth"'
+)
+ONVIF_JPEG = b"\xff\xd8onvif-digest-snapshot-1\xff\xd9"
+
+
 class Backend(socketserver.ThreadingMixIn, socketserver.TCPServer):
     allow_reuse_address = True
     daemon_threads = True
@@ -42,6 +49,33 @@ class Handler(socketserver.StreamRequestHandler):
 
         if target == "/api/v1/stall":
             time.sleep(5)
+        if target in (
+            "/api/v1/media/webrtc/whip?stream=0",
+            "/api/v1/media/webrtc/whip?stream=1",
+        ):
+            expected_length = (
+                4439 if target.endswith("stream=0") else 15 * 1024
+            )
+            if body != b"a" * expected_length:
+                payload = b'{"status":"error","error":{"code":"invalid_request"}}\n'
+                self.wfile.write(
+                    b"HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\n"
+                    b"Content-Length: "
+                    + str(len(payload)).encode()
+                    + b"\r\nConnection: close\r\n\r\n"
+                    + payload
+                )
+                return
+            payload = b"v=0\r\n"
+            self.wfile.write(
+                b"HTTP/1.1 201 Created\r\nContent-Type: application/sdp\r\n"
+                b"Location: /api/v1/media/webrtc/whip/"
+                b"0123456789abcdef0123456789abcdef\r\nContent-Length: "
+                + str(len(payload)).encode()
+                + b"\r\nConnection: close\r\n\r\n"
+                + payload
+            )
+            return
         if target == "/api/v1/runtime/media/metrics":
             payload = (
                 b"prudynt_rtsp_clients 1\n"
@@ -171,6 +205,45 @@ class Handler(socketserver.StreamRequestHandler):
         )
 
 
+class OnvifHandler(socketserver.StreamRequestHandler):
+    def handle(self):
+        line = self.rfile.readline(8193)
+        if not line:
+            return
+        method, target, version = line.decode("ascii").strip().split(" ")
+        headers = []
+        while True:
+            line = self.rfile.readline(8193)
+            if line == b"\r\n":
+                break
+            name, value = line.decode("latin-1").rstrip("\r\n").split(":", 1)
+            headers.append((name.lower(), value.strip()))
+        length = int(dict(headers).get("content-length", "0"))
+        body = self.rfile.read(length)
+        self.server.requests.put((method, target, version, headers, body))
+
+        if dict(headers).get("authorization") != ONVIF_DIGEST_AUTHORIZATION:
+            payload = b"Unauthorized\n"
+            self.wfile.write(
+                b"HTTP/1.1 401 Unauthorized\r\nContent-Type: text/plain\r\n"
+                b"WWW-Authenticate: "
+                + ONVIF_DIGEST_CHALLENGE.encode("ascii")
+                + b"\r\nContent-Length: "
+                + str(len(payload)).encode()
+                + b"\r\nConnection: close\r\n\r\n"
+                + payload
+            )
+            return
+        self.wfile.write(
+            b"HTTP/1.1 200 OK\r\nContent-Type: image/jpeg\r\n"
+            b'Content-Disposition: attachment; filename="snapshot-ch1.jpg"\r\n'
+            b"Content-Length: "
+            + str(len(ONVIF_JPEG)).encode()
+            + b"\r\nConnection: close\r\n\r\n"
+            + ONVIF_JPEG
+        )
+
+
 def request(method, path, headers=None, body=b"", timeout=7, secure=True):
     if secure:
         connection = http.client.HTTPSConnection(
@@ -208,9 +281,54 @@ def one_header(headers, name):
     return values[0]
 
 
+def check_whip_caps(backend):
+    while True:
+        try:
+            backend.requests.get_nowait()
+        except queue.Empty:
+            break
+    for path, body_length in (
+        ("/api/v1/media/webrtc/whip?stream=0", 4439),
+        ("/api/v1/media/webrtc/whip?stream=1", 15 * 1024),
+    ):
+        offered = b"a" * body_length
+        status, _, answer = request(
+            "POST",
+            path,
+            {"Content-Type": "application/sdp"},
+            offered,
+        )
+        assert status == 201 and answer == b"v=0\r\n"
+        method, target, version, _, forwarded = backend.requests.get(timeout=1)
+        assert (method, target, version) == ("POST", path, "HTTP/1.1")
+        assert forwarded == offered
+
+    for method, path, body_length in (
+        (
+            "POST",
+            "/api/v1/media/webrtc/whip?stream=0",
+            15 * 1024 + 1,
+        ),
+        ("POST", "/api/v1/media/webrtc/whip?stream=2", 4097),
+        (
+            "POST",
+            "/api/v1/media/webrtc/whip?stream=0&extra=1",
+            4097,
+        ),
+        ("PUT", "/api/v1/media/webrtc/whip?stream=0", 4097),
+    ):
+        assert request(
+            method,
+            path,
+            {"Content-Type": "application/sdp"},
+            b"a" * body_length,
+        )[0] == 413
+
+
 def main():
-    if len(sys.argv) != 2:
-        raise SystemExit("usage: host_uhttpd_proxy.py UHTTPD")
+    if len(sys.argv) not in (2, 3) or (len(sys.argv) == 3 and sys.argv[2] != "--whip-only"):
+        raise SystemExit("usage: host_uhttpd_proxy.py UHTTPD [--whip-only]")
+    whip_only = len(sys.argv) == 3
     with tempfile.TemporaryDirectory(prefix="thingino-uhttpd-proxy-") as root:
         with open(os.path.join(root, "ready.txt"), "wb") as output:
             output.write(b"ready\n")
@@ -245,6 +363,12 @@ def main():
             target=media_backend.serve_forever, daemon=True
         )
         media_thread.start()
+        onvif_backend = Backend(("127.0.0.1", 1999))
+        onvif_backend.RequestHandlerClass = OnvifHandler
+        onvif_thread = threading.Thread(
+            target=onvif_backend.serve_forever, daemon=True
+        )
+        onvif_thread.start()
         environment = os.environ.copy()
         process = subprocess.Popen(
             [
@@ -271,7 +395,16 @@ def main():
         )
         try:
             wait_ready(process)
-            assert request("GET", "/ready.txt", secure=False)[0] == 426
+            if whip_only:
+                check_whip_caps(backend)
+                print("WHIP route-specific request caps and exact forwarding: PASS")
+                return
+            redirect_status, redirect_headers, redirect_body = request(
+                "GET", "/ready.txt", secure=False
+            )
+            assert redirect_status == 308
+            assert redirect_headers["Location"] == "https://127.0.0.1:18080/"
+            assert redirect_body == b""
             assert request("GET", "/api/v1/health", secure=False)[0] == 426
             fallback_status, fallback_headers, fallback_body = request(
                 "GET", "/preview.html"
@@ -369,43 +502,57 @@ def main():
             )
             assert all(name != "cookie" for name, _ in headers)
 
-            assert request("GET", "/onvif/image1.cgi")[0] == 401
-            method, target, version, headers, body = backend.requests.get(timeout=1)
-            assert method == "GET" and version == "HTTP/1.1" and body == b""
-            assert target == (
-                "/api/v1/internal/media-authorize?target=%2Fonvif%2Fimage1.cgi"
-            )
-            assert one_header(headers, "x-thingino-proxy") == "1"
-            assert all(
-                name not in ("authorization", "cookie", "x-api-key")
-                for name, _ in headers
-            )
+            control_requests = backend.requests.qsize()
+            media_requests = media_backend.requests.qsize()
+            for authorization in (None, "Digest wrong"):
+                supplied = {} if authorization is None else {"Authorization": authorization}
+                onvif_status, onvif_headers, onvif_body = request(
+                    "GET", "/onvif/image1.cgi", supplied
+                )
+                assert onvif_status == 401
+                assert onvif_headers["WWW-Authenticate"] == ONVIF_DIGEST_CHALLENGE
+                assert onvif_body == b"Unauthorized\n"
+                method, target, version, headers, body = onvif_backend.requests.get(
+                    timeout=1
+                )
+                assert (method, target, version, body) == (
+                    "GET",
+                    "/onvif/image1.cgi",
+                    "HTTP/1.1",
+                    b"",
+                )
+                assert one_header(headers, "host") == "127.0.0.1:1999"
+                assert one_header(headers, "x-thingino-remote-addr") == "127.0.0.1"
+                forwarded = [value for name, value in headers if name == "authorization"]
+                assert forwarded == ([] if authorization is None else [authorization])
+                assert all(
+                    name not in ("cookie", "x-api-key", "x-thingino-proxy")
+                    for name, _ in headers
+                )
 
             onvif_status, onvif_headers, onvif_body = request(
-                "GET", "/onvif/image1.cgi", {"X-API-Key": "fixture-key"}
+                "GET",
+                "/onvif/image1.cgi",
+                {"Authorization": ONVIF_DIGEST_AUTHORIZATION},
             )
             assert onvif_status == 200
             assert onvif_headers["Content-Type"] == "image/jpeg"
             assert onvif_headers["Content-Disposition"] == (
                 'attachment; filename="snapshot-ch1.jpg"'
             )
-            assert onvif_body == b"\xff\xd8direct-snapshot-1\xff\xd9"
-            method, target, version, headers, body = backend.requests.get(timeout=1)
-            assert method == "GET" and version == "HTTP/1.1" and body == b""
-            assert target == (
-                "/api/v1/internal/media-authorize?target=%2Fonvif%2Fimage1.cgi"
-            )
-            assert one_header(headers, "x-thingino-proxy") == "1"
-            assert one_header(headers, "x-api-key") == "fixture-key"
-            method, target, version, headers, body = media_backend.requests.get(
-                timeout=1
-            )
+            assert onvif_body == ONVIF_JPEG
+            method, target, version, headers, body = onvif_backend.requests.get(timeout=1)
             assert (method, target, version, body) == (
                 "GET",
-                "/snapshot?ch=1",
-                "HTTP/1.0",
+                "/onvif/image1.cgi",
+                "HTTP/1.1",
                 b"",
             )
+            assert one_header(headers, "authorization") == ONVIF_DIGEST_AUTHORIZATION
+            assert one_header(headers, "host") == "127.0.0.1:1999"
+            assert one_header(headers, "x-thingino-remote-addr") == "127.0.0.1"
+            assert backend.requests.qsize() == control_requests
+            assert media_backend.requests.qsize() == media_requests
 
             status, _, payload = request(
                 "POST",
@@ -448,9 +595,12 @@ def main():
             )
             assert request("GET", "/api/v1/bad-cookie")[0] == 502
 
-            slow_client = socket.create_connection(("127.0.0.1", 18080), timeout=2)
+            slow_socket = socket.create_connection(("127.0.0.1", 18443), timeout=2)
+            slow_client = ssl._create_unverified_context().wrap_socket(
+                slow_socket, server_hostname="127.0.0.1"
+            )
             slow_client.sendall(
-                b"GET /api/v1/large HTTP/1.1\r\nHost: fixture\r\n"
+                b"GET /api/v1/large HTTP/1.1\r\nHost: 127.0.0.1\r\n"
                 b"Content-Length: 0\r\nConnection: close\r\n\r\n"
             )
             assert b"HTTP/1.1 200 OK" in slow_client.recv(256)
@@ -484,17 +634,19 @@ def main():
             )
             assert status == 413
 
+            check_whip_caps(backend)
+
             children_path = f"/proc/{process.pid}/task/{process.pid}/children"
             with open(children_path, "r", encoding="ascii") as source:
                 assert source.read().strip() == ""
             print("uhttpd Thingino Control proxy: PASS")
             print("static SPA fallback: PASS")
             print("forwarding/auth-context strip: PASS")
-            print("authorized WebUI and ONVIF in-memory snapshot relay: PASS")
+            print("authorized WebUI snapshot and ONVIF Digest-header relay: PASS")
             print("POST body, session cookies, zero-length response, and login redirect: PASS")
             print("nonblocking static response during stalled backend: PASS")
             print("slow-client disconnect and follow-up request: PASS")
-            print("backend timeout, request cap, and response cap: PASS")
+            print("backend timeout, route-specific request caps, and response cap: PASS")
             print("uhttpd child processes: 0")
         finally:
             process.terminate()
@@ -509,6 +661,9 @@ def main():
             media_backend.shutdown()
             media_backend.server_close()
             media_thread.join(timeout=1)
+            onvif_backend.shutdown()
+            onvif_backend.server_close()
+            onvif_thread.join(timeout=1)
             if process.returncode not in (0, -15):
                 stderr = process.stderr.read().decode("utf-8", "replace")
                 raise RuntimeError(f"uhttpd exited {process.returncode}: {stderr}")

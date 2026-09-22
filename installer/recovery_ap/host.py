@@ -12,6 +12,7 @@ import queue
 import secrets
 import shutil
 import socket
+import ssl
 import stat
 import subprocess
 import sys
@@ -41,6 +42,11 @@ from .nor_state import NorStateError, RecoveryNorState, parse_nor_state
 
 class RecoveryApHostError(ValueError):
     """The private session or authenticated recovery-AP exchange failed."""
+
+
+UARTLESS_TLS_IDENTITY_COMMAND = "cat /etc/ssl/certs/uhttpd.crt"
+UARTLESS_TLS_IDENTITY_MAX_BYTES = 16 * 1024
+UARTLESS_TLS_IDENTITY_TIMEOUT_SECONDS = 15.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,6 +120,7 @@ def ssh_arguments(
     allow_uartless_station_health: bool = False,
     allow_uartless_raptor_runtime: bool = False,
     allow_uartless_post_install_readback: bool = False,
+    allow_uartless_tls_identity: bool = False,
 ) -> list[str]:
     from .transport import ssh_arguments as _impl
 
@@ -125,6 +132,7 @@ def ssh_arguments(
         allow_uartless_station_health=allow_uartless_station_health,
         allow_uartless_raptor_runtime=allow_uartless_raptor_runtime,
         allow_uartless_post_install_readback=allow_uartless_post_install_readback,
+        allow_uartless_tls_identity=allow_uartless_tls_identity,
     )
 
 
@@ -138,6 +146,7 @@ def _exchange(
     allow_uartless_station_health: bool = False,
     allow_uartless_raptor_runtime: bool = False,
     allow_uartless_post_install_readback: bool = False,
+    allow_uartless_tls_identity: bool = False,
 ) -> bytes:
     from .transport import _exchange as _impl
 
@@ -151,7 +160,75 @@ def _exchange(
         allow_uartless_station_health=allow_uartless_station_health,
         allow_uartless_raptor_runtime=allow_uartless_raptor_runtime,
         allow_uartless_post_install_readback=allow_uartless_post_install_readback,
+        allow_uartless_tls_identity=allow_uartless_tls_identity,
     )
+
+
+def _uartless_tls_transport_identity(session: RecoveryApHostSession) -> str:
+    if (
+        session.session_kind != "uartless-functional-provisioning"
+        or session.transport_enabled
+        or session.station_known_hosts is None
+        or session.camera_identity_sha256 is None
+    ):
+        raise RecoveryApHostError("session is not pinned for UARTless TLS identity")
+    digest = hashlib.sha256(b"thingino-uartless-tls-identity-v1\0")
+    for value in (
+        session.station_mdns_name.encode("ascii"),
+        session.camera_identity_sha256.encode("ascii"),
+        _private_file(session.identity, "identity", 16 * 1024),
+        _private_file(session.station_known_hosts, "station known-host binding", 4096),
+    ):
+        digest.update(len(value).to_bytes(8, "big"))
+        digest.update(value)
+    return digest.hexdigest()
+
+
+def read_uartless_tls_identity(*, session_dir: Path) -> dict[str, object]:
+    """Read the generated uhttpd public certificate over pinned station SSH."""
+
+    session = load_host_session(session_dir)
+    transport_identity = _uartless_tls_transport_identity(session)
+    mdns_name, host = resolve_recovery_ap_station(
+        session_dir,
+        allow_uartless_station=True,
+    )
+    current = load_host_session(session_dir)
+    if _uartless_tls_transport_identity(current) != transport_identity:
+        raise RecoveryApHostError("UARTless TLS session identity changed before retrieval")
+    raw = _exchange(
+        current,
+        host=host,
+        command=UARTLESS_TLS_IDENTITY_COMMAND,
+        timeout=UARTLESS_TLS_IDENTITY_TIMEOUT_SECONDS,
+        allow_uartless_tls_identity=True,
+    )
+    if len(raw) > UARTLESS_TLS_IDENTITY_MAX_BYTES:
+        raise RecoveryApHostError("uhttpd public certificate exceeds its fixed limit")
+    try:
+        # The pinned S02ssl uses -f der for every supported cert generator.
+        # Parse X.509 before publishing the hash. This temporary trust store
+        # does not establish identity; the pinned SSH channel does that.
+        parser = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        parser.load_verify_locations(cadata=raw)
+        der = raw
+    except (ValueError, ssl.SSLError) as exc:
+        raise RecoveryApHostError("uhttpd public certificate is invalid") from exc
+    if not der or len(der) > UARTLESS_TLS_IDENTITY_MAX_BYTES:
+        raise RecoveryApHostError("uhttpd public certificate DER is invalid")
+    if _uartless_tls_transport_identity(load_host_session(session_dir)) != transport_identity:
+        raise RecoveryApHostError("UARTless TLS session identity changed during retrieval")
+    return {
+        "camera_identity_sha256": current.camera_identity_sha256,
+        "certificate_der_sha256": hashlib.sha256(der).hexdigest(),
+        "certificate_source": "/etc/ssl/certs/uhttpd.crt",
+        "mdns_resolution": "session-pinned",
+        "nor_writes": False,
+        "read_only": True,
+        "ssh_authentication": "pinned-key-only",
+        "station_ipv4": _host(host),
+        "station_mdns_name": mdns_name,
+    }
 
 
 def _parse_nor_state(raw: bytes) -> RecoveryNorState:

@@ -167,6 +167,8 @@ class SourceProfileTests(unittest.TestCase):
                 "0015-require-authenticated-tls-ingress.patch",
                 "0016-buffer-request-before-backend.patch",
                 "0017-bind-recording-file-identity.patch",
+                "0018-onvif-snapshot-digest.patch",
+                "0019-bound-whip-sdp-body.patch",
             ):
                 patch_text = (
                     ROOT / "patches" / "uhttpd" / patch_name
@@ -253,7 +255,7 @@ class SourceProfileTests(unittest.TestCase):
         self.assertEqual(profile["model"], "DCS-6100LHV2")
         self.assertEqual(profile["hardware_revision"], "A1")
         self.assertEqual(len(profile["thingino_patches"]), 20)
-        self.assertEqual(len(profile["installed_files"]), 168)
+        self.assertEqual(len(profile["installed_files"]), 169)
         installed_sources = {entry["source"] for entry in profile["installed_files"]}
         self.assertTrue({
             "components/thingino-control/src/raptor.rs",
@@ -379,6 +381,7 @@ class SourceProfileTests(unittest.TestCase):
                 "package/thingino-uhttpd/0016-buffer-request-before-backend.patch",
                 "package/thingino-uhttpd/0017-bind-recording-file-identity.patch",
                 "package/thingino-uhttpd/0018-onvif-snapshot-digest.patch",
+                "package/thingino-uhttpd/0019-bound-whip-sdp-body.patch",
             }
             <= installed_destinations
         )
