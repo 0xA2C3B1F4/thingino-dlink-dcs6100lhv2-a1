@@ -45,6 +45,34 @@ class SourceDeliveryInventoryTests(unittest.TestCase):
         self.assertIn("Licence 1 (2-clause BSD)", mono)
         self.assertIn("Licence 2 (CC-0)", mono)
 
+    def test_sound_text_and_recorded_inventory_preserve_scope(self) -> None:
+        # This checks the checked-in record, not the private firmware image.
+        document = json.loads((ROOT / "third_party/thingino-sounds.inventory.json").read_text())
+        license_info = document["supplemental_license"]
+        payload = (ROOT / license_info["path"]).read_bytes()
+        digest = "a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499"
+        self.assertEqual(hashlib.sha256(payload).hexdigest(), digest)
+        self.assertEqual(license_info["sha256"], digest)
+        self.assertEqual(len(payload), 7048)
+        self.assertEqual(document["package_license_declaration"], "CC0")
+        files = document["files"]
+        self.assertEqual(document["file_count"], len(files))
+        self.assertEqual(len(files), 12)
+        self.assertEqual(len({item["installed_path"] for item in files}), 12)
+        self.assertEqual(sum(item["bytes"] for item in files), document["total_bytes"])
+        self.assertEqual(document["total_bytes"], 99287)
+        for item in files:
+            name = Path(item["installed_path"]).name
+            self.assertTrue(name.endswith(".opus"))
+            self.assertEqual(item["installed_path"], f"usr/share/sounds/{name}")
+            self.assertEqual(item["source_path"], f"package/thingino-sounds/files/{name}")
+            self.assertRegex(item["sha256"], r"^[0-9a-f]{64}$")
+            self.assertGreater(item["bytes"], 0)
+        for field in ("upstream_license_file_present", "package_source_archive_delivered",
+                      "legal_review_approved", "publication_authorized"):
+            self.assertIs(document[field], False)
+        self.assertIn("Raptor motion.pcm and other packages audio files", document["excluded"])
+
     def test_current_lock_renders_all_sources_without_local_paths(self) -> None:
         document = inventory.build_source_delivery_inventory(ROOT)
 

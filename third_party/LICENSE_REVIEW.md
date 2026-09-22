@@ -159,8 +159,8 @@ permits GPL version 2 or later. Preserve that file-level permission without
 silently changing the entire package to an or-later declaration.
 
 `thingino-sounds` declares `CC0`. That is existing package-level evidence, not
-an absence of rights information; its missing text and the exact delivered
-asset set still need to be reconciled. Control's `Cargo.toml` declares `MIT`,
+an absence of rights information. The source repository now supplies the CC0
+text and records the exact installed asset comparison below. Control's `Cargo.toml` declares `MIT`,
 while its local Buildroot recipe incorrectly reports `Unknown`. The project's
 existing MIT text and Cargo declaration are the starting point for correcting
 that metadata, rather than seeking a new grant.
@@ -171,6 +171,35 @@ exceptions, supply their referenced texts, and review actual conflicts or
 imported material where evidence requires it. Root MIT does not replace a
 different component's terms or authorize camera-vendor binary redistribution.
 The exact source/text delivery and firmware distribution gates remain open.
+
+### Installed Thingino sounds and supplied text
+
+[`thingino-sounds.inventory.json`](thingino-sounds.inventory.json) records the
+12 Opus files, totaling 99,287 bytes, under `usr/share/sounds` in the completed
+`a091c826479a206b62f82821e38429273345554c` system image. Each installed file was
+read directly with `unsquashfs -cat` and compared byte for byte with its retained
+prepared-package input. All 12 matched. The inventory binds the system image,
+preparation receipt, package recipe and individual asset hashes. Its reproduction
+instructions do not require extracting or changing the image.
+
+The selected configuration uses Opus and Wi-Fi messages, with startup and
+chime sounds disabled. The inventory describes this image, not every optional
+upstream asset. Raptor's separately installed `motion.pcm` is outside its scope.
+
+The package declares CC0 but omits its referenced `LICENSE`. The complete
+[CC0 1.0 Universal text](licenses/thingino-sounds-CC0-1.0.txt) was retrieved from
+[Creative Commons](https://creativecommons.org/publicdomain/zero/1.0/legalcode.txt)
+on 2026-09-22. Its 7,048 bytes have SHA-256
+`a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499`.
+A second fetch independently matched the committed text's digest. This supplies
+the text corresponding to the package's existing declaration. It does not add
+a grant, edit upstream sources, place the text in the already-built firmware,
+or assert the provenance of rights beyond that declaration.
+
+The installed assets are now mapped to their prepared sources. A corresponding
+package-source delivery and the rest of the firmware review remain open. The
+inventory does not treat source-byte equality as legal approval or permission
+to publish firmware binaries.
 
 ## Buildroot legal-info collection
 

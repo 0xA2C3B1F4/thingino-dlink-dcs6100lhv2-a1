@@ -2034,7 +2034,7 @@
       "source": "tests/test_source_checkout.py"
     },
     "tests/test_source_delivery_inventory.py": {
-      "sha256": "67e156e36aace7b23645efb07af1e4dd583b9b11e27d300fc0d13a892ed7ceed",
+      "sha256": "289a4f4226c565646c344a217e04d83ad6839d5e93b793c1d0c3179dcb1cb509",
       "source": "tests/test_source_delivery_inventory.py"
     },
     "tests/test_source_prepare.py": {
@@ -2114,11 +2114,11 @@
       "source": "tests/test_windows_media_preflight.py"
     },
     "third_party/LICENSE_REVIEW.md": {
-      "sha256": "d190216fa3aca811635c4b633ecbcdd7fbb8f002b74ad5b11e8a0695cc4f18b6",
+      "sha256": "1d18b5c402dbc0204aab2f63006feef89d3f51c4bbe8f51a0ef26c1362b486c3",
       "source": "third_party/LICENSE_REVIEW.md"
     },
     "third_party/NOTICE.md": {
-      "sha256": "15bf70d9ca9867b05017a6f064cbaca8f06c622bf1ca721be904b56753235d95",
+      "sha256": "5ab92f83de3adce9604434e391e6b4ad11dc4d555d279998132083498cc25a8d",
       "source": "third_party/NOTICE.md"
     },
     "third_party/licenses/RTL8188FU-GPL-2.0-only.txt": {
@@ -2145,6 +2145,10 @@
       "sha256": "3384d75264549cd04a5c00538a15871785f3f6ba60a779781df747d591655892",
       "source": "third_party/licenses/raptor-common-cJSON-header.txt"
     },
+    "third_party/licenses/thingino-sounds-CC0-1.0.txt": {
+      "sha256": "a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499",
+      "source": "third_party/licenses/thingino-sounds-CC0-1.0.txt"
+    },
     "third_party/raptor-source-delivery.inventory.json": {
       "sha256": "d791b979d896e7b108297203758f5ca1ab40bd43118eb3424baf596b6c193daa",
       "source": "third_party/raptor-source-delivery.inventory.json"
@@ -2156,6 +2160,10 @@
     "third_party/rtl8188fu-linked-sources.inventory.json": {
       "sha256": "1658bfa4fcc4c627b80194815bdb4b34f592e4305b374463812e2db584e0d145",
       "source": "third_party/rtl8188fu-linked-sources.inventory.json"
+    },
+    "third_party/thingino-sounds.inventory.json": {
+      "sha256": "a51239bc768e2cd284955ef367dc0f99ee93759aea82d13d44b730fda5d1fa56",
+      "source": "third_party/thingino-sounds.inventory.json"
     },
     "webui/browser-tests/motion-email.spec.ts": {
       "sha256": "000a420d52226a7a343732895aede82e1b2761d8b021b1fc19eb19409a0d82ae",
@@ -2511,6 +2519,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "3d7c8915e549e5607f93ebb6a24887dedeec9dde",
+  "source_commit": "630383f6770bbe08cfca50eafb9737065b11707a",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }

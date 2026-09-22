@@ -9,6 +9,13 @@ not redistribute complete third-party source trees or binary artifacts. The
 immutable source pins in `sources.lock.json` and the component locks record the
 exact files, revisions, and patch targets used by a build.
 
+The selected Thingino sound package declares CC0. Its omitted license text is
+supplied as [CC0 1.0 Universal](licenses/thingino-sounds-CC0-1.0.txt), retrieved
+from [Creative Commons](https://creativecommons.org/publicdomain/zero/1.0/legalcode.txt).
+The [installed-sounds inventory](thingino-sounds.inventory.json) records the
+12 files verified against the prepared inputs for the named firmware image.
+It does not cover other audio assets or authorize binary redistribution.
+
 ## Exact pinned-source observations
 
 The WebUI navigation icons under `webui/public/icons/` are unmodified Feather

@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "observed_date": "2026-09-22",
+  "scope": "thingino-sounds installed files only",
+  "source_commit": "a091c826479a206b62f82821e38429273345554c",
+  "system_sha256": "663b2052c68d802c0a5ff26ca6579dd251c3e75541bf9f7f0563979d8661bcc8",
+  "prepared_receipt_sha256": "a1c65cd6a0f8adee5ff400b2b5eff00e5deaf8000ee36331543634f750313a51",
+  "package_recipe_sha256": "803fc317fadf27fbc97c2bfebfcc0d53639158dfd957d71493acb022ee1079d9",
+  "upstream_revision": "94d140dc0a458a23eb48a598e633324ea533f97c",
+  "package_license_declaration": "CC0",
+  "upstream_license_file_present": false,
+  "supplemental_license": {
+    "path": "third_party/licenses/thingino-sounds-CC0-1.0.txt",
+    "sha256": "a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499",
+    "source": "https://creativecommons.org/publicdomain/zero/1.0/legalcode.txt"
+  },
+  "file_count": 12,
+  "total_bytes": 99287,
+  "files": [
+    {
+      "installed_path": "usr/share/sounds/configurationportalisdown.opus",
+      "source_path": "package/thingino-sounds/files/configurationportalisdown.opus",
+      "bytes": 9330,
+      "sha256": "3459d70299d307691ceacf42c9098a673ab67da4a30f4aa133f2b4318460cb8b"
+    },
+    {
+      "installed_path": "usr/share/sounds/configurationportalisup.opus",
+      "source_path": "package/thingino-sounds/files/configurationportalisup.opus",
+      "bytes": 8910,
+      "sha256": "15dafedec0d9121f40a2e9ed83e7b0f8f6b6a6aa6106755310ebd9131435688a"
+    },
+    {
+      "installed_path": "usr/share/sounds/configurationportalmode.opus",
+      "source_path": "package/thingino-sounds/files/configurationportalmode.opus",
+      "bytes": 8431,
+      "sha256": "4cd5532178a6d9b55ca65847de713b59c22a7f4fe36cc0b1ccf0638db37d0cb6"
+    },
+    {
+      "installed_path": "usr/share/sounds/motiondetectionactivated.opus",
+      "source_path": "package/thingino-sounds/files/motiondetectionactivated.opus",
+      "bytes": 9012,
+      "sha256": "f85d9f8b22c4ffb05dee9467341f877611190b4720e7100d48acb1578fd55f08"
+    },
+    {
+      "installed_path": "usr/share/sounds/motiondetectiondisactivated.opus",
+      "source_path": "package/thingino-sounds/files/motiondetectiondisactivated.opus",
+      "bytes": 9647,
+      "sha256": "81574f1ac110cfa2572a0a840e2d4d34dab931a8262628142e2148aa1885cbdb"
+    },
+    {
+      "installed_path": "usr/share/sounds/pleasepowercycletorestart.opus",
+      "source_path": "package/thingino-sounds/files/pleasepowercycletorestart.opus",
+      "bytes": 8928,
+      "sha256": "e0a27974cd621515d4b6debf9cbd1daa6c27fad3ff754982e8f81cc52a92c5d2"
+    },
+    {
+      "installed_path": "usr/share/sounds/timelapserecordingstarted.opus",
+      "source_path": "package/thingino-sounds/files/timelapserecordingstarted.opus",
+      "bytes": 8358,
+      "sha256": "c49b64de788266b4fe2788c274e2aca6609e292186499ad066fd88a26eb5443b"
+    },
+    {
+      "installed_path": "usr/share/sounds/timelepserecordingstopped.opus",
+      "source_path": "package/thingino-sounds/files/timelepserecordingstopped.opus",
+      "bytes": 7728,
+      "sha256": "2de5671656659e31a43ba73fbde2e30cab07a7b13cfde4b722b5e313991b9fed"
+    },
+    {
+      "installed_path": "usr/share/sounds/videorecordingstarted.opus",
+      "source_path": "package/thingino-sounds/files/videorecordingstarted.opus",
+      "bytes": 7885,
+      "sha256": "0128dbc8d54b2753d3fa813622a4c9667a4a0b7d89847056150c57377d47d30a"
+    },
+    {
+      "installed_path": "usr/share/sounds/videorecordingstopped.opus",
+      "source_path": "package/thingino-sounds/files/videorecordingstopped.opus",
+      "bytes": 7265,
+      "sha256": "6e7abe5a91389da7a530cc6c61df913139103e3ff15e7bc15207368223843e61"
+    },
+    {
+      "installed_path": "usr/share/sounds/wificonnected.opus",
+      "source_path": "package/thingino-sounds/files/wificonnected.opus",
+      "bytes": 6162,
+      "sha256": "28561fa342cf90ed534838fa07a4e81753f0a0ee5d2863c52bedfb2a89260e78"
+    },
+    {
+      "installed_path": "usr/share/sounds/wificonnectionfailed.opus",
+      "source_path": "package/thingino-sounds/files/wificonnectionfailed.opus",
+      "bytes": 7631,
+      "sha256": "4a0fc115890171fa8b9fb0b97892ff6e32b81756e2645bdafcf320b20e17c33a"
+    }
+  ],
+  "installed_source_bytes_equal": true,
+  "package_source_archive_delivered": false,
+  "legal_review_approved": false,
+  "publication_authorized": false,
+  "excluded": [
+    "Raptor motion.pcm and other packages audio files",
+    "Rust and Control source closure",
+    "Unselected optional sounds",
+    "Firmware redistribution approval"
+  ],
+  "reproduction": "List with unsquashfs -lc IMAGE usr/share/sounds. Compare each listed file from unsquashfs -cat IMAGE PATH against PREPARED/package/thingino-sounds/files/BASENAME. Record exact bytes and SHA-256; do not extract or alter the image."
+}
