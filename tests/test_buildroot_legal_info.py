@@ -151,6 +151,120 @@ class BuildrootLegalInfoTests(unittest.TestCase):
                 timeout=15,
             )
 
+    def _local_package_supplement(self, mutation: str) -> subprocess.CompletedProcess[str]:
+        preflight = self.collector.split("# BEGIN_LOCAL_PACKAGE_LICENSE_PREFLIGHT\n", 1)[1].split(
+            "# END_LOCAL_PACKAGE_LICENSE_PREFLIGHT", 1
+        )[0]
+        apply = self.collector.split("# BEGIN_LOCAL_PACKAGE_LICENSE_APPLY\n", 1)[1].split(
+            "# END_LOCAL_PACKAGE_LICENSE_APPLY", 1
+        )[0]
+        temp_base = Path(os.environ.get("TMPDIR", tempfile.gettempdir())).resolve()
+        with tempfile.TemporaryDirectory(dir=temp_base) as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            output = root / "output"
+            certgen = source / "package/mbedtls-certgen"
+            daynight = source / "package/thingino-daynightd"
+            certgen_build = output / "build/mbedtls-certgen-1.0"
+            daynight_build = output / "build/thingino-daynightd-2.0.0"
+            payloads = {
+                "certgen_recipe": (certgen / "mbedtls-certgen.mk", b"MBEDTLS_CERTGEN_LICENSE = GPL-2.0+\n"),
+                "certgen_source": (certgen / "files/mbedtls-certgen.c", b"certgen fixture\n"),
+                "certgen_build": (certgen_build / "mbedtls-certgen.c", b"certgen fixture\n"),
+                "daynight_recipe": (daynight / "thingino-daynightd.mk", b"THINGINO_DAYNIGHTD_LICENSE = GPL-2.0\n"),
+                "daynight_source": (daynight / "files/daynightd.c", b"GPL version 2 or later fixture\n"),
+                "daynight_build": (daynight_build / "files/daynightd.c", b"GPL version 2 or later fixture\n"),
+                "daynight_readme": (daynight / "files/README.md", b"GNU GPL v2.0 fixture\n"),
+                "daynight_build_readme": (daynight_build / "files/README.md", b"GNU GPL v2.0 fixture\n"),
+                "supplement": (root / "GPL2.txt", b"canonical license text fixture\n"),
+            }
+            for path, data in payloads.values():
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(data)
+            env = dict(os.environ, source_dir=str(source), output_dir=str(output),
+                       supplemental_license=str(payloads["supplement"][0]))
+            for name in ("certgen_recipe", "certgen_source", "daynight_recipe", "daynight_source", "daynight_readme"):
+                env[name + "_sha256_expected"] = hashlib.sha256(payloads[name][1]).hexdigest()
+            env["supplemental_sha256"] = hashlib.sha256(payloads["supplement"][1]).hexdigest()
+            if mutation in payloads:
+                payloads[mutation][0].write_bytes(b"changed\n")
+            elif mutation == "existing-license":
+                (daynight_build / "LICENSE").write_bytes(b"existing license\n")
+            elif mutation == "dangling-license":
+                (certgen_build / "LICENSE").symlink_to(root / "absent")
+            elif mutation == "source-license":
+                (certgen / "files/LICENSE").write_bytes(b"new upstream license\n")
+            elif mutation == "symlink-source":
+                path, data = payloads["certgen_source"]
+                target = root / "source-target"
+                target.write_bytes(data)
+                path.unlink()
+                path.symlink_to(target)
+            elif mutation == "symlink-build-directory":
+                target = root / "moved-build"
+                daynight_build.rename(target)
+                daynight_build.symlink_to(target, target_is_directory=True)
+
+            def snapshot() -> dict[str, tuple[str, bytes | str]]:
+                return {
+                    str(path.relative_to(root)): (
+                        ("symlink", os.readlink(path)) if path.is_symlink()
+                        else ("file", path.read_bytes())
+                    )
+                    for path in root.rglob("*") if path.is_symlink() or path.is_file()
+                }
+
+            before = snapshot()
+            # Fixtures execute real install/hash checks; only container ownership
+            # is irrelevant on the host. No mocked content or exit status.
+            program = "chown() { :; }\n" + preflight + apply
+            program += '\nverify_local_package_license_inputs\ntest "$local_package_supplements_applied" = true\n'
+            completed = subprocess.run(["sh", "-eu", "-c", program], env=env,
+                                       text=True, capture_output=True, timeout=15)
+            after = snapshot()
+            if mutation == "valid":
+                expected = dict(before)
+                for directory in (certgen_build, daynight_build):
+                    expected[str((directory / "LICENSE").relative_to(root))] = (
+                        "file", payloads["supplement"][1]
+                    )
+                    self.assertEqual(stat.S_IMODE((directory / "LICENSE").stat().st_mode), 0o644)
+                self.assertEqual(after, expected)
+            else:
+                self.assertEqual(after, before, "failed preflight must not write or overwrite text")
+            return completed
+
+    def test_local_package_supplement_copies_only_missing_license_text(self) -> None:
+        completed = self._local_package_supplement("valid")
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+
+    def test_local_package_supplement_rejects_changed_or_unsafe_inputs_before_writes(self) -> None:
+        for mutation in (
+            "certgen_recipe", "certgen_source", "certgen_build", "daynight_recipe",
+            "daynight_source", "daynight_build", "daynight_readme", "daynight_build_readme",
+            "supplement", "existing-license", "dangling-license", "source-license",
+            "symlink-source", "symlink-build-directory",
+        ):
+            with self.subTest(mutation=mutation):
+                completed = self._local_package_supplement(mutation)
+                self.assertNotEqual(completed.returncode, 0)
+
+    def test_local_package_supplement_pins_and_receipt_preserve_existing_declarations(self) -> None:
+        for digest in (
+            "fb43fe008d9dcad613e6bf948f371fcd5142b08e5a16d346c450959ea00c404b",
+            "512ca9723789ee4a703ce9ab4bdf2991988c0d76a0cbb356a6d850293f50d8ad",
+            "36b8db2578fa3b07b143e2a43495d24bd1bbdcb339a5f4370db87609f1298302",
+            "55cd93cfcb53c783d6868220d00251732f8d9a0142c1f1dff397bc48df8e0217",
+            "c9bc43788e95c5abcc949126c7d089853d3dc86ae81479db3af3a380fbc4cb15",
+        ):
+            self.assertIn(digest, self.collector)
+        self.assertIn('"declaration": "GPL-2.0+"', self.collector)
+        self.assertIn('"recipe_declaration": "GPL-2.0"', self.collector)
+        self.assertIn('"c_header_declaration": "GPL version 2 or later"', self.collector)
+        self.assertNotIn('THINGINO_DAYNIGHTD_LICENSE=', self.collector)
+        self.assertNotIn('MBEDTLS_CERTGEN_LICENSE=', self.collector)
+        self.assertIn('phase=collect\nverify_local_package_license_inputs', self.collector)
+
     def test_scripts_are_shell_valid_and_runner_is_offline(self) -> None:
         for path in (self.runner_path, self.collector_path):
             subprocess.run(["sh", "-n", str(path)], check=True)

@@ -151,20 +151,26 @@ The bundled copies were retrieved from the primary sources on 2026-08-29:
 ## Selected local-package gaps
 
 Three selected local packages name license files that are absent from their
-retained package directories. `mbedtls-certgen` declares `GPL-2.0+` and
-`LICENSE`, but its C header contains a functional description without a located
-author or grant; the mbedTLS dependency's license does not answer that
-provenance question. `thingino-daynightd` declares `GPL-2.0` and `LICENSE`; its C
-header names the Thingino Project and GPL version 2 or later, while its README
-refers to the missing file. That header does not document the package's other
-scripts, configuration and WebUI files. `thingino-sounds` declares `CC0` and
-`LICENSE`, but no rights or source declaration was located for its media assets;
-the selected output set and authoritative asset provenance still need review.
+retained package directories, but they have existing package-level license
+declarations. `mbedtls-certgen` declares `GPL-2.0+`; its dependency on mbedTLS is
+separate from that declaration. `thingino-daynightd` declares `GPL-2.0`, and its
+`files/README.md` identifies the project as GNU GPL v2.0. Its C header additionally
+permits GPL version 2 or later. Preserve that file-level permission without
+silently changing the entire package to an or-later declaration.
 
-These are source and metadata observations, not new grants or legal conclusions.
-This review has not accepted the root MIT license as sufficient evidence to
-resolve conflicting metadata or imported-file provenance. The license and
-firmware distribution gates remain open.
+`thingino-sounds` declares `CC0`. That is existing package-level evidence, not
+an absence of rights information; its missing text and the exact delivered
+asset set still need to be reconciled. Control's `Cargo.toml` declares `MIT`,
+while its local Buildroot recipe incorrectly reports `Unknown`. The project's
+existing MIT text and Cargo declaration are the starting point for correcting
+that metadata, rather than seeking a new grant.
+
+A missing per-file header or LICENSE file alone does not establish that new
+author permissions are needed. Retain package declarations and existing
+exceptions, supply their referenced texts, and review actual conflicts or
+imported material where evidence requires it. Root MIT does not replace a
+different component's terms or authorize camera-vendor binary redistribution.
+The exact source/text delivery and firmware distribution gates remain open.
 
 ## Buildroot legal-info collection
 
@@ -190,6 +196,24 @@ exact recipe declarations, source archive hash, and matching archive/build
 `LICENSE` hashes, then verifies the archive is unchanged. This does not create
 a grant, alter package sources, or resolve other packages' missing license
 files or provenance.
+
+For the exact retained certgen 1.0 and daynightd 2.0.0 inputs, the collector
+supplements only the missing build-directory `LICENSE` files with the retained
+canonical GPL version 2 text. It first checks the package recipes, source and
+build copies of the C files, and daynightd's package README against pinned
+hashes. Existing or symlinked destinations are rejected. All original inputs
+and installed license bytes are checked again after collection. The receipt
+records the existing declarations, checked hashes and copied-workspace scope;
+the source recipes and their GPL version declarations are not changed.
+
+This repairs text collection for two targets, not the whole firmware source
+delivery. The base Buildroot collection does not cover the separately composed
+full-Raptor source closure, and some local packages are omitted from its
+manifest. A successful command does not prove that all required sources and
+notices have been delivered. Buildroot describes both overcollection and
+omissions in its [legal-info guidance](https://buildroot.org/downloads/manual/manual.html#legal-info);
+review the actual delivered material rather than treating the exit code as
+legal approval.
 
 ## Evidence sources
 

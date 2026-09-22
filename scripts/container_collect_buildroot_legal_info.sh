@@ -37,6 +37,13 @@ logcat_mini_license_sha256_expected=865ae85978be3b1da7943fb401412504dd21e92bb832
 logcat_mini_license=MIT
 logcat_mini_license_files=LICENSE
 logcat_mini_recipe=$source_dir/package/logcat-mini/logcat-mini.mk
+certgen_recipe_sha256_expected=fb43fe008d9dcad613e6bf948f371fcd5142b08e5a16d346c450959ea00c404b
+certgen_source_sha256_expected=512ca9723789ee4a703ce9ab4bdf2991988c0d76a0cbb356a6d850293f50d8ad
+daynight_recipe_sha256_expected=36b8db2578fa3b07b143e2a43495d24bd1bbdcb339a5f4370db87609f1298302
+daynight_source_sha256_expected=55cd93cfcb53c783d6868220d00251732f8d9a0142c1f1dff397bc48df8e0217
+daynight_readme_sha256_expected=c9bc43788e95c5abcc949126c7d089853d3dc86ae81479db3af3a380fbc4cb15
+local_package_inputs_verified=false
+local_package_supplements_applied=false
 phase=preflight
 legal_info_exit_code=-1
 supplement_applied=false
@@ -170,6 +177,28 @@ write_receipt() {
     "archive_copying_absent": $logcat_mini_archive_copying_absent,
     "build_copying_absent": $logcat_mini_build_copying_absent,
     "license_identity": "MIT License; Copyright (c) 2024 wltechblog"
+  },
+  "local_package_license_supplements": {
+    "inputs_verified": $local_package_inputs_verified,
+    "applied": $local_package_supplements_applied,
+    "scope": "missing LICENSE files in copied build directories only",
+    "canonical_gpl2_text_sha256": "$supplemental_sha256",
+    "meaning": "Delivers the text named by existing package declarations; does not create grants, change source recipes, or override file-level license terms",
+    "mbedtls_certgen": {
+      "version": "1.0",
+      "declaration": "GPL-2.0+",
+      "recipe_sha256_expected": "$certgen_recipe_sha256_expected",
+      "source_sha256_expected": "$certgen_source_sha256_expected"
+    },
+    "thingino_daynightd": {
+      "version": "2.0.0",
+      "recipe_declaration": "GPL-2.0",
+      "readme_declaration": "GNU GPL v2.0",
+      "c_header_declaration": "GPL version 2 or later",
+      "recipe_sha256_expected": "$daynight_recipe_sha256_expected",
+      "source_sha256_expected": "$daynight_source_sha256_expected",
+      "readme_sha256_expected": "$daynight_readme_sha256_expected"
+    }
   },
   "legal_info_export": {
     "method": "exclusive byte copy without source metadata",
@@ -322,6 +351,46 @@ logcat_mini_build_license_sha256=$(sha256sum "$logcat_mini_build/LICENSE"); logc
 test "$logcat_mini_build_license_sha256" = "$logcat_mini_archive_license_sha256"
 # END_LOGCAT_MINI_LICENSE_PREFLIGHT
 
+# BEGIN_LOCAL_PACKAGE_LICENSE_PREFLIGHT
+# These exact local packages already declare GPL terms, but omit the text
+# named by LICENSE_FILES. Bind source and build copies before supplying text.
+local_license_check() {
+  test -f "$1"
+  test ! -L "$1"
+  local_license_hash=$(sha256sum "$1")
+  local_license_hash=${local_license_hash%% *}
+  test "$local_license_hash" = "$2"
+}
+certgen_package=$source_dir/package/mbedtls-certgen
+certgen_build=$output_dir/build/mbedtls-certgen-1.0
+daynight_package=$source_dir/package/thingino-daynightd
+daynight_build=$output_dir/build/thingino-daynightd-2.0.0
+verify_local_package_license_inputs() {
+  local_package_inputs_verified=false
+  local_license_check "$supplemental_license" "$supplemental_sha256"
+  local_license_check "$certgen_package/mbedtls-certgen.mk" "$certgen_recipe_sha256_expected"
+  local_license_check "$certgen_package/files/mbedtls-certgen.c" "$certgen_source_sha256_expected"
+  local_license_check "$certgen_build/mbedtls-certgen.c" "$certgen_source_sha256_expected"
+  local_license_check "$daynight_package/thingino-daynightd.mk" "$daynight_recipe_sha256_expected"
+  local_license_check "$daynight_package/files/daynightd.c" "$daynight_source_sha256_expected"
+  local_license_check "$daynight_build/files/daynightd.c" "$daynight_source_sha256_expected"
+  local_license_check "$daynight_package/files/README.md" "$daynight_readme_sha256_expected"
+  local_license_check "$daynight_build/files/README.md" "$daynight_readme_sha256_expected"
+  local_package_inputs_verified=true
+}
+verify_local_package_license_inputs
+for local_license_directory in "$certgen_build" "$daynight_build"; do
+  test -d "$local_license_directory"
+  test ! -L "$local_license_directory"
+  test ! -e "$local_license_directory/LICENSE"
+  test ! -L "$local_license_directory/LICENSE"
+done
+test ! -e "$certgen_package/files/LICENSE"
+test ! -L "$certgen_package/files/LICENSE"
+test ! -e "$daynight_package/LICENSE"
+test ! -L "$daynight_package/LICENSE"
+# END_LOCAL_PACKAGE_LICENSE_PREFLIGHT
+
 actual_supplemental_sha256=$(sha256sum "$supplemental_license"); actual_supplemental_sha256=${actual_supplemental_sha256%% *}
 test "$actual_supplemental_sha256" = "$supplemental_sha256"
 actual_ingenic_sha256=$(sha256sum "$ingenic_toolchain_archive"); actual_ingenic_sha256=${actual_ingenic_sha256%% *}
@@ -339,6 +408,15 @@ test "$(printf '%s\n' "$wifi_source_archive" | wc -l)" -eq 1
 test -f "$wifi_source_archive"
 wifi_source_filename=$(basename "$wifi_source_archive")
 wifi_source_sha256_before=$(sha256sum "$wifi_source_archive"); wifi_source_sha256_before=${wifi_source_sha256_before%% *}
+
+# BEGIN_LOCAL_PACKAGE_LICENSE_APPLY
+install -m 0644 "$supplemental_license" "$certgen_build/LICENSE"
+install -m 0644 "$supplemental_license" "$daynight_build/LICENSE"
+chown builder:builder "$certgen_build/LICENSE" "$daynight_build/LICENSE"
+local_license_check "$certgen_build/LICENSE" "$supplemental_sha256"
+local_license_check "$daynight_build/LICENSE" "$supplemental_sha256"
+local_package_supplements_applied=true
+# END_LOCAL_PACKAGE_LICENSE_APPLY
 
 install -m 0644 "$supplemental_license" "$wifi_build/COPYING"
 chown builder:builder "$wifi_build/COPYING"
@@ -369,6 +447,9 @@ set -e
 chmod 0400 "$result_dir/buildroot-legal-info.log"
 
 phase=collect
+verify_local_package_license_inputs
+local_license_check "$certgen_build/LICENSE" "$supplemental_sha256"
+local_license_check "$daynight_build/LICENSE" "$supplemental_sha256"
 wifi_source_sha256_after=$(sha256sum "$wifi_source_archive"); wifi_source_sha256_after=${wifi_source_sha256_after%% *}
 test "$wifi_source_sha256_after" = "$wifi_source_sha256_before"
 wifi_source_unchanged=true
