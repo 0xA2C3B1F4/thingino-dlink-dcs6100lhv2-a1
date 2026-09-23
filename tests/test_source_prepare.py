@@ -255,7 +255,7 @@ class SourceProfileTests(unittest.TestCase):
         self.assertEqual(profile["model"], "DCS-6100LHV2")
         self.assertEqual(profile["hardware_revision"], "A1")
         self.assertEqual(len(profile["thingino_patches"]), 20)
-        self.assertEqual(len(profile["installed_files"]), 169)
+        self.assertEqual(len(profile["installed_files"]), 170)
         installed_sources = {entry["source"] for entry in profile["installed_files"]}
         self.assertTrue({
             "components/thingino-control/src/raptor.rs",
@@ -311,6 +311,21 @@ class SourceProfileTests(unittest.TestCase):
         installed_destinations = {
             item["destination"] for item in profile["installed_files"]
         }
+        control_license = next(
+            item for item in profile["installed_files"]
+            if item["destination"] == "package/thingino-control/LICENSE"
+        )
+        self.assertEqual(control_license["source"], "LICENSE")
+        self.assertEqual(
+            profile["snapshots"]["LICENSE"], (ROOT / "LICENSE").read_bytes()
+        )
+        control_manifest = ROOT / "components/thingino-control/Cargo.toml"
+        self.assertIn(b'license = "MIT"', control_manifest.read_bytes())
+        control_patch = profile["snapshots"][
+            "patches/thingino/0005-add-thingino-control.patch"
+        ]
+        self.assertIn(b"+THINGINO_CONTROL_LICENSE = MIT\n", control_patch)
+        self.assertIn(b"+THINGINO_CONTROL_LICENSE_FILES = LICENSE\n", control_patch)
         expected_webui = {
             "dcs6100-webui/firmware-bundle.json",
             "dcs6100-webui/scripts/build.mjs",
@@ -331,6 +346,7 @@ class SourceProfileTests(unittest.TestCase):
         )
         self.assertTrue(
             {
+                "package/thingino-control/LICENSE",
                 "package/thingino-control/build-rust.py",
                 "package/thingino-control/files/S95thingino-control",
                 "package/thingino-control/files/thingino-control.json",

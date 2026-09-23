@@ -209,7 +209,7 @@ write_receipt() {
   },
   "limitations": [
     "Buildroot legal-info warnings are preserved and require review",
-    "THINGINO_CONTROL_LICENSE is Unknown and has no LICENSE_FILES declaration",
+    "Thingino Control license metadata and license file require review against the prepared source used for this collection",
     "Other selected packages still have unresolved missing license files or grant provenance",
     "This collection is not a legal approval or a complete corresponding-source determination"
   ]

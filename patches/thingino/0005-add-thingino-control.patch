@@ -36,10 +36,11 @@ diff --git a/package/thingino-control/thingino-control.mk b/package/thingino-con
 new file mode 100644
 --- /dev/null
 +++ b/package/thingino-control/thingino-control.mk
-@@ -0,0 +1,29 @@
+@@ -0,0 +1,30 @@
 +THINGINO_CONTROL_SITE_METHOD = local
 +THINGINO_CONTROL_SITE = $(THINGINO_CONTROL_PKGDIR)
-+THINGINO_CONTROL_LICENSE = Unknown
++THINGINO_CONTROL_LICENSE = MIT
++THINGINO_CONTROL_LICENSE_FILES = LICENSE
 +THINGINO_CONTROL_DEPENDENCIES = host-python3 thingino-core thingino-mosquitto-20x
 +
 +define THINGINO_CONTROL_BUILD_CMDS

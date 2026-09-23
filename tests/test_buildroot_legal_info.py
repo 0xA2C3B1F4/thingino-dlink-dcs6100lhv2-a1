@@ -535,7 +535,11 @@ class BuildrootLegalInfoTests(unittest.TestCase):
                 self.assertNotEqual(self._logcat_license_preflight(mutation).returncode, 0)
 
     def test_receipt_keeps_known_limitations_explicit(self) -> None:
-        self.assertIn("THINGINO_CONTROL_LICENSE is Unknown", self.collector)
+        self.assertIn(
+            "Thingino Control license metadata and license file require review",
+            self.collector,
+        )
+        self.assertNotIn("THINGINO_CONTROL_LICENSE is Unknown", self.collector)
         self.assertIn("Buildroot legal-info warnings are preserved", self.collector)
         self.assertIn("not a legal approval", self.collector)
         self.assertIn("Other selected packages still have unresolved", self.collector)

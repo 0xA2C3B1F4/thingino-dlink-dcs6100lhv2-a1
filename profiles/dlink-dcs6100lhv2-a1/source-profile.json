@@ -253,6 +253,11 @@
       "source": "webui/tsconfig.json"
     },
     {
+      "destination": "package/thingino-control/LICENSE",
+      "sha256": "441975d4935e4d47a14b7052cfeb23bd5f5288b3f67332688925809665ffee75",
+      "source": "LICENSE"
+    },
+    {
       "destination": "package/thingino-control/build-rust.py",
       "sha256": "d45ef27b65404f024d0b1397db6aacb31585914be3070b4fe5d9e4e3ce325c7f",
       "source": "scripts/build_thingino_control.py"
@@ -864,7 +869,7 @@
       "source": "patches/thingino/0003-register-realtek-recovery-hostapd.patch"
     },
     {
-      "sha256": "70e0c5e991f9d986ba60a7a4e687b7f588de4d447c6851f871568ab5a6ba6dcd",
+      "sha256": "7689b7f826a93b3a6c8f1622ed61cf88e386ec344edbeb987f1d1ef29bc8bc48",
       "source": "patches/thingino/0005-add-thingino-control.patch"
     },
     {

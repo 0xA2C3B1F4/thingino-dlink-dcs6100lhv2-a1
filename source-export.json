@@ -1354,7 +1354,7 @@
       "source": "patches/thingino/0003-register-realtek-recovery-hostapd.patch"
     },
     "patches/thingino/0005-add-thingino-control.patch": {
-      "sha256": "70e0c5e991f9d986ba60a7a4e687b7f588de4d447c6851f871568ab5a6ba6dcd",
+      "sha256": "7689b7f826a93b3a6c8f1622ed61cf88e386ec344edbeb987f1d1ef29bc8bc48",
       "source": "patches/thingino/0005-add-thingino-control.patch"
     },
     "patches/thingino/0009-remove-extension-cgi-and-mqtt-dispatch.patch": {
@@ -1510,7 +1510,7 @@
       "source": "profiles/dlink-dcs6100lhv2-a1/recovery-ap-kernel.fragment"
     },
     "profiles/dlink-dcs6100lhv2-a1/source-profile.json": {
-      "sha256": "d75e04539fbdb0ff5aafc1884f13de63da6a9e356e96be9903f9e366ddce5c9c",
+      "sha256": "5bcc61ab4849bf7c9d80287ea8b28fec6e929b65b1d2f1cc037d8c46d5e6cc82",
       "source": "profiles/dlink-dcs6100lhv2-a1/source-profile.json"
     },
     "profiles/dlink-dcs6100lhv2-a1/stock-restore-kernel.fragment": {
@@ -1610,7 +1610,7 @@
       "source": "scripts/container_build_thingino_toolchain.sh"
     },
     "scripts/container_collect_buildroot_legal_info.sh": {
-      "sha256": "132cd4b6894c94f1b53ab4c14b797575f4c1d21549ce5906292429a7b0b8b992",
+      "sha256": "42d036101df0b5a5bd0a1c1ab030f7e8adf922574a1ddedd92c6e8ec6a1f9fc4",
       "source": "scripts/container_collect_buildroot_legal_info.sh"
     },
     "scripts/container_fetch_thingino_downloads.sh": {
@@ -1750,7 +1750,7 @@
       "source": "tests/test_build_thingino_control.py"
     },
     "tests/test_buildroot_legal_info.py": {
-      "sha256": "1bfc7cbe6f21555b4735669b27240f24309434e4302fbfb288e166f9af8c7503",
+      "sha256": "791a60a5f9db74fb26177480d0f6aff81f9283341826129ece06c3306215857c",
       "source": "tests/test_buildroot_legal_info.py"
     },
     "tests/test_candidate_log.py": {
@@ -2042,7 +2042,7 @@
       "source": "tests/test_source_delivery_inventory.py"
     },
     "tests/test_source_prepare.py": {
-      "sha256": "bed1cf8f7e81e48a3643204101cc5900006234b849443bc7a393154cc509224e",
+      "sha256": "4f4b44fc564ed705a834320c76b0338eec94611f9b7b55aa7eaae9941c5cd256",
       "source": "tests/test_source_prepare.py"
     },
     "tests/test_split_kernel_build.py": {
@@ -2531,6 +2531,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "1fca9786fe54447416696d248a34b611b67ce067",
+  "source_commit": "a0e7ec9d21a1781cbe426371bc45b9ddf20e28dc",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }
