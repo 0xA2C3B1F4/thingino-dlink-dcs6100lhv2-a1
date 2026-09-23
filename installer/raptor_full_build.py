@@ -14,7 +14,10 @@ import uuid
 
 from .local_build_acquire import _directory, _private_child_directory, _load_json_object
 from .local_build_support import LocalBuildRunError, _regular, _run, _sha256
-from .raptor_full_component import PAYLOAD, audit_payload, pack_component, validate_component
+from .raptor_full_component import (
+    CJSON_NOTICE_SHA256, MONOCYPHER_LICENSE_SHA256, PAYLOAD, audit_payload,
+    pack_component, validate_component,
+)
 from .raptor_source import Progress, acquire_sources, recipe_identity
 from .sd_package import atomic_write
 
@@ -111,6 +114,15 @@ def build_full_component(
     if _sha256(toolchain) != expected_toolchain:
         raise LocalBuildRunError("full Raptor SDK identity changed")
     recipe = recipe_identity(root, full_media=True)
+    notices = (
+        (root / "third_party/licenses/raptor-common-cJSON-header.txt",
+         "cJSON notice", CJSON_NOTICE_SHA256),
+        (root / "third_party/licenses/raptor-common-Monocypher-LICENCE.txt",
+         "Monocypher licence", MONOCYPHER_LICENSE_SHA256),
+    )
+    for path, label, expected in notices:
+        if _sha256(_regular(path, label, limit=8 * 1024 * 1024)) != expected:
+            raise LocalBuildRunError(f"full Raptor {label} identity changed")
     sources, receipt = acquire_sources(
         root=root, cache_root=build_root / "cache", progress=progress, full_media=True
     )
@@ -160,6 +172,8 @@ def build_full_component(
             (inputs, "/inputs", True), (toolchain, "/toolchain.tar.gz", True),
             (root / "scripts/container_build_raptor_full.sh", "/build.sh", True),
             (root / "components/raptor/Ubuntu-Font-Licence-1.0.txt", "/font-license", True),
+            (notices[0][0], "/cjson-notice", True),
+            (notices[1][0], "/monocypher-license", True),
             (base_rootfs, "/base.squashfs", True),
             (base_workspace, "/base-workspace.ext4", True),
             (workspace, "/workspace.ext4", False), (result, "/result", False),

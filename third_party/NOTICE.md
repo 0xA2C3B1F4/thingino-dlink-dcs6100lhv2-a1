@@ -97,9 +97,10 @@ full-firmware distribution gate. The Ingenic headers are pinned by
 `components/raptor/headers-input.json`, whose recorded license status is
 unspecified. Pinning does not grant redistribution rights.
 
-Full-Raptor component validation currently checks payload provenance and the
-two delivered font and rendering license files. It is not an audit or delivery
-package for every linked component's notices and corresponding source.
+Future full-Raptor component validation checks payload provenance and the
+delivered Ubuntu Font Licence, libschrift ISC text, cJSON permission header and
+Monocypher licence text. It is not an audit or delivery package for every linked
+component's notices and corresponding source.
 
 ### Embedded common-library notices and technical inventory
 
@@ -126,14 +127,20 @@ The pinned `raptor-common` Makefile explicitly compiles `src/cJSON.c`,
   It retains both original license alternatives and contributor notices;
   individual source-file notices still require review.
 
+Future full-Raptor component builds install these exact texts as
+`/usr/share/licenses/raptor-common/cJSON-header.txt` and
+`/usr/share/licenses/raptor-common/Monocypher-LICENCE.txt`. Final-root
+composition carries them into the firmware. The installed `a091c826` image
+is unchanged. This delivery step does not close legal review or distribution
+gates.
+
 Both notices come from the common-library origin
 `https://github.com/gtxaspec/raptor-common.git`, base commit
 `75d83e8bd2c6d2a2c8ef2b8a7040d74b84236d04` and reconstructed tree
 `9c0da09898641fe6d42c72c317a13f2bd56bda34`, as recorded in the technical
 inventory. The top-level project MIT license does not replace these notices.
 
-These files accompany the published source. They are not currently installed
-by the full-Raptor component builder or embedded in its signed firmware bundle.
-Binary-release materials must account for the complete linked-code notices and
-corresponding-source delivery, including the unresolved SDK/vendor and driver
-closure. The firmware-release gates remain open.
+These files accompany the published source. Binary-release materials must
+account for the complete linked-code notices and corresponding-source delivery,
+including the unresolved SDK/vendor and driver closure. The firmware-release
+gates remain open.

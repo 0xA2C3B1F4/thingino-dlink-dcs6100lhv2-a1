@@ -42,7 +42,7 @@
       "source": "SECURITY.md"
     },
     "components/raptor/README.md": {
-      "sha256": "e22bea5f0ed6a8962e31562a2a272ca48e98a2b3683204e0a14acfc47a4aade5",
+      "sha256": "17647c87efb2344a3d16fb652930990dca0e2fa71c5f9888aa2474ba960895a9",
       "source": "components/raptor/README.md"
     },
     "components/raptor/S05raptor-preconditions": {
@@ -678,7 +678,7 @@
       "source": "production/docs/architecture.md"
     },
     "docs/build.md": {
-      "sha256": "e3043d24413a24d36f9593a6130dda1e1dcf068665971ebc0d26a762ec8c726c",
+      "sha256": "7146cb699937ea67f20a6aa76eea046a65bd1da55267edeadb1500895af95499",
       "source": "production/docs/build.md"
     },
     "docs/features.md": {
@@ -722,7 +722,7 @@
       "source": "production/docs/release-evidence/2026-09-19-fresh-install-reproducibility.md"
     },
     "docs/status.md": {
-      "sha256": "633ae3d25373b7b8dff5780bf002d4c16624ff1e46ae19055c7a2c402cc49783",
+      "sha256": "3fbc58b3afa12248dabd373a759dff7c1f7cfa566859687b4c5c5f3b4e4784aa",
       "source": "production/docs/status.md"
     },
     "docs/testing.md": {
@@ -1002,11 +1002,11 @@
       "source": "installer/raptor_development.py"
     },
     "installer/raptor_full_build.py": {
-      "sha256": "7a37e49e9440ccee43dd6e543f77f6a5bb96bbd26ae70d152d35350399ab9fc8",
+      "sha256": "a2694493274ba613b34d533ce0c7a135807891ddb75aa04bf1eb9a6e910c909c",
       "source": "installer/raptor_full_build.py"
     },
     "installer/raptor_full_component.py": {
-      "sha256": "4013454e251b3fcc3c5d907724885c7af7ed750d6359d78f310f2263e6b8df30",
+      "sha256": "c6389e5c6ab7960204d394cd73b88ffaf5f5365239ce12551e90778c6431a229",
       "source": "installer/raptor_full_component.py"
     },
     "installer/raptor_full_root.py": {
@@ -1022,7 +1022,7 @@
       "source": "installer/raptor_runtime_protocol.py"
     },
     "installer/raptor_source.py": {
-      "sha256": "428aae7985c8907379b319344c7fb4eacedc4ef5bef10099f352bc7e7b3b6bb5",
+      "sha256": "9b51f925f0dba7e3694e085e72446445d61ae54f1e645c9070cb8ca82c679936",
       "source": "installer/raptor_source.py"
     },
     "installer/recovery.py": {
@@ -1586,7 +1586,7 @@
       "source": "scripts/container_build_collector_kernel.sh"
     },
     "scripts/container_build_raptor_full.sh": {
-      "sha256": "b09ac81106847c49073f6845c5b3437d495dbb5718fbbc2c0f5ea1c7e1001628",
+      "sha256": "d8917319189976deff51dab20cd9dafac204a40bf65393f81849b5618e15bb66",
       "source": "scripts/container_build_raptor_full.sh"
     },
     "scripts/container_build_recovery_ap.sh": {
@@ -1954,11 +1954,11 @@
       "source": "tests/test_raptor_full_acquire.py"
     },
     "tests/test_raptor_full_build.py": {
-      "sha256": "549141ed3ce235b44b96469f3036217f94a94fd81b7e704f0c776439e5430ada",
+      "sha256": "fb419293e26192456588b2b8e92892cdaec1b7f9327335dd765860455d83a768",
       "source": "tests/test_raptor_full_build.py"
     },
     "tests/test_raptor_full_component.py": {
-      "sha256": "870b0daedd8b17e1e13492d06c8309a88565a6c3da24e0ad6e68c1968a0243be",
+      "sha256": "59392f40bddaf0f7fb9ecf1df1f7c61758bc7fbb6b5f228e9ffd93823037ccc9",
       "source": "tests/test_raptor_full_component.py"
     },
     "tests/test_raptor_full_pipeline.py": {
@@ -1966,7 +1966,7 @@
       "source": "tests/test_raptor_full_pipeline.py"
     },
     "tests/test_raptor_full_root.py": {
-      "sha256": "9012e1d494222059cecacd7436d52a231d2c845842ff445f5178ef69dd5dd72f",
+      "sha256": "961eaa3de61479246a4bd720d8b72e778819d69077061c12e9a4d0c5b2771a05",
       "source": "tests/test_raptor_full_root.py"
     },
     "tests/test_raptor_full_source_manifest.py": {
@@ -2118,11 +2118,11 @@
       "source": "tests/test_windows_media_preflight.py"
     },
     "third_party/LICENSE_REVIEW.md": {
-      "sha256": "46d3432b0cffe2fb2e8b03717705a17e09b485d293db33f0f3fb7147fb38812e",
+      "sha256": "3d542cf03e1c3ab3dcc9df13d51b8801c8dc6f57a866eecb7f6eb8bddd6d2d06",
       "source": "third_party/LICENSE_REVIEW.md"
     },
     "third_party/NOTICE.md": {
-      "sha256": "2cd5d3a6921cec9db0b24f2aeb0102046e659c85172bae80012a1ce55f90c294",
+      "sha256": "646ed82335e7ade6e14a06e6579d6d5f9306922804306b01706a363f3e8c543e",
       "source": "third_party/NOTICE.md"
     },
     "third_party/licenses/RTL8188FU-GPL-2.0-only.txt": {
@@ -2531,6 +2531,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "a0e7ec9d21a1781cbe426371bc45b9ddf20e28dc",
+  "source_commit": "18be8a804df4286e8346f26590f749e0919b553c",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }

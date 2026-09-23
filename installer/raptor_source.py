@@ -109,6 +109,8 @@ def recipe_identity(root: Path, *, full_media: bool = True) -> dict[str, Any]:
         "components/raptor/source-build-lock.json",
         "components/raptor/headers-input.json",
         "components/raptor/Ubuntu-Font-Licence-1.0.txt",
+        "third_party/licenses/raptor-common-cJSON-header.txt",
+        "third_party/licenses/raptor-common-Monocypher-LICENCE.txt",
         "scripts/container_build_raptor_full.sh",
         "installer/raptor_source.py",
         "installer/raptor_full_build.py",

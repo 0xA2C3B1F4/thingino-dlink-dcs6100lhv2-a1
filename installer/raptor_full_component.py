@@ -20,8 +20,13 @@ BINARIES = ("rvd", "rhd", "rsd", "ric", "rad", "rod", "rmr", "raptorctl", "rwd")
 FONT = "usr/share/fonts/default.ttf"
 FONT_LICENSE = "usr/share/licenses/ubuntu-font/LICENCE.txt"
 LIBSCHRIFT_LICENSE = "usr/share/licenses/libschrift/LICENSE"
+CJSON_NOTICE = "usr/share/licenses/raptor-common/cJSON-header.txt"
+MONOCYPHER_LICENSE = "usr/share/licenses/raptor-common/Monocypher-LICENCE.txt"
 MOTION_CLIP = "usr/share/raptor/audio/motion.pcm"
-DATA_FILES = frozenset({FONT, FONT_LICENSE, LIBSCHRIFT_LICENSE, MOTION_CLIP})
+DATA_FILES = frozenset({
+    FONT, FONT_LICENSE, LIBSCHRIFT_LICENSE, CJSON_NOTICE, MONOCYPHER_LICENSE,
+    MOTION_CLIP,
+})
 PAYLOAD = frozenset(
     {f"usr/bin/{name}" for name in BINARIES}
     | {"usr/lib/librss_common.so", "usr/lib/librss_ipc.so"}
@@ -38,6 +43,8 @@ KIND = "raptor-full-media-component"
 FONT_SHA256 = "52c1afa489ae7bfd893af6cdd9f1af258005703600449e70d338caabcff507e5"
 FONT_LICENSE_SHA256 = "2f0015108d68627bd788d313f529c21ff4da2c2c42a5e1f3883acc83480f9002"
 LIBSCHRIFT_LICENSE_SHA256 = "13c322598cd5f3615a0e8b2b30cca28f8734435ff6214075f318f2bbe45ec4c3"
+CJSON_NOTICE_SHA256 = "3384d75264549cd04a5c00538a15871785f3f6ba60a779781df747d591655892"
+MONOCYPHER_LICENSE_SHA256 = "5f8360e4c06ddcc584bdb4b210c6af824c4bb301e6a9a521869b6d90795ca4b3"
 MOTION_CLIP_SHA256 = "507c4135606518c8158e2dcb28fe76170df1f7e9b9ad9aef4b267787b7f22fad"
 
 
@@ -62,6 +69,12 @@ def audit_payload(files: dict[str, bytes]) -> dict[str, object]:
         or not files[FONT].startswith(b"\x00\x01\x00\x00")
     ):
         raise ValueError("full Raptor OSD font or licence identity changed")
+    if (
+        hashlib.sha256(files[CJSON_NOTICE]).hexdigest() != CJSON_NOTICE_SHA256
+        or hashlib.sha256(files[MONOCYPHER_LICENSE]).hexdigest()
+        != MONOCYPHER_LICENSE_SHA256
+    ):
+        raise ValueError("full Raptor vendored notice identity changed")
     return {
         name: audit_elf(
             data, name,

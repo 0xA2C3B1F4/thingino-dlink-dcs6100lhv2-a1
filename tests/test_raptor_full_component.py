@@ -52,6 +52,12 @@ class FullComponentTests(unittest.TestCase):
         self.files[component.FONT] = FONT_FIXTURE
         self.files[component.FONT_LICENSE] = license_fixture
         self.files[component.LIBSCHRIFT_LICENSE] = b"fixture libschrift licence\n"
+        self.files[component.CJSON_NOTICE] = (
+            ROOT / "third_party/licenses/raptor-common-cJSON-header.txt"
+        ).read_bytes()
+        self.files[component.MONOCYPHER_LICENSE] = (
+            ROOT / "third_party/licenses/raptor-common-Monocypher-LICENCE.txt"
+        ).read_bytes()
         self.files[component.MOTION_CLIP] = MOTION_CLIP_FIXTURE
         for name, value in (
             ("FONT_SHA256", hashlib.sha256(FONT_FIXTURE).hexdigest()),
@@ -114,11 +120,30 @@ class FullComponentTests(unittest.TestCase):
     def test_font_and_licence_are_non_executable_and_identity_bound(self):
         raw = component.pack_component(self.files, self.provenance)
         self.validate(raw)
-        for name in component.DATA_FILES - {component.MOTION_CLIP}:
+        for name in (component.FONT, component.FONT_LICENSE, component.LIBSCHRIFT_LICENSE):
             with self.subTest(name=name), self.assertRaisesRegex(ValueError, "font or licence"):
                 changed = {**self.files, name: self.files[name] + b"changed"}
                 component.pack_component(changed, self.provenance)
             self.assertEqual(component.payload_mode(name), 0o644)
+
+    def test_vendored_notices_are_required_non_executable_and_identity_bound(self):
+        for name, expected in (
+            (component.CJSON_NOTICE, component.CJSON_NOTICE_SHA256),
+            (component.MONOCYPHER_LICENSE, component.MONOCYPHER_LICENSE_SHA256),
+        ):
+            with self.subTest(name=name):
+                self.assertEqual(hashlib.sha256(self.files[name]).hexdigest(), expected)
+                self.assertEqual(component.payload_mode(name), 0o644)
+                with self.assertRaisesRegex(ValueError, "vendored notice identity"):
+                    component.pack_component(
+                        {**self.files, name: self.files[name] + b"changed"},
+                        self.provenance,
+                    )
+        files, manifest = self.validate(component.pack_component(self.files, self.provenance))
+        self.assertEqual(files[component.CJSON_NOTICE], self.files[component.CJSON_NOTICE])
+        self.assertEqual(files[component.MONOCYPHER_LICENSE], self.files[component.MONOCYPHER_LICENSE])
+        self.assertEqual(manifest["files"][component.CJSON_NOTICE], component.CJSON_NOTICE_SHA256)
+        self.assertEqual(manifest["files"][component.MONOCYPHER_LICENSE], component.MONOCYPHER_LICENSE_SHA256)
 
     def test_motion_clip_is_required_non_executable_and_identity_bound(self):
         missing = {name: data for name, data in self.files.items() if name != component.MOTION_CLIP}

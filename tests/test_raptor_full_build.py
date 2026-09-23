@@ -45,6 +45,12 @@ class FullBuildTests(unittest.TestCase):
         self.payload[component.FONT] = FONT_FIXTURE
         self.payload[component.FONT_LICENSE] = license_fixture
         self.payload[component.LIBSCHRIFT_LICENSE] = b"fixture libschrift licence\n"
+        self.payload[component.CJSON_NOTICE] = (
+            ROOT / "third_party/licenses/raptor-common-cJSON-header.txt"
+        ).read_bytes()
+        self.payload[component.MONOCYPHER_LICENSE] = (
+            ROOT / "third_party/licenses/raptor-common-Monocypher-LICENCE.txt"
+        ).read_bytes()
         self.payload[component.MOTION_CLIP] = MOTION_CLIP_FIXTURE
         for name, value in (
             ("FONT_SHA256", hashlib.sha256(FONT_FIXTURE).hexdigest()),
@@ -65,13 +71,18 @@ class FullBuildTests(unittest.TestCase):
             **kwargs,
         )
 
-    def inputs(self):
+    def inputs(self, *, corrupt_notice=None):
         stack = ExitStack()
         stack.enter_context(patch.object(build, "acquire_sources", return_value=(self.root, self.receipt)))
         stack.enter_context(patch.object(build.subprocess, "run"))
         stack.enter_context(patch.object(build.shutil, "disk_usage", return_value=SimpleNamespace(free=8 * 1024**3)))
-        stack.enter_context(patch.object(build, "_sha256", side_effect=lambda path:
-            self.sdk_hash if path == self.sdk else hashlib.sha256(path.read_bytes()).hexdigest()))
+        def digest(path):
+            if path == self.sdk:
+                return self.sdk_hash
+            if path.name == corrupt_notice:
+                return "0" * 64
+            return hashlib.sha256(path.read_bytes()).hexdigest()
+        stack.enter_context(patch.object(build, "_sha256", side_effect=digest))
         return stack
 
     def compile_fixture(self, command, **kwargs):
@@ -97,6 +108,20 @@ class FullBuildTests(unittest.TestCase):
         self.assertIn("resources/Ubuntu-Regular.ttf", recipe)
         self.assertIn("install -m 0644 /font-license", recipe)
         self.assertIn("install -m 0644 /work/src/libschrift/LICENSE", recipe)
+        self.assertIn("install -m 0644 /cjson-notice", recipe)
+        self.assertIn("install -m 0644 /monocypher-license", recipe)
+        self.assertIn(component.CJSON_NOTICE_SHA256, recipe)
+        self.assertIn(component.MONOCYPHER_LICENSE_SHA256, recipe)
+        for source, destination in (
+            ("raptor-common-cJSON-header.txt", component.CJSON_NOTICE),
+            ("raptor-common-Monocypher-LICENCE.txt", component.MONOCYPHER_LICENSE),
+        ):
+            self.assertIn(f"/result/root/{destination}", recipe)
+            relative = f"third_party/licenses/{source}"
+            self.assertEqual(
+                build.recipe_identity(ROOT, full_media=True)[relative],
+                hashlib.sha256((ROOT / relative).read_bytes()).hexdigest(),
+            )
 
         schrift_compile = next(
             line for line in recipe.splitlines()
@@ -126,7 +151,27 @@ class FullBuildTests(unittest.TestCase):
             f"type=bind,src={ROOT / 'components/raptor/Ubuntu-Font-Licence-1.0.txt'},dst=/font-license,readonly",
             compile_command,
         )
+        for source, target in (
+            ("raptor-common-cJSON-header.txt", "/cjson-notice"),
+            ("raptor-common-Monocypher-LICENCE.txt", "/monocypher-license"),
+        ):
+            self.assertIn(
+                f"type=bind,src={ROOT / 'third_party/licenses' / source},dst={target},readonly",
+                compile_command,
+            )
         self.assertFalse((other_run / "raptor-full").exists())
+
+    def test_changed_vendored_notice_stops_before_container(self):
+        for source, label in (
+            ("raptor-common-cJSON-header.txt", "cJSON notice"),
+            ("raptor-common-Monocypher-LICENCE.txt", "Monocypher licence"),
+        ):
+            with self.subTest(source=source), self.inputs(corrupt_notice=source), \
+                    patch.object(build, "run_container") as run:
+                with self.assertRaisesRegex(ValueError, f"{label} identity changed"):
+                    self.build()
+                run.assert_not_called()
+        self.assertFalse((self.run / "raptor-full").exists())
 
     def test_independent_build_bypasses_shared_component_cache(self):
         with self.inputs(), patch.object(build, "run_container", side_effect=self.compile_fixture):

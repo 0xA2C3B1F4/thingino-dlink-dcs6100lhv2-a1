@@ -51,9 +51,10 @@ locked 353824-byte Ubuntu Regular font as `/usr/share/fonts/default.ttf` and its
 Ubuntu Font Licence 1.0. The font bytes come from the locked libschrift tree;
 the accompanying licence text is the Canonical Ubuntu Sans v1.006
 `LICENCE.txt`, committed and hash-bound by the component recipe. The compile
-also installs libschrift's locked ISC `LICENSE` beside the font licence. The
-container has no network, two CPUs, a 2 GiB memory limit and no additional swap
-allowance.
+also installs libschrift's locked ISC `LICENSE` beside the font licence. Future
+full-Raptor builds also install the hash-bound cJSON permission header and
+Monocypher licence text under `/usr/share/licenses/raptor-common/`. The container
+has no network, two CPUs, a 2 GiB memory limit and no additional swap allowance.
 
 The base build uses the hash-locked `raptor-support.fragment` through Thingino's
 existing configuration-fragment mechanism. It retains the required libraries

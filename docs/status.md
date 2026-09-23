@@ -109,9 +109,13 @@ and Substream each played audible WebRTC audio after one Listen click, without
 Reload or a second click; the browser UI showed active audio counters. The
 operator separately reported audible audio on both streams in Safari. RTSP Main
 and Substream also passed Digest authentication on this installed candidate;
-each delivered a complete H.264 IDR frame with checked SPS dimensions. These
-bounded observations do not close the remaining physical acceptance matrix,
-long-duration checks, licensing or binary-distribution gates.
+each delivered a complete H.264 IDR frame with checked SPS dimensions. On
+September 23, bounded live checks passed snapshots and two-frame MJPEG on both
+streams, plus ONVIF time, device, profiles and stream URI reads. The private
+candidate ledger records 9 of 20 checks passed, with 11 missing. These bounded
+observations do not establish full client interoperability or a long-duration
+soak. They do not close the remaining physical acceptance matrix, long-duration
+checks, licensing or binary-distribution gates.
 
 These are same-image bounded observations. They do not transfer results from an
 older candidate, establish every control or setting, prove persistence, or close

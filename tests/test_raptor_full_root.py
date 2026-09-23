@@ -130,6 +130,12 @@ class FullRootTests(unittest.TestCase):
         self.files[raptor_full_component.FONT] = FONT_FIXTURE
         self.files[raptor_full_component.FONT_LICENSE] = license_fixture
         self.files[raptor_full_component.LIBSCHRIFT_LICENSE] = b"fixture libschrift licence\n"
+        self.files[raptor_full_component.CJSON_NOTICE] = (
+            ROOT / "third_party/licenses/raptor-common-cJSON-header.txt"
+        ).read_bytes()
+        self.files[raptor_full_component.MONOCYPHER_LICENSE] = (
+            ROOT / "third_party/licenses/raptor-common-Monocypher-LICENCE.txt"
+        ).read_bytes()
         self.files[raptor_full_component.MOTION_CLIP] = MOTION_CLIP_FIXTURE
         for name, value in (
             ("FONT_SHA256", hashlib.sha256(FONT_FIXTURE).hexdigest()),
@@ -153,12 +159,12 @@ class FullRootTests(unittest.TestCase):
         self.output = self.root / "output"
         self.packed = self.root / "packed"
 
-    def compose(self, *, corrupt_readback=False):
+    def compose(self, *, corrupt_readback=None):
         def extract(*, source, destination, **kwargs):
             original = self.source if source.name == "base.squashfs" else self.packed
             shutil.copytree(original, destination, symlinks=True)
             if corrupt_readback and original == self.packed:
-                (destination / "usr/bin/rvd").write_bytes(b"changed")
+                (destination / corrupt_readback).write_bytes(b"changed")
 
         def pack(*, root, output, **kwargs):
             shutil.copytree(root, self.packed, symlinks=True)
@@ -201,11 +207,21 @@ class FullRootTests(unittest.TestCase):
         clip = self.packed / raptor_full_component.MOTION_CLIP
         self.assertEqual(clip.read_bytes(), MOTION_CLIP_FIXTURE)
         self.assertEqual(clip.stat().st_mode & 0o777, 0o644)
+        for relative in (raptor_full_component.CJSON_NOTICE,
+                         raptor_full_component.MONOCYPHER_LICENSE):
+            notice = self.packed / relative
+            self.assertEqual(notice.read_bytes(), self.files[relative])
+            self.assertEqual(notice.stat().st_mode & 0o777, 0o644)
         final_root._validate_universal_tree(self.packed)
 
     def test_modified_packed_binary_does_not_publish_output(self):
         with self.assertRaisesRegex(ValueError, "component changed"):
-            self.compose(corrupt_readback=True)
+            self.compose(corrupt_readback="usr/bin/rvd")
+        self.assertFalse(self.output.exists())
+
+    def test_modified_packed_notice_does_not_publish_output(self):
+        with self.assertRaisesRegex(ValueError, "component changed"):
+            self.compose(corrupt_readback=raptor_full_component.CJSON_NOTICE)
         self.assertFalse(self.output.exists())
 
     def test_support_only_intermediate_must_be_composed_before_provisioning(self):

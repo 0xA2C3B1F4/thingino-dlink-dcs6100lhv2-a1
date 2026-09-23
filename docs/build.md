@@ -102,16 +102,17 @@ not grant a license for an SDK, firmware binary, or headers distribution.
 
 The source build produces `rvd`, `rhd`, `rsd`, `ric`, `rad`, `rod`, `rmr`,
 `raptorctl`, `rwd`, and the two RSS libraries. ROD statically links the locked
-libschrift source. The component also installs the locked Ubuntu Regular font
-and the applicable Ubuntu Font Licence and libschrift ISC texts. Compilation
-runs without network access as the unprivileged builder user in a task-owned
-ext4 workspace. No camera or SD device is mounted in that container.
+libschrift source. Future full-Raptor components install the locked Ubuntu
+Regular font, the Ubuntu Font Licence, libschrift ISC text, cJSON permission
+header and Monocypher licence text. Compilation runs without network access
+as the unprivileged builder user in a task-owned ext4 workspace. No camera or
+SD device is mounted in that container.
 
 Composition checks every ELF for the target ABI, 4 KiB LOAD alignment, allowed
 dynamic dependencies, and absent RPATH/RUNPATH. It checks the service files,
-configuration, font license files, source provenance, packed image size, and
-read-back inventory. A source, dependency, or read-back failure stops before
-install-set packaging.
+configuration, font, license and notice files, source provenance, packed image
+size, and read-back inventory. A source, dependency, or read-back failure stops
+before install-set packaging.
 
 The model image contains no camera credentials. Its Raptor services remain
 disabled until camera-bound provisioning supplies the local network and

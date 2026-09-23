@@ -171,10 +171,12 @@ silently changing the entire package to an or-later declaration.
 
 `thingino-sounds` declares `CC0`. That is existing package-level evidence, not
 an absence of rights information. The source repository now supplies the CC0
-text and records the exact installed asset comparison below. Control's `Cargo.toml` declares `MIT`,
-while its local Buildroot recipe incorrectly reports `Unknown`. The project's
-existing MIT text and Cargo declaration are the starting point for correcting
-that metadata, rather than seeking a new grant.
+text and records the exact installed asset comparison below. Control's `Cargo.toml`
+declares `MIT`. Its Buildroot recipe now declares `MIT` and
+`LICENSE_FILES = LICENSE`, and the source profile copies the root MIT `LICENSE`
+to the prepared package. This corrects future prepared builds. The installed
+`a091c826` image and its old legal-info receipt were not rebuilt or changed.
+Overall legal and source-delivery closure remains open.
 
 A missing per-file header or LICENSE file alone does not establish that new
 author permissions are needed. Retain package declarations and existing

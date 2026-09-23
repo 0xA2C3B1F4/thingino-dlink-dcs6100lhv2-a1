@@ -15,6 +15,11 @@ if [ "${1:-}" != --compile ]; then
     test -d /work && test -z "$(find /work -mindepth 1 -print -quit)"
     test -d /result && test -z "$(find /result -mindepth 1 -print -quit)"
     test -f /font-license
+    test -f /cjson-notice && test -f /monocypher-license
+    test "$(sha256sum /cjson-notice | cut -d ' ' -f1)" = \
+        3384d75264549cd04a5c00538a15871785f3f6ba60a779781df747d591655892
+    test "$(sha256sum /monocypher-license | cut -d ' ' -f1)" = \
+        5f8360e4c06ddcc584bdb4b210c6af824c4bb301e6a9a521869b6d90795ca4b3
     test -d /headers/T31/1.1.6/en && test -d /headers/T31/1.1.4/zh
     test -d /target/lib && test -d /target/usr/lib
     mkdir -p /work/src /work/sdk /work/vendor "$TMPDIR"
@@ -109,7 +114,8 @@ make -C /work/src/raptor -j2 rwd PLATFORM=T31 TLS=1 \
 mkdir -p /result/root/usr/bin /result/root/usr/lib /result/root/usr/share/fonts \
     /result/root/usr/share/raptor/audio \
     /result/root/usr/share/licenses/ubuntu-font \
-    /result/root/usr/share/licenses/libschrift /result/readelf
+    /result/root/usr/share/licenses/libschrift \
+    /result/root/usr/share/licenses/raptor-common /result/readelf
 for name in "${binaries[@]}"; do
     install -m 0755 "/work/src/raptor/$name/$name" "/result/root/usr/bin/$name"
 done
@@ -118,6 +124,10 @@ install -m 0644 /work/src/libschrift/resources/Ubuntu-Regular.ttf \
 install -m 0644 /font-license /result/root/usr/share/licenses/ubuntu-font/LICENCE.txt
 install -m 0644 /work/src/libschrift/LICENSE \
     /result/root/usr/share/licenses/libschrift/LICENSE
+install -m 0644 /cjson-notice \
+    /result/root/usr/share/licenses/raptor-common/cJSON-header.txt
+install -m 0644 /monocypher-license \
+    /result/root/usr/share/licenses/raptor-common/Monocypher-LICENCE.txt
 python3 - /result/root/usr/share/raptor/audio/motion.pcm <<'PYCODE'
 from pathlib import Path
 import struct
