@@ -174,8 +174,11 @@ an absence of rights information. The source repository now supplies the CC0
 text and records the exact installed asset comparison below. Control's `Cargo.toml`
 declares `MIT`. Its Buildroot recipe now declares `MIT` and
 `LICENSE_FILES = LICENSE`, and the source profile copies the root MIT `LICENSE`
-to the prepared package. This corrects future prepared builds. The installed
-`a091c826` image and its old legal-info receipt were not rebuilt or changed.
+to the prepared package. The `22989b85` prepared source contains that recipe
+and license file, with SHA-256 `441975d4935e4d47a14b7052cfeb23bd5f5288b3f67332688925809665ffee75`.
+Buildroot legal-info does not list this local package, so review its delivery
+separately. The installed `a091c826` image and its old legal-info receipt
+were not rebuilt or changed.
 Overall legal and source-delivery closure remains open.
 
 A missing per-file header or LICENSE file alone does not establish that new
@@ -256,6 +259,38 @@ notices have been delivered. Buildroot describes both overcollection and
 omissions in its [legal-info guidance](https://buildroot.org/downloads/manual/manual.html#legal-info);
 review the actual delivered material rather than treating the exit code as
 legal approval.
+
+### Current candidate collection
+
+For source `22989b85e327b090116cf7884a2e616055e24454c`, the offline
+collector completed against a copy of the finished build-A workspace. It
+exported 327 files totaling 547,326,204 bytes, with tree SHA-256
+`10333d2250f30b79e21fbd0487ad04a9ebd5292db8526d25f53824557da7ad6f`.
+An independent readback verified all 326 listed file hashes. The accepted
+original workspace had SHA-256
+`47a7e160aa1101bcd89df4da07451eb23aed3b637322848b8f48918d11816e20`
+before and after the run. The collection receipt itself has SHA-256
+`5175f29cac57b66adfdd041c65a0a3919be64f3e5c5e63000d76108de26ab4c3`.
+The receipt marks collection complete but legal review and publication
+authorization false.
+
+Compared with the retained `a091c826` collection, only `buildroot.config`,
+the Buildroot version in `host-manifest.csv`, and their checksum index differ.
+The selected-package manifest and saved source and license files are otherwise
+byte-identical. This is a technical comparison, not a rights determination.
+The same eight base warning categories listed below remain.
+
+A separate private Buildroot source supplement for `22989b85` includes the
+pinned upstream tree, four overrides, the final config and build receipts.
+Its reconstruction matched all 20,000 prepared entries by content, type,
+executable bit and symlink target, allowing for private staging permission
+changes. Its SHA-256 is
+`6a3c697be6ea945893e0500ef6d015b880a5a82474ae69697d4d36b80c532d00`.
+The locked 13-source Raptor archive has SHA-256
+`3b37cc50f9f1b676bfb3643fe1fd7a6f86505314ddf0fd307ab95fdcd2fc4d8c`;
+its source-lock and headers-input digests match this candidate's source. Both
+archives remain private technical evidence. They exclude other firmware
+sources and do not approve redistribution.
 
 ## Remaining base-collection warnings
 

@@ -722,7 +722,7 @@
       "source": "production/docs/release-evidence/2026-09-19-fresh-install-reproducibility.md"
     },
     "docs/status.md": {
-      "sha256": "3fbc58b3afa12248dabd373a759dff7c1f7cfa566859687b4c5c5f3b4e4784aa",
+      "sha256": "35e981908871ea702207af3f5aa848885b9a8f0580b112876a5a3ad7549601e1",
       "source": "production/docs/status.md"
     },
     "docs/testing.md": {
@@ -2122,7 +2122,7 @@
       "source": "tests/test_windows_media_preflight.py"
     },
     "third_party/LICENSE_REVIEW.md": {
-      "sha256": "3d542cf03e1c3ab3dcc9df13d51b8801c8dc6f57a866eecb7f6eb8bddd6d2d06",
+      "sha256": "9e17c9b86ae9dde4ac415f305d55e56bdf08082d4b383233a3b5796682c03b6f",
       "source": "third_party/LICENSE_REVIEW.md"
     },
     "third_party/NOTICE.md": {
@@ -2535,6 +2535,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "da6363e6aa1e4388283d77eb9e0c2cf80cd8198a",
+  "source_commit": "760b3a3aa596c921461002d222eb40f582f5d84b",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }

@@ -1,6 +1,6 @@
 # Release status
 
-Historical runtime baseline validated: 2026-09-06. Documentation updated: 2026-09-22.
+Historical runtime baseline validated: 2026-09-06. Documentation updated: 2026-09-23.
 
 This repository provides source and host tools. There is no supported firmware
 download yet. The validated platform is DCS-6100LHV2 A1 with Apple Silicon macOS.
@@ -16,12 +16,33 @@ changes. The full-Raptor source path has passed host composition checks and a
 source-built camera exercise. A new release candidate still needs its own image,
 installation, browser, and physical checks.
 
-The first camera now runs source `385ba106`. It includes bounded, payload-free
-files and storage-SD diagnostics and reports unavailable collector logs as
-`null` with source status. The earlier `aad992b6` heartbeat-read allowance
-remains part of the source history; its runtime observations do not transfer to
-this image. After installation, the supported read-only
-split-layout verifier matched the complete padded kernel and system plus the
+The latest unaccepted candidate is source
+`22989b85e327b090116cf7884a2e616055e24454c`. Its two clean `initialize`
+builds used no Raptor component cache and produced 16 byte-identical
+complete-firmware artifact pairs. An independent pass rehashed all 32 files
+and inspected both install sets. The universal bundle is 7,958,609 bytes,
+SHA-256 `416e94a8125aa4758d8cdea2ee91ab5543fc955ea54f41c35c7121edf125a23c`.
+Its camera-specific SD installer files were staged, remounted and read back,
+then the card was ejected from the Mac. The retained evidence does not yet
+confirm stock-updater completion, final handoff, camera boot, selected-partition
+readback, or audio on these bytes. Do not transfer the `a091c826` camera and
+browser results to this candidate.
+
+An offline Buildroot legal-info collection from the `22989b85` build-A
+workspace completed and exported 327 files. All 326 listed file hashes passed
+an independent readback; the original build workspace remained byte-identical.
+This is technical collection, not legal approval or a complete corresponding-
+source package. The same eight base warning categories remain, including the
+external toolchain and camera-vendor binary restrictions. See the
+[license review](../third_party/LICENSE_REVIEW.md#current-candidate-collection).
+
+At the `385ba106` checkpoint, the first camera ran an image with bounded,
+payload-free diagnostics for the files and storage-SD paths. It reported
+unavailable collector logs as `null` with source status. The earlier
+`aad992b6` heartbeat-read allowance remains part of the source history; its
+runtime observations do not transfer to this image. After installation, the
+supported read-only split-layout verifier matched the complete padded kernel
+and system plus the
 same camera's three protected originals. The boot identity stayed stable during
 the check. Mutable data and physical mtd2 were outside the comparison, so this
 is selected-partition evidence rather than a full-flash readback claim. The
@@ -44,7 +65,7 @@ recorder trial without making another recording or rebooting the camera. Both
 videos decoded as H.264 at their expected main and substream sizes, while the
 six older files remained present with unchanged sizes and modification times.
 These recorder and Safari observations belong to `aad992b6`; they do not
-transfer to the currently installed `385ba106` image.
+transfer to the later `385ba106` image.
 
 The immediate post-stop inventory ended in an assertion failure without a
 retained HTTP response. A separate later read-only diagnostic returned HTTP 504,
@@ -102,7 +123,8 @@ system is 6,369,280 bytes with SHA-256
 `663b2052c68d802c0a5ff26ca6579dd251c3e75541bf9f7f0563979d8661bcc8`;
 the universal bundle SHA-256 is
 `57593fa34b7ed40985eb3c3c4b8bec71f932251391d7aa7663f3a49f541b7dd0`.
-This `a091c826` firmware is installed on the first camera. Canonical management
+This `a091c826` firmware was installed on the first camera before the
+`22989b85` SD preparation. Canonical management
 verification and independent selected-partition readback passed. The readback
 does not cover all flash, mutable data or physical mtd2. In Chromium 147, Main
 and Substream each played audible WebRTC audio after one Listen click, without
