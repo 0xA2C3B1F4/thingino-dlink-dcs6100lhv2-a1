@@ -1,5 +1,5 @@
 {
-  "export_policy_sha256": "fccc307a063d3e1b5d26b7bc774b5f5d32372b3568e2e87e7716b8d3d0c2a1d3",
+  "export_policy_sha256": "4def6c87b643d42274de8993022b2af7e463812715e8d771d4465ae358f8084a",
   "files": {
     ".editorconfig": {
       "sha256": "77d71c2bd466915cf8363f0929ef8a1f6a25b92a21d01c6ae5c6c7f5c307fd8a",
@@ -721,8 +721,12 @@
       "sha256": "e3abbddec91c7a46482ba3771094369eeefe016676eccc50601b547865fc1c08",
       "source": "production/docs/release-evidence/2026-09-19-fresh-install-reproducibility.md"
     },
+    "docs/release-evidence/2026-09-23-raptor-a1-candidate.md": {
+      "sha256": "9cf8c39e5499837ba2813d53933ef27a3ca133b20658a3a08db0929c90a6f649",
+      "source": "production/docs/release-evidence/2026-09-23-raptor-a1-candidate.md"
+    },
     "docs/status.md": {
-      "sha256": "35e981908871ea702207af3f5aa848885b9a8f0580b112876a5a3ad7549601e1",
+      "sha256": "663ad5ea2efd824f0d2b3557fb4c9efe346b69923182906d75cbafc6ece432c1",
       "source": "production/docs/status.md"
     },
     "docs/testing.md": {
@@ -2535,6 +2539,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "ee574fe8680e6eb5f4e8cf53d5bda6172487e8a6",
+  "source_commit": "c4c8ccffb58e936080283708c84d4b68cd432683",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }

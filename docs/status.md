@@ -12,9 +12,9 @@ are outside scope. First-installation, interrupted-installation recovery, and
 same-camera verification remain release requirements.
 
 The tables below describe named evidence, not blanket acceptance of later source
-changes. The full-Raptor source path has passed host composition checks and a
-source-built camera exercise. A new release candidate still needs its own image,
-installation, browser, and physical checks.
+changes. The full-Raptor source path has passed host composition checks. The
+current candidate has bounded first-camera installation and browser evidence;
+its full physical acceptance matrix remains open.
 
 The latest unaccepted candidate is source
 `22989b85e327b090116cf7884a2e616055e24454c`. Its two clean `initialize`
@@ -22,11 +22,17 @@ builds used no Raptor component cache and produced 16 byte-identical
 complete-firmware artifact pairs. An independent pass rehashed all 32 files
 and inspected both install sets. The universal bundle is 7,958,609 bytes,
 SHA-256 `416e94a8125aa4758d8cdea2ee91ab5543fc955ea54f41c35c7121edf125a23c`.
-Its camera-specific SD installer files were staged, remounted and read back,
-then the card was ejected from the Mac. The retained evidence does not yet
-confirm stock-updater completion, final handoff, camera boot, selected-partition
-readback, or audio on these bytes. Do not transfer the `a091c826` camera and
-browser results to this candidate.
+Its first-camera installation reached the final Thingino boot after a supported
+SD handoff. Universal management verification and selected-partition readback
+passed; mutable data and physical mtd2 exact comparison were excluded. Chromium
+showed live WebRTC and operator-audible first-click Listen audio on both streams,
+including immediate audio after microphone Off-to-On without Reload. The first
+card boot had no direct UART stock-updater success line. See the
+[September 23 candidate evidence](release-evidence/2026-09-23-raptor-a1-candidate.md)
+for the observed stages, hashes and limits. The firmware-release ledger remains
+2 of 9 closed; full candidate acceptance, recovery, wider provisioning, a
+second camera, host platforms/CI, RTL8188FU rights and Raptor legal/source
+review remain open.
 
 An offline Buildroot legal-info collection from the `22989b85` build-A
 workspace completed and exported 327 files. All 326 listed file hashes passed
