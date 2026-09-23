@@ -152,6 +152,22 @@ matching the Makefile in both read-only current-candidate build workspaces.
 This verifies the recorded driver-local build inputs. It does not review all
 file-level rights or package the kernel and toolchain inputs with the driver.
 
+On 2026-09-23, the same two inventory scripts were run against both clean
+workspaces for the host-built MJPEG correction source
+`aff74396532c133805e7f08549fc7bf6ba80d60b`. Each ext4 image was mounted
+read-only with journal replay disabled under the pinned builder image. The
+build-A workspace SHA-256 was
+`2d1800c2b0534159dcb19fa7e9730dd495ffe34e616f9b0c5b7bd308e79d1f50`;
+build B was
+`9a85bd1a5f2b9ef5fd852c901273f45b4d4b48116a2b3bec7da73a81e6513098`.
+Both whole-image hashes were unchanged after inspection. Each run produced
+byte-identical inventories matching the committed JSON hashes above, including
+the same 150 translation units, 767 existing header dependencies and installed
+module hash. This binds those recorded RTL8188FU inputs to the new host-built
+candidate. No Buildroot `legal-info` collection or complete corresponding-source
+package is claimed for these bytes; rights review and the firmware gate remain
+open.
+
 ### Remaining driver notice questions
 
 A full-file marker check against the hash-verified 150 translation units and
