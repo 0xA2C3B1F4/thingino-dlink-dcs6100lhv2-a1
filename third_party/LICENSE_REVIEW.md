@@ -314,7 +314,7 @@ metadata does not necessarily mean missing license declarations in the source.
 | Warning | Observed material and remaining work |
 | --- | --- |
 | Buildroot source | The collector omits Buildroot and its Libtool patches. A private `a091c826` supplement contains the pinned Buildroot Git archive, four exact overrides, final config and receipts. Its reconstructed tree matched all 20,000 prepared entries by bytes, modes and symlink targets; two runs produced the same archive, SHA-256 `cf5ba3b25a50898ba3b44917a91deb236a33200089985757a027a254b9d3abb8`. It has not been published. |
-| External toolchain | The manifest labels the external SDK `unknown` and saves no license files. Its actual compiler, libc and related source/notices need a separate delivery. |
+| External toolchain | The manifest labels the external SDK `unknown` and saves no license files. A private source-input collection now holds the pinned Thingino and Buildroot trees plus the 60-entry GCC 16 / glibc toolchain download cache. That collection has not been approved as a notice or corresponding-source delivery. |
 | `ingenic-diag-tools` | `gpio-diag` is installed. The retained source declares AGPL-3.0-or-later and includes the complete license. Both the original source notice and license text are now supplied here. |
 | `ingenic-lib` | This profile explicitly uses camera-local inputs with `REDISTRIBUTE = NO`. Their omission from the collected source archives is intentional, not an open-source license-text substitution to make. Firmware redistribution remains unapproved. |
 | `ingenic-pwm` | `pwm` and its control script are installed. The four-file pinned utility archive and recipe contain no located license declaration. This remains an unresolved component-specific rights question; another package's MIT license must not be assigned to it. |
@@ -332,6 +332,20 @@ to the separate distribution restriction.
 The private Buildroot supplement covers build-system source preparation only.
 External toolchain source and notices, other firmware components and package
 sources, per-file rights review, and complete source delivery remain open.
+
+For the current candidate's external SDK, a private technical collection now
+retains the source-built toolchain inputs: Thingino commit `94d140dc0a458a23eb48a598e633324ea533f97c`
+as a Git archive, SHA-256 `c15882cb4b3ce7dc7d0fd4724adcdac4eeb2417f65f2fa531294540fd6898538`;
+its Buildroot submodule commit `3c323d714afbc772050fbf665d67700f9a869d79`
+as a Git archive, SHA-256 `b875fbbd6ad9d91a7b17d6faa1b59f81aa7775ef498684590b6e1eb34ed8ca13`;
+and the validated 60-entry source download cache, SHA-256
+`f7317d824370e7c5bfb8eb28a5cccec72d3ce9817f30ae9a867389a050641340`.
+The private source-input manifest has SHA-256
+`fe2285ce688df1407e9b92cb92bb6cce9d01fdb148a4b63681e49d3ec44f21d4`
+and binds these to the locked SDK SHA-256
+`9871abf2b79138fdfa2b684cf0f142bfbc3a37a4553e4af3b56804ea6a1b3412`.
+This resolves where the exact toolchain build inputs are held, not which notices
+must accompany a firmware release or whether distribution is authorized.
 
 For the current candidate, the pinned `thingino-libubox` source archive has
 SHA-256 `78254b8a4f2b38ca9e7d7aae0b8d5faa2f2cb88ae13ff886577e5aaea401c146`.
