@@ -64,10 +64,10 @@ the full text.
 
 This repository carries the canonical GPL-2.0-only text and the hostap BSD
 license text referenced by those headers. That fixes the missing license-text
-delivery in this source repository. It does not yet prove the exact compiled
-RTL8188FU file closure or corresponding-source package for a firmware binary.
-The firmware gate stays blocked until that generated closure and its notices are
-recorded together.
+delivery in this source repository. The inventories below record the compiled
+RTL8188FU files and dependencies for the a091 build, but they do not constitute
+a corresponding-source delivery package for a firmware binary. The firmware
+gate stays blocked.
 
 ### Linked translation-unit evidence
 
@@ -114,6 +114,17 @@ inside the workspace. Internal symlinks retain both recorded and resolved paths.
 This extends the technical inventory to recorded transitive headers, but does
 not establish unrecorded generator/compiler inputs, per-file licensing or a
 complete corresponding-source delivery package. No license gate is closed.
+
+On 2026-09-23, both inventories were regenerated from the actual build-a and
+build-b workspaces for source `a091c826479a206b62f82821e38429273345554c`.
+The workspaces were mounted read-only with journal replay disabled; the pinned
+build image ran without network access. Both runs produced byte-identical files
+that also matched the committed inventories. The linked-source JSON is 109,501
+bytes, SHA-256 `1658bfa4fcc4c627b80194815bdb4b34f592e4305b374463812e2db584e0d145`;
+the header-dependency JSON is 398,367 bytes, SHA-256
+`967927371061ce0bdb6443e73cadd7063f8a3f54509e6fe2f33c6ae9fa9d16bc`.
+This binds the recorded 150 translation units and 767 existing dependencies to
+the a091 build. It does not resolve the rights and delivery questions above.
 
 ### Remaining driver notice questions
 
