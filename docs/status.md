@@ -24,6 +24,15 @@ is 7,958,609 bytes, SHA-256
 It has not been installed or browser-tested on a camera. See the
 [MJPEG correction build evidence](release-evidence/2026-09-23-raptor-mjpeg-correction-build.md).
 
+On 2026-09-23, the same candidate was staged on the first camera's identified
+SD card through the supported universal installer. The prior stock-mtd3
+checkpoint was copied and verified in private recovery storage before staging.
+All six newly staged files passed independent SD readback; the host wrote no
+camera NOR. A passive 900-second UART observation then received zero bytes and
+no stock-updater success marker. The camera's physical state is not yet known,
+so the first boot, SD handoff, Stage 1 and installed-candidate acceptance remain
+unverified. Do not infer completion from card staging or LED behavior.
+
 The latest installed, now rejected candidate is source
 `22989b85e327b090116cf7884a2e616055e24454c`. Its two clean `initialize`
 builds used no Raptor component cache and produced 16 byte-identical
