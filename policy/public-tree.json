@@ -480,6 +480,7 @@
     "tests/test_onvif_digest.py",
     "tests/test_onvif_snapshot_http.py",
     "tests/test_onvif_snapshot_io.py",
+    "tests/test_package_buildroot_source.py",
     "tests/test_platform_wifi.py",
     "tests/test_post_install_readback.py",
     "tests/test_private_config.py",

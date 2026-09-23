@@ -150,6 +150,8 @@ def extract_checked(source_tar: Path, destination: Path) -> None:
 
 
 def tree_inventory(root: Path) -> dict[str, dict[str, object]]:
+    # Git records whether a file is executable, but private staging can
+    # normalize read/write bits and directory permissions independently.
     require(root.is_dir() and not root.is_symlink(), f"invalid tree: {root}")
     result: dict[str, dict[str, object]] = {}
     for directory, names, files in os.walk(root, followlinks=False):
@@ -159,9 +161,10 @@ def tree_inventory(root: Path) -> dict[str, dict[str, object]]:
             relative = path.relative_to(root).as_posix()
             mode = path.lstat().st_mode
             if stat.S_ISDIR(mode):
-                item: dict[str, object] = {"type": "directory", "mode": stat.S_IMODE(mode)}
+                item: dict[str, object] = {"type": "directory"}
             elif stat.S_ISREG(mode):
-                item = {"type": "file", "mode": stat.S_IMODE(mode),
+                item = {"type": "file", "executable": bool(mode & 0o111),
+                        "special_mode": stat.S_IMODE(mode) & 0o7000,
                         "size": path.stat().st_size, "sha256": hash_file(path)}
             elif stat.S_ISLNK(mode):
                 item = {"type": "symlink", "target": os.readlink(path)}
@@ -180,6 +183,37 @@ def add_bytes(archive: tarfile.TarFile, name: str, payload: bytes, epoch: int) -
     info.uid = info.gid = 0
     info.uname = info.gname = ""
     archive.addfile(info, io.BytesIO(payload))
+
+
+def build_manifest(*, project_revision: str, buildroot_pin: dict[str, str],
+                   thingino_revision: str, source_date_epoch: int,
+                   upstream_archive_members: int, upstream_archive_file_bytes: int,
+                   prepared_tree_entries_compared: int,
+                   members: dict[str, bytes]) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "scope": "pinned Buildroot Git tree and four exact Thingino overrides for the recorded project revision",
+        "project_revision": project_revision,
+        "buildroot_revision": buildroot_pin["revision"],
+        "buildroot_tree": buildroot_pin["tree"],
+        "buildroot_url": buildroot_pin["url"],
+        "thingino_revision": thingino_revision,
+        "source_date_epoch": source_date_epoch,
+        "upstream_archive_members": upstream_archive_members,
+        "upstream_archive_file_bytes": upstream_archive_file_bytes,
+        "prepared_tree_entries_compared": prepared_tree_entries_compared,
+        "prepared_tree_equal": True,
+        "members": {name: {"bytes": len(data), "sha256": digest(data)}
+                    for name, data in sorted(members.items())},
+        "source_notices": ["sources/buildroot-upstream.tar:COPYING",
+                           "sources/buildroot-upstream.tar:README"],
+        "limits": ["Buildroot scope only; excludes other firmware component source",
+                   "The supplied final Buildroot config is hashed; source collection and legal review are separate",
+                   "No package-license review or full legal approval is claimed",
+                   "No binary, build output, or credential is included"],
+        "legal_review_approved": False,
+        "publication_authorized": False,
+    }
 
 
 def package(args: argparse.Namespace) -> dict[str, object]:
@@ -299,30 +333,16 @@ def package(args: argparse.Namespace) -> dict[str, object]:
         }
         for path, payload in patches.items():
             members[f"patches/{Path(path).name}"] = payload
-        manifest = {
-            "schema_version": 1,
-            "scope": "pinned Buildroot Git tree and four exact Thingino overrides for one a091 candidate",
-            "project_revision": args.project_revision,
-            "buildroot_revision": revision,
-            "buildroot_tree": tree,
-            "buildroot_url": pinned["url"],
-            "thingino_revision": thingino_pin["revision"],
-            "source_date_epoch": epoch,
-            "upstream_archive_members": member_count,
-            "upstream_archive_file_bytes": source_bytes,
-            "prepared_tree_entries_compared": len(actual_inventory),
-            "prepared_tree_equal": True,
-            "members": {name: {"bytes": len(data), "sha256": digest(data)}
-                        for name, data in sorted(members.items())},
-            "source_notices": ["sources/buildroot-upstream.tar:COPYING",
-                               "sources/buildroot-upstream.tar:README"],
-            "limits": ["Buildroot scope only; excludes other firmware component source",
-                       "The supplied config is from the separate legal-info export",
-                       "No package-license review or full legal approval is claimed",
-                       "No binary, build output, or credential is included"],
-            "legal_review_approved": False,
-            "publication_authorized": False,
-        }
+        manifest = build_manifest(
+            project_revision=args.project_revision,
+            buildroot_pin=pinned,
+            thingino_revision=thingino_pin["revision"],
+            source_date_epoch=epoch,
+            upstream_archive_members=member_count,
+            upstream_archive_file_bytes=source_bytes,
+            prepared_tree_entries_compared=len(actual_inventory),
+            members=members,
+        )
         members["metadata/manifest.json"] = (json.dumps(manifest, sort_keys=True, indent=2) + "\n").encode()
         descriptor = os.open(archive_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         try:

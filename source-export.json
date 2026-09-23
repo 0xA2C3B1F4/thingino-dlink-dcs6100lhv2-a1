@@ -1630,7 +1630,7 @@
       "source": "scripts/inventory_rtl_linked_sources.py"
     },
     "scripts/package_buildroot_source.py": {
-      "sha256": "56d93af637bfd0b2f4ba8df022b9a5b32c7e1ffd6bb01aa160fbfc3719fe60dc",
+      "sha256": "3b06353cd7da4952569b6ca5d4cdd6919dfd2c9255966f3d860d0ba43312a265",
       "source": "scripts/package_buildroot_source.py"
     },
     "scripts/platform/__init__.py": {
@@ -1908,6 +1908,10 @@
     "tests/test_onvif_snapshot_io.py": {
       "sha256": "7a8c782e7d6a4bbd59340f46ca9ecb4be879a50ca9ea57fc34affbed1acb8f36",
       "source": "tests/test_onvif_snapshot_io.py"
+    },
+    "tests/test_package_buildroot_source.py": {
+      "sha256": "1b5dc502ed5469898265ff50c153316281c394f370e5141a7cc26f1c13ffdcab",
+      "source": "tests/test_package_buildroot_source.py"
     },
     "tests/test_platform_wifi.py": {
       "sha256": "91229a9120a69f7dbe89f8736436f16e416447daa756cbb8d04ee78c2488ec77",
@@ -2531,6 +2535,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "18be8a804df4286e8346f26590f749e0919b553c",
+  "source_commit": "da6363e6aa1e4388283d77eb9e0c2cf80cd8198a",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }
