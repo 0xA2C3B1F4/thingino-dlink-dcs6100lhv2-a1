@@ -2130,7 +2130,7 @@
       "source": "tests/test_windows_media_preflight.py"
     },
     "third_party/LICENSE_REVIEW.md": {
-      "sha256": "ec97d215a98ccc336af0afa78f0aa28873bfec13bd55e8073a48859511061c4c",
+      "sha256": "94b8405c56fadef4214932fd9d63ba4a30be24b71099ea6e566145adba468697",
       "source": "third_party/LICENSE_REVIEW.md"
     },
     "third_party/NOTICE.md": {
@@ -2543,6 +2543,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "0036e51c97cdc827ae46193ac77ed8eb5c37160f",
+  "source_commit": "ec20b50ca7168a9399e46c64f32de8997b0ac18c",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }

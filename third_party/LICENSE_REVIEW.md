@@ -336,6 +336,14 @@ metadata does not necessarily mean missing license declarations in the source.
 | `thingino-button` | The executable is installed. Its README identifies the project as MIT, despite the recipe's `unknown` result. The archive has no standalone license text; that is a text-delivery gap, not a reason to assume there is no declaration. |
 | `thingino-libubox` | `libubox.so`, `libblobmsg_json.so` and `jshn` are installed. The recipe declares ISC and BSD-3-Clause but names no `LICENSE_FILES`, so the collector saves no license text. The pinned archive has `debian/copyright` and source-level notices. Review the actual compiled files and retain their applicable notices, including terms not captured by the recipe's two labels. |
 
+On 2026-09-23, the [upstream `ingenic-pwm` repository](https://github.com/gtxaspec/ingenic-pwm)
+still had the exact pinned commit `8d45ebdb97600c7559f5b7eac8e42a9d8c38426b`
+at `master`. Its four-file tree showed no license file, and the
+[GitHub repository metadata](https://api.github.com/repos/gtxaspec/ingenic-pwm)
+reported `license: null`. This is a bounded search for a grant, not a legal
+determination or evidence that another project's MIT declaration applies.
+The component-specific rights question remains open.
+
 This table is a scoped warning review, not an exhaustive linked-file inventory
 or a corresponding-source acceptance decision. The two replacement libraries
 must not be classified by their filenames alone as the originally acquired
