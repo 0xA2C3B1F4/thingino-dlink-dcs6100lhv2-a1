@@ -85,3 +85,43 @@ Both API snapshot routes returned HTTP 200, but this script did not validate
 JPEG contents. It also did not prove positive ONVIF Digest access, full auth
 session lifecycle, concurrent slow-client behavior, or CPU/PSS/socket/shared-
 memory stability. Those candidate checks remain open.
+
+## Read-only media and protocol checks
+
+Further checks on the same installed bytes used the camera-bound SSH host key
+and made no settings or flash changes. Both authenticated Control snapshot
+responses decoded as JPEG at 1920 × 1080 and 640 × 360. Each authenticated
+HTTPS MJPEG endpoint produced two decoded frames. This proves the media routes,
+not a browser MJPEG fallback or reconnect sequence.
+
+Both `/stream0` and `/stream1` RTSP endpoints rejected an unauthenticated
+request, then accepted the separately derived camera-bound Digest credential.
+The bounded verifier received a complete H.264 IDR and two RTP timestamps on
+each stream, with the expected 1920 × 1080 and 640 × 360 SPS dimensions.
+Neither the credential nor camera frames were saved or printed.
+
+Both ONVIF snapshot routes also accepted their own HTTP Digest authentication
+and returned decoded JPEGs at those dimensions. WS-Security UsernameToken
+authenticated Media1 and Media2; each exposed two profiles whose RTSP and
+snapshot URLs matched the endpoints tested above. The HTTPS certificate was
+first read over pinned SSH and compared before SOAP credentials were sent.
+The reusable, camera-specific SOAP probe and its exact invocation remain with
+the private candidate ledger. A running `onvif-httpd` did not establish
+WS-Discovery: no UDP 3702 listener or discovery init script was present in
+this image. Automatic discovery and ONVIF profile conformance are not claimed.
+The installed `wsd_simple_server` also embeds the old
+`/var/www/onvif/wsd_files` path, while this image contains those templates only
+under `/usr/share/onvif/wsd_files`. Starting the existing binary would not be
+a validated discovery fix.
+
+The host clock was on September 23, but the camera UTC clock read August 6
+after roughly 84 minutes of uptime. `ntpd` was running without a default route
+or DNS resolver. The local-only profile requires an operator-configured
+reachable NTP address; the clock was not changed during these checks. SOAP was
+tested using the camera's own current time. Time settings, time-based
+schedules and timestamp correctness remain unaccepted until synchronization
+and persistence are observed.
+
+The private content-addressed candidate ledger now has six passed checks of
+twenty. Seven are explicitly incomplete and seven have no run observation.
+This remains a partial first-camera result, not a firmware release decision.

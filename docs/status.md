@@ -27,7 +27,11 @@ SD handoff. Universal management verification and selected-partition readback
 passed; mutable data and physical mtd2 exact comparison were excluded. Chromium
 showed live WebRTC and operator-audible first-click Listen audio on both streams,
 including immediate audio after microphone Off-to-On without Reload. The first
-card boot had no direct UART stock-updater success line. See the
+card boot had no direct UART stock-updater success line. Later bounded tests
+decoded both JPEG snapshots and both MJPEG routes, verified Digest RTSP video
+on each stream, and verified ONVIF Media1/Media2 plus both Digest snapshot
+routes. Automatic ONVIF discovery was not running, and the camera clock had not
+synchronized. See the
 [September 23 candidate evidence](release-evidence/2026-09-23-raptor-a1-candidate.md)
 for the observed stages, hashes and limits. The firmware-release ledger remains
 2 of 9 closed; full candidate acceptance, recovery, wider provisioning, a

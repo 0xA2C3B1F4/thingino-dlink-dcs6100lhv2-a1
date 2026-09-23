@@ -682,7 +682,7 @@
       "source": "production/docs/build.md"
     },
     "docs/features.md": {
-      "sha256": "35dad0786fe6a7c0b86d33920150c843939d3aa91d6ce2bb65c02b93226de358",
+      "sha256": "c887419cc1929788223aff55fa11bf1910b1e26f7a67076abcc0b1d7e2d4b05a",
       "source": "production/docs/features.md"
     },
     "docs/hardware.md": {
@@ -722,11 +722,11 @@
       "source": "production/docs/release-evidence/2026-09-19-fresh-install-reproducibility.md"
     },
     "docs/release-evidence/2026-09-23-raptor-a1-candidate.md": {
-      "sha256": "65ba740db31172d7eb250456092c128d02cb13dea58e44fd0ab69c3d839666fa",
+      "sha256": "177c826cab0805190e37115f34bdd9bbb8e03025c4102f531ccd065859504d92",
       "source": "production/docs/release-evidence/2026-09-23-raptor-a1-candidate.md"
     },
     "docs/status.md": {
-      "sha256": "663ad5ea2efd824f0d2b3557fb4c9efe346b69923182906d75cbafc6ece432c1",
+      "sha256": "08a2c373181ccec30116806f2cda09fda627c01f632b16ef74a6bf426730bf2f",
       "source": "production/docs/status.md"
     },
     "docs/testing.md": {
@@ -2539,6 +2539,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "26d2150329fdcdd54effb0230eaf919db42f484a",
+  "source_commit": "ebe745af400b06acde121253c321f391d31d5243",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }
