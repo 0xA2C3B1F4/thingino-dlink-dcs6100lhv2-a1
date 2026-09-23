@@ -61,6 +61,17 @@ both. On Main stream, with Listen still on, switching the microphone from Off
 to On restored audio immediately without Reload. No Safari result is claimed
 for these bytes.
 
+A later authenticated Chromium fallback check on the same installed bytes
+temporarily disabled WebRTC in a separate browser tab. Main stream initially
+reached `Live · MJPEG`, with Listen unavailable as expected. Preview Reload
+then requested `/media/v1/mjpeg?stream=0&q=51`, received HTTP 401 and showed
+Offline. The original WebRTC tab was not changed. The private candidate ledger
+records `preview.mjpeg_stream0` as failed and rejects this candidate. Source
+inspection found the mismatch: uhttpd validates and discards the bounded `q`
+retry revision, but the Raptor Control media-authorization allowlist rejects
+it. A source correction admitting only Preview's `q=50…99` revisions passed
+host tests; it has not been built into or tested on this installed candidate.
+
 The public firmware-release ledger remains 2 of 9 gates closed. The full
 content-addressed candidate matrix, interrupted-installation and recovery
 tests, wider provisioning acceptance, a second camera, host-platform and hosted
@@ -92,7 +103,8 @@ Further checks on the same installed bytes used the camera-bound SSH host key
 and made no settings or flash changes. Both authenticated Control snapshot
 responses decoded as JPEG at 1920 × 1080 and 640 × 360. Each authenticated
 HTTPS MJPEG endpoint produced two decoded frames. This proves the media routes,
-not a browser MJPEG fallback or reconnect sequence.
+not a successful browser MJPEG fallback and reconnect sequence; the later
+browser Reload failure above overrides any inference from the direct endpoints.
 
 Both `/stream0` and `/stream1` RTSP endpoints rejected an unauthenticated
 request, then accepted the separately derived camera-bound Digest credential.

@@ -972,6 +972,16 @@ fn raptor_proxy_media_target(target: &str) -> bool {
     if tail.is_empty() {
         return !query.ends_with('&');
     }
+    // Preview uses q only as a bounded retry revision. The uhttpd Raptor
+    // mapping validates it and then drops it before opening /mjpg, so this
+    // authorization must accept the same browser-generated requests.
+    if let Some(revision) = tail.strip_prefix("q=") {
+        return revision.len() == 2
+            && revision.bytes().all(|b| b.is_ascii_digit())
+            && revision
+                .parse::<u8>()
+                .is_ok_and(|value| (50..=99).contains(&value));
+    }
     let Some(fps) = tail.strip_prefix("f=") else {
         return false;
     };
@@ -1910,6 +1920,9 @@ mod tests {
             "/media/v1/mjpeg?stream=0",
             "/media/v1/mjpeg?stream=1&f=1",
             "/media/v1/mjpeg?stream=1&f=30",
+            "/media/v1/mjpeg?stream=0&q=50",
+            "/media/v1/mjpeg?stream=0&q=51",
+            "/media/v1/mjpeg?stream=1&q=99",
         ] {
             assert!(mapped.authorize_media(target), "{target}");
         }
@@ -1925,7 +1938,11 @@ mod tests {
             "/media/v1/mjpeg?stream=1&f=31",
             "/media/v1/mjpeg?stream=1&f=01",
             "/media/v1/mjpeg?stream=1&f=2&f=3",
-            "/media/v1/mjpeg?stream=1&q=51",
+            "/media/v1/mjpeg?stream=1&q=49",
+            "/media/v1/mjpeg?stream=1&q=100",
+            "/media/v1/mjpeg?stream=1&q=051",
+            "/media/v1/mjpeg?stream=1&q=51&q=52",
+            "/media/v1/mjpeg?stream=1&q=51&f=1",
             "/media/v1/mjpeg?stream=%31",
             "/media/v1/mjpeg?stream=1&f=+1",
         ] {

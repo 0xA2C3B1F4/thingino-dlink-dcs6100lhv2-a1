@@ -13,10 +13,18 @@ same-camera verification remain release requirements.
 
 The tables below describe named evidence, not blanket acceptance of later source
 changes. The full-Raptor source path has passed host composition checks. The
-current candidate has bounded first-camera installation and browser evidence;
-its full physical acceptance matrix remains open.
+latest built candidate has host-only evidence; its full physical acceptance
+matrix remains open.
 
-The latest unaccepted candidate is source
+Source `aff74396532c133805e7f08549fc7bf6ba80d60b` corrects Control's
+MJPEG retry-query allowlist. Two clean complete-firmware builds and an
+independent rehash of 16 artifact pairs passed. The new signed universal bundle
+is 7,958,609 bytes, SHA-256
+`d97e3b8857cbfe167411fefb90fb3015476bbbd425824ec0871ecb5855ff3cc1`.
+It has not been installed or browser-tested on a camera. See the
+[MJPEG correction build evidence](release-evidence/2026-09-23-raptor-mjpeg-correction-build.md).
+
+The latest installed, now rejected candidate is source
 `22989b85e327b090116cf7884a2e616055e24454c`. Its two clean `initialize`
 builds used no Raptor component cache and produced 16 byte-identical
 complete-firmware artifact pairs. An independent pass rehashed all 32 files
@@ -33,8 +41,13 @@ on each stream, and verified ONVIF Media1/Media2 plus both Digest snapshot
 routes. Automatic ONVIF discovery was not running, and the camera clock had not
 synchronized. A later bounded two-request concurrency probe returned HTTP 200
 twice, but runtime logs and live heartbeat reads showed intermittent day/night
-state timeouts. Slow-client, disconnect and long-duration resource acceptance
-remain open. See the
+state timeouts. A real Chromium MJPEG fallback reached Live on Main stream,
+but Preview Reload then received HTTP 401 for its bounded `q=51` retry URL and
+went Offline. The installed candidate's MJPEG browser check failed and its
+content-addressed candidate decision is rejected. The Control allowlist
+mismatch has a host-built correction but no new camera acceptance yet.
+Slow-client, disconnect and
+long-duration resource acceptance remain open. See the
 [September 23 candidate evidence](release-evidence/2026-09-23-raptor-a1-candidate.md)
 for the observed stages, hashes and limits. The firmware-release ledger remains
 2 of 9 closed; full candidate acceptance, recovery, wider provisioning, a
