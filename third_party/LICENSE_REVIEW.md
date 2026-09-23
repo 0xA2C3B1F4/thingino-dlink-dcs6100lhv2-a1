@@ -302,7 +302,7 @@ omissions in its [legal-info guidance](https://buildroot.org/downloads/manual/ma
 review the actual delivered material rather than treating the exit code as
 legal approval.
 
-### Current candidate collection
+### Installed rejected candidate collection
 
 For source `22989b85e327b090116cf7884a2e616055e24454c`, the offline
 collector completed against a copy of the finished build-A workspace. It
@@ -333,6 +333,30 @@ The locked 13-source Raptor archive has SHA-256
 its source-lock and headers-input digests match this candidate's source. Both
 archives remain private technical evidence. They exclude other firmware
 sources and do not approve redistribution.
+
+### Host-built MJPEG correction collection
+
+For source `aff74396532c133805e7f08549fc7bf6ba80d60b`, the offline
+Buildroot collector completed against an APFS-cloned copy of the clean build-A
+workspace from `build-20260923T145048233909Z-aff74396532c`. The original
+20 GiB ext4 image had SHA-256
+`2d1800c2b0534159dcb19fa7e9730dd495ffe34e616f9b0c5b7bd308e79d1f50`
+before and after the run. The collector exported 327 files totaling
+547,326,204 bytes, with tree SHA-256
+`e78477c36aa2473c69e315e8bea1b99c13829aa2028f6a8713616d3dab5d4e66`.
+An independent host pass checked all 326 listed file hashes. The collection
+receipt has SHA-256
+`417b221075f188d09f4a9f70fe4c6cb7498c2d1ad6257279d74ce413a180be8d`.
+
+Compared byte-for-byte with the preceding `22989b85` collection, only
+`buildroot.config`, the Buildroot version field in `host-manifest.csv`, and
+their checksum index differ. The recorded Buildroot version changed from
+`-g200c9bf6` to `-gac0f7208`; all saved source and license files match.
+The same eight base warning categories below remain. The receipt says
+`complete: true`, `legal_review_approved: false`, and
+`publication_authorized: false`. This is candidate-specific technical source
+collection, not a complete corresponding-source package or permission to
+distribute firmware. The RTL8188FU and Raptor rights gates remain open.
 
 ## Remaining base-collection warnings
 

@@ -57,10 +57,16 @@ review remain open.
 An offline Buildroot legal-info collection from the `22989b85` build-A
 workspace completed and exported 327 files. All 326 listed file hashes passed
 an independent readback; the original build workspace remained byte-identical.
-This is technical collection, not legal approval or a complete corresponding-
-source package. The same eight base warning categories remain, including the
-external toolchain and camera-vendor binary restrictions. See the
-[license review](../third_party/LICENSE_REVIEW.md#current-candidate-collection).
+The same offline collector also completed on a copy of the new `aff74396`
+build-A workspace. Its 327-file export passed independent readback, and its
+original build image remained unchanged. Saved source and license files match
+the earlier collection; only Buildroot version metadata and its checksum index
+differ. Both are technical collections, not legal approval or complete
+corresponding-source packages. The same eight base warning categories remain,
+including the external toolchain and camera-vendor binary restrictions. See the
+[installed candidate](../third_party/LICENSE_REVIEW.md#installed-rejected-candidate-collection)
+and [corrected candidate](../third_party/LICENSE_REVIEW.md#host-built-mjpeg-correction-collection)
+license records.
 
 At the `385ba106` checkpoint, the first camera ran an image with bounded,
 payload-free diagnostics for the files and storage-SD paths. It reported

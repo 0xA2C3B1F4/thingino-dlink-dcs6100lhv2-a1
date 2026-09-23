@@ -48,6 +48,14 @@ against its SHA-256 and 4,150-entry inventory, copied to this source profile's
 new cache key, and revalidated by the normal builder. It was dependency input,
 not a reused firmware component. The successful run made no SD or camera write.
 
+An offline Buildroot `legal-info` collection from a copy of this candidate's
+build-A workspace completed with 327 exported files. An independent pass
+checked all 326 listed hashes, and the original workspace image remained
+unchanged. Compared with the preceding `22989b85` collection, saved source
+and license files match; only Buildroot version metadata and the checksum
+index differ. The collection receipt records legal review and publication
+authorization as false. See the [license review](../../third_party/LICENSE_REVIEW.md#host-built-mjpeg-correction-collection).
+
 Next, install this exact signed candidate through the supported SD workflow
 and independently verify the camera identity, layout and selected readback.
 In a real browser with WebRTC unavailable, test MJPEG Live, Reload, and both

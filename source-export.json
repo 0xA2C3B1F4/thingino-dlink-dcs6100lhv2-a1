@@ -726,11 +726,11 @@
       "source": "production/docs/release-evidence/2026-09-23-raptor-a1-candidate.md"
     },
     "docs/release-evidence/2026-09-23-raptor-mjpeg-correction-build.md": {
-      "sha256": "036144be55cd7cd8bb2eec0290d76501975acce37a0b3a7f16b2df43914cdcf3",
+      "sha256": "3425bb36934441fcc14de134aa939b67cbd93cac3a53de66661d6a748d1d4958",
       "source": "production/docs/release-evidence/2026-09-23-raptor-mjpeg-correction-build.md"
     },
     "docs/status.md": {
-      "sha256": "53fc5d31b723e439ab7c27cbfca55ca351032f5c9d70ad10c1d86749f7c946ea",
+      "sha256": "506c458190a0e2fc2012e1d375df6ad6444f22b3812371f3e3b1cf479a83ae47",
       "source": "production/docs/status.md"
     },
     "docs/testing.md": {
@@ -2130,7 +2130,7 @@
       "source": "tests/test_windows_media_preflight.py"
     },
     "third_party/LICENSE_REVIEW.md": {
-      "sha256": "5f9fc6dfe8a1062b6a268643cd850a1db6d336e54ebdc940e87232548e0517dc",
+      "sha256": "8ab39128d30d6fc3ce0c09f30b14f2732ddb04153ee32029329ab2f9fa9cd86a",
       "source": "third_party/LICENSE_REVIEW.md"
     },
     "third_party/NOTICE.md": {
@@ -2543,6 +2543,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "895eac85e13b28ba07440abb400d7fbd7373a7ad",
+  "source_commit": "db1f0aadc6bec8ee5eb896703bf505e384237554",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }
