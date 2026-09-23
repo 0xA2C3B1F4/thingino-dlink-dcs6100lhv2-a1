@@ -66,3 +66,22 @@ content-addressed candidate matrix, interrupted-installation and recovery
 tests, wider provisioning acceptance, a second camera, host-platform and hosted
 CI acceptance, RTL8188FU rights, and Raptor corresponding-source and legal
 review remain open. This record does not authorize firmware distribution.
+
+## Bounded Control acceptance after installation
+
+The host-side camera acceptance script was updated for the Raptor supervisor's
+Control PID path and for the documented Raptor API differences; this script
+change did not alter the installed firmware bytes. The first unmodified-script
+attempt made no API requests because it expected the old PID path. A subsequent
+diagnostic run identified the expected 503 for Raptor's unsupported aggregate
+`GET /api/v1/config` and the expected 401 for ONVIF snapshot requests carrying
+only a WebUI API key. The final script requires the exact unavailable response
+for aggregate config and rejects a WebUI-key bypass of ONVIF HTTP Digest.
+
+On the same installed candidate, a bounded 1,000-request Control/media run
+passed. The serial request loop took 28.39 seconds; Control threads were
+16→16, file descriptors 5→5, child processes 0→0, and RSS 1616→1604 KiB.
+Both API snapshot routes returned HTTP 200, but this script did not validate
+JPEG contents. It also did not prove positive ONVIF Digest access, full auth
+session lifecycle, concurrent slow-client behavior, or CPU/PSS/socket/shared-
+memory stability. Those candidate checks remain open.

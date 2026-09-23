@@ -234,7 +234,7 @@
       "source": "components/thingino-control/integration/thingino-control.json"
     },
     "components/thingino-control/scripts/camera_acceptance.sh": {
-      "sha256": "4a944e132c947529f42ab49887f50cfc245ad7694f3108bf17dcb926e00349d1",
+      "sha256": "795bef3e6c8a10d99bc41a5ce37991d916ed520c765a9c0fe31c91f71e760d7d",
       "source": "components/thingino-control/scripts/camera_acceptance.sh"
     },
     "components/thingino-control/scripts/device_smoke.sh": {
@@ -670,7 +670,7 @@
       "source": "contracts/thingino-control-api-v1.json"
     },
     "docs/api.md": {
-      "sha256": "e85d4e0ba5cbf5334432bb255249c3fc428e7d90d126ddaa4d9e3340de755a00",
+      "sha256": "513422b544736f5d9925340c7a8a32fd9266875f2675c86186a8b8862625e65d",
       "source": "production/docs/api.md"
     },
     "docs/architecture.md": {
@@ -722,7 +722,7 @@
       "source": "production/docs/release-evidence/2026-09-19-fresh-install-reproducibility.md"
     },
     "docs/release-evidence/2026-09-23-raptor-a1-candidate.md": {
-      "sha256": "9cf8c39e5499837ba2813d53933ef27a3ca133b20658a3a08db0929c90a6f649",
+      "sha256": "65ba740db31172d7eb250456092c128d02cb13dea58e44fd0ab69c3d839666fa",
       "source": "production/docs/release-evidence/2026-09-23-raptor-a1-candidate.md"
     },
     "docs/status.md": {
@@ -2094,7 +2094,7 @@
       "source": "tests/test_stock_restore_transactions.py"
     },
     "tests/test_thingino_control_device_script.py": {
-      "sha256": "b94ad450f6bdd4ec937acdf089b45c0095d80acd84f6b6abc834db45b442c1cc",
+      "sha256": "27c7f41241ff4869fe14afa5ed2fef20311454aaac30737efc3ea0b70be91622",
       "source": "tests/test_thingino_control_device_script.py"
     },
     "tests/test_thingino_control_init.py": {
@@ -2539,6 +2539,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "c4c8ccffb58e936080283708c84d4b68cd432683",
+  "source_commit": "26d2150329fdcdd54effb0230eaf919db42f484a",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }

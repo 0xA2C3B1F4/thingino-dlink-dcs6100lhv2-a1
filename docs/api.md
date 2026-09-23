@@ -91,10 +91,12 @@ including after reloading a live path that was not saved successfully.
 - at most two concurrent backend operations; and
 - three-second accepted-request deadline.
 
-uhttpd relays MJPEG, snapshots, recordings, and ONVIF responses after Control
-authorizes the exact request. `/onvif/image.cgi` and `/onvif/image1.cgi` use
-the same session, API-key, or bearer authentication as other snapshot routes;
-there is no unauthenticated ONVIF snapshot bypass. Large media bodies do not
+uhttpd relays MJPEG, snapshots, recordings, and ONVIF responses through their
+respective loopback services. Control authorizes the exact WebUI media route.
+`/onvif/image.cgi` and `/onvif/image1.cgi` instead require independent ONVIF
+HTTP Digest authentication; a WebUI session, API key, or bearer token does not
+authorize them. The ONVIF service delegates an authorized capture to Control.
+There is no unauthenticated ONVIF snapshot bypass. Large media bodies do not
 occupy a Control worker. uhttpd receives each bounded Control or ONVIF request
 body in full before opening the corresponding loopback backend connection; one
 four-second deadline covers body admission and backend service.
