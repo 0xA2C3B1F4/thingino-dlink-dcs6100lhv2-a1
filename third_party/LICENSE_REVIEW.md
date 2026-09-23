@@ -126,6 +126,18 @@ the header-dependency JSON is 398,367 bytes, SHA-256
 This binds the recorded 150 translation units and 767 existing dependencies to
 the a091 build. It does not resolve the rights and delivery questions above.
 
+The same two inventory commands were run on both clean build workspaces for
+the current `22989b85e327b090116cf7884a2e616055e24454c` firmware candidate.
+The workspaces were mounted read-only without journal replay, using the pinned
+builder image `sha256:8abae43028bd1155572c76e268b9b8c5dce4686efe70ff68c0b7c5f9b93b361e`.
+Their full-image SHA-256 values remained unchanged after inspection:
+`47a7e160aa1101bcd89df4da07451eb23aed3b637322848b8f48918d11816e20`
+for build A and `9738e233e25b73ffe04eb66533ffb940331cb0302e62b2a29f4abe5fff2ab621`
+for build B. Both produced exactly the committed inventory hashes above,
+including 150 translation units, 767 existing dependencies and the installed
+module hash. This binds those recorded inputs to the current candidate, but
+does not close the per-file rights or corresponding-source delivery gate.
+
 ### Remaining driver notice questions
 
 A full-file marker check against the hash-verified 150 translation units and
