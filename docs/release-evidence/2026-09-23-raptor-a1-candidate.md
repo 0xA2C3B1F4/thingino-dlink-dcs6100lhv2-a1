@@ -122,6 +122,30 @@ tested using the camera's own current time. Time settings, time-based
 schedules and timestamp correctness remain unaccepted until synchronization
 and persistence are observed.
 
+## Bounded concurrency and runtime logs
+
+At about two hours of uptime, two simultaneous authenticated HTTPS media-state
+GETs both returned HTTP 200 in 3.619 and 3.632 seconds of client time. Control
+retained 16 threads, five file descriptors and one socket descriptor before
+and immediately after. Its RSS fell from 1776 to 1708 KiB, PSS from 1450 to
+1385 KiB and private memory from 1380 to 1316 KiB; system shared memory was
+unchanged at 5764 KiB. The private ledger retains the read-only probe and
+numeric result. TLS setup and uhttpd time are included in the client duration,
+so it cannot be compared directly with Control's three-second accepted-request
+deadline. Two requests do not close slow-client, disconnect or soak acceptance.
+
+The RVD log contained 21 transient control-request failures, each followed by
+a recovery message. Control also logged rate-limited day/night heartbeat
+timeouts through at least count 16 and three privacy heartbeat timeouts. A
+day/night configuration GET returned HTTP 200, while three sequential
+heartbeat GETs reported `unknown`, `day`, `day` for the live mode. The optional
+heartbeat reader has a 300 ms RIC budget and preserves `unknown` on failure.
+This observation does not prove an encoder failure, but intermittent state
+readback and the cause of the timeouts need investigation before acceptance.
+The retained kernel ring began at boot but its last entry was at 446 seconds;
+it does not prove the later two-hour interval error-free. No camera settings
+or firmware were changed for this review.
+
 The private content-addressed candidate ledger now has six passed checks of
-twenty. Seven are explicitly incomplete and seven have no run observation.
+twenty. Nine are explicitly incomplete and five have no run observation.
 This remains a partial first-camera result, not a firmware release decision.

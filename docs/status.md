@@ -31,7 +31,10 @@ card boot had no direct UART stock-updater success line. Later bounded tests
 decoded both JPEG snapshots and both MJPEG routes, verified Digest RTSP video
 on each stream, and verified ONVIF Media1/Media2 plus both Digest snapshot
 routes. Automatic ONVIF discovery was not running, and the camera clock had not
-synchronized. See the
+synchronized. A later bounded two-request concurrency probe returned HTTP 200
+twice, but runtime logs and live heartbeat reads showed intermittent day/night
+state timeouts. Slow-client, disconnect and long-duration resource acceptance
+remain open. See the
 [September 23 candidate evidence](release-evidence/2026-09-23-raptor-a1-candidate.md)
 for the observed stages, hashes and limits. The firmware-release ledger remains
 2 of 9 closed; full candidate acceptance, recovery, wider provisioning, a
