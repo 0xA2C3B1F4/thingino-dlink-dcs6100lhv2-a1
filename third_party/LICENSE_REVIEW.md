@@ -308,7 +308,7 @@ metadata does not necessarily mean missing license declarations in the source.
 | `ingenic-pwm` | `pwm` and its control script are installed. The four-file pinned utility archive and recipe contain no located license declaration. This remains an unresolved component-specific rights question; another package's MIT license must not be assigned to it. |
 | `ingenic-system-libs-neo` | The configuration selects both replacement libraries and the image contains `libalog.so` and `libsysutils.so`. The recipe, source SPDX markers and README identify MIT. Its archive lacks a standalone license text. Preserve the existing declarations and complete that text/notice delivery. |
 | `thingino-button` | The executable is installed. Its README identifies the project as MIT, despite the recipe's `unknown` result. The archive has no standalone license text; that is a text-delivery gap, not a reason to assume there is no declaration. |
-| `thingino-libubox` | `libubox.so`, `libblobmsg_json.so` and `jshn` are installed. The recipe declares ISC and BSD-3-Clause. The archive contains source files with notices but no standalone license file; review and retain the applicable original per-file notices. |
+| `thingino-libubox` | `libubox.so`, `libblobmsg_json.so` and `jshn` are installed. The recipe declares ISC and BSD-3-Clause but names no `LICENSE_FILES`, so the collector saves no license text. The pinned archive has `debian/copyright` and source-level notices. Review the actual compiled files and retain their applicable notices, including terms not captured by the recipe's two labels. |
 
 This table is a scoped warning review, not an exhaustive linked-file inventory
 or a corresponding-source acceptance decision. The two replacement libraries
@@ -320,6 +320,18 @@ to the separate distribution restriction.
 The private Buildroot supplement covers build-system source preparation only.
 External toolchain source and notices, other firmware components and package
 sources, per-file rights review, and complete source delivery remain open.
+
+For the current candidate, the pinned `thingino-libubox` source archive has
+SHA-256 `78254b8a4f2b38ca9e7d7aae0b8d5faa2f2cb88ae13ff886577e5aaea401c146`.
+Its `debian/copyright` contains an ISC grant and has SHA-256
+`f957700a3f105a45e6b34ae4268f63eb9f825d9c22656b95fb5d159419804626`.
+The upstream `CMakeLists.txt` includes `base64.c` and `md5.c` in the library.
+Their SHA-256 values are
+`3378f8210b5bd02d19e9c73caa658b5206e61efef8d2fdedf879b13f5f0ef966`
+and `a9cb115e58a1f1a249fa13653223439e8add19f4a23d0e1bb701f233c87c98a6`.
+`base64.c` carries ISC, Internet Software Consortium and IBM notices;
+`md5.c` carries its author's public-domain statement with fallback terms.
+These are source observations, not a completed linked-file or rights review.
 
 For `ingenic-diag-tools`, the retained six-file source archive has SHA-256
 `483394340e74015f2a55761c838f6597df56b4b224803d9f46c888c8e1331ebe`.
