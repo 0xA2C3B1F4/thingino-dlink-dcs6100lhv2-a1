@@ -138,6 +138,20 @@ including 150 translation units, 767 existing dependencies and the installed
 module hash. This binds those recorded inputs to the current candidate, but
 does not close the per-file rights or corresponding-source delivery gate.
 
+The current candidate's offline Buildroot collection also retained the pinned
+driver source archive, SHA-256
+`9705879189d704c274618d550dd19d3f297953f2b8eb4f22fc936345c33b09ba`,
+and the two ordered package patches, SHA-256
+`c93b9fc9955c4e71e3b5d7884a47a73a05b05e75f40bd776131087c5a193a517`
+and `9f2b4ed80caf16517b33f0fd12d559c2d8409cbd9e60f532eb12c58d7ef9cda5`.
+After extracting that archive and applying the patches in its recorded order,
+all 150 linked driver C files and all 161 recorded driver headers matched the
+committed inventories by SHA-256. The patched Makefile had SHA-256
+`bb9ddb18062e64108c341cceee88c1c510880ac97ac5caf4db5c74d03e0719d1`,
+matching the Makefile in both read-only current-candidate build workspaces.
+This verifies the recorded driver-local build inputs. It does not review all
+file-level rights or package the kernel and toolchain inputs with the driver.
+
 ### Remaining driver notice questions
 
 A full-file marker check against the hash-verified 150 translation units and
