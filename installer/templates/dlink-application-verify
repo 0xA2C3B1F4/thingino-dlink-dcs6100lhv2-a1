@@ -1,0 +1,76 @@
+#!/bin/sh
+# Read-only application acceptance. Never start or restart a service here.
+set -eu
+PATH=/bin:/sbin:/usr/bin:/usr/sbin
+export PATH
+
+fail() {
+    printf 'Application verification failed: %s\n' "$1" >&2
+    exit 1
+}
+
+# The HTTPS request stays on this device. Its self-signed certificate is not
+# public-PKI validated; the host authenticates this entire probe with pinned SSH.
+# No credential, cookie, redirect or externally supplied URL is used.
+curl --noproxy '*' --insecure --fail --silent --show-error --max-time 5 \
+    --output /dev/null https://127.0.0.1/ || fail webui-ingress
+session=$(curl --noproxy '*' --insecure --fail --silent --show-error --max-time 5 \
+    https://127.0.0.1/api/v1/auth/session) || fail control
+case "$session" in
+    *'"control_api":{"name":"Thingino Control","version":1}'*) ;;
+    *) fail control-response ;;
+esac
+
+[ -f /etc/raptor-media.conf ] || fail raptor-config
+[ "$(cat /run/raptor-boot/ready 2>/dev/null)" = started ] || fail raptor-startup
+sub_status=$(/usr/bin/raptorctl -j \
+    '{"daemon":"rvd","cmd":"get-stream-enabled","stream_id":1}') || fail stream1-state
+case "$sub_status" in
+    *'"status":"ok"'*) ;;
+    *) fail stream1-state ;;
+esac
+case "$sub_status" in *'"supported":true'*) ;; *) fail stream1-state ;; esac
+case "$sub_status" in
+    *'"active_enabled":true'*) active=true ;;
+    *'"active_enabled":false'*) active=false ;;
+    *) fail stream1-state ;;
+esac
+case "$sub_status" in
+    *'"configured_enabled":true'*) configured=true ;;
+    *'"configured_enabled":false'*) configured=false ;;
+    *) fail stream1-state ;;
+esac
+[ "$active" = "$configured" ] || fail stream1-state
+sub_enabled=$active
+owners='rvd rhd rod rsd ric rad rmr0 rwd storage control'
+if [ "$sub_enabled" = true ]; then
+    owners="$owners rmr1"
+fi
+for owner in $owners; do
+    pid=$(cat "/run/raptor-boot/$owner.pid" 2>/dev/null) || fail "$owner-pid"
+    case "$pid" in ''|*[!0-9]*) fail "$owner-pid" ;; esac
+    binary=$owner
+    case "$owner" in
+        rmr0|rmr1) binary=rmr ;;
+        storage|control) binary=thingino-controld ;;
+    esac
+    case "$binary" in
+        thingino-controld) expected=/usr/sbin/$binary ;;
+        *) expected=/usr/bin/$binary ;;
+    esac
+    [ "$(readlink "/proc/$pid/exe" 2>/dev/null)" = "$expected" ] || fail "$owner-process"
+done
+channels=0
+if [ "$sub_enabled" = true ]; then
+    channels='0 1'
+fi
+for channel in $channels; do
+    result=$(curl --noproxy '*' --fail --silent --show-error --max-time 5 \
+        --output /dev/null --write-out '%{content_type} %{size_download}' \
+        "http://127.0.0.1:8080/snapshot?ch=$channel") || fail "snapshot-$channel"
+    case "$result" in 'image/jpeg '*) ;; *) fail "snapshot-$channel-type" ;; esac
+    size=${result##* }
+    case "$size" in ''|*[!0-9]*) fail "snapshot-$channel-size" ;; esac
+    [ "$size" -gt 4 ] || fail "snapshot-$channel-empty"
+done
+printf '{"schema_version":1,"application_gate":"passed","backend":"raptor","webui_gate":"passed","control_gate":"passed","media_gate":"passed"}\n'

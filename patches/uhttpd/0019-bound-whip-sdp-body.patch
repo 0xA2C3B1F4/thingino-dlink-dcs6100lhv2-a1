@@ -1,0 +1,40 @@
+diff --git a/control_proxy.c b/control_proxy.c
+--- a/control_proxy.c
++++ b/control_proxy.c
+@@ -23,6 +23,7 @@
+ #define CONTROL_ONVIF_PORT 1999
+ #define CONTROL_PROXY_TIMEOUT_MS 4000
+ #define CONTROL_PROXY_MAX_BODY 4096
++#define CONTROL_PROXY_MAX_WHIP_SDP_BODY (15 * 1024)
+ #define CONTROL_ONVIF_MAX_BODY (16 * 1024)
+ #define CONTROL_PROXY_MAX_RESPONSE (2 * 1024 * 1024)
+ #define CONTROL_PROXY_WRITE_BUFFER 8192
+@@ -1109,7 +1110,7 @@ static void control_proxy_request(struct client *cl, char *url,
+ {
+	struct dispatch_control_proxy *proxy = &cl->dispatch.control_proxy;
+ 	const char *host, *origin;
+-	bool media, onvif, onvif_snapshot;
++	bool media, onvif, onvif_snapshot, whip_post;
+ 	(void) pi;
+ 
+ 	memset(proxy, 0, sizeof(*proxy));
+@@ -1120,6 +1121,9 @@ static void control_proxy_request(struct client *cl, char *url,
+ 	onvif = !strncmp(url, "/onvif/", 7);
+ 	onvif_snapshot = !strcmp(url, "/onvif/image.cgi") ||
+ 		!strcmp(url, "/onvif/image1.cgi");
++	whip_post = cl->request.method == UH_HTTP_MSG_POST &&
++		(!strcmp(url, "/api/v1/media/webrtc/whip?stream=0") ||
++		 !strcmp(url, "/api/v1/media/webrtc/whip?stream=1"));
+ 	proxy->media = media;
+ 	proxy->onvif = onvif && !onvif_snapshot;
+ 	proxy->onvif_snapshot = onvif_snapshot;
+@@ -1145,7 +1149,8 @@ static void control_proxy_request(struct client *cl, char *url,
+ 		return;
+ 	}
+ 	if (cl->request.content_length > (onvif && !onvif_snapshot ?
+-	    CONTROL_ONVIF_MAX_BODY : CONTROL_PROXY_MAX_BODY)) {
++	    CONTROL_ONVIF_MAX_BODY : whip_post ?
++	    CONTROL_PROXY_MAX_WHIP_SDP_BODY : CONTROL_PROXY_MAX_BODY)) {
+ 		control_proxy_fail(cl, 413, "Payload Too Large", "payload_too_large");
+ 		return;
+ 	}

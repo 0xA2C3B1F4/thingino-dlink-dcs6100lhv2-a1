@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "profile": "dlink-dcs6100lhv2-a1",
+  "target": {
+    "model": "DCS-6100LHV2",
+    "hardware_revision": "A1",
+    "flash_size_bytes": 16777216,
+    "physical_partitions": ["mtd0", "mtd1", "mtd2", "mtd3", "mtd4", "mtd5"]
+  },
+  "user_path": {
+    "allowed_interfaces": [
+      "power",
+      "sd-card",
+      "reset-button",
+      "status-leds",
+      "local-setup-ap"
+    ],
+    "forbidden_dependencies": [
+      "uart",
+      "external-spi-programmer",
+      "opened-enclosure"
+    ]
+  },
+  "ap_feasibility": {
+    "boot_storage": "ram",
+    "nor_write_count": 0,
+    "mtd_access": "all-read-only",
+    "wifi_chip": "RTL8188FU",
+    "ap_security": "WPA2-PSK-CCMP",
+    "control_transport": "ssh-ed25519-key-only-over-local-ap",
+    "setup_secret_source": "per-install-sd-session-bundle",
+    "station_credentials_storage": "tmpfs-only",
+    "required_checks": [
+      "ram_root_and_all_mtd_read_only",
+      "rtl8188fu_realtek_hostapd_started",
+      "unique_wpa2_setup_ap_visible",
+      "host_joined_setup_ap",
+      "authenticated_control_and_file_transfer",
+      "wifi_credentials_provisioned_without_secret_disclosure",
+      "ap_to_station_transition",
+      "station_failure_returned_to_ap",
+      "reset_button_forced_ap_recovery"
+    ]
+  },
+  "release": {
+    "required_checks": [
+      "complete_duplicate_mtd0_mtd5_backup_before_first_nor_write",
+      "normal_install_completed_without_forbidden_dependency",
+      "final_station_health_gate_proved_by_host",
+      "wrong_wifi_credentials_returned_to_setup_ap",
+      "corrupt_mtd3_returned_to_setup_ap",
+      "interrupted_mtd3_write_returned_to_setup_ap",
+      "stock_uboot_sd_recovered_mtd1_mtd2",
+      "same_device_stock_mtd1_mtd2_mtd3_restore_with_complete_readback",
+      "reset_button_forced_setup_ap",
+      "installer_led_protocol_observed"
+    ]
+  }
+}

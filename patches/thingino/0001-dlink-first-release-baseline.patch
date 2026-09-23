@@ -1,0 +1,160 @@
+diff --git a/Config.soc.in b/Config.soc.in
+index d9510856d..a24f81b5e 100644
+--- a/Config.soc.in
++++ b/Config.soc.in
+@@ -114,6 +114,8 @@ choice
+ 
+ config BR2_AVPU_CLK_400MHZ
+ 	bool "400 MHz"
++config BR2_AVPU_CLK_440MHZ
++	bool "440 MHz"
+ config BR2_AVPU_CLK_450MHZ
+ 	bool "450 MHz"
+ config BR2_AVPU_CLK_486MHZ
+@@ -130,6 +132,11 @@ config BR2_AVPU_CLK_700MHZ
+ 	bool "700 MHz"
+ endchoice
+ 
++config BR2_AVPU_PARAMS
++	string "Extra AVPU parameters"
++	help
++	  Set additional parameters passed to the AVPU kernel module when it is loaded.
++
+ choice
+ 	prompt "ISP Clock Source"
+ 	default BR2_ISP_CLK_INTERNAL
+diff --git a/Makefile b/Makefile
+index 5141f0383..b77a9e413 100644
+--- a/Makefile
++++ b/Makefile
+@@ -62,7 +62,9 @@ THINGINO_BACKUP_DIR ?= $(HOME)/.thingino/backups
+ GIT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD | tr -d '()' | xargs)
+ GIT_HASH = "$(shell git show -s --format=%H | cut -c1-7)"
+ GIT_DATE = "$(TZ=UTC0 git show --quiet --date='format-local:%Y-%m-%d %H:%M:%S UTC' --format="%cd")"
+-BUILD_DATE = "$(shell env -u SOURCE_DATE_EPOCH TZ=UTC date '+%Y-%m-%d %H:%M:%S %z')"
++SOURCE_DATE_EPOCH ?= $(shell git show -s --format=%ct)
++BUILD_DATE = "$(shell TZ=UTC /usr/bin/date --date="@$(SOURCE_DATE_EPOCH)" '+%Y-%m-%d %H:%M:%S %z')"
++export SOURCE_DATE_EPOCH
+ 
+ ifeq ($(GROUP),github)
+ CAMERA_SUBDIR := configs/github
+diff --git a/package/thingino-onvif/thingino-onvif.mk b/package/thingino-onvif/thingino-onvif.mk
+index 442bcda6d..f88590d79 100644
+--- a/package/thingino-onvif/thingino-onvif.mk
++++ b/package/thingino-onvif/thingino-onvif.mk
+@@ -20,7 +20,7 @@ endif
+ 
+ # username | uid | group | gid | password | home | shell | groups | comment
+ define THINGINO_ONVIF_USERS
+-thingino -1 thingino -1 =thingino - - - Streaming Service
++thingino -1 thingino -1 * - - - Streaming Service
+ endef
+ 
+ define THINGINO_ONVIF_BUILD_CMDS
+diff --git a/package/thingino-webui/thingino-webui.mk b/package/thingino-webui/thingino-webui.mk
+index d27d7c9b4..1b64d2539 100644
+--- a/package/thingino-webui/thingino-webui.mk
++++ b/package/thingino-webui/thingino-webui.mk
+@@ -3,7 +3,7 @@ THINGINO_WEBUI_SITE = $(THINGINO_WEBUI_PKGDIR)/files
+ THINGINO_WEBUI_LICENSE = MIT
+ 
+ THINGINO_WEBUI_ASSET_TAG_RAW := $(shell LC_ALL=C find $(THINGINO_WEBUI_PKGDIR)/files/www/a -type f \( -name '*.js' -o -name '*.css' \) -printf '%T@\n' 2>/dev/null | sort -nr | head -n1 | cut -d. -f1)
+-THINGINO_WEBUI_ASSET_TAG := $(if $(THINGINO_WEBUI_ASSET_TAG_RAW),$(THINGINO_WEBUI_ASSET_TAG_RAW),$(shell date +%s))
++THINGINO_WEBUI_ASSET_TAG := $(if $(SOURCE_DATE_EPOCH),$(SOURCE_DATE_EPOCH),$(if $(THINGINO_WEBUI_ASSET_TAG_RAW),$(THINGINO_WEBUI_ASSET_TAG_RAW),$(shell date +%s)))
+ 
+ ifeq ($(BR2_PACKAGE_THINGINO_STREAMER_RAPTOR),y)
+ THINGINO_WEBUI_PREVIEW_HTML = $(THINGINO_WEBUI_PKGDIR)/files/www/preview-raptor.html
+diff --git a/package/busybox/busybox.config b/package/busybox/busybox.config
+index 02ec29563..8cb957344 100644
+--- a/package/busybox/busybox.config
++++ b/package/busybox/busybox.config
+@@ -795,10 +795,10 @@ CONFIG_FEATURE_DEVFS is not set
+ # CONFIG_FEATURE_DEVFS is not set
+ CONFIG_DEVMEM=y
+ # CONFIG_FBSPLASH is not set
+-CONFIG_FLASH_ERASEALL=y
++# CONFIG_FLASH_ERASEALL is not set
+ # CONFIG_FLASH_LOCK is not set
+ # CONFIG_FLASH_UNLOCK is not set
+-CONFIG_FLASHCP=y
++# CONFIG_FLASHCP is not set
+ # CONFIG_GETFATTR is not set
+ # CONFIG_HDPARM is not set
+ # CONFIG_FEATURE_HDPARM_GET_IDENTITY is not set
+diff --git a/package/ingenic-sdk/ingenic-sdk.mk b/package/ingenic-sdk/ingenic-sdk.mk
+index 596da9eab..e81c023d1 100644
+--- a/package/ingenic-sdk/ingenic-sdk.mk
++++ b/package/ingenic-sdk/ingenic-sdk.mk
+@@ -167,7 +167,7 @@ define GENERATE_MODULE_LOADER
+ 
+ 	if [ "$(BR2_THINGINO_DEV_CAMERA)" = "y" ]; then \
+ 		if [ "$(SOC_FAMILY)" = "t31" ] || [ "$(SOC_FAMILY)" = "c100" ] || [ "$(SOC_FAMILY)" = "t40" ] || [ "$(SOC_FAMILY)" = "t41" ]; then \
+-			echo "avpu $(AVPU_CLK_SRC) $(AVPU_CLK)" > $(TARGET_DIR)/etc/modules.d/10-avpu; \
++			echo "avpu $(AVPU_CLK_SRC) $(AVPU_CLK) $(call qstrip,$(BR2_AVPU_PARAMS))" > $(TARGET_DIR)/etc/modules.d/10-avpu; \
+ 		fi \
+ 	fi
+ 
+diff --git a/scripts/rootfs_script.sh b/scripts/rootfs_script.sh
+index a56123ecc..0e8cbd599 100755
+--- a/scripts/rootfs_script.sh
++++ b/scripts/rootfs_script.sh
+@@ -23,7 +23,7 @@ cd $BR2_EXTERNAL
+ GIT_BRANCH=$(git branch | grep ^* | awk '{print $2}')
+ GIT_HASH=$(git show -s --format=%H)
+ GIT_TIME=$(TZ=UTC0 git show --quiet --date='format-local:%Y-%m-%d %H:%M:%S +0000' --format="%cd")
+-BUILD_TIME="$(env -u SOURCE_DATE_EPOCH TZ=UTC date '+%Y-%m-%d %H:%M:%S %z')"
++BUILD_TIME="$(TZ=UTC /usr/bin/date --date="@${SOURCE_DATE_EPOCH}" '+%Y-%m-%d %H:%M:%S %z')"
+ BUILD_ID="${GIT_BRANCH}+${GIT_HASH:0:7}, ${BUILD_TIME}"
+ COMMIT_ID="${GIT_BRANCH}+${GIT_HASH:0:7}, ${GIT_TIME}"
+ cd -
+@@ -96,7 +96,7 @@ BUILD_TIME=\"${BUILD_TIME}\"
+ COMMIT_ID=\"${COMMIT_ID}\"
+ BOOTLOADER=${BOOTLOADER}
+ HOSTNAME=${HOSTNAME}
+-TIME_STAMP=$(date +%s)" | tee $FILE
++TIME_STAMP=${SOURCE_DATE_EPOCH}" | tee $FILE
+ 
+ # Append the rest of the file
+ cat $tmpfile | tee -a $FILE
+diff --git a/thingino.mk b/thingino.mk
+index 819ca4427..564fa4328 100644
+--- a/thingino.mk
++++ b/thingino.mk
+@@ -273,6 +273,8 @@ endif
+ 
+ ifeq ($(BR2_AVPU_CLK_400MHZ),y)
+ 	AVPU_CLK := avpu_clk=400000000
++else ifeq ($(BR2_AVPU_CLK_440MHZ),y)
++	AVPU_CLK := avpu_clk=440000000
+ else ifeq ($(BR2_AVPU_CLK_450MHZ),y)
+ 	AVPU_CLK := avpu_clk=450000000
+ else ifeq ($(BR2_AVPU_CLK_500MHZ),y)
+@@ -404,7 +406,7 @@ endif
+ endif
+ endif
+ 
+-ifeq ($(BR2_ISP_DAY_NIGHT_SWITCH_DROP_FRAME_NUM),y)
++ifeq ($(BR2_ISP_DAY_NIGHT_SWITCH_DROP_FRAME),y)
+ 	ISP_DAY_NIGHT_SWITCH_DROP_FRAME_NUM := isp_day_night_switch_drop_frame_num=$(BR2_ISP_DAY_NIGHT_SWITCH_DROP_FRAME_NUM_VALUE)
+ else
+ 	ISP_DAY_NIGHT_SWITCH_DROP_FRAME_NUM :=
+diff --git a/package/thingino-kopt/thingino-kopt.mk b/package/thingino-kopt/thingino-kopt.mk
+index d2c074907..1ea4f5d70 100644
+--- a/package/thingino-kopt/thingino-kopt.mk
++++ b/package/thingino-kopt/thingino-kopt.mk
+@@ -54,9 +54,14 @@ define THINGINO_KOPT_LINUX_CONFIG_FIXUPS_MMC
+ endef
+ endif
++ifeq ($(CAMERA),dlink_dcs6100lhv2_a1_t31n_os02g10_rtl8188fu)
++THINGINO_MMC0_MAX_FREQ := 24000000
++else
++THINGINO_MMC0_MAX_FREQ := 48000000
++endif
+ ifeq ($(BR2_PACKAGE_THINGINO_KOPT_MMC0),y)
+ define THINGINO_KOPT_LINUX_CONFIG_FIXUPS_MMC0
+ 	$(call KCONFIG_ENABLE_OPT,CONFIG_JZMMC_V12_MMC0)
+-	$(call KCONFIG_SET_OPT,CONFIG_MMC0_MAX_FREQ,48000000)
++	$(call KCONFIG_SET_OPT,CONFIG_MMC0_MAX_FREQ,$(THINGINO_MMC0_MAX_FREQ))
+ endef
+ endif
+ ifeq ($(BR2_PACKAGE_THINGINO_KOPT_MMC0_1BIT),y)

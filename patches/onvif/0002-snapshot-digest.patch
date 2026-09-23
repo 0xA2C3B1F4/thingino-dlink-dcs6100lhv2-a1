@@ -1,0 +1,745 @@
+diff --git a/src/onvif_digest.h b/src/onvif_digest.h
+new file mode 100644
+--- /dev/null
++++ b/src/onvif_digest.h
+@@ -0,0 +1,40 @@
++#ifndef ONVIF_DIGEST_H
++#define ONVIF_DIGEST_H
++#include <stdbool.h>
++#include <stddef.h>
++#include <stdint.h>
++
++#define ONVIF_DIGEST_REALM "Thingino ONVIF"
++#define ONVIF_DIGEST_NONCES 16
++#define ONVIF_DIGEST_CLIENTS 8
++#define ONVIF_DIGEST_TTL 300
++typedef bool (*onvif_digest_hash)(const void *, size_t, unsigned char[16]);
++/* Production binding is linked separately, never replaced by the test hash. */
++bool onvif_digest_md5(const void *, size_t, unsigned char[16]);
++
++typedef struct {
++    char cnonce[129];
++    uint32_t nc;
++} onvif_digest_counter;
++typedef struct {
++    char value[33];
++    uint64_t issued;
++    onvif_digest_counter clients[ONVIF_DIGEST_CLIENTS];
++} onvif_digest_nonce;
++typedef struct {
++    char ha1[33];
++    onvif_digest_nonce nonces[ONVIF_DIGEST_NONCES];
++    unsigned next;
++} onvif_digest_state;
++
++/* The serial daemon supplies CLOCK_MONOTONIC seconds and its checked MD5
++ * implementation. Passwords are never stored here. Zero-initialize state.
++ * Challenge output is a nonce, not a URL or a complete HTTP header. */
++bool onvif_digest_challenge(onvif_digest_state *, const char *username,
++    const char *password, uint64_t now, onvif_digest_hash, char nonce[33]);
++/* HTTP caller must enforce GET, reject embedded NUL and duplicate
++ * Authorization headers, and pass the unmodified request target. */
++bool onvif_digest_verify(onvif_digest_state *, const char *username,
++    const char *password, uint64_t now, onvif_digest_hash,
++    const char *target, const char *authorization);
++#endif
+diff --git a/src/onvif_digest.c b/src/onvif_digest.c
+new file mode 100644
+--- /dev/null
++++ b/src/onvif_digest.c
+@@ -0,0 +1,243 @@
++#include "onvif_digest.h"
++#include <ctype.h>
++#include <errno.h>
++#include <fcntl.h>
++#include <stdio.h>
++#include <string.h>
++#include <strings.h>
++#include <unistd.h>
++
++static void wipe(void *data, size_t count)
++{
++    volatile unsigned char *p = data;
++    while (count--) *p++ = 0;
++}
++
++static void hex(const unsigned char *bytes, size_t length, char *out)
++{
++    static const char digits[] = "0123456789abcdef";
++    for (size_t i = 0; i < length; i++) {
++        out[2 * i] = digits[bytes[i] >> 4];
++        out[2 * i + 1] = digits[bytes[i] & 15];
++    }
++    out[2 * length] = 0;
++}
++
++static bool hash_hex(onvif_digest_hash hash, const char *input, char out[33])
++{
++    unsigned char bytes[16] = {0};
++    bool ok = hash && hash(input, strlen(input), bytes);
++    if (ok) hex(bytes, sizeof(bytes), out);
++    wipe(bytes, sizeof(bytes));
++    return ok;
++}
++
++static bool equal(const char *a, const char *b, size_t length)
++{
++    unsigned char difference = 0;
++    for (size_t i = 0; i < length; i++)
++        difference |= (unsigned char)a[i] ^ (unsigned char)b[i];
++    return difference == 0;
++}
++
++static bool credentials(onvif_digest_state *state, const char *username,
++                        const char *password, onvif_digest_hash hash)
++{
++    char input[1400] = {0}, ha1[33] = {0};
++    bool ok = false;
++    if (!username || !password || !username[0] || !password[0] ||
++        strlen(username) > 128 || strlen(password) > 1024)
++        goto done;
++    int count = snprintf(input, sizeof(input), "%s:%s:%s",
++                         username, ONVIF_DIGEST_REALM, password);
++    if (count < 0 || (size_t)count >= sizeof(input) ||
++        !hash_hex(hash, input, ha1))
++        goto done;
++    if (!equal(state->ha1, ha1, sizeof(ha1))) {
++        wipe(state, sizeof(*state));
++        memcpy(state->ha1, ha1, sizeof(ha1));
++    }
++    ok = true;
++done:
++    if (!ok) wipe(state, sizeof(*state));
++    wipe(input, sizeof(input));
++    wipe(ha1, sizeof(ha1));
++    return ok;
++}
++
++bool onvif_digest_challenge(onvif_digest_state *state, const char *username,
++    const char *password, uint64_t now, onvif_digest_hash hash, char nonce[33])
++{
++    unsigned char bytes[16] = {0};
++    size_t used = 0;
++    nonce[0] = 0;
++    if (!credentials(state, username, password, hash)) return false;
++    onvif_digest_nonce *recent = &state->nonces[
++        (state->next + ONVIF_DIGEST_NONCES - 1) % ONVIF_DIGEST_NONCES];
++    if (recent->value[0] && now >= recent->issued &&
++        now - recent->issued < ONVIF_DIGEST_TTL) {
++        for (unsigned i = 0; i < ONVIF_DIGEST_CLIENTS; i++) {
++            if (!recent->clients[i].cnonce[0]) {
++                memcpy(nonce, recent->value, 33);
++                return true; /* Unauthenticated challenges cannot churn the ring. */
++            }
++        }
++    }
++    int fd = open("/dev/urandom", O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
++    if (fd < 0) return false;
++    while (used < sizeof(bytes)) {
++        ssize_t count = read(fd, bytes + used, sizeof(bytes) - used);
++        if (count > 0) used += (size_t)count;
++        else if (count < 0 && errno == EINTR) continue;
++        else break;
++    }
++    close(fd);
++    if (used != sizeof(bytes)) {
++        wipe(bytes, sizeof(bytes));
++        return false;
++    }
++    onvif_digest_nonce *slot = &state->nonces[state->next];
++    state->next = (state->next + 1) % ONVIF_DIGEST_NONCES;
++    wipe(slot, sizeof(*slot));
++    hex(bytes, sizeof(bytes), slot->value);
++    wipe(bytes, sizeof(bytes));
++    slot->issued = now;
++    memcpy(nonce, slot->value, 33);
++    return true;
++}
++
++enum { USER, REALM, NONCE, URI, RESPONSE, ALGORITHM, QOP, CNONCE, NC, FIELDS };
++static const char *const names[FIELDS] = {
++    "username", "realm", "nonce", "uri", "response", "algorithm",
++    "qop", "cnonce", "nc"
++};
++
++static const char *spaces(const char *p)
++{
++    while (*p == ' ' || *p == '\t') p++;
++    return p;
++}
++
++/* Deliberately reject duplicate and unknown directives. No auth-int, sess,
++ * userhash, legacy no-qop, URI normalization, or HTTP header folding. */
++static bool parse(const char *header, char fields[FIELDS][257])
++{
++    unsigned seen = 0;
++    if (!header || strlen(header) > 2048 ||
++        strncasecmp(header, "Digest ", 7)) return false;
++    const char *p = spaces(header + 7);
++    while (*p) {
++        const char *key = p;
++        while (isalpha((unsigned char)*p)) p++;
++        size_t length = (size_t)(p - key);
++        int field = -1;
++        for (int i = 0; i < FIELDS; i++)
++            if (strlen(names[i]) == length && !strncasecmp(key, names[i], length))
++                field = i;
++        if (field < 0 || (seen & (1U << field))) return false;
++        seen |= 1U << field;
++        p = spaces(p);
++        if (*p++ != '=') return false;
++        p = spaces(p);
++        bool quoted = *p == '"';
++        if (quoted) p++;
++        size_t used = 0;
++        while (*p && (quoted ? *p != '"' : *p != ',' && *p != ' ' && *p != '\t')) {
++            unsigned char byte = (unsigned char)*p++;
++            if (quoted && byte == '\\') {
++                byte = (unsigned char)*p++;
++            }
++            if (byte < 0x20 || byte >= 0x7f || used >= 256 ||
++                (!quoted && (byte == '"' || byte == '\\'))) return false;
++            fields[field][used++] = (char)byte;
++        }
++        fields[field][used] = 0;
++        if (!used || (quoted && *p++ != '"')) return false;
++        p = spaces(p);
++        if (!*p) break;
++        if (*p++ != ',') return false;
++        p = spaces(p);
++        if (!*p) return false;
++    }
++    unsigned required = ((1U << FIELDS) - 1) & ~(1U << ALGORITHM);
++    return (seen & required) == required &&
++        (!(seen & (1U << ALGORITHM)) || !strcasecmp(fields[ALGORITHM], "MD5"));
++}
++
++static int unhex(unsigned char byte)
++{
++    if (byte >= '0' && byte <= '9') return byte - '0';
++    if (byte >= 'a' && byte <= 'f') return byte - 'a' + 10;
++    if (byte >= 'A' && byte <= 'F') return byte - 'A' + 10;
++    return -1;
++}
++
++bool onvif_digest_verify(onvif_digest_state *state, const char *username,
++    const char *password, uint64_t now, onvif_digest_hash hash,
++    const char *target, const char *authorization)
++{
++    char fields[FIELDS][257] = {{0}};
++    char input[512] = {0}, ha2[33] = {0}, expected[33] = {0};
++    bool ok = false;
++    uint32_t nc = 0;
++    onvif_digest_nonce *nonce = NULL;
++    onvif_digest_counter *counter = NULL;
++    if (!credentials(state, username, password, hash) || !target ||
++        (strcmp(target, "/onvif/image.cgi") && strcmp(target, "/onvif/image1.cgi")) ||
++        !parse(authorization, fields)) goto done;
++    if (strcmp(fields[USER], username) || strcmp(fields[REALM], ONVIF_DIGEST_REALM) ||
++        strcmp(fields[URI], target) || strcmp(fields[QOP], "auth") ||
++        strlen(fields[NONCE]) != 32 || strlen(fields[RESPONSE]) != 32 ||
++        strlen(fields[CNONCE]) > 128 || strlen(fields[NC]) != 8) goto done;
++    for (unsigned i = 0; i < 8; i++) {
++        int digit = unhex((unsigned char)fields[NC][i]);
++        if (digit < 0) goto done;
++        nc = (nc << 4) | (unsigned)digit;
++    }
++    if (!nc) goto done;
++    for (unsigned i = 0; i < 32; i++) {
++        if (unhex((unsigned char)fields[RESPONSE][i]) < 0) goto done;
++        fields[RESPONSE][i] = (char)tolower((unsigned char)fields[RESPONSE][i]);
++    }
++    for (unsigned i = 0; i < ONVIF_DIGEST_NONCES; i++) {
++        onvif_digest_nonce *candidate = &state->nonces[i];
++        if (candidate->value[0] && equal(candidate->value, fields[NONCE], 32)) {
++            if (now < candidate->issued || now - candidate->issued >= ONVIF_DIGEST_TTL) {
++                wipe(candidate, sizeof(*candidate));
++                goto done;
++            }
++            nonce = candidate;
++            break;
++        }
++    }
++    if (!nonce) goto done;
++    snprintf(input, sizeof(input), "GET:%s", target);
++    if (!hash_hex(hash, input, ha2)) goto done;
++    int length = snprintf(input, sizeof(input), "%s:%s:%s:%s:auth:%s",
++        state->ha1, fields[NONCE], fields[NC], fields[CNONCE], ha2);
++    if (length < 0 || (size_t)length >= sizeof(input) ||
++        !hash_hex(hash, input, expected) || !equal(expected, fields[RESPONSE], 32))
++        goto done;
++    for (unsigned i = 0; i < ONVIF_DIGEST_CLIENTS; i++) {
++        onvif_digest_counter *candidate = &nonce->clients[i];
++        if (!strcmp(candidate->cnonce, fields[CNONCE])) {
++            counter = candidate;
++            break;
++        }
++        if (!candidate->cnonce[0] && !counter) counter = candidate;
++    }
++    if (!counter) {
++        wipe(nonce, sizeof(*nonce)); /* Never forget counters for a live nonce. */
++        goto done;
++    }
++    if (nc <= counter->nc) goto done;
++    memcpy(counter->cnonce, fields[CNONCE], strlen(fields[CNONCE]) + 1);
++    counter->nc = nc;
++    ok = true;
++done:
++    wipe(fields, sizeof(fields));
++    wipe(input, sizeof(input));
++    wipe(ha2, sizeof(ha2));
++    wipe(expected, sizeof(expected));
++    return ok;
++}
+diff --git a/src/onvif_snapshot_io.h b/src/onvif_snapshot_io.h
+new file mode 100644
+--- /dev/null
++++ b/src/onvif_snapshot_io.h
+@@ -0,0 +1,16 @@
++#ifndef ONVIF_SNAPSHOT_IO_H
++#define ONVIF_SNAPSHOT_IO_H
++#include <stddef.h>
++#include <stdint.h>
++#include <sys/types.h>
++
++/* One CLOCK_MONOTONIC budget, shared by client input, backend and output. */
++int64_t onvif_io_deadline(unsigned milliseconds);
++ssize_t onvif_io_read(int fd, void *buffer, size_t length, int64_t deadline);
++int onvif_io_write(int fd, const void *buffer, size_t length, int64_t deadline);
++/* Call only after Digest authentication. Fixed loopback Control, stream 0/1.
++ * 0: complete; positive HTTP status: no client output yet; -1: output started,
++ * caller must close the connection, never append another HTTP response. */
++int onvif_snapshot_relay(int client, unsigned stream, const char *token,
++                        int64_t deadline);
++#endif
+diff --git a/src/onvif_snapshot_io.c b/src/onvif_snapshot_io.c
+new file mode 100644
+--- /dev/null
++++ b/src/onvif_snapshot_io.c
+@@ -0,0 +1,258 @@
++#include "onvif_snapshot_io.h"
++#include <arpa/inet.h>
++#include <errno.h>
++#include <fcntl.h>
++#include <limits.h>
++#include <poll.h>
++#include <stdbool.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <strings.h>
++#include <sys/socket.h>
++#include <time.h>
++#include <unistd.h>
++
++#ifndef ONVIF_CONTROL_PORT
++#define ONVIF_CONTROL_PORT 1998
++#endif
++#ifndef MSG_NOSIGNAL
++#define MSG_NOSIGNAL 0
++#endif
++#define HEADER_MAX 8192
++#define JPEG_MAX (2 * 1024 * 1024)
++
++/* Keep two bytes private until the JPEG ending has been validated. */
++static int body_part(int client, const unsigned char *bytes, size_t length,
++                     unsigned char tail[2], int64_t deadline)
++{
++    if (!length) return 0;
++    if (length == 1) {
++        if (onvif_io_write(client, tail, 1, deadline)) return -1;
++        tail[0] = tail[1]; tail[1] = bytes[0];
++    } else {
++        if (onvif_io_write(client, tail, 2, deadline) ||
++            onvif_io_write(client, bytes, length - 2, deadline)) return -1;
++        tail[0] = bytes[length - 2]; tail[1] = bytes[length - 1];
++    }
++    return 0;
++}
++
++static int64_t clock_ms(void)
++{
++    struct timespec now;
++    if (clock_gettime(CLOCK_MONOTONIC, &now)) return -1;
++    return (int64_t)now.tv_sec * 1000 + now.tv_nsec / 1000000;
++}
++
++int64_t onvif_io_deadline(unsigned milliseconds)
++{
++    int64_t now = clock_ms();
++    return now < 0 || milliseconds > 3500 ? -1 : now + milliseconds;
++}
++
++static int ready(int fd, short events, int64_t deadline)
++{
++    for (;;) {
++        int64_t now = clock_ms();
++        if (now < 0 || deadline <= now) { errno = ETIMEDOUT; return -1; }
++        int64_t remaining = deadline - now;
++        struct pollfd item = {.fd = fd, .events = events};
++        int count = poll(&item, 1, remaining > INT_MAX ? INT_MAX : (int)remaining);
++        if (count > 0 && !(item.revents & POLLNVAL)) return 0;
++        if (count < 0 && errno == EINTR) continue;
++        if (count == 0) errno = ETIMEDOUT;
++        return -1;
++    }
++}
++
++ssize_t onvif_io_read(int fd, void *buffer, size_t length, int64_t deadline)
++{
++    int flags = fcntl(fd, F_GETFL);
++    if (flags < 0 || (!(flags & O_NONBLOCK) && fcntl(fd, F_SETFL, flags | O_NONBLOCK)))
++        return -1;
++    for (;;) {
++        if (ready(fd, POLLIN, deadline)) return -1;
++        ssize_t count = recv(fd, buffer, length, MSG_DONTWAIT);
++        if (count < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK))
++            continue;
++        return count;
++    }
++}
++
++int onvif_io_write(int fd, const void *buffer, size_t length, int64_t deadline)
++{
++    int flags = fcntl(fd, F_GETFL);
++    if (flags < 0 || (!(flags & O_NONBLOCK) && fcntl(fd, F_SETFL, flags | O_NONBLOCK)))
++        return -1;
++    const unsigned char *bytes = buffer;
++    while (length) {
++        if (ready(fd, POLLOUT, deadline)) return -1;
++        ssize_t count = send(fd, bytes, length, MSG_DONTWAIT | MSG_NOSIGNAL);
++        if (count > 0) { bytes += count; length -= (size_t)count; }
++        else if (count < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK))
++            continue;
++        else return -1;
++    }
++    return 0;
++}
++
++static int connect_control(int64_t deadline)
++{
++    struct sockaddr_in address = {.sin_family = AF_INET,
++        .sin_port = htons(ONVIF_CONTROL_PORT),
++        .sin_addr.s_addr = htonl(INADDR_LOOPBACK)};
++    int fd = socket(AF_INET, SOCK_STREAM, 0);
++    if (fd < 0) return -1;
++    if (fcntl(fd, F_SETFD, FD_CLOEXEC) || fcntl(fd, F_SETFL, O_NONBLOCK))
++        goto fail;
++    if (connect(fd, (struct sockaddr *)&address, sizeof(address)) &&
++        errno != EINPROGRESS) goto fail;
++    if (ready(fd, POLLOUT, deadline)) goto fail;
++    int error = 0;
++    socklen_t length = sizeof(error);
++    if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &length) || error) goto fail;
++    return fd;
++fail:
++    close(fd);
++    return -1;
++}
++
++static void wipe(void *data, size_t size)
++{
++    volatile unsigned char *p = data;
++    while (size--) *p++ = 0;
++}
++
++static bool length_value(const char *text, size_t *out)
++{
++    size_t value = 0;
++    if (!*text) return false;
++    for (; *text; text++) {
++        if (*text < '0' || *text > '9' || value > JPEG_MAX / 10) return false;
++        value = value * 10 + (unsigned)(*text - '0');
++        if (value > JPEG_MAX) return false;
++    }
++    *out = value;
++    return true;
++}
++
++/* Parse only the bounded HTTP header, never binary image bytes. */
++static bool snapshot_headers(char *headers, size_t *length)
++{
++    char *end = strstr(headers, "\r\n");
++    if (!end) return false;
++    *end = 0;
++    if (strncmp(headers, "HTTP/1.1 200 ", 13) &&
++        strncmp(headers, "HTTP/1.0 200 ", 13)) return false;
++    bool have_length = false, have_type = false;
++    char *line = end + 2;
++    while (*line) {
++        end = strstr(line, "\r\n");
++        if (!end) return false;
++        *end = 0;
++        if (!*line) return have_length && have_type && *length >= 4;
++        char *colon = strchr(line, ':');
++        if (!colon || colon == line) return false;
++        for (char *p = line; p < colon; p++)
++            if (!((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z') ||
++                  (*p >= '0' && *p <= '9') || *p == '-')) return false;
++        *colon++ = 0;
++        while (*colon == ' ' || *colon == '\t') colon++;
++        char *tail = end;
++        while (tail > colon && (tail[-1] == ' ' || tail[-1] == '\t')) *--tail = 0;
++        for (char *p = colon; *p; p++)
++            if ((unsigned char)*p < 0x20 && *p != '\t') return false;
++        if (!strcasecmp(line, "Content-Length")) {
++            if (have_length || !length_value(colon, length)) return false;
++            have_length = true;
++        } else if (!strcasecmp(line, "Content-Type")) {
++            if (have_type || strcasecmp(colon, "image/jpeg")) return false;
++            have_type = true;
++        } else if (!strcasecmp(line, "Transfer-Encoding")) return false;
++        line = end + 2;
++    }
++    return false;
++}
++
++int onvif_snapshot_relay(int client, unsigned stream, const char *token,
++                        int64_t deadline)
++{
++    unsigned char headers[HEADER_MAX + 1], buffer[4096];
++    char request[384] = {0}, output[256];
++    int backend = -1, result = 502;
++    size_t used = 0, offset = 0, length = 0;
++    bool started = false;
++    if (stream > 1 || !token || strlen(token) != 64) return 500;
++    for (unsigned i = 0; i < 64; i++)
++        if (!((token[i] >= '0' && token[i] <= '9') ||
++              (token[i] >= 'a' && token[i] <= 'f') ||
++              (token[i] >= 'A' && token[i] <= 'F'))) return 500;
++    backend = connect_control(deadline);
++    if (backend < 0) goto done;
++    int count = snprintf(request, sizeof(request),
++        "GET /api/v1/actions/snapshot?stream_id=%u HTTP/1.1\r\n"
++        "Host: 127.0.0.1:%d\r\nAuthorization: Bearer %s\r\n"
++        "Accept: image/jpeg\r\nConnection: close\r\nContent-Length: 0\r\n\r\n",
++        stream, ONVIF_CONTROL_PORT, token);
++    if (count < 0 || (size_t)count >= sizeof(request) ||
++        onvif_io_write(backend, request, (size_t)count, deadline)) goto done;
++    wipe(request, sizeof(request));
++    while (!offset) {
++        if (used == HEADER_MAX) goto done;
++        ssize_t received = onvif_io_read(backend, headers + used, HEADER_MAX - used, deadline);
++        if (received <= 0) goto done;
++        size_t old = used;
++        used += (size_t)received;
++        for (size_t i = old > 3 ? old - 3 : 0; i + 3 < used; i++) {
++            if (!memcmp(headers + i, "\r\n\r\n", 4)) {
++                offset = i + 4;
++                break;
++            }
++        }
++    }
++    if (memchr(headers, 0, offset)) goto done;
++    unsigned char saved = offset < used ? headers[offset] : 0;
++    headers[offset] = 0;
++    bool valid = snapshot_headers((char *)headers, &length);
++    headers[offset] = saved;
++    if (!valid || used - offset > length) goto done;
++    size_t initial = used - offset;
++    /* Read at least the SOI before committing a successful response. */
++    unsigned char soi[2];
++    size_t prefix = initial > 2 ? 2 : initial;
++    memcpy(soi, headers + offset, prefix);
++    while (prefix < 2) {
++        ssize_t received = onvif_io_read(backend, soi + prefix, 2 - prefix, deadline);
++        if (received <= 0) goto done;
++        prefix += (size_t)received;
++    }
++    if (soi[0] != 0xff || soi[1] != 0xd8) goto done;
++    count = snprintf(output, sizeof(output),
++        "HTTP/1.1 200 OK\r\nContent-Type: image/jpeg\r\nContent-Length: %zu\r\n"
++        "Cache-Control: no-store\r\nConnection: close\r\n\r\n", length);
++    if (count < 0 || (size_t)count >= sizeof(output)) goto done;
++    started = true;
++    if (onvif_io_write(client, output, (size_t)count, deadline)) goto done;
++    size_t received_body = 2;
++    unsigned char tail[2] = {0xff, 0xd8};
++    if (initial > 2) {
++        if (body_part(client, headers + offset + 2, initial - 2, tail, deadline)) goto done;
++        received_body = initial;
++    }
++    while (received_body < length) {
++        size_t want = length - received_body;
++        if (want > sizeof(buffer)) want = sizeof(buffer);
++        ssize_t received = onvif_io_read(backend, buffer, want, deadline);
++        if (received <= 0) goto done;
++        if (body_part(client, buffer, (size_t)received, tail, deadline)) goto done;
++        received_body += (size_t)received;
++    }
++    if (tail[0] != 0xff || tail[1] != 0xd9) goto done;
++    if (onvif_io_write(client, tail, 2, deadline)) goto done;
++    result = 0;
++done:
++    wipe(request, sizeof(request));
++    if (backend >= 0) close(backend);
++    return result && started ? -1 : result;
++}
+diff --git a/src/onvif_digest_mbedtls.c b/src/onvif_digest_mbedtls.c
+new file mode 100644
+--- /dev/null
++++ b/src/onvif_digest_mbedtls.c
+@@ -0,0 +1,12 @@
++#include "onvif_digest.h"
++#include <mbedtls/build_info.h>
++#include <mbedtls/md5.h>
++
++#if !defined(MBEDTLS_MD5_C)
++#error "ONVIF snapshot Digest requires MBEDTLS_MD5_C"
++#endif
++
++bool onvif_digest_md5(const void *input, size_t length, unsigned char out[16])
++{
++    return mbedtls_md5((const unsigned char *)input, length, out) == 0;
++}
+diff --git a/src/onvif_snapshot_http.h b/src/onvif_snapshot_http.h
+new file mode 100644
+--- /dev/null
++++ b/src/onvif_snapshot_http.h
+@@ -0,0 +1,13 @@
++#ifndef ONVIF_SNAPSHOT_HTTP_H
++#define ONVIF_SNAPSHOT_HTTP_H
++#include "onvif_digest.h"
++#include <stdint.h>
++
++/* Serial daemon only. Headers excludes CRLFCRLF, has length+1 writable bytes.
++ * Pass the current effective SOAP credentials, never cached pointers. The
++ * token callback runs only after successful authentication. No proxy marker
++ * can authorize a request. All output uses the caller's original deadline. */
++int onvif_snapshot_http(int fd, char *headers, size_t length, size_t extra_body,
++    const char *username, const char *password, onvif_digest_hash hash,
++    bool (*token_reader)(char[65]), int64_t deadline);
++#endif
+diff --git a/src/onvif_snapshot_http.c b/src/onvif_snapshot_http.c
+new file mode 100644
+--- /dev/null
++++ b/src/onvif_snapshot_http.c
+@@ -0,0 +1,128 @@
++#include "onvif_snapshot_http.h"
++#include "onvif_snapshot_io.h"
++#include <stdio.h>
++#include <string.h>
++#include <strings.h>
++#include <time.h>
++
++static onvif_digest_state auth_state;
++
++static void clear_bytes(void *data, size_t size)
++{
++    volatile unsigned char *p = data;
++    while (size--) *p++ = 0;
++}
++
++static int respond(int fd, int status, const char *nonce, int64_t deadline)
++{
++    char response[512];
++    const char *reason = status == 401 ? "Unauthorized" :
++        status == 400 ? "Bad Request" :
++        status == 503 ? "Service Unavailable" : "Bad Gateway";
++    int length;
++    if (nonce)
++        length = snprintf(response, sizeof(response),
++            "HTTP/1.1 401 Unauthorized\r\n"
++            "WWW-Authenticate: Digest realm=\"%s\", nonce=\"%s\", algorithm=MD5, qop=\"auth\"\r\n"
++            "Content-Type: text/plain\r\nContent-Length: 0\r\n"
++            "Cache-Control: no-store\r\nConnection: close\r\n\r\n",
++            ONVIF_DIGEST_REALM, nonce);
++    else
++        length = snprintf(response, sizeof(response),
++            "HTTP/1.1 %d %s\r\nContent-Type: text/plain\r\nContent-Length: 0\r\n"
++            "Cache-Control: no-store\r\nConnection: close\r\n\r\n", status, reason);
++    if (length < 0 || (size_t)length >= sizeof(response)) return -1;
++    return onvif_io_write(fd, response, (size_t)length, deadline);
++}
++
++static bool request_fields(char *headers, size_t length, size_t extra_body,
++                           char target[64], char authorization[2049], unsigned *stream)
++{
++    if (!length || length > 8192 || extra_body || memchr(headers, 0, length))
++        return false;
++    for (size_t i = 0; i < length; i++) {
++        unsigned char byte = (unsigned char)headers[i];
++        if ((byte < 0x20 && byte != '\t' && byte != '\r' && byte != '\n') ||
++            byte == 0x7f ||
++            (byte == '\r' && (i + 1 == length || headers[i + 1] != '\n')) ||
++            (byte == '\n' && (!i || headers[i - 1] != '\r'))) return false;
++    }
++    headers[length] = 0;
++    char *end = strstr(headers, "\r\n");
++    if (!end) return false;
++    *end = 0;
++    char method[8], version[16], extra;
++    if (sscanf(headers, "%7s %63s %15s %c", method, target, version, &extra) != 3 ||
++        strcmp(method, "GET") ||
++        (strcmp(version, "HTTP/1.1") && strcmp(version, "HTTP/1.0"))) return false;
++    if (!strcmp(target, "/onvif/image.cgi")) *stream = 0;
++    else if (!strcmp(target, "/onvif/image1.cgi")) *stream = 1;
++    else return false;
++    bool seen_auth = false, seen_length = false;
++    authorization[0] = 0;
++    char *line = end + 2;
++    while (*line) {
++        end = strstr(line, "\r\n");
++        if (end) *end = 0;
++        char *colon = strchr(line, ':');
++        if (!colon || colon == line) return false;
++        for (char *p = line; p < colon; p++)
++            if (!((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z') ||
++                  (*p >= '0' && *p <= '9') || *p == '-')) return false;
++        *colon++ = 0;
++        while (*colon == ' ' || *colon == '\t') colon++;
++        char *tail = colon + strlen(colon);
++        while (tail > colon && (tail[-1] == ' ' || tail[-1] == '\t')) *--tail = 0;
++        for (char *p = colon; *p; p++)
++            if ((unsigned char)*p < 0x20 && *p != '\t') return false;
++        if (!strcasecmp(line, "Authorization")) {
++            if (seen_auth || strlen(colon) > 2048) return false;
++            seen_auth = true;
++            strcpy(authorization, colon);
++        } else if (!strcasecmp(line, "Content-Length")) {
++            if (seen_length || strcmp(colon, "0")) return false;
++            seen_length = true;
++        } else if (!strcasecmp(line, "Transfer-Encoding") || !strcasecmp(line, "Expect"))
++            return false;
++        if (!end) break;
++        line = end + 2;
++    }
++    return true;
++}
++
++int onvif_snapshot_http(int fd, char *headers, size_t length, size_t extra_body,
++    const char *username, const char *password, onvif_digest_hash hash,
++    bool (*token_reader)(char[65]), int64_t deadline)
++{
++    char target[64], authorization[2049] = {0}, token[65] = {0}, nonce[33] = {0};
++    struct timespec now;
++    unsigned stream;
++    int result;
++    if (!request_fields(headers, length, extra_body, target, authorization, &stream)) {
++        result = respond(fd, 400, NULL, deadline);
++        goto done;
++    }
++    if (clock_gettime(CLOCK_MONOTONIC, &now)) {
++        result = respond(fd, 503, NULL, deadline);
++        goto done;
++    }
++    if (!onvif_digest_verify(&auth_state, username, password, (uint64_t)now.tv_sec,
++                             hash, target, authorization)) {
++        if (!onvif_digest_challenge(&auth_state, username, password,
++                                    (uint64_t)now.tv_sec, hash, nonce))
++            result = respond(fd, 503, NULL, deadline);
++        else
++            result = respond(fd, 401, nonce, deadline);
++        goto done;
++    }
++    if (!token_reader || !token_reader(token)) {
++        result = respond(fd, 503, NULL, deadline);
++        goto done;
++    }
++    result = onvif_snapshot_relay(fd, stream, token, deadline);
++    if (result > 0) result = respond(fd, result == 500 ? 503 : result, NULL, deadline);
++done:
++    clear_bytes(authorization, sizeof(authorization));
++    clear_bytes(token, sizeof(token));
++    return result;
++}

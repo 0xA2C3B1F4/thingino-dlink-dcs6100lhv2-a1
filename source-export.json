@@ -1,0 +1,2548 @@
+{
+  "export_policy_sha256": "87032021c009388d23197cdac5b3332ab9d52a203f694f8dbd68b3acac6d3021",
+  "files": {
+    ".editorconfig": {
+      "sha256": "77d71c2bd466915cf8363f0929ef8a1f6a25b92a21d01c6ae5c6c7f5c307fd8a",
+      "source": ".editorconfig"
+    },
+    ".gitattributes": {
+      "sha256": "25f2847c188fc803b190e5657870e68d81c385c76237131d8d10695399a2737d",
+      "source": ".gitattributes"
+    },
+    ".githooks/pre-commit": {
+      "sha256": "06cef1d08395c1d64cf2acbc5b9668d237bcac9b4d97f79c211de189b371f471",
+      "source": ".githooks/pre-commit"
+    },
+    ".github/workflows/check.yml": {
+      "sha256": "79eac6ebbc9fd30a58711af59286c2fa19872dc77e8fa12608106353eae12e6b",
+      "source": ".github/workflows/check.yml"
+    },
+    ".gitignore": {
+      "sha256": "09c949fbfc969f9718a30bcdacada80e2d7c93cd61c5a8aa2ff65b6ccc7a0d31",
+      "source": ".gitignore"
+    },
+    "CONTRIBUTING.md": {
+      "sha256": "43580a7a50c98a48d612cf42c550a44d640b80a92c8bbf7d727c76940139dba3",
+      "source": "production/CONTRIBUTING.md"
+    },
+    "LICENSE": {
+      "sha256": "441975d4935e4d47a14b7052cfeb23bd5f5288b3f67332688925809665ffee75",
+      "source": "LICENSE"
+    },
+    "Makefile": {
+      "sha256": "ba36dc9510981adf8f57d9c0a144bcd4928352d10a19c7a9885544620cd948ab",
+      "source": "Makefile"
+    },
+    "README.md": {
+      "sha256": "7ce3742638db373523139f87c64a01570a87851075df6136df4d8fc5705cf392",
+      "source": "production/README.md"
+    },
+    "SECURITY.md": {
+      "sha256": "9cd2f9ada4d548be9c3930d2101a376c5d4fd353291ad32935583a4e13003254",
+      "source": "SECURITY.md"
+    },
+    "components/raptor/README.md": {
+      "sha256": "17647c87efb2344a3d16fb652930990dca0e2fa71c5f9888aa2474ba960895a9",
+      "source": "components/raptor/README.md"
+    },
+    "components/raptor/S05raptor-preconditions": {
+      "sha256": "06b368ec49a6163bd9ce80cc345cb7fc57a088e4bb8e27f536b9be960d2224a5",
+      "source": "components/raptor/S05raptor-preconditions"
+    },
+    "components/raptor/S96raptor": {
+      "sha256": "cecccfb22d61127365d11d88a7507b298fe6eb527b33d3a9bb5749bcbbff556d",
+      "source": "components/raptor/S96raptor"
+    },
+    "components/raptor/Ubuntu-Font-Licence-1.0.txt": {
+      "sha256": "2f0015108d68627bd788d313f529c21ff4da2c2c42a5e1f3883acc83480f9002",
+      "source": "components/raptor/Ubuntu-Font-Licence-1.0.txt"
+    },
+    "components/raptor/headers-input.json": {
+      "sha256": "395cd4cca6d89509bd6dd2c8707584a5b8cf98d2933da0095902cfe01b8469c0",
+      "source": "components/raptor/headers-input.json"
+    },
+    "components/raptor/media-acceptance.sh": {
+      "sha256": "5469fc1464fa145388caf506511edbd73012a7a3f6eaa3840e7ef9aff62878a2",
+      "source": "components/raptor/media-acceptance.sh"
+    },
+    "components/raptor/raptor-audio.conf": {
+      "sha256": "e9a26d213e7367ca20b5fe7ec353440cb1dde5021c57a2212167cf412d296027",
+      "source": "components/raptor/raptor-audio.conf"
+    },
+    "components/raptor/raptor-media.conf": {
+      "sha256": "03600fad56f256f60515e8279c799b5009020a335d29ab2649ec4f01f583feaf",
+      "source": "components/raptor/raptor-media.conf"
+    },
+    "components/raptor/raptor-webrtc.conf": {
+      "sha256": "4c5025e09e0d338d2daea283256144a9ba39f1674b46b1a1d750cede9c8fad67",
+      "source": "components/raptor/raptor-webrtc.conf"
+    },
+    "components/raptor/source-build-lock.json": {
+      "sha256": "bff85f6d1dd168b9152770f688d9e0a354a9e95d3557a59446ed2cda6f40e769",
+      "source": "components/raptor/source-build-lock.json"
+    },
+    "components/thingino-control/Cargo.lock": {
+      "sha256": "c3b18a46ee1c19d5ecc3f5badb835718d8aed74d981b3014a93f7fce5c20a6cc",
+      "source": "components/thingino-control/Cargo.lock"
+    },
+    "components/thingino-control/Cargo.toml": {
+      "sha256": "0a213ec34047bfba0eb1671e0a6c2097228977734d2181177d99af74642aa58b",
+      "source": "components/thingino-control/Cargo.toml"
+    },
+    "components/thingino-control/README.md": {
+      "sha256": "ad5d62d30417f2b237635cbf1454df71e9fffa43e988411cee58921a6f06de58",
+      "source": "production/components/thingino-control/README.md"
+    },
+    "components/thingino-control/fixtures/daynight-auto.json": {
+      "sha256": "8484114d634dfebb229785620283b771fd2dc01a8f0eb7a38e7212c46e09506c",
+      "source": "components/thingino-control/fixtures/daynight-auto.json"
+    },
+    "components/thingino-control/fixtures/daynight-day.json": {
+      "sha256": "b181d48669db7d72ae8452e737b1b40068542f626487a3e85119a3d8b4f79562",
+      "source": "components/thingino-control/fixtures/daynight-day.json"
+    },
+    "components/thingino-control/fixtures/daynight-night.json": {
+      "sha256": "44ee95c338cbe4e061c2475c7165d32c97635ec4a5af19ebf61268b5e4fb809b",
+      "source": "components/thingino-control/fixtures/daynight-night.json"
+    },
+    "components/thingino-control/fixtures/health.json": {
+      "sha256": "2d33dd6390abbfd6d03679b66b27672b65d5fd0341c28ce2f057a4b59579aaf0",
+      "source": "components/thingino-control/fixtures/health.json"
+    },
+    "components/thingino-control/fixtures/motion-state-machine-v1.json": {
+      "sha256": "50102b9ef1dd07fdc997d8b84368b249b6bfb9eb573950d69ca5ff6b03e0cfdc",
+      "source": "components/thingino-control/fixtures/motion-state-machine-v1.json"
+    },
+    "components/thingino-control/fixtures/runtime-media.json": {
+      "sha256": "63eb3b3ab34c67c4481b7c03683ebc22289e654f659779c00b4b643ea496a1a7",
+      "source": "components/thingino-control/fixtures/runtime-media.json"
+    },
+    "components/thingino-control/fuzz/Cargo.lock": {
+      "sha256": "6194633d4233cb133826a4c302736d78f0bd36fc2f61c75bac65bde09099d85b",
+      "source": "components/thingino-control/fuzz/Cargo.lock"
+    },
+    "components/thingino-control/fuzz/Cargo.toml": {
+      "sha256": "38233cb7ece0feca475f6a6691bef7d9feadb08cc8778f9c4f43a26af33f57e4",
+      "source": "components/thingino-control/fuzz/Cargo.toml"
+    },
+    "components/thingino-control/fuzz/README.md": {
+      "sha256": "9fe6bff266fa4ccd62dd83f5bc4ce7d31909b0111164898fac264710e0fcd271",
+      "source": "components/thingino-control/fuzz/README.md"
+    },
+    "components/thingino-control/fuzz/corpus/decoders/base64-noncanonical": {
+      "sha256": "b1800c2a220f2c08cf8e0bc2ed3cca387b05bbab056e8c305da33fb23ebb298a",
+      "source": "components/thingino-control/fuzz/corpus/decoders/base64-noncanonical"
+    },
+    "components/thingino-control/fuzz/corpus/decoders/base64-padded": {
+      "sha256": "b780a8db47caeaef7b9219387703d0afc40e6921ae4754c1b26816ef2a7cfd1b",
+      "source": "components/thingino-control/fuzz/corpus/decoders/base64-padded"
+    },
+    "components/thingino-control/fuzz/corpus/decoders/form-percent": {
+      "sha256": "fb27f63d9159ca640abb62c4669ac6e65124e986bf51e81bf41cece44899b624",
+      "source": "components/thingino-control/fuzz/corpus/decoders/form-percent"
+    },
+    "components/thingino-control/fuzz/corpus/decoders/hex-ssid": {
+      "sha256": "5f7426671118432e17a4bf2c38c66c767cc51945b300cdce65cfc08ac98cae88",
+      "source": "components/thingino-control/fuzz/corpus/decoders/hex-ssid"
+    },
+    "components/thingino-control/fuzz/corpus/decoders/path-percent": {
+      "sha256": "e2ef3a84cce5c9092969762de88057837759094d787f09611c4630b269e741c7",
+      "source": "components/thingino-control/fuzz/corpus/decoders/path-percent"
+    },
+    "components/thingino-control/fuzz/corpus/decoders/wpa-escaped": {
+      "sha256": "847a5b2bb6c0e1637b5761eff938833756d4837a1652a94c7c0450658acecd56",
+      "source": "components/thingino-control/fuzz/corpus/decoders/wpa-escaped"
+    },
+    "components/thingino-control/fuzz/corpus/http_request/content-length": {
+      "sha256": "e8ebdbe1403fec0cff91184bcb5e94457b08226e2e47f57a62d9c7e62295850d",
+      "source": "components/thingino-control/fuzz/corpus/http_request/content-length"
+    },
+    "components/thingino-control/fuzz/corpus/http_request/post-line": {
+      "sha256": "35c213f7996f0878823ba476d7739fe74746aed16f8abf986a2c605ea34052e4",
+      "source": "components/thingino-control/fuzz/corpus/http_request/post-line"
+    },
+    "components/thingino-control/fuzz/corpus/http_request/request-line": {
+      "sha256": "2df3135a52db7d4e920e87b848e05d1af66bd754b12eee7d469525ef54a8ec83",
+      "source": "components/thingino-control/fuzz/corpus/http_request/request-line"
+    },
+    "components/thingino-control/fuzz/corpus/json_parse/duplicate-key": {
+      "sha256": "d2c428abb9e7ed8b38b796d0acb61c50d433615168592e5ee87a34364b4726e5",
+      "source": "components/thingino-control/fuzz/corpus/json_parse/duplicate-key"
+    },
+    "components/thingino-control/fuzz/corpus/json_parse/nested": {
+      "sha256": "dcb9f25614c3dcddab6e4d72b18866e31de8dc21938c95c7dd85d41873884fa5",
+      "source": "components/thingino-control/fuzz/corpus/json_parse/nested"
+    },
+    "components/thingino-control/fuzz/corpus/json_parse/null": {
+      "sha256": "38e0b9de817f645c4bec37c0d4a3e58baecccb040f5718dc069a72c7385a0bed",
+      "source": "components/thingino-control/fuzz/corpus/json_parse/null"
+    },
+    "components/thingino-control/fuzz/corpus/motion_datagram/clear": {
+      "sha256": "e6d6d9fdd335e4179b35c462e8877ac0be3985fb493e3a5aeb751b11694ac463",
+      "source": "components/thingino-control/fuzz/corpus/motion_datagram/clear"
+    },
+    "components/thingino-control/fuzz/corpus/motion_datagram/detected": {
+      "sha256": "a862bdd0b11ed71315e56169ae17b121c2fc156032546881264415bfd4ba1a4c",
+      "source": "components/thingino-control/fuzz/corpus/motion_datagram/detected"
+    },
+    "components/thingino-control/fuzz/corpus/motion_datagram/inconsistent-roi": {
+      "sha256": "81988c1365c45dffd8ce0dcd4f612dd6997589acd0bcebca571338344fce0515",
+      "source": "components/thingino-control/fuzz/corpus/motion_datagram/inconsistent-roi"
+    },
+    "components/thingino-control/fuzz/dictionaries/decoders.dict": {
+      "sha256": "52c2a788ffc34431b67520bff518de46559b929d7e5c2a9c2bdc0cce4afba809",
+      "source": "components/thingino-control/fuzz/dictionaries/decoders.dict"
+    },
+    "components/thingino-control/fuzz/dictionaries/http.dict": {
+      "sha256": "cc459ed8fbeeba1cfc3f903b62671feaed95ed894c6222081c9549a09b916a35",
+      "source": "components/thingino-control/fuzz/dictionaries/http.dict"
+    },
+    "components/thingino-control/fuzz/dictionaries/json.dict": {
+      "sha256": "63a678280c5cf208cfa819a97f7e4a24b1f96277aaface6f8c54dcca03621e13",
+      "source": "components/thingino-control/fuzz/dictionaries/json.dict"
+    },
+    "components/thingino-control/fuzz/dictionaries/motion.dict": {
+      "sha256": "1077d2020f6d56019929c814221bc7640497356bfeb88cb2d02657ccc4a3a4f8",
+      "source": "components/thingino-control/fuzz/dictionaries/motion.dict"
+    },
+    "components/thingino-control/fuzz/fuzz_targets/decoders.rs": {
+      "sha256": "c77e45e126d4ab8ff315002ad6e0e57262ef5cffe82f94451b0d2b966b38774d",
+      "source": "components/thingino-control/fuzz/fuzz_targets/decoders.rs"
+    },
+    "components/thingino-control/fuzz/fuzz_targets/http_request.rs": {
+      "sha256": "9895c482b9dd6a086f03955fc5865c1988ae23176789579274fa590e63ad2339",
+      "source": "components/thingino-control/fuzz/fuzz_targets/http_request.rs"
+    },
+    "components/thingino-control/fuzz/fuzz_targets/json_parse.rs": {
+      "sha256": "8e2ba722ac86ce2b7166355085a0ee87a7ed589c553aa293340218414af01277",
+      "source": "components/thingino-control/fuzz/fuzz_targets/json_parse.rs"
+    },
+    "components/thingino-control/fuzz/fuzz_targets/motion_datagram.rs": {
+      "sha256": "5ef1678e3e103ebf248ccb23662b472002c8fdfa992d1736045b4de47b98e561",
+      "source": "components/thingino-control/fuzz/fuzz_targets/motion_datagram.rs"
+    },
+    "components/thingino-control/fuzz/rust-toolchain.toml": {
+      "sha256": "eb76aba699a7461d9bd0410309cfeda5f8167807f428bfbdc15490850a780a7f",
+      "source": "components/thingino-control/fuzz/rust-toolchain.toml"
+    },
+    "components/thingino-control/integration/S95thingino-control": {
+      "sha256": "fd5174bbd2b60fb4a4859a2d304d89d080a1e9ad64725efdcadf34242bb5b049",
+      "source": "components/thingino-control/integration/S95thingino-control"
+    },
+    "components/thingino-control/integration/thingino-control.json": {
+      "sha256": "0c59ae96d5ebe4f65da06079f0f07cb1b2ea1a10199850e782c3814cb46772e0",
+      "source": "components/thingino-control/integration/thingino-control.json"
+    },
+    "components/thingino-control/scripts/camera_acceptance.sh": {
+      "sha256": "795bef3e6c8a10d99bc41a5ce37991d916ed520c765a9c0fe31c91f71e760d7d",
+      "source": "components/thingino-control/scripts/camera_acceptance.sh"
+    },
+    "components/thingino-control/scripts/device_smoke.sh": {
+      "sha256": "baf10b6fa12b8517b34c0c3034969cfa89247ef21ab439c3772f7741d478222c",
+      "source": "components/thingino-control/scripts/device_smoke.sh"
+    },
+    "components/thingino-control/scripts/host_soak.py": {
+      "sha256": "fe83c5cea9ff2036ebc8a1b9dbcfe360639d9c518cd2065116789cd259ba8a3c",
+      "source": "components/thingino-control/scripts/host_soak.py"
+    },
+    "components/thingino-control/scripts/host_uhttpd_proxy.py": {
+      "sha256": "e540c507bb419faf91c8d0729e40484852dfacc0439d8d80f0c9d48291658622",
+      "source": "components/thingino-control/scripts/host_uhttpd_proxy.py"
+    },
+    "components/thingino-control/scripts/run_native_uhttpd_proxy.py": {
+      "sha256": "2fd33729963369bafe8cec0b6e763b72355d5c57ac68a3258ee23dea74ea5658",
+      "source": "components/thingino-control/scripts/run_native_uhttpd_proxy.py"
+    },
+    "components/thingino-control/scripts/run_with_mqtt_brokers.py": {
+      "sha256": "ecd52e6379803959cb58620d7050593b36b53f42f3c363ec98b556f1fc385af0",
+      "source": "components/thingino-control/scripts/run_with_mqtt_brokers.py"
+    },
+    "components/thingino-control/src/camera.rs": {
+      "sha256": "ac47ccefc8ab0976eecbcc3e1bcb0ef51d516bca12bf89df31ebdd227af47b47",
+      "source": "components/thingino-control/src/camera.rs"
+    },
+    "components/thingino-control/src/camera/actions.rs": {
+      "sha256": "a795a5842181f5653e753125a16a2bf5a6fbd163f8912441dac845b8baceca95",
+      "source": "components/thingino-control/src/camera/actions.rs"
+    },
+    "components/thingino-control/src/camera/config/access.rs": {
+      "sha256": "4c31d73c40678e050f84dd6181433a2b59d133f728572a3312fd92ec6e9742d7",
+      "source": "components/thingino-control/src/camera/config/access.rs"
+    },
+    "components/thingino-control/src/camera/config/crontab.rs": {
+      "sha256": "f4f0d90413dbc100ff3a5c4485b551e371e4e11bfeabc49ffde2c5cd088576bc",
+      "source": "components/thingino-control/src/camera/config/crontab.rs"
+    },
+    "components/thingino-control/src/camera/config/domains.rs": {
+      "sha256": "c8c4f0774d95febb0c21e7f78af7c76636652c0746172728ad7c84de7071c60b",
+      "source": "components/thingino-control/src/camera/config/domains.rs"
+    },
+    "components/thingino-control/src/camera/config/domains_tests.rs": {
+      "sha256": "a4860fdf31353c488e13635b775d403b12453d6b12a84d1e4d64261104dbad13",
+      "source": "components/thingino-control/src/camera/config/domains_tests.rs"
+    },
+    "components/thingino-control/src/camera/config/gpio.rs": {
+      "sha256": "824484c926f8419f4d1872096202b66b513b52823ff6a7e1f270f23036776a53",
+      "source": "components/thingino-control/src/camera/config/gpio.rs"
+    },
+    "components/thingino-control/src/camera/config/mod.rs": {
+      "sha256": "2a2da3a2eef63a5b60a6d9bcb2753883ae94f0cedb1b824380310fb4eceb11aa",
+      "source": "components/thingino-control/src/camera/config/mod.rs"
+    },
+    "components/thingino-control/src/camera/config/network.rs": {
+      "sha256": "a801910664a081d13cfae97f48bc07e821e620576d58a3151a45e007eb99fddf",
+      "source": "components/thingino-control/src/camera/config/network.rs"
+    },
+    "components/thingino-control/src/camera/config/time.rs": {
+      "sha256": "350ee301389025e13efb7ba212bda177b0d7809cbcfbd61745e27e38ca3babcd",
+      "source": "components/thingino-control/src/camera/config/time.rs"
+    },
+    "components/thingino-control/src/camera/diagnostics.rs": {
+      "sha256": "0a87d4b8cc9721c65e30e724e652fcc06cd51f3ee07b124ed3475bd92f787349",
+      "source": "components/thingino-control/src/camera/diagnostics.rs"
+    },
+    "components/thingino-control/src/camera/ha/backend.rs": {
+      "sha256": "dcab66f452ba33c72bda6e04b35677202e14bcf7fd4f6b356531a3b63f29e079",
+      "source": "components/thingino-control/src/camera/ha/backend.rs"
+    },
+    "components/thingino-control/src/camera/ha/commands.rs": {
+      "sha256": "0dca73a6eeaa8cbfecc45624b7a111ce7b1e3080435b2a0d2f210fa9e69e57d7",
+      "source": "components/thingino-control/src/camera/ha/commands.rs"
+    },
+    "components/thingino-control/src/camera/ha/config.rs": {
+      "sha256": "5f2dc4edc459e0af4a428d84191b8147f31f39396a8efa284ceac198e47fc80e",
+      "source": "components/thingino-control/src/camera/ha/config.rs"
+    },
+    "components/thingino-control/src/camera/ha/discovery.rs": {
+      "sha256": "cdd18949e34aeb6b6d732356a0f5ee95431d279ea7c976854b57f76ebd2f80fd",
+      "source": "components/thingino-control/src/camera/ha/discovery.rs"
+    },
+    "components/thingino-control/src/camera/ha/mod.rs": {
+      "sha256": "86df10b71401fd3501f77b7ee6aeae4b20938dc9535767e7719e6814c56d4b57",
+      "source": "components/thingino-control/src/camera/ha/mod.rs"
+    },
+    "components/thingino-control/src/camera/ha/motion.rs": {
+      "sha256": "a4c52d1e5cced7f473640c606bdf49578113324969d46401ef1f8136bf7d55dc",
+      "source": "components/thingino-control/src/camera/ha/motion.rs"
+    },
+    "components/thingino-control/src/camera/ha/mqtt.rs": {
+      "sha256": "514303034320176ab79f3ca2e1245837992bb3953ada0b43674d841b796a18c6",
+      "source": "components/thingino-control/src/camera/ha/mqtt.rs"
+    },
+    "components/thingino-control/src/camera/ha/mqtt_tests.rs": {
+      "sha256": "6d582acc76576731d75c51dde46d7d77c929f960a21903bd709bc91312b8cb77",
+      "source": "components/thingino-control/src/camera/ha/mqtt_tests.rs"
+    },
+    "components/thingino-control/src/camera/ha/raptor_tests.rs": {
+      "sha256": "a7fcf35f59b507e8e26e387a0a16e6ef342a9a416cf0294dd261f2ece180d76f",
+      "source": "components/thingino-control/src/camera/ha/raptor_tests.rs"
+    },
+    "components/thingino-control/src/camera/ha/service.rs": {
+      "sha256": "698c602899a96dd441a3b8ce3ab9c7f803f6c61d03cd9b5355abaf9e1b47e0be",
+      "source": "components/thingino-control/src/camera/ha/service.rs"
+    },
+    "components/thingino-control/src/camera/ha/service/lifecycle.rs": {
+      "sha256": "b9c2773595bbb77e06bee5270797174628522aca753c006c52359769b5180eb3",
+      "source": "components/thingino-control/src/camera/ha/service/lifecycle.rs"
+    },
+    "components/thingino-control/src/camera/ha/service/publication.rs": {
+      "sha256": "62691af9a6a07bc7ad7e357410b66cfcfe61139392b6c4a01e5e7daf79962734",
+      "source": "components/thingino-control/src/camera/ha/service/publication.rs"
+    },
+    "components/thingino-control/src/camera/ha/service/session.rs": {
+      "sha256": "7639e7de8341dbbdf63eb7b0fd3331649c21f2c2cad9e63bd4f09f66eb131dfb",
+      "source": "components/thingino-control/src/camera/ha/service/session.rs"
+    },
+    "components/thingino-control/src/camera/ha/service_tests.rs": {
+      "sha256": "d0b98d04a818d48405d43457d96c8b4a0f7ebcbda81fb1bc254a31c5a56c3e4e",
+      "source": "components/thingino-control/src/camera/ha/service_tests.rs"
+    },
+    "components/thingino-control/src/camera/ha/snapshot.rs": {
+      "sha256": "feaedd390ea7f5035ed24c3570445dba81ddba994591ee45e806ca86211a6a46",
+      "source": "components/thingino-control/src/camera/ha/snapshot.rs"
+    },
+    "components/thingino-control/src/camera/ha/state.rs": {
+      "sha256": "7a5c45e42684fe4cd899ea8333734b75ffd872aeb0e3ec8a5d97ce57aa312f33",
+      "source": "components/thingino-control/src/camera/ha/state.rs"
+    },
+    "components/thingino-control/src/camera/host.rs": {
+      "sha256": "f173f09dc7c87c90a12c2fd4cbb81f44a39d9ec1acdc00c8a7f8fc07ad7b5ce9",
+      "source": "components/thingino-control/src/camera/host.rs"
+    },
+    "components/thingino-control/src/camera/maintenance.rs": {
+      "sha256": "70e4b5efd4473c10d8aef1b781e1b7d314e313db8497d0a825c41496b310a7b3",
+      "source": "components/thingino-control/src/camera/maintenance.rs"
+    },
+    "components/thingino-control/src/camera/motion_datagram.rs": {
+      "sha256": "5d776ff236dced5dca0ab9aab4c8d20c095e17b3815380320fd9bb722516e892",
+      "source": "components/thingino-control/src/camera/motion_datagram.rs"
+    },
+    "components/thingino-control/src/camera/motion_events.rs": {
+      "sha256": "0af0396e9120860cc49d0e493379fc16e2857e092c9559cd4d4a36304ea0e312",
+      "source": "components/thingino-control/src/camera/motion_events.rs"
+    },
+    "components/thingino-control/src/camera/motion_state.rs": {
+      "sha256": "14b9788fbda6355acb120651230cb766cdf3410789de29ad1bcccaa1b56d19b2",
+      "source": "components/thingino-control/src/camera/motion_state.rs"
+    },
+    "components/thingino-control/src/camera/network.rs": {
+      "sha256": "720f10cb9755d0b891c1ab9cd0ca327a9b036858f54e9b299f05df753b11c337",
+      "source": "components/thingino-control/src/camera/network.rs"
+    },
+    "components/thingino-control/src/camera/platform.rs": {
+      "sha256": "6ace66825f2adaa0bbd2ea4ed998bd540a3cd6049b4bde895270df59be00293d",
+      "source": "components/thingino-control/src/camera/platform.rs"
+    },
+    "components/thingino-control/src/camera/platform/abi.rs": {
+      "sha256": "c454dc2c10ae4dc4a2fbf05900daacddc02a35291b7398c7055b0a718c804467",
+      "source": "components/thingino-control/src/camera/platform/abi.rs"
+    },
+    "components/thingino-control/src/camera/platform/file_io.rs": {
+      "sha256": "d7da7d04970a693fcca97c287f835166201d60fc5a1676eb9de33f5db713da87",
+      "source": "components/thingino-control/src/camera/platform/file_io.rs"
+    },
+    "components/thingino-control/src/camera/platform/logs.rs": {
+      "sha256": "4e2cc9ec02da47293e4148ddff0e412a5eceba81dda0add20d9b95aa28c14bff",
+      "source": "components/thingino-control/src/camera/platform/logs.rs"
+    },
+    "components/thingino-control/src/camera/platform/mips_abi_probe.c": {
+      "sha256": "76310977542b34c11eaae19e1e5bd0ffc64c26f5c0788189d69a309142c32bf4",
+      "source": "components/thingino-control/src/camera/platform/mips_abi_probe.c"
+    },
+    "components/thingino-control/src/camera/platform/socket_io.rs": {
+      "sha256": "a863317b921a97389b35223906f6cbaee4105f9c6948eb583ffdb03af465b6a2",
+      "source": "components/thingino-control/src/camera/platform/socket_io.rs"
+    },
+    "components/thingino-control/src/camera/platform/sysv.rs": {
+      "sha256": "d32c2e1832ffd182a9a719fa158f00454c101bc940f730cac97616508681fbee",
+      "source": "components/thingino-control/src/camera/platform/sysv.rs"
+    },
+    "components/thingino-control/src/camera/platform_tests.rs": {
+      "sha256": "d49289dac9845e543f05ef45c75241e78daa06a332bd1dd3f4f484b486321a1a",
+      "source": "components/thingino-control/src/camera/platform_tests.rs"
+    },
+    "components/thingino-control/src/camera/runtime.rs": {
+      "sha256": "f2cd531ecfb8369285eee084511a6a15b53901176b50c8cfff0c5d4c13f3204c",
+      "source": "components/thingino-control/src/camera/runtime.rs"
+    },
+    "components/thingino-control/src/camera/storage.rs": {
+      "sha256": "b241572dbcf85895affbb87cc5fa11ba7d3352f4475e256c7cadbf44144955d0",
+      "source": "components/thingino-control/src/camera/storage.rs"
+    },
+    "components/thingino-control/src/camera/storage/filesystem.rs": {
+      "sha256": "bbc05e1ea3eb8e25566270aa800b9bd01e5129feb436ea684e63195ec741beb9",
+      "source": "components/thingino-control/src/camera/storage/filesystem.rs"
+    },
+    "components/thingino-control/src/camera/storage/format.rs": {
+      "sha256": "8a1bb456aa5a0954a6c44853e550c16619a87c1d1c5c5d484d6d4e769f85cfcf",
+      "source": "components/thingino-control/src/camera/storage/format.rs"
+    },
+    "components/thingino-control/src/camera/storage/paths.rs": {
+      "sha256": "20478f35049dfb257534d609877d276567cbe12ac74ddaa58cd22b3e7f2890a9",
+      "source": "components/thingino-control/src/camera/storage/paths.rs"
+    },
+    "components/thingino-control/src/camera/storage/sd.rs": {
+      "sha256": "ad9491b6fa64c2b8601772445db1239ff0d2d9df4f9f8df60010bce78e6c62c9",
+      "source": "components/thingino-control/src/camera/storage/sd.rs"
+    },
+    "components/thingino-control/src/camera_tests.rs": {
+      "sha256": "107a5c07108a6dcb78069c7b13e4def55c383f8fa792395de8acb1f2a84271a7",
+      "source": "components/thingino-control/src/camera_tests.rs"
+    },
+    "components/thingino-control/src/decode.rs": {
+      "sha256": "ca3ed4ac626273549df65b0a873b10347944a2551182de222b5c003b34db9442",
+      "source": "components/thingino-control/src/decode.rs"
+    },
+    "components/thingino-control/src/json.rs": {
+      "sha256": "4e3a3f678f557357b8a0a54725655f9472e0397b02d903f24ba7758a4ae0b3e7",
+      "source": "components/thingino-control/src/json.rs"
+    },
+    "components/thingino-control/src/lib.rs": {
+      "sha256": "e1b3f2fbf89846f294bff545c5b088e9a03cf78b9a72b08b1dc243c95591a5d3",
+      "source": "components/thingino-control/src/lib.rs"
+    },
+    "components/thingino-control/src/main.rs": {
+      "sha256": "7de2bbc13c2d0a0481386de4bd7a3a7af59f69cb08ce4c3d9f999ee8bae2b649",
+      "source": "components/thingino-control/src/main.rs"
+    },
+    "components/thingino-control/src/protocol.rs": {
+      "sha256": "ecfc31e7feb23e73ae29d79702db1cf4ca56b7ff3246e2aefd03797cce210037",
+      "source": "components/thingino-control/src/protocol.rs"
+    },
+    "components/thingino-control/src/raptor.rs": {
+      "sha256": "d15d4a4809fb244971c58c8952197b560b5e938283ac5b03694e23bc131bcde3",
+      "source": "components/thingino-control/src/raptor.rs"
+    },
+    "components/thingino-control/src/raptor_backend.rs": {
+      "sha256": "77bb1cc1ef314153a3ec3a43ab3a97a0636edaceca6d95ec7f8bc91c970085f4",
+      "source": "components/thingino-control/src/raptor_backend.rs"
+    },
+    "components/thingino-control/src/raptor_backend/access.rs": {
+      "sha256": "db1b522f783af43c7b6f49e7985ac5cb9ae12b5f607f65c50d38ec64e47e82b7",
+      "source": "components/thingino-control/src/raptor_backend/access.rs"
+    },
+    "components/thingino-control/src/raptor_backend/audio.rs": {
+      "sha256": "9fa969a2639932acf98d371d3e8c924456601a50fcf049a406ca625450f75ee8",
+      "source": "components/thingino-control/src/raptor_backend/audio.rs"
+    },
+    "components/thingino-control/src/raptor_backend/browser_bridge.rs": {
+      "sha256": "a4a9d59234c4ae93165f2936826b53fdaa92c8c02b42ffc4b491435282416ddd",
+      "source": "components/thingino-control/src/raptor_backend/browser_bridge.rs"
+    },
+    "components/thingino-control/src/raptor_backend/daynight.rs": {
+      "sha256": "be7826de5506c9515512120100124cadca8cb7bb0e3c9449f46e37fdf3352526",
+      "source": "components/thingino-control/src/raptor_backend/daynight.rs"
+    },
+    "components/thingino-control/src/raptor_backend/files.rs": {
+      "sha256": "70cd0dd3a6a7361a6e911175bb91261d66d5cdd3669072e24eed9eb3c451745e",
+      "source": "components/thingino-control/src/raptor_backend/files.rs"
+    },
+    "components/thingino-control/src/raptor_backend/files/tests.rs": {
+      "sha256": "5721d5caab388b2de51a606e81ade6d5df4b28328d13de580404d9559b9fdcdd",
+      "source": "components/thingino-control/src/raptor_backend/files/tests.rs"
+    },
+    "components/thingino-control/src/raptor_backend/files/worker.rs": {
+      "sha256": "6de034a75ced07b369e68badbff7f9de94dc4f4eab92ae49716e4ed74709b8b8",
+      "source": "components/thingino-control/src/raptor_backend/files/worker.rs"
+    },
+    "components/thingino-control/src/raptor_backend/ha.rs": {
+      "sha256": "035ffb089235825fdbbbc694a2e30f8f64a607edadecc16ffb5d959528b996c7",
+      "source": "components/thingino-control/src/raptor_backend/ha.rs"
+    },
+    "components/thingino-control/src/raptor_backend/imaging.rs": {
+      "sha256": "38b188b4a68cc71fdfbba5384e0ca690b403021c821dbb3dcd95a3f2442f5ac5",
+      "source": "components/thingino-control/src/raptor_backend/imaging.rs"
+    },
+    "components/thingino-control/src/raptor_backend/motion.rs": {
+      "sha256": "90bbec01b61c1bb85e64178d68a19a7f2a8effdf72c3e49df90fab85b4ba0fb9",
+      "source": "components/thingino-control/src/raptor_backend/motion.rs"
+    },
+    "components/thingino-control/src/raptor_backend/motion_actions.rs": {
+      "sha256": "cc03bde2bc6ce9040c7c7579053cd52fce5e9d62e03eddf478df5957d0e67857",
+      "source": "components/thingino-control/src/raptor_backend/motion_actions.rs"
+    },
+    "components/thingino-control/src/raptor_backend/motion_email.rs": {
+      "sha256": "29e344dfbc7d0f8dc7c31b6ea3f99109db8e32ae05ddc48d792f9c6446a4cc43",
+      "source": "components/thingino-control/src/raptor_backend/motion_email.rs"
+    },
+    "components/thingino-control/src/raptor_backend/motion_email_tests.rs": {
+      "sha256": "522835279023624a893e4e85ba537a154ab7410a36c10a20c182dcf589546d7c",
+      "source": "components/thingino-control/src/raptor_backend/motion_email_tests.rs"
+    },
+    "components/thingino-control/src/raptor_backend/motion_ftp.rs": {
+      "sha256": "4d248547e6c0d35afe6bd2f5a712922d9c79303c2432e2111a3f71defe009d3a",
+      "source": "components/thingino-control/src/raptor_backend/motion_ftp.rs"
+    },
+    "components/thingino-control/src/raptor_backend/motion_ftp_tests.rs": {
+      "sha256": "359061eb230c63aba59e000e9f7367ec8ea232ab9ef82df786ac045f5e24c5a2",
+      "source": "components/thingino-control/src/raptor_backend/motion_ftp_tests.rs"
+    },
+    "components/thingino-control/src/raptor_backend/motion_gotify.rs": {
+      "sha256": "0f220bd3e678d7753f8a6246f6827c22e017841a80e298225267ef5c28d169eb",
+      "source": "components/thingino-control/src/raptor_backend/motion_gotify.rs"
+    },
+    "components/thingino-control/src/raptor_backend/motion_lifecycle.rs": {
+      "sha256": "9ea0351577a2ace25f3473214cbfffa9edd6da5c747a5c01c25f402fcf32f14d",
+      "source": "components/thingino-control/src/raptor_backend/motion_lifecycle.rs"
+    },
+    "components/thingino-control/src/raptor_backend/motion_ntfy.rs": {
+      "sha256": "c43f8c7bf25a6de8b96f3b172b9549a5e9637f32c2b044e11b24b5a9660fe9af",
+      "source": "components/thingino-control/src/raptor_backend/motion_ntfy.rs"
+    },
+    "components/thingino-control/src/raptor_backend/motion_roi.rs": {
+      "sha256": "63c3903de9801d6dc5093904b9ec4dccf381c62c9f945d16c295ae9ebdc89af9",
+      "source": "components/thingino-control/src/raptor_backend/motion_roi.rs"
+    },
+    "components/thingino-control/src/raptor_backend/motion_telegram.rs": {
+      "sha256": "640427882b2bca799ab10d160c3f7db8b15a8d00cf5ffba88262efc650650c08",
+      "source": "components/thingino-control/src/raptor_backend/motion_telegram.rs"
+    },
+    "components/thingino-control/src/raptor_backend/motion_webhook.rs": {
+      "sha256": "055f0d7f136b533125fad62227285cb2a4745ee2fb918315decdc13d9fc1b3a3",
+      "source": "components/thingino-control/src/raptor_backend/motion_webhook.rs"
+    },
+    "components/thingino-control/src/raptor_backend/osd.rs": {
+      "sha256": "136bce45ac348fa76f26ed67487c72fa45b8aa8a769d75a8169e05f96c870dc2",
+      "source": "components/thingino-control/src/raptor_backend/osd.rs"
+    },
+    "components/thingino-control/src/raptor_backend/osd_metadata.rs": {
+      "sha256": "11a0da7605b78b817d7be078d570fa781476c550ccfcef8b7a2d059cbf9f6d58",
+      "source": "components/thingino-control/src/raptor_backend/osd_metadata.rs"
+    },
+    "components/thingino-control/src/raptor_backend/privacy.rs": {
+      "sha256": "983914a7c7aafad582d8caae9a4f0ff416e1f00c247102bad6f9a6449a59c571",
+      "source": "components/thingino-control/src/raptor_backend/privacy.rs"
+    },
+    "components/thingino-control/src/raptor_backend/recorder.rs": {
+      "sha256": "e3fd65e59b2e90f2c2633e280257edc7d13b1855a9f784b0c339e5cc91cd27e2",
+      "source": "components/thingino-control/src/raptor_backend/recorder.rs"
+    },
+    "components/thingino-control/src/raptor_backend/recorder_config.rs": {
+      "sha256": "35372e59a8dbd8aaf870512d811799c426f544a229200001983978abf7345767",
+      "source": "components/thingino-control/src/raptor_backend/recorder_config.rs"
+    },
+    "components/thingino-control/src/raptor_backend/streams.rs": {
+      "sha256": "4c42afcb7afbdd51e6f7c0d6d2131f68c505c2a51615b7b07e09eac57784c690",
+      "source": "components/thingino-control/src/raptor_backend/streams.rs"
+    },
+    "components/thingino-control/src/raptor_backend/timelapse/mod.rs": {
+      "sha256": "f21152abbdb36b1d3b134dc067c6b3ab8ac6622d84e6c78db8795c00cca52b60",
+      "source": "components/thingino-control/src/raptor_backend/timelapse/mod.rs"
+    },
+    "components/thingino-control/src/raptor_backend/timelapse/policy.rs": {
+      "sha256": "69485b1a09b2ba799d018361da4b99f356ccfe6e0a4d57664aa342955bc4013c",
+      "source": "components/thingino-control/src/raptor_backend/timelapse/policy.rs"
+    },
+    "components/thingino-control/src/raptor_backend/timelapse/preset.rs": {
+      "sha256": "1d60d3682e45c163fb6b0b5556a72e91211d4752b38095bab9cb0461f983fbe3",
+      "source": "components/thingino-control/src/raptor_backend/timelapse/preset.rs"
+    },
+    "components/thingino-control/src/raptor_backend/timelapse/storage.rs": {
+      "sha256": "8f47152e26b43a35919d33667d2a589937210bc1f4a5cd54e63a852245a3757c",
+      "source": "components/thingino-control/src/raptor_backend/timelapse/storage.rs"
+    },
+    "components/thingino-control/src/raptor_backend/timelapse/tests.rs": {
+      "sha256": "7abb45149af26aa19f6d3c9972455b6a93edf701ce3e34e82512e4ffa8701201",
+      "source": "components/thingino-control/src/raptor_backend/timelapse/tests.rs"
+    },
+    "components/thingino-control/src/raptor_backend/timezone.rs": {
+      "sha256": "949ea37a89c6720f538e6f571e567708aca4bbb7e061b0b19b140e80d69e14ee",
+      "source": "components/thingino-control/src/raptor_backend/timezone.rs"
+    },
+    "components/thingino-control/src/request.rs": {
+      "sha256": "27ea426c3e7ffdc4698fef5ab5263cca07be1632329834f40123fe4b8c1c3cbb",
+      "source": "components/thingino-control/src/request.rs"
+    },
+    "components/thingino-control/src/request_parse.rs": {
+      "sha256": "03196d5462393c4f7b9cf2bcf8e6192e78be64892791b22af1499c4d9dff1fc0",
+      "source": "components/thingino-control/src/request_parse.rs"
+    },
+    "components/thingino-control/src/response.rs": {
+      "sha256": "69d5d418654c83ffd1e8940dc79449dcbb46ed54f1f061b0d4ce2731bd99c6e6",
+      "source": "components/thingino-control/src/response.rs"
+    },
+    "components/thingino-control/src/router.rs": {
+      "sha256": "1d1e896056b5575a69686a2b09b128855d8804a4392d01aae84c859808128500",
+      "source": "components/thingino-control/src/router.rs"
+    },
+    "components/thingino-control/src/server.rs": {
+      "sha256": "c31fa786e4428fb3536082749ca7efa6a504ef650749d78ead49c1a21afacbd7",
+      "source": "components/thingino-control/src/server.rs"
+    },
+    "components/thingino-control/src/web_auth.rs": {
+      "sha256": "062f5e01cc299ef14e825259eb06098b761efecaab68804e59b67ba43e5c13fc",
+      "source": "components/thingino-control/src/web_auth.rs"
+    },
+    "components/thingino-control/src/web_auth_tests.rs": {
+      "sha256": "b6d213f3d9a9e118d4cfda98945c0ce9f1f04819f9875ce4f0f6466d7862a134",
+      "source": "components/thingino-control/src/web_auth_tests.rs"
+    },
+    "components/thingino-control/src/whip.rs": {
+      "sha256": "6e2ef7cefa3f41098f61f3b4b42aaa5875c59626b455115377c9c9569a79d5c7",
+      "source": "components/thingino-control/src/whip.rs"
+    },
+    "components/thingino-control/storage-worker/mod.rs": {
+      "sha256": "2cefe781a07149531baea473ce6c83e89a54bff577cf454350e09162f6ce0e49",
+      "source": "components/thingino-control/storage-worker/mod.rs"
+    },
+    "components/thingino-control/tests/contract.rs": {
+      "sha256": "a52a06fdd74734d8f256683115d2610bab4eda2be5f279b2af3fe4f8263d2e0e",
+      "source": "components/thingino-control/tests/contract.rs"
+    },
+    "containers/thingino-builder-amd64.Containerfile": {
+      "sha256": "cd06120baab37b58a18261855793341ca62a9a2242c36d4a180624134022b21b",
+      "source": "containers/thingino-builder-amd64.Containerfile"
+    },
+    "containers/thingino-builder-arm64.Containerfile": {
+      "sha256": "ddbac54cb60047dd53ab849f4edf6c2f497d78d483d8b98f41f448e2b890ee9a",
+      "source": "containers/thingino-builder-arm64.Containerfile"
+    },
+    "contracts/raptor-stream-codec-v1.json": {
+      "sha256": "b55826f224f01ce52b3239c0ef9aab5fc2d732fac1eaa357190a674d66924e8a",
+      "source": "contracts/raptor-stream-codec-v1.json"
+    },
+    "contracts/raptor-stream-profile-v1.json": {
+      "sha256": "7c00ee8fef517c89eb8dfead3a4f19b15d4c4839dac0fe6455384cec1ee29382",
+      "source": "contracts/raptor-stream-profile-v1.json"
+    },
+    "contracts/thingino-control-api-v1.json": {
+      "sha256": "39123dfd3d25bdbfe674c16df2434c1a3c343588bf9a74f63d7e55ae9b79daa6",
+      "source": "contracts/thingino-control-api-v1.json"
+    },
+    "docs/api.md": {
+      "sha256": "513422b544736f5d9925340c7a8a32fd9266875f2675c86186a8b8862625e65d",
+      "source": "production/docs/api.md"
+    },
+    "docs/architecture.md": {
+      "sha256": "0abcccd63b53768df38b0b398f267fcbb01b5d71f1cb02b28edcfc3d2fc906fe",
+      "source": "production/docs/architecture.md"
+    },
+    "docs/build.md": {
+      "sha256": "7146cb699937ea67f20a6aa76eea046a65bd1da55267edeadb1500895af95499",
+      "source": "production/docs/build.md"
+    },
+    "docs/features.md": {
+      "sha256": "c887419cc1929788223aff55fa11bf1910b1e26f7a67076abcc0b1d7e2d4b05a",
+      "source": "production/docs/features.md"
+    },
+    "docs/hardware.md": {
+      "sha256": "0e35b5c68f74bad62c97158629f127d549d3d677ac6144791e801f766df27d78",
+      "source": "production/docs/hardware.md"
+    },
+    "docs/index.md": {
+      "sha256": "c125260c665919201a2064d9ad174e2ec229264bcb0932f796741c8e5f58b68a",
+      "source": "production/docs/index.md"
+    },
+    "docs/installation.md": {
+      "sha256": "19229c4cf154f155baa84ddcafc32a1d19d907587937c88eaf60829d8a2f20aa",
+      "source": "production/docs/installation.md"
+    },
+    "docs/installer-projects.md": {
+      "sha256": "ad7fbb436cf376ab7241a4146f54ae9fba6e3b6919f402d48b6383e4a6978f6e",
+      "source": "production/docs/installer-projects.md"
+    },
+    "docs/recovery.md": {
+      "sha256": "f010f3eaeee1216aee87438f113ef9a3b6b4ddfc60a5440027d6363cfa2f2b02",
+      "source": "production/docs/recovery.md"
+    },
+    "docs/release-evidence/2026-09-17-raptor-audio-reproducibility.json": {
+      "sha256": "35c6a3851949a67cc53241519a2cc0ed88f50a7f652cb91373debfa47570e84f",
+      "source": "production/docs/release-evidence/2026-09-17-raptor-audio-reproducibility.json"
+    },
+    "docs/release-evidence/2026-09-17-raptor-audio-reproducibility.md": {
+      "sha256": "639069bda50a8ae92f23764415769d2378d34987af14af83dd4d97f972969c9b",
+      "source": "production/docs/release-evidence/2026-09-17-raptor-audio-reproducibility.md"
+    },
+    "docs/release-evidence/2026-09-18-raptor-mic-acknowledgement.md": {
+      "sha256": "3598476bd577f8d939a0fda60306d5fb2eb412bc086cdb25195cf5fef61b6ebb",
+      "source": "production/docs/release-evidence/2026-09-18-raptor-mic-acknowledgement.md"
+    },
+    "docs/release-evidence/2026-09-19-fresh-install-reproducibility.md": {
+      "sha256": "e3abbddec91c7a46482ba3771094369eeefe016676eccc50601b547865fc1c08",
+      "source": "production/docs/release-evidence/2026-09-19-fresh-install-reproducibility.md"
+    },
+    "docs/release-evidence/2026-09-23-raptor-a1-candidate.md": {
+      "sha256": "d82af6587619b908acd9276b20f9ba17cdc3a7aa94da9ab17ee8003913bde3a4",
+      "source": "production/docs/release-evidence/2026-09-23-raptor-a1-candidate.md"
+    },
+    "docs/release-evidence/2026-09-23-raptor-mjpeg-correction-build.md": {
+      "sha256": "3425bb36934441fcc14de134aa939b67cbd93cac3a53de66661d6a748d1d4958",
+      "source": "production/docs/release-evidence/2026-09-23-raptor-mjpeg-correction-build.md"
+    },
+    "docs/status.md": {
+      "sha256": "506c458190a0e2fc2012e1d375df6ad6444f22b3812371f3e3b1cf479a83ae47",
+      "source": "production/docs/status.md"
+    },
+    "docs/testing.md": {
+      "sha256": "7616d5cda973af9d64e86ffec27735e5df8e3726afe9f27ec11e930a1a7191a8",
+      "source": "production/docs/testing.md"
+    },
+    "installer/__init__.py": {
+      "sha256": "71daccce0a06dfbf59358df2483dacae672971727ed5017805cbc50254261407",
+      "source": "installer/__init__.py"
+    },
+    "installer/__main__.py": {
+      "sha256": "0f7d54f3fbb1f79a85eb8110f11793db99da6f3c61ee979de5abe9a1b5f3fdb3",
+      "source": "installer/__main__.py"
+    },
+    "installer/artifacts.py": {
+      "sha256": "dd30165a804d679c730ed19b12a7fa134472bc4305034be558a2fcac3137b945",
+      "source": "installer/artifacts.py"
+    },
+    "installer/camera_authorization.py": {
+      "sha256": "47c289df11c1e305e87cc4d53b8dce319dfe9a48f8a0abd553132a17306232b4",
+      "source": "installer/camera_authorization.py"
+    },
+    "installer/camera_setup.py": {
+      "sha256": "084df3bc776e5bf3cbd49ea71bae985dfaaf244068c917bdd0b14fce2bd5b6d0",
+      "source": "installer/camera_setup.py"
+    },
+    "installer/candidate_log.py": {
+      "sha256": "42e431da81ae28598f74e86c4f0710ad4d40b3ba2abd2f303e26a27622c8f6bc",
+      "source": "installer/candidate_log.py"
+    },
+    "installer/capture_reuse.py": {
+      "sha256": "3674dd3c5807b0eb8e604a0e1d702f1b5b3860e9f11956b97cd5d77e519c6742",
+      "source": "installer/capture_reuse.py"
+    },
+    "installer/capture_state.py": {
+      "sha256": "d1e3d6c31c2f6e2b62f8622f0a16192870c65ddd6b315e9cd8e5f21f5e90d817",
+      "source": "installer/capture_state.py"
+    },
+    "installer/cli.py": {
+      "sha256": "ca3853d025c38df91be7a34bb66d792e425771079fe32ce98d5ebb1067400741",
+      "source": "installer/cli.py"
+    },
+    "installer/cli_commands_build.py": {
+      "sha256": "84e7765e8748d9c6dd8c783abf24a8dc7a5cf8c1f2e6ed313a13f14a68439b22",
+      "source": "installer/cli_commands_build.py"
+    },
+    "installer/cli_commands_media.py": {
+      "sha256": "3d4a68ce6bf62a7934b34a3ee9139b3dd2bcda8abb9e59e7f48b5c5b63e7932c",
+      "source": "installer/cli_commands_media.py"
+    },
+    "installer/cli_commands_recovery.py": {
+      "sha256": "db3b1061141c0205fc82e561fc4f1c9b0ce31f17e743c0da88535170d5fda491",
+      "source": "installer/cli_commands_recovery.py"
+    },
+    "installer/cli_commands_stock_recovery.py": {
+      "sha256": "09dc24a109ffce5e30c357155649063f3af50a78a612f3a5abdd5928a3ecadde",
+      "source": "installer/cli_commands_stock_recovery.py"
+    },
+    "installer/cli_parser.py": {
+      "sha256": "23dcd5f76e5f6ff216abba2b2dab3b2037a284161db5da650f246c45f792dd72",
+      "source": "installer/cli_parser.py"
+    },
+    "installer/cli_parser_stock_recovery.py": {
+      "sha256": "2224947bd323e78c5c05c8479312ec26234faa59b9c4edcc2a0c915346ee804c",
+      "source": "installer/cli_parser_stock_recovery.py"
+    },
+    "installer/collector/__init__.py": {
+      "sha256": "2a14d079f1945db9add243e2ae1178558717b5c166f69ff1ee0b019988b5cdb6",
+      "source": "installer/collector/__init__.py"
+    },
+    "installer/collector/build.py": {
+      "sha256": "34c6c02be45ffb92632ef3da6a4fc32fbf395bde34a81d9fe21ac0650f993e92",
+      "source": "installer/collector/build.py"
+    },
+    "installer/collector/init.c": {
+      "sha256": "1c004a677e6815784d3e65958bef6f04558491ce769d405162e7fc9e98d3dd7a",
+      "source": "installer/collector/init.c"
+    },
+    "installer/collector/kernel.py": {
+      "sha256": "a89bc90d2195d34d534ca328a3a5182efcdd607f674eb753f3d57d342a4f5165",
+      "source": "installer/collector/kernel.py"
+    },
+    "installer/collector/output.py": {
+      "sha256": "9c858ac80d8388ed739ace6f32b44ab71b866d1f689f0c091ef1a7982a3f5c1f",
+      "source": "installer/collector/output.py"
+    },
+    "installer/download_cache.py": {
+      "sha256": "0690c00cb80a01aa74bd25780c1b675b327a164227bc3c89c8ef877865fe3897",
+      "source": "installer/download_cache.py"
+    },
+    "installer/fake_mtd.py": {
+      "sha256": "416ad96314e22ca420943efcfbdf423590aa7d009b3c518545568e35a6b0ddb9",
+      "source": "installer/fake_mtd.py"
+    },
+    "installer/final_bundle.py": {
+      "sha256": "0fa5917e1867da929d5eb05317b61b82a08d4544a0bd39f0f52a4a730bb8f94d",
+      "source": "installer/final_bundle.py"
+    },
+    "installer/final_root.py": {
+      "sha256": "2d6fc23b9bfcbe0717b659e6747e4d836f5a3100b4ad5dbb12d5b5daa5deb331",
+      "source": "production/installer/final_root.py"
+    },
+    "installer/final_root_media.py": {
+      "sha256": "fa504bf0fc3abda95a283fe35015b1f31d521c75aaad1dbe8604d9da8ce47ccc",
+      "source": "production/installer/final_root_media.py"
+    },
+    "installer/final_root_security.py": {
+      "sha256": "27ec22e31789c9f9ec7ee53f344ee93f36092c2d48e327f640ecec680218a608",
+      "source": "installer/final_root_security.py"
+    },
+    "installer/freestanding_sha256.h": {
+      "sha256": "8ac04a70da02545ca98b23c6aa014a5d76348234d3d9a62a1e29e6c47c02be55",
+      "source": "installer/freestanding_sha256.h"
+    },
+    "installer/full_backup.py": {
+      "sha256": "cd83a66496d352e13f30ea7cb4d6dfb61a4fa3a5dc37312e9c3ae59e06573f63",
+      "source": "installer/full_backup.py"
+    },
+    "installer/functional_stock_restore.py": {
+      "sha256": "31f1b098370ed9b77f162ee91a4a1c3452ef5eae86bc4493c79591e47bb646b7",
+      "source": "installer/functional_stock_restore.py"
+    },
+    "installer/install_actions.py": {
+      "sha256": "68f727b2a89c78477a76f3a53b7f799944ac0f2dfe5b730291e36e5f7512e149",
+      "source": "installer/install_actions.py"
+    },
+    "installer/install_policy.py": {
+      "sha256": "77c6f7fc7625b825a4aa1d17fbcbe0f33e1a8966e50824bdccdd0c4d9a57b006",
+      "source": "installer/install_policy.py"
+    },
+    "installer/install_project.py": {
+      "sha256": "5eae54a8effc97b950692a7f47082730ba52bceca4e69b52261c840af71cd333",
+      "source": "installer/install_project.py"
+    },
+    "installer/install_results.py": {
+      "sha256": "0c38895550521cb39dfdf73dd952e058e01bb2ac441faf31075d0dbee6a436df",
+      "source": "installer/install_results.py"
+    },
+    "installer/layout.py": {
+      "sha256": "4eb93a4611427b2c99dc31af8f6069b8c39b6fd80d7bfabf075e8c99fb06cca7",
+      "source": "installer/layout.py"
+    },
+    "installer/live_ram.py": {
+      "sha256": "b8bb149f0c5bc51a880bd8f7de0703f5a6258e4ff6cf3a06c65bef5e0b906dc2",
+      "source": "installer/live_ram.py"
+    },
+    "installer/local_build.py": {
+      "sha256": "c3190838274371c04bb0a8859b9928f68add0cf9f51e0037ac847c6b85809566",
+      "source": "installer/local_build.py"
+    },
+    "installer/local_build_acquire.py": {
+      "sha256": "79598427253e132aada3645b46a64b7b91b8a34d246d0cf0ea889d79e2804012",
+      "source": "installer/local_build_acquire.py"
+    },
+    "installer/local_build_archive.py": {
+      "sha256": "26c2ef226dfd1c423888d26c66c2691987e89e102f59ddabbabdf5e64efd8e0b",
+      "source": "installer/local_build_archive.py"
+    },
+    "installer/local_build_bootstrap.py": {
+      "sha256": "25a4fe59a013b3dc7c0f1f5cf4767f1c70bfdf48074e52022ce6547fe4c23d11",
+      "source": "installer/local_build_bootstrap.py"
+    },
+    "installer/local_build_inputs.py": {
+      "sha256": "0abc2fd548700bba28db8ff26ef14f67b0b332c3ecb544d92b2c0e527bf0e6fc",
+      "source": "installer/local_build_inputs.py"
+    },
+    "installer/local_build_models.py": {
+      "sha256": "12f1ed4746b47832b5c4c7e4e4b58753bd4994ba26d8167d4d288e686277ee42",
+      "source": "installer/local_build_models.py"
+    },
+    "installer/local_build_package.py": {
+      "sha256": "113f1eaf6e69e17fc716ed4a8647300be5d85bd0ee4a562c643bbda516200dec",
+      "source": "installer/local_build_package.py"
+    },
+    "installer/local_build_run.py": {
+      "sha256": "4c9e18d79135621f5f2d9980b812240a7f3d245a9eb3479e0a97a73646366a36",
+      "source": "installer/local_build_run.py"
+    },
+    "installer/local_build_support.py": {
+      "sha256": "c81e4608ba69278d3f00d6ca8bea17868a79abfd948722180364695e196f0d2b",
+      "source": "installer/local_build_support.py"
+    },
+    "installer/local_build_toolchain.py": {
+      "sha256": "70fe6b1363977af6344986241d81a30179ac7f8facf560a98a062d9cb161774e",
+      "source": "installer/local_build_toolchain.py"
+    },
+    "installer/macos_wifi.py": {
+      "sha256": "6dbc3318dcb0c76ddd9b8a1d562f325712a3c7abe5aafd5aac15f6509699639a",
+      "source": "installer/macos_wifi.py"
+    },
+    "installer/media.py": {
+      "sha256": "b0d507ae9da32ae26dc44a0b90f30e18444ce758fe36782468c14b1fe3f62d54",
+      "source": "installer/media.py"
+    },
+    "installer/media_capture.py": {
+      "sha256": "5ef14c42c9db2445e4221ff2e9e2878ac7580a74d8ccd5ac1913665d38b10b10",
+      "source": "installer/media_capture.py"
+    },
+    "installer/media_closure.py": {
+      "sha256": "5c002b28d1dc5bbf1dcbea30368fd4a47a24e256fc9727de80853b4b5924c1e3",
+      "source": "production/installer/media_closure.py"
+    },
+    "installer/media_contracts.py": {
+      "sha256": "b01d9eb78957359b6d2d44d0b89745cfa6f1f526ff983cd24eda29b09746ce12",
+      "source": "installer/media_contracts.py"
+    },
+    "installer/media_install_set.py": {
+      "sha256": "467ada6e1042ee763171207f9b47781dbeb395e00c041b476e9e766abdaa5514",
+      "source": "installer/media_install_set.py"
+    },
+    "installer/media_io.py": {
+      "sha256": "629893c960bf43781864a89db3232154b26ac89e75bc0eb3d75f5841a7a8ac36",
+      "source": "installer/media_io.py"
+    },
+    "installer/media_packages.py": {
+      "sha256": "954026f01061d4e3e7570ee31fe87b80bcd931ded0a815422e3571d1e563a838",
+      "source": "installer/media_packages.py"
+    },
+    "installer/media_preflight.py": {
+      "sha256": "c464a55846e3d02b982167c1c0329595696802fd5bb3950da2fe787b39d8011f",
+      "source": "installer/media_preflight.py"
+    },
+    "installer/media_replacement.py": {
+      "sha256": "8b4000289ff67d2a446b421e1e6bc276ee383cc93378d61e3f0e88221a94bd81",
+      "source": "installer/media_replacement.py"
+    },
+    "installer/media_selection.py": {
+      "sha256": "ce7c6221fe356aa328da5cfe69eab65edd74f3f3305c3bf62d0a35a0b26dc301",
+      "source": "installer/media_selection.py"
+    },
+    "installer/media_transactions.py": {
+      "sha256": "1e12d5a639d7dede334b33f4c041d0509dfb962036435a5be6e9f41afab4b35b",
+      "source": "installer/media_transactions.py"
+    },
+    "installer/mtd3_image.py": {
+      "sha256": "8946be82d9a6ea5b5c4e63d1e9f5a267a7e33d44b27465b6a6d0ae8800f83a6b",
+      "source": "installer/mtd3_image.py"
+    },
+    "installer/mtd3_split.py": {
+      "sha256": "d2b110d0c1d3a66bcdd378899dc6056c515f1ac57802bc82f0b5a4b0bf096b20",
+      "source": "installer/mtd3_split.py"
+    },
+    "installer/official_input.py": {
+      "sha256": "cb451fb21c2761a0a582fcab5577e59e73e5c194cc049cdd8f9cce2dc0316ffc",
+      "source": "installer/official_input.py"
+    },
+    "installer/platform_wifi.py": {
+      "sha256": "9295efe955420bcbb04bceda5a22d093739e3253966ec4cab634d3882e58339e",
+      "source": "installer/platform_wifi.py"
+    },
+    "installer/post_install_readback.py": {
+      "sha256": "6fedb1ad5f0273b32ca6af79fa5d0b67e83d8aa27542bdf28cab3a64a461d130",
+      "source": "installer/post_install_readback.py"
+    },
+    "installer/private_config.py": {
+      "sha256": "c23b021c68898f13ac0bdadc092c5994014bdd30de8bbd7258060bcc415d0ebd",
+      "source": "installer/private_config.py"
+    },
+    "installer/provisioning.py": {
+      "sha256": "89f69ef6a01318d75c3002007de9036b03e9cc158ffc5ce8b491df5af7d7fb5b",
+      "source": "installer/provisioning.py"
+    },
+    "installer/provisioning_data.py": {
+      "sha256": "ab8105ca641f556d9401b886df2d5ee9047aa8e977b554d1df7302811b8fe742",
+      "source": "installer/provisioning_data.py"
+    },
+    "installer/ram_boot.py": {
+      "sha256": "fcda1f6a3d81717e49f3f5a4f3ffe7e80d0d868dbd0c2cd3c07c5b7de15c66f6",
+      "source": "installer/ram_boot.py"
+    },
+    "installer/raptor_component.py": {
+      "sha256": "ececf6a4ac3430ada6d329a4d5590e8f92b0d739cc6ccd06138f8d1a05c2224d",
+      "source": "installer/raptor_component.py"
+    },
+    "installer/raptor_development.py": {
+      "sha256": "fa5d676fba82105974186d9e5c38e2b7aa4edf41762774ff2df76dc72786b791",
+      "source": "installer/raptor_development.py"
+    },
+    "installer/raptor_full_build.py": {
+      "sha256": "a2694493274ba613b34d533ce0c7a135807891ddb75aa04bf1eb9a6e910c909c",
+      "source": "installer/raptor_full_build.py"
+    },
+    "installer/raptor_full_component.py": {
+      "sha256": "c6389e5c6ab7960204d394cd73b88ffaf5f5365239ce12551e90778c6431a229",
+      "source": "installer/raptor_full_component.py"
+    },
+    "installer/raptor_full_root.py": {
+      "sha256": "5315fbe3e0371da1c7b0e5d125658ca6cb8b84da660759f792d7c48943ce7901",
+      "source": "installer/raptor_full_root.py"
+    },
+    "installer/raptor_provisioning.py": {
+      "sha256": "e7739815b55db26889cb2e950f5c7009252ed9cc13b7791e6b21b2602f3be066",
+      "source": "installer/raptor_provisioning.py"
+    },
+    "installer/raptor_runtime_protocol.py": {
+      "sha256": "3aa0ac4ddac449b8556fa5548459f85eab90c1acee1815bfeab5078bb767d797",
+      "source": "installer/raptor_runtime_protocol.py"
+    },
+    "installer/raptor_source.py": {
+      "sha256": "9b51f925f0dba7e3694e085e72446445d61ae54f1e645c9070cb8ca82c679936",
+      "source": "installer/raptor_source.py"
+    },
+    "installer/recovery.py": {
+      "sha256": "19edbdf53a45b91a8940f4b4fe93c4bcbe53680b50b75b2ba24d735dd0517de9",
+      "source": "installer/recovery.py"
+    },
+    "installer/recovery_actions.py": {
+      "sha256": "ed8b1f8afc379f2945602d8895f8760f5b9b544028d67dad85797367ddc2d56d",
+      "source": "installer/recovery_actions.py"
+    },
+    "installer/recovery_ap/__init__.py": {
+      "sha256": "50f83be50a0e80ce6ab62c8038e89d81b6b1edafa8cbcb770d83bc2ed598cbcc",
+      "source": "installer/recovery_ap/__init__.py"
+    },
+    "installer/recovery_ap/build.py": {
+      "sha256": "d25d1cde54239bece65bcbae92204f018763ccc7585ea9265a672c5f45d0ea22",
+      "source": "installer/recovery_ap/build.py"
+    },
+    "installer/recovery_ap/entropy_seed.c": {
+      "sha256": "f3a149be83c7ec086d800da6f7be5745fc4e9c8f00106d9ea85f69b6d1760884",
+      "source": "installer/recovery_ap/entropy_seed.c"
+    },
+    "installer/recovery_ap/host.py": {
+      "sha256": "537eab73665e505b9bd2a0ff4fa11dfae35d4f41d08c8d0e3fa9ea3f61eb6302",
+      "source": "installer/recovery_ap/host.py"
+    },
+    "installer/recovery_ap/ingenic_t31_dtrng.c": {
+      "sha256": "e6e044a0c00bb2384fe5759353797675b50a48413de3d07d1bd70123c922f6a9",
+      "source": "installer/recovery_ap/ingenic_t31_dtrng.c"
+    },
+    "installer/recovery_ap/init.sh": {
+      "sha256": "cd22016c3f166122d2dea60a049db5b2fbdedff57a594f8f8447773d0975357d",
+      "source": "installer/recovery_ap/init.sh"
+    },
+    "installer/recovery_ap/kernel.py": {
+      "sha256": "3d29d2af868829b32b25ab59ea608c89789c011c3f504f3378b57e0421842cb3",
+      "source": "installer/recovery_ap/kernel.py"
+    },
+    "installer/recovery_ap/nor_state.py": {
+      "sha256": "62f8a53ccb6f62e2691a518c8073915750d5b824d26f2ea4def0e4b109fcd5fa",
+      "source": "installer/recovery_ap/nor_state.py"
+    },
+    "installer/recovery_ap/recovery.service": {
+      "sha256": "b66321aed826d802df6a89619ec36ea54fc6062f30858a3dd08144644e4e245d",
+      "source": "installer/recovery_ap/recovery.service"
+    },
+    "installer/recovery_ap/recoveryctl.sh": {
+      "sha256": "f074fff825dd03a1df2f2448b45daebe2698182b089c3a0ca40be468ef6ec8dd",
+      "source": "installer/recovery_ap/recoveryctl.sh"
+    },
+    "installer/recovery_ap/session.py": {
+      "sha256": "a5ed00661052f9ab537a37ec15446e142bd755c4c6a947dccd7e88defd521e81",
+      "source": "installer/recovery_ap/session.py"
+    },
+    "installer/recovery_ap/thingino_enter.c": {
+      "sha256": "4350bbb5a326531273168334cbed78bbbb2710eafd57e66e30614afcf204a694",
+      "source": "installer/recovery_ap/thingino_enter.c"
+    },
+    "installer/recovery_ap/transport.py": {
+      "sha256": "78af29d9474886b58291cf827e221dc3443a448378a0449e0dd0129407d793bc",
+      "source": "installer/recovery_ap/transport.py"
+    },
+    "installer/recovery_gate.py": {
+      "sha256": "6671d8b7b14ec1fd97339de9e256013557b04645e8ab9b9cccac781b7cf0a343",
+      "source": "installer/recovery_gate.py"
+    },
+    "installer/recovery_package_binding.py": {
+      "sha256": "43fd7829e3dfea4fb16de21cb0c316adeb17063765189a962ed46ff3cc163a4f",
+      "source": "installer/recovery_package_binding.py"
+    },
+    "installer/rtsp_protocol.py": {
+      "sha256": "1127bd6887997a59eb2018389f540c8ad61e937891e5c0a8e60ebc8dffebcea2",
+      "source": "installer/rtsp_protocol.py"
+    },
+    "installer/rtsp_verify.py": {
+      "sha256": "03109d85ff2c15bc6c5023e6f42f01a9b75b231e943e6b40aa51be895a4b8593",
+      "source": "installer/rtsp_verify.py"
+    },
+    "installer/runtime_candidate.py": {
+      "sha256": "1b6a2f9068ba00baa335baf6a5ec8314c5fff3d887231c325f2ddc97ed6a7003",
+      "source": "installer/runtime_candidate.py"
+    },
+    "installer/runtime_diagnostics.py": {
+      "sha256": "3d297288eabe7682b3758b75ffe503050bb565fd78763c924a1b23843e20c7ae",
+      "source": "installer/runtime_diagnostics.py"
+    },
+    "installer/runtime_gate.py": {
+      "sha256": "39bece75296f31412129d39109e7b683c3df421524647a03deed5ff22ec593c7",
+      "source": "installer/runtime_gate.py"
+    },
+    "installer/runtime_policy.py": {
+      "sha256": "ab1708d5f90b2a24d70ab4952063ed2a338af88f298f7756ba9829b2026f1c7b",
+      "source": "installer/runtime_policy.py"
+    },
+    "installer/sd_package.py": {
+      "sha256": "0b8488491e531c72df3c3d746adfe0aa3d5b39c4ee8452d2cbbdfdc3e7ae0100",
+      "source": "installer/sd_package.py"
+    },
+    "installer/stage1/__init__.py": {
+      "sha256": "31c3ce988bf5a7e9db1949dea4d95be570a388a4e09cf2f61cc774a2bc9532af",
+      "source": "installer/stage1/__init__.py"
+    },
+    "installer/stage1/build.py": {
+      "sha256": "d307425676e0b5112d52d549f9daa34edfaa11368787c9f3f3e5562d9f0737c5",
+      "source": "installer/stage1/build.py"
+    },
+    "installer/stage1/init.c": {
+      "sha256": "30c65d45d68b47c0dbc1f6fc6d5f1e17ea101c85e0defd177f95f400f06728e1",
+      "source": "installer/stage1/init.c"
+    },
+    "installer/stage1/linker.ld": {
+      "sha256": "232dd6230fef0d392fa640388fab0e9de4ca1cd8f8793a77b4c0ecd8d0e6a1e7",
+      "source": "installer/stage1/linker.ld"
+    },
+    "installer/stage1/squashfs_listing.py": {
+      "sha256": "251ca7eafffaec5c1cd96bd60a064e0882fc067e49e753b521ebb62413c8b92c",
+      "source": "installer/stage1/squashfs_listing.py"
+    },
+    "installer/stage1/stage1-contract.json": {
+      "sha256": "5fd7cda150c42d395c13a39b0155f4ef15b5bda9966692f1ee1ab2647068efe6",
+      "source": "installer/stage1/stage1-contract.json"
+    },
+    "installer/stage2.py": {
+      "sha256": "365040efbdf6ade2576cf23652e53a8a5874e2d1b3790ce74327c9a31b41a9d8",
+      "source": "installer/stage2.py"
+    },
+    "installer/state_machine.py": {
+      "sha256": "7ad3dea631a9ba18cf4c8fea4e0cfce24c0f8338cf52ee6660c324b49bf1a5dd",
+      "source": "installer/state_machine.py"
+    },
+    "installer/stock_restore/__init__.py": {
+      "sha256": "20a49669af9dbcc2ac46c6866cdba11acd8530f818dee8fe9e8f69cf429b2cec",
+      "source": "installer/stock_restore/__init__.py"
+    },
+    "installer/stock_restore/activation.py": {
+      "sha256": "b68effa285e4a79f36b3363c75d65ac589c9faa62daafc65ed7f2d903b6a263e",
+      "source": "installer/stock_restore/activation.py"
+    },
+    "installer/stock_restore/authorization.inc": {
+      "sha256": "79ed6dff47cc36481d343664a981e8c85f9ef0b4725fd3df7054cc8e0dc910cf",
+      "source": "installer/stock_restore/authorization.inc"
+    },
+    "installer/stock_restore/build.py": {
+      "sha256": "70355d3a9de0b4bbeb2eab0a42fde53e75ef05a2ef6c63aa7e433d562ae197c6",
+      "source": "installer/stock_restore/build.py"
+    },
+    "installer/stock_restore/contract.py": {
+      "sha256": "0a4b51db886d407093a95e4deafba9a5346f43428db1d90201055412d0b985ef",
+      "source": "installer/stock_restore/contract.py"
+    },
+    "installer/stock_restore/file_io.py": {
+      "sha256": "30d5dbd298c830b13dba24df3af6841ab60d474a9c34bc5ba3df5434cbeb88d9",
+      "source": "installer/stock_restore/file_io.py"
+    },
+    "installer/stock_restore/flash.inc": {
+      "sha256": "4804166eb7b9b6886b126974c5b7a6ee289eac09547fa0e55e815dd1113e1718",
+      "source": "installer/stock_restore/flash.inc"
+    },
+    "installer/stock_restore/init.c": {
+      "sha256": "512c6d832388b10ce31a57aa53d67e72d62175e4a1ec0afe59d36e700d1e2aba",
+      "source": "installer/stock_restore/init.c"
+    },
+    "installer/stock_restore/kernel.py": {
+      "sha256": "6ad56b573331ab21ed82245527376ad792f0f53d77c879213b746aecfb1a0678",
+      "source": "installer/stock_restore/kernel.py"
+    },
+    "installer/stock_restore/media_policy.py": {
+      "sha256": "d4d21e514ecb334bfa583a99a815c72a12df15d7c1140939b34c19f2078824a5",
+      "source": "installer/stock_restore/media_policy.py"
+    },
+    "installer/stock_restore/passivation.py": {
+      "sha256": "7397f0cfcba8be28649d694555d20060798bcd47c852cfae19ff30ae5c600666",
+      "source": "installer/stock_restore/passivation.py"
+    },
+    "installer/stock_restore/runtime.inc": {
+      "sha256": "8eec89c9f7520f7e6b7b246752c5a110a3f04c44f67d2e32b851136316d3f0bb",
+      "source": "installer/stock_restore/runtime.inc"
+    },
+    "installer/stock_restore/set.py": {
+      "sha256": "ef449bf80d8a0dc0beb967f399bf2616df0bde823d5ce0787d75b40ef6a41522",
+      "source": "installer/stock_restore/set.py"
+    },
+    "installer/stock_restore/staging.py": {
+      "sha256": "22de6f522d3691f5d3c485be9227258fdeec84846ddc808ec3a8211df93f5843",
+      "source": "installer/stock_restore/staging.py"
+    },
+    "installer/stock_restore/verify.inc": {
+      "sha256": "95e3eec2d32c1d4b8ccfefbff6bf37152529095b016742c51629d967b1a7b7fc",
+      "source": "installer/stock_restore/verify.inc"
+    },
+    "installer/templates/S04loopback": {
+      "sha256": "0ae28267edb787595edb44f64a4b600e3ca65facc162f6092ad1fef15a2b0a70",
+      "source": "production/installer/templates/S04loopback"
+    },
+    "installer/templates/S05dlink-media-preconditions": {
+      "sha256": "714a336374b7c8eca4eb06694303f4b846a12dce75506ea86d8bc610bfb43c7b",
+      "source": "production/installer/templates/S05dlink-media-preconditions"
+    },
+    "installer/templates/S13dlink-media-ready": {
+      "sha256": "012cd83c467f9585bac51497062e2dcf4f3466cc6d783b099e2fa5f46052e7d5",
+      "source": "production/installer/templates/S13dlink-media-ready"
+    },
+    "installer/templates/S55installer-health": {
+      "sha256": "02a9c5b12e6369eb8b74f3557fdb64306c627ce152a8074cca326e45340fde92",
+      "source": "installer/templates/S55installer-health"
+    },
+    "installer/templates/dlink-application-verify": {
+      "sha256": "8a7f8376a774430c539bb2c785680703838f1241203f01e3609124364edc6377",
+      "source": "installer/templates/dlink-application-verify"
+    },
+    "installer/templates/dlink-media-verify": {
+      "sha256": "0f0bbcc23dfb13162c2a7d06e941fa86ff0da083438767fa73389a619af481a3",
+      "source": "installer/templates/dlink-media-verify"
+    },
+    "installer/templates/dlink-runtime-snapshot": {
+      "sha256": "5c71186ef75f8b4a68ef5340faaf32d59a1ac40f8711f858a5e9e4ea15d6f830",
+      "source": "installer/templates/dlink-runtime-snapshot"
+    },
+    "installer/templates/raptor-transfer.sh": {
+      "sha256": "3df2b0d0b03927dd644e3c08928750fde8f7d6db38e080ca0ece4977b0838cdd",
+      "source": "installer/templates/raptor-transfer.sh"
+    },
+    "installer/templates/runtime-candidate.sh": {
+      "sha256": "4313ef36504ff91a6deeb356e9785b09b91f651c21b647268b91289336a916f0",
+      "source": "installer/templates/runtime-candidate.sh"
+    },
+    "installer/templates/thingino-health": {
+      "sha256": "1fdd26c5fed441a3c9d669897f0da41727528e57e22c4f598014c34a56926629",
+      "source": "installer/templates/thingino-health"
+    },
+    "installer/uartless_gate.py": {
+      "sha256": "604837230a8bc4a477abebe80e78cb3313d26440837645db7d16acdd02e9395f",
+      "source": "installer/uartless_gate.py"
+    },
+    "installer/universal_install.py": {
+      "sha256": "dc329533f639d2601dc40af4f5b48b5d4a59c539a58638f742071b3f8fae91a0",
+      "source": "installer/universal_install.py"
+    },
+    "installer/user_cli.py": {
+      "sha256": "476a7f10a4d24f1b0821e54bf061c9b974a18e038cc6a2d8601cc2f4274caf0d",
+      "source": "installer/user_cli.py"
+    },
+    "installer/user_cli_build.py": {
+      "sha256": "ccc94b3e572b6f5d1910453fa1dd556af671b64768e65f8cd25d1fea9fcf3627",
+      "source": "installer/user_cli_build.py"
+    },
+    "installer/user_cli_diagnostics.py": {
+      "sha256": "8df0b7d0fd696de9f090a3c6571771a223b06cc36f24c50fc5c6cfabea0a9a3a",
+      "source": "installer/user_cli_diagnostics.py"
+    },
+    "installer/user_cli_media.py": {
+      "sha256": "fcfbcbe0d970f3b23cdab2fa7c19102790ed292511840fcd94bc824b8ad9c95d",
+      "source": "installer/user_cli_media.py"
+    },
+    "installer/user_cli_parser.py": {
+      "sha256": "cfd200aca37766007b5ef299845452527bd7b9e357f945fd8c06941a2e6b6bfa",
+      "source": "installer/user_cli_parser.py"
+    },
+    "installer/user_cli_parser_stock_recovery.py": {
+      "sha256": "365c587e823dcae406aaa0a8f4651ac91561689185d696b7ca8a1a07b8d7ec55",
+      "source": "installer/user_cli_parser_stock_recovery.py"
+    },
+    "installer/user_cli_project.py": {
+      "sha256": "e1a1c00a57002a66e1cf744d87892ef1168f60425b8f223d695021b25506b7da",
+      "source": "installer/user_cli_project.py"
+    },
+    "installer/user_cli_stock_recovery.py": {
+      "sha256": "7c4f27c07ef03b9d40de31977d4f5cde44ed72d99f1efcd44e0d9155fc455399",
+      "source": "installer/user_cli_stock_recovery.py"
+    },
+    "installer/user_cli_universal.py": {
+      "sha256": "dc0f6a1c47e6e375237caeae1da1c186efce2ab17bed889cab1d494f47c7703a",
+      "source": "installer/user_cli_universal.py"
+    },
+    "installer/vendor_bundle.py": {
+      "sha256": "d50c5be38e2fb379a90353014b23549b2d35300bd526561a7b778430e8fdc09a",
+      "source": "installer/vendor_bundle.py"
+    },
+    "patches/README.md": {
+      "sha256": "c504c9efbeb5d33d2b2887279bc028914ec844a2cdb900662124dba3041f0df1",
+      "source": "patches/README.md"
+    },
+    "patches/onvif/0001-persistent-httpd-no-request-children.patch": {
+      "sha256": "86e8125238fc3af6a45d16a2867dbf29280ef50cc201aa4e196f8008d35069ea",
+      "source": "patches/onvif/0001-persistent-httpd-no-request-children.patch"
+    },
+    "patches/onvif/0002-snapshot-digest.patch": {
+      "sha256": "dca818f05b5837ba983e79d4b62f6dcd187b1b5cbe6c904ed144fdd893686e5b",
+      "source": "patches/onvif/0002-snapshot-digest.patch"
+    },
+    "patches/onvif/0003-control-token-reader.patch": {
+      "sha256": "eac21e65c4f4b67de47c61d3fcc1deca4abc3a41309942ab30cba4a31d0c4c77",
+      "source": "patches/onvif/0003-control-token-reader.patch"
+    },
+    "patches/onvif/0004-config-lifetime.patch": {
+      "sha256": "e66553c3f290ec364ced385cdabe886fa0a4fdc5ed07f49158d16a375c8f2b10",
+      "source": "patches/onvif/0004-config-lifetime.patch"
+    },
+    "patches/raptor-full-source/compy.patch": {
+      "sha256": "a24df57eb764e43d4bce8a1c8ad89107a7bbbb4495fba8a90b53a0e4b83327f2",
+      "source": "patches/raptor-full-source/compy.patch"
+    },
+    "patches/raptor-full-source/raptor-common.patch": {
+      "sha256": "de023fe3392de156f1ad7e282680e7dd01f3c7e231e60a662f3bb655cb437b91",
+      "source": "patches/raptor-full-source/raptor-common.patch"
+    },
+    "patches/raptor-full-source/raptor-hal.patch": {
+      "sha256": "1a0c4684ac04291a2afdcf0f52dc9f2288806686da623be886a80feea62c4117",
+      "source": "patches/raptor-full-source/raptor-hal.patch"
+    },
+    "patches/raptor-full-source/raptor-ipc.patch": {
+      "sha256": "8ec2d6b8fae3c24fafb051ec254c4c8cd8ff94f132056dccbcb91fa60b7abd69",
+      "source": "patches/raptor-full-source/raptor-ipc.patch"
+    },
+    "patches/raptor-full-source/raptor.patch": {
+      "sha256": "0f1094f0e86efd402ad30a423839ab260b469ca5640058fa1a2c485230729a16",
+      "source": "patches/raptor-full-source/raptor.patch"
+    },
+    "patches/thingino/0001-dlink-first-release-baseline.patch": {
+      "sha256": "887ead4ad22aa38b7675af0099826f69292fc7261069e93759d099d5552d4f23",
+      "source": "patches/thingino/0001-dlink-first-release-baseline.patch"
+    },
+    "patches/thingino/0002-dlink-glibc-imp114.patch": {
+      "sha256": "93d0de2115c30c9a8ccfed0ddb3040ea3fa4254834430a44663c2cb01a5fb22f",
+      "source": "patches/thingino/0002-dlink-glibc-imp114.patch"
+    },
+    "patches/thingino/0003-register-realtek-recovery-hostapd.patch": {
+      "sha256": "502993a2c30ba2341d0f1503838a7dc97d01fd47c7ce2d04e7408e770f485138",
+      "source": "patches/thingino/0003-register-realtek-recovery-hostapd.patch"
+    },
+    "patches/thingino/0005-add-thingino-control.patch": {
+      "sha256": "7689b7f826a93b3a6c8f1622ed61cf88e386ec344edbeb987f1d1ef29bc8bc48",
+      "source": "patches/thingino/0005-add-thingino-control.patch"
+    },
+    "patches/thingino/0009-remove-extension-cgi-and-mqtt-dispatch.patch": {
+      "sha256": "6b32adfb7783fd26344a4d2a81b02bbe45fdf7361fdbf1d18463eef79e7c15fb",
+      "source": "patches/thingino/0009-remove-extension-cgi-and-mqtt-dispatch.patch"
+    },
+    "patches/thingino/0010-persistent-onvif-and-disable-cgi-ingress.patch": {
+      "sha256": "d6d55c86d27b5048642b3284dc67cfea98d3594f475f1fd421fa1424ead3e692",
+      "source": "patches/thingino/0010-persistent-onvif-and-disable-cgi-ingress.patch"
+    },
+    "patches/thingino/0011-install-static-dlink-webui.patch": {
+      "sha256": "a6be7786205bc3d32e960a57d9681e6b8f064e48b04e7a0bd87cc3e97859a9d3",
+      "source": "patches/thingino/0011-install-static-dlink-webui.patch"
+    },
+    "patches/thingino/0012-minimize-uhttpd-dependencies.patch": {
+      "sha256": "281184d31494d5237ae4855af177806779135704e3a2aadd4e8af315a788c926",
+      "source": "patches/thingino/0012-minimize-uhttpd-dependencies.patch"
+    },
+    "patches/thingino/0013-sanitize-kernel-release-capture.patch": {
+      "sha256": "1b227db02c25666980dda1e06dc58d9912bbd9c10d64457abe6dc73fdc769458",
+      "source": "patches/thingino/0013-sanitize-kernel-release-capture.patch"
+    },
+    "patches/thingino/0014-stop-uhttpd-by-verified-pid.patch": {
+      "sha256": "cb69a5f90f865a50080a9535fc88db41435c3decb7e82894ff46ea1469a69ff2",
+      "source": "patches/thingino/0014-stop-uhttpd-by-verified-pid.patch"
+    },
+    "patches/thingino/0015-route-daynight-actuation-through-control.patch": {
+      "sha256": "44c43d2f20d7d66b94356df15b3c3436a4ab7a6502f99894d9f5565ce18ebb89",
+      "source": "patches/thingino/0015-route-daynight-actuation-through-control.patch"
+    },
+    "patches/thingino/0016-release-recovery-transfer-before-media.patch": {
+      "sha256": "f1fc3560c4904d863bedd32c38e5f7735c7f97b462bfcf007d1a3ec51b869da4",
+      "source": "patches/thingino/0016-release-recovery-transfer-before-media.patch"
+    },
+    "patches/thingino/0018-create-linux-patch-directories.patch": {
+      "sha256": "82f752eaa761d5d6b645f178f939c1a33e5e05918666d558905e02bcdfca5c1c",
+      "source": "patches/thingino/0018-create-linux-patch-directories.patch"
+    },
+    "patches/thingino/0019-reproducible-aac-link-order.patch": {
+      "sha256": "0086c8edde871936c7ac417a8e5160131fa50cbd8430c2ef0de895c2d93dfd65",
+      "source": "patches/thingino/0019-reproducible-aac-link-order.patch"
+    },
+    "patches/thingino/0020-overlay-refuse-implicit-data-format.patch": {
+      "sha256": "916bb8475359d60fcf36a484baaab69afa22da9bdba82f6f3fdeea58b33e6810",
+      "source": "patches/thingino/0020-overlay-refuse-implicit-data-format.patch"
+    },
+    "patches/thingino/0021-harden-dlink-sd-automount.patch": {
+      "sha256": "a109cfb91d81f3fe539c27170109c2bd8502137ed0bc20b493c8dc40574fa9d5",
+      "source": "patches/thingino/0021-harden-dlink-sd-automount.patch"
+    },
+    "patches/thingino/0022-accept-verified-stage1-mtd-handoff.patch": {
+      "sha256": "b7970424562eafb90b0d90f80fb742d3d3ed66fe168085dc9a777639543aa96a",
+      "source": "patches/thingino/0022-accept-verified-stage1-mtd-handoff.patch"
+    },
+    "patches/thingino/0023-pin-exfat-nofuse-source-archive.patch": {
+      "sha256": "fe53b784e329bbe848a810bd3fde0d155c86b1298ccfd93221546ae21ae67bb3",
+      "source": "patches/thingino/0023-pin-exfat-nofuse-source-archive.patch"
+    },
+    "patches/thingino/0025-normalize-neo-library-comments.patch": {
+      "sha256": "81a6b951344bc2da981c6da8fbfb4292479f8b44388c00923b968a5a3aabfbaf",
+      "source": "patches/thingino/0025-normalize-neo-library-comments.patch"
+    },
+    "patches/thingino/0026-floor-buildroot-package-stamp-mtimes.patch": {
+      "sha256": "6823e594e681225673f7c8e04a09a901b87c7ff6164cf74c363da6c2bb2d1302",
+      "source": "patches/thingino/0026-floor-buildroot-package-stamp-mtimes.patch"
+    },
+    "patches/uhttpd/0007-proxy-thingino-control.patch": {
+      "sha256": "443f019f4d4895a629aa5f525889cc04c8d3803e179f570606bae9e0a69eb6b5",
+      "source": "patches/uhttpd/0007-proxy-thingino-control.patch"
+    },
+    "patches/uhttpd/0008-disable-cgi-and-proxy-onvif.patch": {
+      "sha256": "97a5323b3bc7eb0827af85c5389c579bf31b577dd12e144160fa825f20b504a8",
+      "source": "patches/uhttpd/0008-disable-cgi-and-proxy-onvif.patch"
+    },
+    "patches/uhttpd/0009-remove-request-script-runtime.patch": {
+      "sha256": "42478971ac4c597e364d1357e57c713c871363fa126e837bb2b7a540e1d872f3",
+      "source": "patches/uhttpd/0009-remove-request-script-runtime.patch"
+    },
+    "patches/uhttpd/0010-defer-control-proxy-pump.patch": {
+      "sha256": "9329338c77f2e27163cd3c2a8c40b4b054bc059e4444852304900f7f5cc68328",
+      "source": "patches/uhttpd/0010-defer-control-proxy-pump.patch"
+    },
+    "patches/uhttpd/0011-account-tls-socket-backpressure.patch": {
+      "sha256": "a248bac929b2fa4f5cf46a8a61b23f7636d2a6c4dfc79f256637c47ae31a20d2",
+      "source": "patches/uhttpd/0011-account-tls-socket-backpressure.patch"
+    },
+    "patches/uhttpd/0012-keep-mjpeg-encoder-profile-static.patch": {
+      "sha256": "d26678bed61219df26d95bc4443ca82f010e44dbd286e607f36eebd8f30920b9",
+      "source": "patches/uhttpd/0012-keep-mjpeg-encoder-profile-static.patch"
+    },
+    "patches/uhttpd/0013-never-cache-static-html-shell.patch": {
+      "sha256": "d92fba9d96b980473b85f3d475887a9474c2ae37c33c964c6893e050b6373b3b",
+      "source": "patches/uhttpd/0013-never-cache-static-html-shell.patch"
+    },
+    "patches/uhttpd/0014-allow-prometheus-control-responses.patch": {
+      "sha256": "3f0de51d3c6c676be271f48edb93060c47ba441b069ab4d8253771151f4f0f79",
+      "source": "patches/uhttpd/0014-allow-prometheus-control-responses.patch"
+    },
+    "patches/uhttpd/0015-require-authenticated-tls-ingress.patch": {
+      "sha256": "cac27e4b782cfd142716265220223166c4838d16ae2353039ef265253d8fde28",
+      "source": "patches/uhttpd/0015-require-authenticated-tls-ingress.patch"
+    },
+    "patches/uhttpd/0016-buffer-request-before-backend.patch": {
+      "sha256": "123ed7a716b79b6d403a56b0a3641b44a994e7022af4366b835b66a938ef8b40",
+      "source": "patches/uhttpd/0016-buffer-request-before-backend.patch"
+    },
+    "patches/uhttpd/0017-bind-recording-file-identity.patch": {
+      "sha256": "25901c3da4080bbd75f9693f927bda3aa05b8cb93a80aafdbf6ed957c8cf9c0b",
+      "source": "patches/uhttpd/0017-bind-recording-file-identity.patch"
+    },
+    "patches/uhttpd/0018-onvif-snapshot-digest.patch": {
+      "sha256": "752ad4480e3aff553bcba4469e119fd50019a107e8e1fa05a0b5cfbc496df438",
+      "source": "patches/uhttpd/0018-onvif-snapshot-digest.patch"
+    },
+    "patches/uhttpd/0019-bound-whip-sdp-body.patch": {
+      "sha256": "df0202e13d9760fd25785b23ba41d2d2a40ad76a24f387c31c8b36eb1e88e519",
+      "source": "patches/uhttpd/0019-bound-whip-sdp-body.patch"
+    },
+    "policy/release-gates.json": {
+      "sha256": "de61602909d97e4e7b94e9a8073a7062269c6312bfc46066833079f1d477abb4",
+      "source": "policy/release-gates.json"
+    },
+    "profiles/dlink-dcs6100lhv2-a1/artifact-limits.json": {
+      "sha256": "4b1a168fb9ced48cae93501ea33316bc5aaae8a07cf28255a1d8d984cdf9fbdd",
+      "source": "profiles/dlink-dcs6100lhv2-a1/artifact-limits.json"
+    },
+    "profiles/dlink-dcs6100lhv2-a1/collector-kernel.fragment": {
+      "sha256": "dcc1935efe641f193b0506164a84952facd591ca050430e6765dc3ecc92e507e",
+      "source": "profiles/dlink-dcs6100lhv2-a1/collector-kernel.fragment"
+    },
+    "profiles/dlink-dcs6100lhv2-a1/defconfig": {
+      "sha256": "be40de6a77e286fe3786052a40eb650f0394262d707d39f13c35e1c74932cd65",
+      "source": "profiles/dlink-dcs6100lhv2-a1/defconfig"
+    },
+    "profiles/dlink-dcs6100lhv2-a1/download-cache.json": {
+      "sha256": "80d957427a8a573ceb168b032047c2878597a33d4747aefcf50cad7db88df95b",
+      "source": "profiles/dlink-dcs6100lhv2-a1/download-cache.json"
+    },
+    "profiles/dlink-dcs6100lhv2-a1/kernel.fragment": {
+      "sha256": "72988587a8df06de6a39ee903fe931d01ac81d3bfe3dcc4006de4bc4a5349aa5",
+      "source": "profiles/dlink-dcs6100lhv2-a1/kernel.fragment"
+    },
+    "profiles/dlink-dcs6100lhv2-a1/official-inputs.json": {
+      "sha256": "eff67cbbefa80868626965edb35a6defe0c51c123053db3b7305745b1189328f",
+      "source": "profiles/dlink-dcs6100lhv2-a1/official-inputs.json"
+    },
+    "profiles/dlink-dcs6100lhv2-a1/raptor-support.fragment": {
+      "sha256": "7c007273441405c43354dff77223152c1f0eaf482edd5b76b902d66ad8a1490b",
+      "source": "profiles/dlink-dcs6100lhv2-a1/raptor-support.fragment"
+    },
+    "profiles/dlink-dcs6100lhv2-a1/recovery-ap-kernel.fragment": {
+      "sha256": "3cb630216bd4c91ee9234225e20f8dda8510ec14b6c0e6154a0cf633f3d26660",
+      "source": "profiles/dlink-dcs6100lhv2-a1/recovery-ap-kernel.fragment"
+    },
+    "profiles/dlink-dcs6100lhv2-a1/source-profile.json": {
+      "sha256": "17762e7b6b11e865dd7994d580444cd02d858ac035cefe7f2b83b202468f5765",
+      "source": "profiles/dlink-dcs6100lhv2-a1/source-profile.json"
+    },
+    "profiles/dlink-dcs6100lhv2-a1/stock-restore-kernel.fragment": {
+      "sha256": "eea2bb59fc2279ac46c802454d01a24086c0baed179d7156f299eba55d544691",
+      "source": "profiles/dlink-dcs6100lhv2-a1/stock-restore-kernel.fragment"
+    },
+    "profiles/dlink-dcs6100lhv2-a1/thingino.json": {
+      "sha256": "2d94c0cd190c532ea2474fdd44a3217b02c18a4f1830153ecc17f1b27c5f7933",
+      "source": "profiles/dlink-dcs6100lhv2-a1/thingino.json"
+    },
+    "profiles/dlink-dcs6100lhv2-a1/thingino.json.template": {
+      "sha256": "9356b0d47c890b88fd253a14b74e0da0546741dc7ba58bb082dd2837a7ee054c",
+      "source": "profiles/dlink-dcs6100lhv2-a1/thingino.json.template"
+    },
+    "profiles/dlink-dcs6100lhv2-a1/toolchain-download-cache.json": {
+      "sha256": "43d82fee1e7a0722da084f3540669bab0aa3b90a1e51b67fb0f41bc66a434da2",
+      "source": "profiles/dlink-dcs6100lhv2-a1/toolchain-download-cache.json"
+    },
+    "profiles/dlink-dcs6100lhv2-a1/uartless-release-gate.json": {
+      "sha256": "10faf6e7ec7995f7fd4e33ac4c0d78a46f6ac0459a4a22511071501a70371307",
+      "source": "profiles/dlink-dcs6100lhv2-a1/uartless-release-gate.json"
+    },
+    "profiles/dlink-dcs6100lhv2-a1/vendor-closure.json": {
+      "sha256": "de8d1ebb272fb985c5aebd4480af2d7fe3a6de3e88c9c144e7bd4287fd9287ed",
+      "source": "profiles/dlink-dcs6100lhv2-a1/vendor-closure.json"
+    },
+    "pyproject.toml": {
+      "sha256": "8a4b8aa3dc41462d2e8b9a296bdf75b6cda5440a4e6d1185d9e11f22d81eb419",
+      "source": "pyproject.toml"
+    },
+    "scripts/__init__.py": {
+      "sha256": "325fd3bc0efcd13f68434d4cc36decf8e3cd6d7aa5f0a335d9e0ee6b3ad0a52c",
+      "source": "scripts/__init__.py"
+    },
+    "scripts/build_recovery_ap_entropy.sh": {
+      "sha256": "0a268e7858cc63bb35dfbb73d28fb1fd8dc873c9d10b4af815e4abdf1a8e9030",
+      "source": "scripts/build_recovery_ap_entropy.sh"
+    },
+    "scripts/build_thingino_control.py": {
+      "sha256": "d45ef27b65404f024d0b1397db6aacb31585914be3070b4fe5d9e4e3ce325c7f",
+      "source": "scripts/build_thingino_control.py"
+    },
+    "scripts/check.sh": {
+      "sha256": "b8e76f7cc8166124bcbf7f9f222449873b79b66a27ee57401be13ad6932177cf",
+      "source": "scripts/check.sh"
+    },
+    "scripts/check_docs.py": {
+      "sha256": "31c5a2d16b0810373ef5b21c3150798ee0116b9c12f4bad6ac8b2b2cd453e4df",
+      "source": "scripts/check_docs.py"
+    },
+    "scripts/check_onvif_https_chain.py": {
+      "sha256": "3fbe59b0c0743aa387f563eac2841c525fc438b9bde1744447b2637f14cae7e1",
+      "source": "scripts/check_onvif_https_chain.py"
+    },
+    "scripts/check_public_tree.py": {
+      "sha256": "b772032abca28c184190bb065b96404f60bfb91e0c6501ced9fd9119e8e14898",
+      "source": "scripts/check_public_tree.py"
+    },
+    "scripts/check_release_gates.py": {
+      "sha256": "90be25db50e08e4b9b81024dce4a8b86b5dba1d5297bf0ba5a45d565a0515e64",
+      "source": "scripts/check_release_gates.py"
+    },
+    "scripts/check_thingino_control.sh": {
+      "sha256": "291590b399f919c8db3da94bbe2b2e3806a7134d842e13b57a00aaad1e8b7f94",
+      "source": "scripts/check_thingino_control.sh"
+    },
+    "scripts/check_thingino_control_contract.py": {
+      "sha256": "6e242abc3794b35806161bdcd71d5db468d05a98fd6440572f8519cc2cfa109a",
+      "source": "scripts/check_thingino_control_contract.py"
+    },
+    "scripts/container_build_collector_kernel.sh": {
+      "sha256": "21a5558b0888b1408957cb211f1154d04d0afb020b96738af2556be271e2a0d7",
+      "source": "scripts/container_build_collector_kernel.sh"
+    },
+    "scripts/container_build_raptor_full.sh": {
+      "sha256": "d8917319189976deff51dab20cd9dafac204a40bf65393f81849b5618e15bb66",
+      "source": "scripts/container_build_raptor_full.sh"
+    },
+    "scripts/container_build_recovery_ap.sh": {
+      "sha256": "7bcc5ff138ac7518b5e4b69f30adca32ae64890f1f6525a166259b591d81c29f",
+      "source": "scripts/container_build_recovery_ap.sh"
+    },
+    "scripts/container_build_split_kernels.sh": {
+      "sha256": "8e36e8e31a8f5cffec25e7d20bc6d8c5bcbc0b446595dc6a543008cd2980596d",
+      "source": "scripts/container_build_split_kernels.sh"
+    },
+    "scripts/container_build_stock_restore_kernel.sh": {
+      "sha256": "f1acea4ce9865112f127996f7bf356dbcd2b8ca56d9b7ae66e6d62b592001a5e",
+      "source": "scripts/container_build_stock_restore_kernel.sh"
+    },
+    "scripts/container_build_thingino.sh": {
+      "sha256": "9ffa9465264410caf5497932e3538c5305589422cc3a8ad9a2001ab5c3723f08",
+      "source": "scripts/container_build_thingino.sh"
+    },
+    "scripts/container_build_thingino_toolchain.sh": {
+      "sha256": "bb0e6b3536de5eb27018cb8add6673cfd280a15e6f06b0aaca2142241e1fe49d",
+      "source": "scripts/container_build_thingino_toolchain.sh"
+    },
+    "scripts/container_collect_buildroot_legal_info.sh": {
+      "sha256": "42d036101df0b5a5bd0a1c1ab030f7e8adf922574a1ddedd92c6e8ec6a1f9fc4",
+      "source": "scripts/container_collect_buildroot_legal_info.sh"
+    },
+    "scripts/container_fetch_thingino_downloads.sh": {
+      "sha256": "e4b132b0e9d258fdde34aaec49582ef3d47fd0392276edc89f99eb0787cd2cb2",
+      "source": "scripts/container_fetch_thingino_downloads.sh"
+    },
+    "scripts/container_fetch_thingino_toolchain_downloads.sh": {
+      "sha256": "c1c05a30f23b957e2df0a84a17bd0ccde2c060e9dfbe12ec43ba15aa5d8bea86",
+      "source": "scripts/container_fetch_thingino_toolchain_downloads.sh"
+    },
+    "scripts/inventory_rtl_dependencies.py": {
+      "sha256": "cd827e3090d8f70f7018747e4ed4087a58173eac4698640e8061861ea36f2339",
+      "source": "scripts/inventory_rtl_dependencies.py"
+    },
+    "scripts/inventory_rtl_linked_sources.py": {
+      "sha256": "96e92bb35085302694db6ada6eedf610bf84d4878819d0c602375bc17eafd0ac",
+      "source": "scripts/inventory_rtl_linked_sources.py"
+    },
+    "scripts/package_buildroot_source.py": {
+      "sha256": "3b06353cd7da4952569b6ca5d4cdd6919dfd2c9255966f3d860d0ba43312a265",
+      "source": "scripts/package_buildroot_source.py"
+    },
+    "scripts/platform/__init__.py": {
+      "sha256": "3c29ef6a52f8a60234297f356870b475013937c197246910cbbe2e103f48ff7f",
+      "source": "scripts/platform/__init__.py"
+    },
+    "scripts/platform/linux_media_preflight.py": {
+      "sha256": "3e2abafa66edec91aa67c41b16adc81c49bac9e44f4c5dde31f6e42e1e3fac12",
+      "source": "scripts/platform/linux_media_preflight.py"
+    },
+    "scripts/platform/macos_media_preflight.py": {
+      "sha256": "9f65789ab3ce1b1bf4ab372798b0b8d96a53d6af55b5d84243eb7d9b936b109f",
+      "source": "scripts/platform/macos_media_preflight.py"
+    },
+    "scripts/platform/macos_recovery_wifi.swift": {
+      "sha256": "4e42307e853a838eb25f600778a9cde2bff9e824cf12e3c0b8d2abec3c0a09a0",
+      "source": "scripts/platform/macos_recovery_wifi.swift"
+    },
+    "scripts/platform/macos_station_wifi.swift": {
+      "sha256": "730fefe36ac15d5249fe73c35632d980b3c6b158906a608759baa7d775cab421",
+      "source": "scripts/platform/macos_station_wifi.swift"
+    },
+    "scripts/platform/media_preflight.py": {
+      "sha256": "e79a14c9b7ca26c31ce1198b6b320332b55f829c1c732fb353d4590b1758d9e3",
+      "source": "scripts/platform/media_preflight.py"
+    },
+    "scripts/platform/media_preflight_common.py": {
+      "sha256": "1dc8815e5b33c1897e68c44a1b46dc4374729a4eba3400e7e6b9ba6b84ac9cfe",
+      "source": "scripts/platform/media_preflight_common.py"
+    },
+    "scripts/platform/windows_media_preflight.py": {
+      "sha256": "e67d9dcd0c45a6ce320ab721f4476f11bfc892eb7211737d216375a2a2572f13",
+      "source": "scripts/platform/windows_media_preflight.py"
+    },
+    "scripts/raptor_full_source_manifest.py": {
+      "sha256": "dd76b73e747e662c9e98e59d9356c78024787d1789b801e99af8887638652f41",
+      "source": "scripts/raptor_full_source_manifest.py"
+    },
+    "scripts/raptor_private_source_archive.py": {
+      "sha256": "8f0a54452151cd7e89be7b2fae550f9b7b21d2697ac0249cd99d7afe5a4436d5",
+      "source": "scripts/raptor_private_source_archive.py"
+    },
+    "scripts/release_closure.py": {
+      "sha256": "1fe979dfbca9957550a2ff0c61bb9fad3544ad33344e7d065f38b9752c5199da",
+      "source": "scripts/release_closure.py"
+    },
+    "scripts/run_container_mkfs_jffs2.sh": {
+      "sha256": "80ee29c7319ecc8899b1322beb589f12f9da8434948585febab2846b2b96ad1a",
+      "source": "scripts/run_container_mkfs_jffs2.sh"
+    },
+    "scripts/run_macos_buildroot_legal_info.sh": {
+      "sha256": "98046ed044a8df384a99adb137858306e7837d51e13b336748bd00ac1d38eae2",
+      "source": "scripts/run_macos_buildroot_legal_info.sh"
+    },
+    "scripts/run_macos_collector_kernel_build.sh": {
+      "sha256": "0f178b97b4fe7af373ba3f5c2d19af9faf9391bce07558a1e228fe285f7bfbbb",
+      "source": "scripts/run_macos_collector_kernel_build.sh"
+    },
+    "scripts/run_macos_split_kernel_build.sh": {
+      "sha256": "dc1ef7b83133250c6f1bc1b516eda7d84205d87f7b8bfa47a2d7d930fc902b17",
+      "source": "scripts/run_macos_split_kernel_build.sh"
+    },
+    "scripts/run_macos_stock_restore_kernel_build.sh": {
+      "sha256": "ce8484990705d0004aa615b89845b39ae5d27c0790047758584eef8104febb9f",
+      "source": "scripts/run_macos_stock_restore_kernel_build.sh"
+    },
+    "scripts/run_macos_thingino_build.sh": {
+      "sha256": "f9a2df88c37abbc8f9ba6fd89455625cd41898ffd1101bec61d41b26130229d1",
+      "source": "scripts/run_macos_thingino_build.sh"
+    },
+    "scripts/run_macos_thingino_download_fetch.sh": {
+      "sha256": "0e3c5ac7b5b3ef29479c60e14e80c6832e3d3e2cdb1a6a960a3b4c58973f27ab",
+      "source": "scripts/run_macos_thingino_download_fetch.sh"
+    },
+    "scripts/run_macos_thingino_toolchain_build.sh": {
+      "sha256": "200003248082b084c045b80c7b7f8f31aec950ebdc86aa8bc796fed272d1b74a",
+      "source": "scripts/run_macos_thingino_toolchain_build.sh"
+    },
+    "scripts/run_macos_thingino_toolchain_download_fetch.sh": {
+      "sha256": "52a67dca6092215a176bcc2b4366e09e1705191c2c2576e282b1a4ee159fc159",
+      "source": "scripts/run_macos_thingino_toolchain_download_fetch.sh"
+    },
+    "scripts/source_checkout.py": {
+      "sha256": "708d86da43f6716b180a150ac42dfc789b498801ed9a16959caeb8fdaf546dd6",
+      "source": "scripts/source_checkout.py"
+    },
+    "scripts/source_delivery_inventory.py": {
+      "sha256": "b7e7acced5e2a3078ebcd3154ea6540b8856c026041eeae8f4474a3f3186ee67",
+      "source": "scripts/source_delivery_inventory.py"
+    },
+    "scripts/source_prepare.py": {
+      "sha256": "9f6878a79357036569da08e2dd0f19d6954cde8a07ed19b4d234344df195c11b",
+      "source": "scripts/source_prepare.py"
+    },
+    "sources.lock.json": {
+      "sha256": "071a8cd9aa8369b2993c535c1b46e1ec50c4ae578ed06994e41feedd3a591a27",
+      "source": "sources.lock.json"
+    },
+    "tests/fixtures/recording-files/guard.c": {
+      "sha256": "a1d4285084cbab162a5c9796196b1ca288ad4de7b0158cd6a92a7b4849f0897c",
+      "source": "tests/fixtures/recording-files/guard.c"
+    },
+    "tests/fixtures/stock_restore_syscalls.c": {
+      "sha256": "97128cdec1ee3ddc3c0e6d088a81645394cba2b4c85f55a81fac8d8a698fcb97",
+      "source": "tests/fixtures/stock_restore_syscalls.c"
+    },
+    "tests/test_application_verify.py": {
+      "sha256": "61e000639e1d830a0de74a3a5bcccfb952572df459c5d627df66c2f49d5b58bf",
+      "source": "tests/test_application_verify.py"
+    },
+    "tests/test_artifacts.py": {
+      "sha256": "4d256c3e5b2b0948d7ca0750d396c8bf62597740d2e2c7fcfac8b60ce9678368",
+      "source": "tests/test_artifacts.py"
+    },
+    "tests/test_build_thingino_control.py": {
+      "sha256": "2292a40dfae77f61e369041c5dd226c94c42f4940de456c06cd7d190fdd24a57",
+      "source": "tests/test_build_thingino_control.py"
+    },
+    "tests/test_buildroot_legal_info.py": {
+      "sha256": "791a60a5f9db74fb26177480d0f6aff81f9283341826129ece06c3306215857c",
+      "source": "tests/test_buildroot_legal_info.py"
+    },
+    "tests/test_candidate_log.py": {
+      "sha256": "9793683337c3c8be0a4686f289ff1f6632f4751e564e7579acd513ad953ba6ba",
+      "source": "tests/test_candidate_log.py"
+    },
+    "tests/test_capture_reuse.py": {
+      "sha256": "0ecbfab297dc03bd9d21d132ea585340d5b84963a11ab99a6ddab5dc7fc85a91",
+      "source": "tests/test_capture_reuse.py"
+    },
+    "tests/test_cli.py": {
+      "sha256": "b37379aa95b6a0dc898252f26c4ecb82b0eefb913bd3b326f3583c83dd8ad204",
+      "source": "tests/test_cli.py"
+    },
+    "tests/test_collector_build.py": {
+      "sha256": "ae958588cd5c2d7f57be166ab54be8969dec1f628d22a3164e5feffa333a7c96",
+      "source": "tests/test_collector_build.py"
+    },
+    "tests/test_collector_kernel.py": {
+      "sha256": "4e05d3a64f530819d2d7f7f0459587a2309dbb9b8a51f4958d6926f11ee32ec6",
+      "source": "tests/test_collector_kernel.py"
+    },
+    "tests/test_collector_output.py": {
+      "sha256": "cd18289fe3a5a710bb992bbc277bb51f3201cfac24205d2518c9268978580a5f",
+      "source": "tests/test_collector_output.py"
+    },
+    "tests/test_docs.py": {
+      "sha256": "90192ba939f4fb35b733fe47091caa6f8b087a23308197ca5895d0fba24490ad",
+      "source": "tests/test_docs.py"
+    },
+    "tests/test_download_cache.py": {
+      "sha256": "09e35bd5fb74183af01b66e63146e81c08c7498b8af94000f1f017a894ec1aae",
+      "source": "tests/test_download_cache.py"
+    },
+    "tests/test_fake_mtd.py": {
+      "sha256": "cda9bbbf7cd65c39f52727e1fa6fcf0f59b2a40d2b9efe576654c99c34553de4",
+      "source": "tests/test_fake_mtd.py"
+    },
+    "tests/test_final_bundle.py": {
+      "sha256": "0cd199736eb376cfe69eab4b1888cecd88d1f0295da0a87f6b9e830b2be15f09",
+      "source": "tests/test_final_bundle.py"
+    },
+    "tests/test_full_backup.py": {
+      "sha256": "7c8e050057242181368dfb9dda04d159297adf6372cfc597151b113e04c06e65",
+      "source": "tests/test_full_backup.py"
+    },
+    "tests/test_functional_stock_restore.py": {
+      "sha256": "461af5f31ac9f25c4262f27eea8b839456620832ff12375d3a64a26ca482673c",
+      "source": "tests/test_functional_stock_restore.py"
+    },
+    "tests/test_install_actions.py": {
+      "sha256": "ca5477d6f6e452b66eb67b9afeec78bbdd4c0f9fe7e96a82e7416f48857e2a93",
+      "source": "tests/test_install_actions.py"
+    },
+    "tests/test_install_project.py": {
+      "sha256": "87e729a08b4749e1fb936f58e3b223065158587baee82871026a7ddeda0da6d8",
+      "source": "tests/test_install_project.py"
+    },
+    "tests/test_installation_flow.py": {
+      "sha256": "9c2d8583756fd2025dc63ceaa5059baa00078074898ebf512960f60eb253c41e",
+      "source": "tests/test_installation_flow.py"
+    },
+    "tests/test_installer_contracts.py": {
+      "sha256": "b00c53e86212130e39d28c7ca6f1b52438689cace8ae99c21d6c8921b000c7e7",
+      "source": "tests/test_installer_contracts.py"
+    },
+    "tests/test_inventory_rtl_dependencies.py": {
+      "sha256": "56a07395b7240a8e092e2e9d6ee96565769c024706e68e7b40eb2023fcd2c1b9",
+      "source": "tests/test_inventory_rtl_dependencies.py"
+    },
+    "tests/test_inventory_rtl_linked_sources.py": {
+      "sha256": "27994d482bb03a062aff88e06fa6192e4daff99ccbd2cdb2d15a50272e4cedcc",
+      "source": "tests/test_inventory_rtl_linked_sources.py"
+    },
+    "tests/test_linux_media_preflight.py": {
+      "sha256": "7f7ff60d541e19000ce2013eed44aea4b4676a4e8c5537b53c1edecfe0f37269",
+      "source": "tests/test_linux_media_preflight.py"
+    },
+    "tests/test_live_ram.py": {
+      "sha256": "674684eb17c21b19c4ec143290916cb7c14bf144e9b3b10de7a60abd68c50356",
+      "source": "tests/test_live_ram.py"
+    },
+    "tests/test_local_build.py": {
+      "sha256": "42066bf70b9bdf1e04a07c4afac09bf3ebdeb2f5cb00aab49516f106d392fd6c",
+      "source": "tests/test_local_build.py"
+    },
+    "tests/test_local_build_acquire.py": {
+      "sha256": "c4c37aa4e51a1f011d558ea8267885a5134b727ca2a67f5631110a852a24d2f1",
+      "source": "tests/test_local_build_acquire.py"
+    },
+    "tests/test_local_build_bootstrap.py": {
+      "sha256": "63c35717a1908ea7581b6cb75bb72a7e370adceba3cfe7adbc944244f5b62df7",
+      "source": "tests/test_local_build_bootstrap.py"
+    },
+    "tests/test_local_build_run.py": {
+      "sha256": "cb88a45b0f651fd9c111b71e9809a1f70f8b257f07b7a6c7def02c6b254209e3",
+      "source": "tests/test_local_build_run.py"
+    },
+    "tests/test_macos_media_preflight.py": {
+      "sha256": "b89aaeccf49badd79d216acdaa62ee92a323d962440466a8af95f27d8e2043cc",
+      "source": "tests/test_macos_media_preflight.py"
+    },
+    "tests/test_macos_wifi.py": {
+      "sha256": "8a2e3cc29adc80f07c41ea3f93a9278d25273c05edb8be390c052a7901072387",
+      "source": "tests/test_macos_wifi.py"
+    },
+    "tests/test_media.py": {
+      "sha256": "5c419eb800814af7a3562e4f78fd3410a2d865dd2e6902f48a47f6ba7f70c547",
+      "source": "tests/test_media.py"
+    },
+    "tests/test_media_dependencies.py": {
+      "sha256": "ae43cf52054b8e951deb720f89ae5f3804efb42b7445a5792127dcced2cc1f2a",
+      "source": "tests/test_media_dependencies.py"
+    },
+    "tests/test_media_preflight_dispatch.py": {
+      "sha256": "af144c1199f2eef9ec0530856784bbd19fe6bc12b75802c7affe56dad81552ea",
+      "source": "tests/test_media_preflight_dispatch.py"
+    },
+    "tests/test_media_transaction_order.py": {
+      "sha256": "f24cd015e1ce5f235ee213ca2179d7c76be0d0190cc867e50365dabadeb20655",
+      "source": "tests/test_media_transaction_order.py"
+    },
+    "tests/test_mtd3_image.py": {
+      "sha256": "42c3f8cc55f0ee394d55c1aadfda77a036aa0114ee689051157dcb28881c013d",
+      "source": "tests/test_mtd3_image.py"
+    },
+    "tests/test_native_uhttpd_proxy.py": {
+      "sha256": "2ae7c897c4279cbdf41c403de779d27caf4edbb0a1ada6000470c0854b11115a",
+      "source": "tests/test_native_uhttpd_proxy.py"
+    },
+    "tests/test_official_input.py": {
+      "sha256": "56de48745483173c1e501ba6dcab99f8f3bd0045960605bd98ce2c9f17eabd70",
+      "source": "tests/test_official_input.py"
+    },
+    "tests/test_onvif_config_lifetime.py": {
+      "sha256": "a3b2d2522fe1c1b85de605308e7f80355f51e7ad271239a83d1c140773a4fe21",
+      "source": "tests/test_onvif_config_lifetime.py"
+    },
+    "tests/test_onvif_control_imaging_bridge.py": {
+      "sha256": "72ac97772af666a231cfa8092bc1a496026d8b6530038a83df53204fe3ae3474",
+      "source": "tests/test_onvif_control_imaging_bridge.py"
+    },
+    "tests/test_onvif_control_token.py": {
+      "sha256": "88cc83f7eaa7d3d6b292a7ff74579f0862a8cbcc5ade6a10be494b2e643ab9d4",
+      "source": "tests/test_onvif_control_token.py"
+    },
+    "tests/test_onvif_digest.py": {
+      "sha256": "0a4619d5414f1f2fff4103858174690508986619bc2e50a0c0100017f4ff1b1c",
+      "source": "tests/test_onvif_digest.py"
+    },
+    "tests/test_onvif_snapshot_http.py": {
+      "sha256": "1838f6c4f69edd6b6de7547271d9eae401456b3440d54018b7b7ea1e478f06ea",
+      "source": "tests/test_onvif_snapshot_http.py"
+    },
+    "tests/test_onvif_snapshot_io.py": {
+      "sha256": "7a8c782e7d6a4bbd59340f46ca9ecb4be879a50ca9ea57fc34affbed1acb8f36",
+      "source": "tests/test_onvif_snapshot_io.py"
+    },
+    "tests/test_package_buildroot_source.py": {
+      "sha256": "1b5dc502ed5469898265ff50c153316281c394f370e5141a7cc26f1c13ffdcab",
+      "source": "tests/test_package_buildroot_source.py"
+    },
+    "tests/test_platform_wifi.py": {
+      "sha256": "91229a9120a69f7dbe89f8736436f16e416447daa756cbb8d04ee78c2488ec77",
+      "source": "tests/test_platform_wifi.py"
+    },
+    "tests/test_post_install_readback.py": {
+      "sha256": "40b93dce395470adac2673cbe1b54a9eff0a7ddc8472905b7a9ece91e4072785",
+      "source": "tests/test_post_install_readback.py"
+    },
+    "tests/test_private_config.py": {
+      "sha256": "000939d4d3813f01a52a9e22d8e114248aac3486622648206a6bef48393c5cb7",
+      "source": "tests/test_private_config.py"
+    },
+    "tests/test_profile.py": {
+      "sha256": "9fd39d43173c7390150708e1bc28e3dcb89e82686f46deb903fc707f5495edb8",
+      "source": "tests/test_profile.py"
+    },
+    "tests/test_project.py": {
+      "sha256": "354075394c9718d32187431ebe1a624a9e6862bd3b151d9ebe1234e44101b66a",
+      "source": "tests/test_project.py"
+    },
+    "tests/test_provisioning_data.py": {
+      "sha256": "5a99b0194e949851d8bf0d607cf7f7e664c9b80f687503dc17c8358034549f65",
+      "source": "tests/test_provisioning_data.py"
+    },
+    "tests/test_public_tree.py": {
+      "sha256": "fe86168dbb9791be9d7b9cbb9653e20b40c0dba05b93200e0dc151bae64e4aa0",
+      "source": "tests/test_public_tree.py"
+    },
+    "tests/test_ram_boot.py": {
+      "sha256": "1c9bcdd9574dfbfec16f1c1ee58ca0546daded3f59b8cc2c545023688dde2d36",
+      "source": "tests/test_ram_boot.py"
+    },
+    "tests/test_raptor_boot_network.py": {
+      "sha256": "d4e109bd93dea6d0b07f3ff070f7d77e301671998e0b3b3a82b4f895678a136a",
+      "source": "tests/test_raptor_boot_network.py"
+    },
+    "tests/test_raptor_development.py": {
+      "sha256": "eb6a0038f79ea4e46bc19b76a5cded95d4dddcab490e09f65e5d36d81043064d",
+      "source": "tests/test_raptor_development.py"
+    },
+    "tests/test_raptor_full_acquire.py": {
+      "sha256": "e0fe7239f870bb5074f046798c70130f009dafbd11946c162e920f18dd3e086e",
+      "source": "tests/test_raptor_full_acquire.py"
+    },
+    "tests/test_raptor_full_build.py": {
+      "sha256": "fb419293e26192456588b2b8e92892cdaec1b7f9327335dd765860455d83a768",
+      "source": "tests/test_raptor_full_build.py"
+    },
+    "tests/test_raptor_full_component.py": {
+      "sha256": "59392f40bddaf0f7fb9ecf1df1f7c61758bc7fbb6b5f228e9ffd93823037ccc9",
+      "source": "tests/test_raptor_full_component.py"
+    },
+    "tests/test_raptor_full_pipeline.py": {
+      "sha256": "6691239b312f3ba4e9e64daceb84916f81c605f0be6492305f7943a5ca06f1e8",
+      "source": "tests/test_raptor_full_pipeline.py"
+    },
+    "tests/test_raptor_full_root.py": {
+      "sha256": "961eaa3de61479246a4bd720d8b72e778819d69077061c12e9a4d0c5b2771a05",
+      "source": "tests/test_raptor_full_root.py"
+    },
+    "tests/test_raptor_full_source_manifest.py": {
+      "sha256": "e3b61e5640a919e7cc7515365a590256c67407d86feebe7dedcb3338871060ed",
+      "source": "tests/test_raptor_full_source_manifest.py"
+    },
+    "tests/test_raptor_private_source_archive.py": {
+      "sha256": "760d66bfc938dbc7bb11234f6d95ff59399e40f5d400810f620f21bf5b9926d5",
+      "source": "tests/test_raptor_private_source_archive.py"
+    },
+    "tests/test_recording_file_guard.py": {
+      "sha256": "253ad0aa5f00163f22ded120005b3e158052cb74fd9156449bd1d69069240de3",
+      "source": "tests/test_recording_file_guard.py"
+    },
+    "tests/test_recovery.py": {
+      "sha256": "29d850c795529a433d94c09769f6e52e79f4a7d1f28142fc2ce263040a864a00",
+      "source": "tests/test_recovery.py"
+    },
+    "tests/test_recovery_ap_host.py": {
+      "sha256": "eb0211fd5d55bfe0b495407d3ac8da521edabdb7af43534323a2d0c771360aa5",
+      "source": "tests/test_recovery_ap_host.py"
+    },
+    "tests/test_recovery_ap_kernel.py": {
+      "sha256": "edf22898ba9788559b89c347ad7e394998ae0ba5d6e338880708e42ccc802cdc",
+      "source": "tests/test_recovery_ap_kernel.py"
+    },
+    "tests/test_recovery_ap_root.py": {
+      "sha256": "d4460671cb5b5fcd3831b65c9cdcfeb250513957ed7c162b5bd740b273a9f114",
+      "source": "tests/test_recovery_ap_root.py"
+    },
+    "tests/test_recovery_ap_session.py": {
+      "sha256": "ccc5d63490af77edc82f57680543bcac473cc32e37c42cde8c96b11424bef5cb",
+      "source": "tests/test_recovery_ap_session.py"
+    },
+    "tests/test_recovery_gate.py": {
+      "sha256": "f8c07ef79e7ef39f3558aa4cdc0376ab7afaed0c005dd384664b545fea9942c9",
+      "source": "tests/test_recovery_gate.py"
+    },
+    "tests/test_release_closure.py": {
+      "sha256": "d59024cf9badaa9ab47c4859ebfcbd8a2e7ce7e9d31098d9d4408804dab2a8b8",
+      "source": "tests/test_release_closure.py"
+    },
+    "tests/test_release_gates.py": {
+      "sha256": "48970e97315fa8517961ca9bd288706f089bb96303aa7b04dd862b340253cec8",
+      "source": "tests/test_release_gates.py"
+    },
+    "tests/test_rtsp_verify.py": {
+      "sha256": "8eaeb8e11b812095d34aa363b01395cb55f34a3d0ff449a01fefa2f5dce7593f",
+      "source": "tests/test_rtsp_verify.py"
+    },
+    "tests/test_runtime_candidate.py": {
+      "sha256": "d5e464a65f2bc24795f267800d164607e66e8ebef79da8c241976a752caf2231",
+      "source": "tests/test_runtime_candidate.py"
+    },
+    "tests/test_runtime_diagnostics.py": {
+      "sha256": "58bd95ea41973da5522fa852e1c798a342b2dd93575365d70f10c0e20acde62a",
+      "source": "tests/test_runtime_diagnostics.py"
+    },
+    "tests/test_runtime_gate.py": {
+      "sha256": "b7d2f61a7564290a8efce39b249788f4db65b730d6c3b558f80788fae216e0fe",
+      "source": "tests/test_runtime_gate.py"
+    },
+    "tests/test_sd_package.py": {
+      "sha256": "2d3d06f6048071424c8b6e24c412ee6b7a38be79f092cd703c0e7db2d01c8cd9",
+      "source": "tests/test_sd_package.py"
+    },
+    "tests/test_source_checkout.py": {
+      "sha256": "d9ebff11085bfd3fe9f6e5cb67305458f4de967d4a06ec370def79a351101cd8",
+      "source": "tests/test_source_checkout.py"
+    },
+    "tests/test_source_delivery_inventory.py": {
+      "sha256": "59f99ba8d23f892aa3e4e99994a67f69d0b594c247865f1f60161a4f813460e0",
+      "source": "tests/test_source_delivery_inventory.py"
+    },
+    "tests/test_source_prepare.py": {
+      "sha256": "4f4b44fc564ed705a834320c76b0338eec94611f9b7b55aa7eaae9941c5cd256",
+      "source": "tests/test_source_prepare.py"
+    },
+    "tests/test_split_kernel_build.py": {
+      "sha256": "4df844873f45b8f5a6ffb64606867e9162a88b3bfd9aacbb2e0a3b4c505e7333",
+      "source": "tests/test_split_kernel_build.py"
+    },
+    "tests/test_stage1_build.py": {
+      "sha256": "930b8d26006c84c29c3fc369bfbad4faed6470fef16857526cdb1ed751bd53f7",
+      "source": "tests/test_stage1_build.py"
+    },
+    "tests/test_stage2.py": {
+      "sha256": "b4e760548933f827c9199ba8cd16ebb1680f8a8180a71abcf27a99ad246b50b7",
+      "source": "tests/test_stage2.py"
+    },
+    "tests/test_state_machine.py": {
+      "sha256": "1746d2113fe8a5ad887ccfee07409a3da206ac4e3134f3323f68377780b01fbe",
+      "source": "tests/test_state_machine.py"
+    },
+    "tests/test_stock_recovery.py": {
+      "sha256": "d6c58b73ac287e2cb6fd982894c6350b527e6dfd4e0c81b4d45e8ea96c2c6cd9",
+      "source": "tests/test_stock_recovery.py"
+    },
+    "tests/test_stock_restore_c.py": {
+      "sha256": "7eea218bfd1ded116aa74dbdf050e9e6204a51c18992ee7fa162e0570ac0b5f4",
+      "source": "tests/test_stock_restore_c.py"
+    },
+    "tests/test_stock_restore_kernel.py": {
+      "sha256": "0283f3b0812e8eda396b541afbed670190bcf38a670228955dd042ae4fc15003",
+      "source": "tests/test_stock_restore_kernel.py"
+    },
+    "tests/test_stock_restore_root.py": {
+      "sha256": "6a21496f2ee75c70d655dd923180ef5e1b3699e7e8bb55e569e4098daf7b1b42",
+      "source": "tests/test_stock_restore_root.py"
+    },
+    "tests/test_stock_restore_source.py": {
+      "sha256": "a455dada62f7c0dce54eb7f58c8644a57d6631c3238741635bd6b33a741c6d71",
+      "source": "tests/test_stock_restore_source.py"
+    },
+    "tests/test_stock_restore_transactions.py": {
+      "sha256": "4de9c194f5c3c0486ece0579f2559d0d84e732b77e6b9852a6efd0c3472cbf87",
+      "source": "tests/test_stock_restore_transactions.py"
+    },
+    "tests/test_thingino_control_device_script.py": {
+      "sha256": "27c7f41241ff4869fe14afa5ed2fef20311454aaac30737efc3ea0b70be91622",
+      "source": "tests/test_thingino_control_device_script.py"
+    },
+    "tests/test_thingino_control_init.py": {
+      "sha256": "b9a403ef545de96d8886a4e710d40c0de805fcebfda3cfbbb20d4a03438a92e2",
+      "source": "tests/test_thingino_control_init.py"
+    },
+    "tests/test_uartless_gate.py": {
+      "sha256": "45d7dab559a12eb139faf0bfdcc608c472a3ebe1f37d173220674f5efb335e3b",
+      "source": "tests/test_uartless_gate.py"
+    },
+    "tests/test_universal_artifacts.py": {
+      "sha256": "3462ed856ee21086e107147c7ce4841ca3272d03cb7c069076027c6f914df4e2",
+      "source": "tests/test_universal_artifacts.py"
+    },
+    "tests/test_user_cli.py": {
+      "sha256": "fa11405bc6f844dfca478bc0eb71f50122fe8cd333a8ceefcc48f0a1ef4e583d",
+      "source": "tests/test_user_cli.py"
+    },
+    "tests/test_user_cli_build.py": {
+      "sha256": "7f9686e68b3755cdfc85b841a5bf5e2666c8275dd167c9ab1e82e4dae7a10862",
+      "source": "tests/test_user_cli_build.py"
+    },
+    "tests/test_vendor_bundle.py": {
+      "sha256": "7370fb7c2a629f08d4be0d557cfe68483deb6a70fd8ec7147b4f3b809225cde9",
+      "source": "tests/test_vendor_bundle.py"
+    },
+    "tests/test_windows_media_preflight.py": {
+      "sha256": "48f159893ec80527e1fc3c19ed6297219f5c462d85f6a640c32102938c517d5f",
+      "source": "tests/test_windows_media_preflight.py"
+    },
+    "third_party/LICENSE_REVIEW.md": {
+      "sha256": "8ab39128d30d6fc3ce0c09f30b14f2732ddb04153ee32029329ab2f9fa9cd86a",
+      "source": "third_party/LICENSE_REVIEW.md"
+    },
+    "third_party/NOTICE.md": {
+      "sha256": "646ed82335e7ade6e14a06e6579d6d5f9306922804306b01706a363f3e8c543e",
+      "source": "third_party/NOTICE.md"
+    },
+    "third_party/licenses/RTL8188FU-GPL-2.0-only.txt": {
+      "sha256": "4f2416509c30c4f0c4de101cc30c571e3be33fdb5c42cabc0d2915e8ed5ea51e",
+      "source": "third_party/licenses/RTL8188FU-GPL-2.0-only.txt"
+    },
+    "third_party/licenses/RTL8188FU-hostap-BSD-3-Clause.txt": {
+      "sha256": "2c2b3640a8256edb409356a7e3f3dfe762a489bd2cd9586aa1647b0f1128caf8",
+      "source": "third_party/licenses/RTL8188FU-hostap-BSD-3-Clause.txt"
+    },
+    "third_party/licenses/Rust-1.95.0-Apache-2.0.txt": {
+      "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+      "source": "third_party/licenses/Rust-1.95.0-Apache-2.0.txt"
+    },
+    "third_party/licenses/Rust-1.95.0-MIT.txt": {
+      "sha256": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+      "source": "third_party/licenses/Rust-1.95.0-MIT.txt"
+    },
+    "third_party/licenses/jz-diag-tools-AGPL-3.0.txt": {
+      "sha256": "8486a10c4393cee1c25392769ddd3b2d6c242d6ec7928e1414efff7dfb2f07ef",
+      "source": "third_party/licenses/jz-diag-tools-AGPL-3.0.txt"
+    },
+    "third_party/licenses/jz-diag-tools-source-notice.txt": {
+      "sha256": "7824dff674b1ff99a28c66c8041b735fcb603a732b14fd7f2ac369dd71b71f40",
+      "source": "third_party/licenses/jz-diag-tools-source-notice.txt"
+    },
+    "third_party/licenses/raptor-common-Monocypher-LICENCE.txt": {
+      "sha256": "5f8360e4c06ddcc584bdb4b210c6af824c4bb301e6a9a521869b6d90795ca4b3",
+      "source": "third_party/licenses/raptor-common-Monocypher-LICENCE.txt"
+    },
+    "third_party/licenses/raptor-common-cJSON-header.txt": {
+      "sha256": "3384d75264549cd04a5c00538a15871785f3f6ba60a779781df747d591655892",
+      "source": "third_party/licenses/raptor-common-cJSON-header.txt"
+    },
+    "third_party/licenses/thingino-sounds-CC0-1.0.txt": {
+      "sha256": "a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499",
+      "source": "third_party/licenses/thingino-sounds-CC0-1.0.txt"
+    },
+    "third_party/raptor-source-delivery.inventory.json": {
+      "sha256": "d791b979d896e7b108297203758f5ca1ab40bd43118eb3424baf596b6c193daa",
+      "source": "third_party/raptor-source-delivery.inventory.json"
+    },
+    "third_party/rtl8188fu-header-dependencies.inventory.json": {
+      "sha256": "967927371061ce0bdb6443e73cadd7063f8a3f54509e6fe2f33c6ae9fa9d16bc",
+      "source": "third_party/rtl8188fu-header-dependencies.inventory.json"
+    },
+    "third_party/rtl8188fu-linked-sources.inventory.json": {
+      "sha256": "1658bfa4fcc4c627b80194815bdb4b34f592e4305b374463812e2db584e0d145",
+      "source": "third_party/rtl8188fu-linked-sources.inventory.json"
+    },
+    "third_party/thingino-sounds.inventory.json": {
+      "sha256": "a51239bc768e2cd284955ef367dc0f99ee93759aea82d13d44b730fda5d1fa56",
+      "source": "third_party/thingino-sounds.inventory.json"
+    },
+    "webui/browser-tests/motion-email.spec.ts": {
+      "sha256": "000a420d52226a7a343732895aede82e1b2761d8b021b1fc19eb19409a0d82ae",
+      "source": "webui/browser-tests/motion-email.spec.ts"
+    },
+    "webui/browser-tests/motion-ftp.spec.ts": {
+      "sha256": "ee887ed1cf6f991c7609b346a3ae35bc989fb3ba7884e23e18623c42fc72fe5b",
+      "source": "webui/browser-tests/motion-ftp.spec.ts"
+    },
+    "webui/browser-tests/osd-font-size.spec.ts": {
+      "sha256": "ec70da0008793e13721966d6d9581b42ad1b1f0e5b44cbe2faa276319367faa0",
+      "source": "webui/browser-tests/osd-font-size.spec.ts"
+    },
+    "webui/browser-tests/preview-audio.spec.ts": {
+      "sha256": "a4d69eff530329607b5607d1b3daa37f5d2ffdc10c95bf84ccf54fa99729ca16",
+      "source": "webui/browser-tests/preview-audio.spec.ts"
+    },
+    "webui/browser-tests/raptor.spec.ts": {
+      "sha256": "5aba3462af849b57a2de050684d40320283cb2ceb5135dd4857ecf3b941cab8b",
+      "source": "webui/browser-tests/raptor.spec.ts"
+    },
+    "webui/browser-tests/recorder.spec.ts": {
+      "sha256": "e0a4e89595ba47216fa06bfdaf6e34aa6ada50922e64fcb629a369a8f4110c2f",
+      "source": "webui/browser-tests/recorder.spec.ts"
+    },
+    "webui/browser-tests/recording-files.spec.ts": {
+      "sha256": "8b398b7486059307f0a1a634fa24c3c6c91f5fed7b0a4dd2dafd8c6639c4cc9a",
+      "source": "webui/browser-tests/recording-files.spec.ts"
+    },
+    "webui/browser-tests/stream-audio-policy.spec.ts": {
+      "sha256": "cf96847c1ea850f74299e483b95e210becf8416376bee41c0bc5e0472512baff",
+      "source": "webui/browser-tests/stream-audio-policy.spec.ts"
+    },
+    "webui/browser-tests/time-sync.spec.ts": {
+      "sha256": "7eb45dba56767fee14830bf94cfca529ff095c4b6ad36fa43b0d10dae72d032d",
+      "source": "webui/browser-tests/time-sync.spec.ts"
+    },
+    "webui/browser-tests/timelapse.spec.ts": {
+      "sha256": "da8d3dba74c3478a5be104ae75707dec67d58c06894ec66e83875f6dc68ecba2",
+      "source": "webui/browser-tests/timelapse.spec.ts"
+    },
+    "webui/browser-tests/webui.spec.ts": {
+      "sha256": "a70eacf6a67189bacc6a868abf259a9cd2acaee1b98e956a707f949fb694fa9e",
+      "source": "webui/browser-tests/webui.spec.ts"
+    },
+    "webui/firmware-bundle.json": {
+      "sha256": "a0b73787916297a3293dfce7823b9d96119cc783d38d485d1471b75f2358f130",
+      "source": "webui/firmware-bundle.json"
+    },
+    "webui/fixtures/server.mjs": {
+      "sha256": "11308422b589e085eae7b6571fd2d9d4fde1da6b7a9a12fc5b99f01e601d639a",
+      "source": "webui/fixtures/server.mjs"
+    },
+    "webui/index.html": {
+      "sha256": "136b88f7cf8ba949e64ae37c1f96cde1e2e53b37987a485bc89c3bc02311069e",
+      "source": "webui/index.html"
+    },
+    "webui/package-lock.json": {
+      "sha256": "f9155e75c25a36b9b55cad9d7c27ddd49493380aee32204aaa8d60e1407479b1",
+      "source": "webui/package-lock.json"
+    },
+    "webui/package.json": {
+      "sha256": "6350308aed03edbcb863364212377ab177a0f90f3a4b02fcec176fc4c5145c67",
+      "source": "webui/package.json"
+    },
+    "webui/playwright.config.ts": {
+      "sha256": "d2a6f10c39aaadbc973d91a115edba81f3ab1dca769b10227ee815cf8491f736",
+      "source": "webui/playwright.config.ts"
+    },
+    "webui/public/icons/LICENSE.txt": {
+      "sha256": "308028e93fcf84972523cdf6e616f73168546b4953895f516d01287f16fe7bee",
+      "source": "webui/public/icons/LICENSE.txt"
+    },
+    "webui/public/icons/grid.svg": {
+      "sha256": "3af69eafc4dec2329532a891ee4cd1da2890e94c14f8c3e2e465f441c3640cbe",
+      "source": "webui/public/icons/grid.svg"
+    },
+    "webui/public/icons/help-circle.svg": {
+      "sha256": "01119f71e8e22bba9e208ee205ac2e3c64b9dc422c3d94d2cb49e309d912afa8",
+      "source": "webui/public/icons/help-circle.svg"
+    },
+    "webui/public/icons/info.svg": {
+      "sha256": "f8414990facbea55b38da12dde132078131abdb70add4ce76b5d1c23e3a84322",
+      "source": "webui/public/icons/info.svg"
+    },
+    "webui/public/icons/radio.svg": {
+      "sha256": "f16cc07d0e208c901e2ba644d84c7584a29cd898c921538a669d15bb434c42af",
+      "source": "webui/public/icons/radio.svg"
+    },
+    "webui/public/icons/settings.svg": {
+      "sha256": "2f584e1a2cd6b941ce50a99b8c74d54aa966bcffd9bee62339dabffd44665e82",
+      "source": "webui/public/icons/settings.svg"
+    },
+    "webui/public/icons/tool.svg": {
+      "sha256": "35a8ecf042e983811b8cdf58b1b217076d7287fa194ec2e20b60277e914500a0",
+      "source": "webui/public/icons/tool.svg"
+    },
+    "webui/public/icons/video.svg": {
+      "sha256": "ea4ca261395d957393ff4dfe8f1fba4fee524ec78e06ff87687cc4115ae4246e",
+      "source": "webui/public/icons/video.svg"
+    },
+    "webui/public/manifest.webmanifest": {
+      "sha256": "38bda3647c9bb6976180108beedeceb0dfde4068a3f157a18ae8527e8d553ce5",
+      "source": "webui/public/manifest.webmanifest"
+    },
+    "webui/scripts/build.mjs": {
+      "sha256": "8af79c017d346aed3bd554860e3273d69dda7c54f631c69fe8874db77c2383bd",
+      "source": "webui/scripts/build.mjs"
+    },
+    "webui/scripts/bundle-size.mjs": {
+      "sha256": "f969e938d647853d007208c46923fe59fdec2941487ac8b7ebc65bd41220cacf",
+      "source": "webui/scripts/bundle-size.mjs"
+    },
+    "webui/scripts/check-bundle.mjs": {
+      "sha256": "776fe4102ccd31e54a2237d666aaca58c1f482763aa8f3dda59016aff2cd9d19",
+      "source": "webui/scripts/check-bundle.mjs"
+    },
+    "webui/scripts/firmware-bundle.mjs": {
+      "sha256": "d4d73e57072cf54c42043d668e933248df54cdebb95f59810db9c0fb863dcd55",
+      "source": "webui/scripts/firmware-bundle.mjs"
+    },
+    "webui/src/api/client.ts": {
+      "sha256": "ee64c78a08714ad18ce4f6c0ee53e1a1d074da8c059d385cafec00d5d96a2249",
+      "source": "webui/src/api/client.ts"
+    },
+    "webui/src/api/contracts.ts": {
+      "sha256": "7bb03a397cf40708f59f1fe86e65baeaa45b41435bd240a0470524094f98f871",
+      "source": "webui/src/api/contracts.ts"
+    },
+    "webui/src/api/control.ts": {
+      "sha256": "5968845e144d8a8b3f325438e42431fc16d1212731d678db2d4a2bd63cddf38d",
+      "source": "webui/src/api/control.ts"
+    },
+    "webui/src/api/decode.ts": {
+      "sha256": "12e278f20005566eea228b283ee6988468149a21bb4ecdb095eee3dd19848e2f",
+      "source": "webui/src/api/decode.ts"
+    },
+    "webui/src/api/media.ts": {
+      "sha256": "633203833870b98f16106ccf2f068a1152f5a075491100cee3040b5f51566803",
+      "source": "webui/src/api/media.ts"
+    },
+    "webui/src/api/osd-metadata.ts": {
+      "sha256": "711cbf40c36d3cf704c9803afbb49928870453d6b62963d3f8c0de872e75cc4b",
+      "source": "webui/src/api/osd-metadata.ts"
+    },
+    "webui/src/api/preview-audio.ts": {
+      "sha256": "d2b97f5e04f688322b8812a28c344540706a73f4099dcc91a630a90595bdd2e0",
+      "source": "webui/src/api/preview-audio.ts"
+    },
+    "webui/src/api/routes.ts": {
+      "sha256": "04309b4fd35ce262f77a3c058926a4142f91788af805d6092c773041dc56c827",
+      "source": "webui/src/api/routes.ts"
+    },
+    "webui/src/app/dom.ts": {
+      "sha256": "06f573d3a6b4d33f43a7ce1fa46b110bfa8842bc6e933cb7c2c31ebcabb1ca53",
+      "source": "webui/src/app/dom.ts"
+    },
+    "webui/src/app/forms.ts": {
+      "sha256": "8536e4f56738881f5563a772cb85fa757c27ca5d5d3c339d0ba91f4d4a767295",
+      "source": "webui/src/app/forms.ts"
+    },
+    "webui/src/app/fullscreen-preview.ts": {
+      "sha256": "1d1e8e105c2392a5ff9bd9363ed1f4f453574b5927db072537b69b93436b3970",
+      "source": "webui/src/app/fullscreen-preview.ts"
+    },
+    "webui/src/app/navigation.ts": {
+      "sha256": "54937150dada236e52bd1947e2a8d04dd8822532c11d12cf50218b643c14f4d2",
+      "source": "webui/src/app/navigation.ts"
+    },
+    "webui/src/app/shell.ts": {
+      "sha256": "b68b15edad269a44f62823359209f8d23d669bdb611504853fc4b85f53b64f13",
+      "source": "webui/src/app/shell.ts"
+    },
+    "webui/src/app/streamer-preview.ts": {
+      "sha256": "db33cb734a00e3b23793b70c82a1ab088f4c44c23970cba359f2bb771dc86d92",
+      "source": "webui/src/app/streamer-preview.ts"
+    },
+    "webui/src/main.ts": {
+      "sha256": "c17a9cc894ab30dc640c5d1bb7e04c2c4450e572f44e6f2cfc664164c5fca43c",
+      "source": "webui/src/main.ts"
+    },
+    "webui/src/pages/config.ts": {
+      "sha256": "b3e6ed5c83020903556aa21d42e1b3f985ac6b7900d221a892db14b3a2b825b5",
+      "source": "webui/src/pages/config.ts"
+    },
+    "webui/src/pages/config/access.ts": {
+      "sha256": "b4b1c4bb0024ea93def3e876fb76f2bd41d1ae4bf7eabf26caf2cddf20200b7e",
+      "source": "webui/src/pages/config/access.ts"
+    },
+    "webui/src/pages/config/common.ts": {
+      "sha256": "e586043b475297ce4837b65194f8dca86dd3335fa12f6102bbb971d552b5c853",
+      "source": "webui/src/pages/config/common.ts"
+    },
+    "webui/src/pages/config/hardware.ts": {
+      "sha256": "38e2b9bfefa2fa40f2a22e8aa1750531d53997c0d89f6c2375cf2e39e3dfc2c0",
+      "source": "webui/src/pages/config/hardware.ts"
+    },
+    "webui/src/pages/config/media.ts": {
+      "sha256": "56cd5a2ba8f2b8fe8ae92ee98c2b42a2f1bc4656ce4083ff2d92e2286576b1bf",
+      "source": "webui/src/pages/config/media.ts"
+    },
+    "webui/src/pages/config/motion-privacy.ts": {
+      "sha256": "da256ffc7c349eef58f9943a805db4fc53a124231956725c8b2d3f425969a3d0",
+      "source": "webui/src/pages/config/motion-privacy.ts"
+    },
+    "webui/src/pages/config/network-time.ts": {
+      "sha256": "f2afa655a3d9ac0357a8f6d2e183145fbf7ece33633cb2375c1eb9249b36f33f",
+      "source": "webui/src/pages/config/network-time.ts"
+    },
+    "webui/src/pages/config/osd.ts": {
+      "sha256": "daf662dcd6ad17148901472429fe9ac11224628c3f245f97cd630f9c86c88a55",
+      "source": "webui/src/pages/config/osd.ts"
+    },
+    "webui/src/pages/config/raptor-daynight.ts": {
+      "sha256": "2f7014f21db7ed0f3be283a7430037fec84ee65496c327281bf4b6d0c1d5b8a2",
+      "source": "webui/src/pages/config/raptor-daynight.ts"
+    },
+    "webui/src/pages/config/services.ts": {
+      "sha256": "2d62b11d4abf037fb77978d9bb593ad8399403fef56148539b93a82f3d7634d4",
+      "source": "webui/src/pages/config/services.ts"
+    },
+    "webui/src/pages/login.ts": {
+      "sha256": "9de06837c3d57e67df5a03a303262d31478899b480a71d9b6c035edf35390cec",
+      "source": "webui/src/pages/login.ts"
+    },
+    "webui/src/pages/preview.ts": {
+      "sha256": "82c28b5c5b5f4ef80d3edb87342d950d596c76ef9c90107fe0b6afa6fd93e219",
+      "source": "webui/src/pages/preview.ts"
+    },
+    "webui/src/pages/tools.ts": {
+      "sha256": "7595bcaabbbeffdb4a0b852730e5c94e2ba155346c9f86f625206e8a8f592bdb",
+      "source": "webui/src/pages/tools.ts"
+    },
+    "webui/src/styles.css": {
+      "sha256": "c2a8983c591cde85a43a4133aa0828d5466057d5a723d52cac87814aedc38d94",
+      "source": "webui/src/styles.css"
+    },
+    "webui/tests/api-client.test.ts": {
+      "sha256": "2d8df1f19fe23ea78622bc5592af35acebabd26ed2e01f15dddca2da6481921f",
+      "source": "webui/tests/api-client.test.ts"
+    },
+    "webui/tests/contracts.test.ts": {
+      "sha256": "769838f9a4a1ea1f99252e3defac42eca3b3f692991240c212581a275018f529",
+      "source": "webui/tests/contracts.test.ts"
+    },
+    "webui/tests/decoders.test.ts": {
+      "sha256": "503786ca514a8b3db4cadd872de337b97c8fbe116d775b11807dd96e9e0b262f",
+      "source": "webui/tests/decoders.test.ts"
+    },
+    "webui/tests/firmware-bundle.test.mjs": {
+      "sha256": "b3881f3e5c5c233a5db6098eea6d401d8d596e555c11f3b5ce45142a4c9b3335",
+      "source": "webui/tests/firmware-bundle.test.mjs"
+    },
+    "webui/tests/fixture-contract.test.ts": {
+      "sha256": "e0bed98b20e41338437a4aad9951857495b2ad101a007b40a89365fcfe285ac6",
+      "source": "webui/tests/fixture-contract.test.ts"
+    },
+    "webui/tests/fixture-fetch.test.ts": {
+      "sha256": "d56172f87f5a92ce153100eef8671e9cce3037501800f359c8d763e38a3a67c8",
+      "source": "webui/tests/fixture-fetch.test.ts"
+    },
+    "webui/tests/media.test.ts": {
+      "sha256": "bb87cb366cb96904885ceed4105540ed6408047c10f379b418a2692a52aee7c7",
+      "source": "webui/tests/media.test.ts"
+    },
+    "webui/tests/page-payload.test.ts": {
+      "sha256": "9a1eeca4215e33672305975fe863a3ebd74823813d8dc25ed223abe10e28fb14",
+      "source": "webui/tests/page-payload.test.ts"
+    },
+    "webui/tests/preview-audio.test.ts": {
+      "sha256": "c884881ea04d92533b28794d55134735055d687f046ab36767e07d76eeb8daeb",
+      "source": "webui/tests/preview-audio.test.ts"
+    },
+    "webui/tests/raptor-access.test.ts": {
+      "sha256": "89d1a8e05d6e5392057ef34f66f006941c0148d16452b657b01977bb71633ec9",
+      "source": "webui/tests/raptor-access.test.ts"
+    },
+    "webui/tests/raptor-audio.test.ts": {
+      "sha256": "0f6539d41e9b8fa7e828c8d8737823b0145508b9d1a3d7e68e16c21df0144bab",
+      "source": "webui/tests/raptor-audio.test.ts"
+    },
+    "webui/tests/raptor-daynight.test.ts": {
+      "sha256": "f758efb521421cb65e714ab10ec8e8aa07c797815b5e2cbcd8e28220841d8527",
+      "source": "webui/tests/raptor-daynight.test.ts"
+    },
+    "webui/tests/raptor-files.test.ts": {
+      "sha256": "d93212c1d1580a27ee91caf6e561ab4361b27813fa9a027712d58655f8b4cbc0",
+      "source": "webui/tests/raptor-files.test.ts"
+    },
+    "webui/tests/raptor-imaging.test.ts": {
+      "sha256": "860c85c087524d95a530302822a7bf771881f31da07406c88410352795d7bb1d",
+      "source": "webui/tests/raptor-imaging.test.ts"
+    },
+    "webui/tests/raptor-media.test.ts": {
+      "sha256": "d9fbedc11ea95136c83548a34b323f26ab3343aa66b205a9a9ae507080114f27",
+      "source": "webui/tests/raptor-media.test.ts"
+    },
+    "webui/tests/raptor-motion.test.ts": {
+      "sha256": "f8c7b2a5b7a65e2e814e34cf599aa7162517275bfb6d2f3c976a60fbb148da32",
+      "source": "webui/tests/raptor-motion.test.ts"
+    },
+    "webui/tests/raptor-osd-metadata.test.ts": {
+      "sha256": "0e0320afb584d30630326ff5493215cf4f01fe89fa494823df01900a4aea7217",
+      "source": "webui/tests/raptor-osd-metadata.test.ts"
+    },
+    "webui/tests/raptor-osd.test.ts": {
+      "sha256": "95dc3a35b4dfdbe6323551b65159aaa9d62375672795035b5c45d2f3daf7d634",
+      "source": "webui/tests/raptor-osd.test.ts"
+    },
+    "webui/tests/raptor-privacy.test.ts": {
+      "sha256": "f29cc5e95a2566c23d05b970f154fed684ef5405fad5cb2f610d6926c3422dee",
+      "source": "webui/tests/raptor-privacy.test.ts"
+    },
+    "webui/tests/raptor-timelapse.test.ts": {
+      "sha256": "a40da9ecec2bbeb7a49402a4a9307c4e01c546be058b122b4b5c0fc3c660e9a8",
+      "source": "webui/tests/raptor-timelapse.test.ts"
+    },
+    "webui/tests/raptor-timezone.test.ts": {
+      "sha256": "17fc17edeac1fdfdb7a4e7f8f346c434bc9227c08558b19f0d3da1416f7aa278",
+      "source": "webui/tests/raptor-timezone.test.ts"
+    },
+    "webui/tests/routes.test.ts": {
+      "sha256": "6ba8b0165c95be1472768abab3d3f3e18537b2e4efc4a990cb1c62bbcfac6b9a",
+      "source": "webui/tests/routes.test.ts"
+    },
+    "webui/tests/streamer-preview.test.ts": {
+      "sha256": "c253521a1b8f4f69b3efc9d673de1e8676d8a25ad91f7d9c67e2cd1a7edc805a",
+      "source": "webui/tests/streamer-preview.test.ts"
+    },
+    "webui/tests/support/config-source.ts": {
+      "sha256": "4c3f4ffb2e22c7499f82ea2e64aa084a5797794e572225f0faf211ba274d5be9",
+      "source": "webui/tests/support/config-source.ts"
+    },
+    "webui/tests/support/contracts.ts": {
+      "sha256": "65648c482e550aad2af218f09e59efc9db50ee0097499cc4ae4fbbafe7b6d6a8",
+      "source": "webui/tests/support/contracts.ts"
+    },
+    "webui/tests/support/fixture-fetch.ts": {
+      "sha256": "225515a6bfb7b46bdeedfe5f90a36eadeb5cfe122b7e61e56a4883b224c102fe",
+      "source": "webui/tests/support/fixture-fetch.ts"
+    },
+    "webui/tests/support/fixtures.ts": {
+      "sha256": "2e4e659317bdcb10fb64498ea1afa86cf14aff9f4802b3234463835c601418fb",
+      "source": "webui/tests/support/fixtures.ts"
+    },
+    "webui/tests/tools.test.ts": {
+      "sha256": "d838bccc7a9abcb3e66adf90a18a2e22ae2c0ba5b02a73635c6306065b2c6fd4",
+      "source": "webui/tests/tools.test.ts"
+    },
+    "webui/tsconfig.json": {
+      "sha256": "d6a0a2065f76d64d605b76a3ce689c2ada4792b93fb6a8d86daa83b85d0f8fdb",
+      "source": "webui/tsconfig.json"
+    }
+  },
+  "schema_version": 1,
+  "source_commit": "db1f0aadc6bec8ee5eb896703bf505e384237554",
+  "source_repository": "thingino-dlink-dcs6100lhv2"
+}

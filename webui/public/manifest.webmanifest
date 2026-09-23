@@ -1,0 +1,8 @@
+{
+  "name": "D-Link DCS-6100LHV2 A1",
+  "short_name": "DCS-6100LHV2",
+  "display": "standalone",
+  "start_url": "/#/preview",
+  "background_color": "#f3f1eb",
+  "theme_color": "#176b4b"
+}

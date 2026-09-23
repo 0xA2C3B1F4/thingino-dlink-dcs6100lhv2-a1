@@ -1,0 +1,117 @@
+{
+  "schema_version": 2,
+  "target": {
+    "erase_block_size": 65536,
+    "flash_size": 16777216,
+    "hardware_revision": "A1",
+    "model": "DCS-6100LHV2",
+    "partitions": [
+      {"mtd": 0, "name": "boot", "offset": 0, "size": 262144},
+      {"mtd": 1, "name": "kernel", "offset": 262144, "size": 1835008},
+      {"mtd": 2, "name": "rootfs", "offset": 2097152, "size": 4718592},
+      {"mtd": 3, "name": "userdata", "offset": 6815744, "size": 8126464},
+      {"mtd": 4, "name": "userdata2", "offset": 14942208, "size": 1572864},
+      {"mtd": 5, "name": "userdata3", "offset": 16515072, "size": 262144}
+    ]
+  },
+  "source": {
+    "firmware_version": "1.02.02",
+    "mount_policy": "read-only",
+    "partition": {"mtd": 3, "name": "userdata", "offset": 6815744, "size": 8126464}
+  },
+  "files": [
+    {
+      "destination": "usr/lib/libimp.so",
+      "format": "elf-shared",
+      "elf": {
+        "flags": "0x70001007",
+        "needed": ["libpthread.so.0", "libdl.so.2", "libc.so.6"],
+        "soname": "libimp.so"
+      },
+      "name": "libimp.so",
+      "required": true,
+      "rootfs": true,
+      "sha256": "14b18d23964f18b63cef3a32ca7a6dc7ae8ee6ebb001c646ffa0ace72c2273fe",
+      "size": 1146852,
+      "source_path": "lib/libimp.so"
+    },
+    {
+      "destination": "usr/lib/libalog.so",
+      "format": "elf-shared",
+      "elf": {
+        "flags": "0x70001007",
+        "needed": ["libc.so.6"],
+        "soname": "libalog.so"
+      },
+      "name": "libalog.so",
+      "required": true,
+      "rootfs": true,
+      "sha256": "40fd7eb9237772f705a92e9792325f07f0fe022479923f8dc67653cc11450ea1",
+      "size": 36044,
+      "source_path": "lib/libalog.so"
+    },
+    {
+      "destination": "usr/lib/libsysutils.so",
+      "format": "elf-shared",
+      "elf": {
+        "flags": "0x70001007",
+        "needed": ["libc.so.6"],
+        "soname": "libsysutils.so"
+      },
+      "name": "libsysutils.so",
+      "required": true,
+      "rootfs": true,
+      "sha256": "befca6166d2e25b749cc9fff4798332f42a2d997b00d4aee713358d803353b79",
+      "size": 30020,
+      "source_path": "lib/libsysutils.so"
+    },
+    {
+      "destination": "usr/lib/libaudioProcess.so",
+      "format": "elf-shared",
+      "elf": {
+        "flags": "0x70001007",
+        "needed": ["libstdc++.so.6", "libm.so.6", "libgcc_s.so.1", "libc.so.6"],
+        "soname": "libaudioProcess.so"
+      },
+      "name": "libaudioProcess.so",
+      "required": true,
+      "rootfs": true,
+      "sha256": "0f03bee6156b3a570c4af8cc199a53b1302fb4450570a53222107ff498a3ae72",
+      "size": 697757,
+      "source_path": "lib/libaudioProcess.so"
+    },
+    {
+      "destination": "usr/lib/modules/3.10.14__isvp_swan_1.0__/ingenic/tx-isp-t31.ko",
+      "elf": {"flags": "0x50001001"},
+      "format": "elf-relocatable",
+      "name": "tx-isp-t31.ko",
+      "required": true,
+      "rootfs": true,
+      "sha256": "d13b5654e858155d07ce10dce97477549974227a90d02c37737907221fc2a573",
+      "size": 1106726,
+      "source_path": "lib/modules/tx-isp-t31.ko"
+    },
+    {
+      "destination": "usr/lib/modules/3.10.14__isvp_swan_1.0__/ingenic/sensor_os02g10_t31.ko",
+      "elf": {"flags": "0x50001001"},
+      "format": "elf-relocatable",
+      "name": "sensor_os02g10_t31.ko",
+      "required": true,
+      "rootfs": true,
+      "sha256": "4b034950cd9450f9c1cfdff19bcf0d92a1cf69fd412218c1841706ef9cdde8be",
+      "size": 16218,
+      "source_path": "lib/modules/sensor_os02g10_t31.ko"
+    },
+    {
+      "destination": "usr/share/sensor/os02g10-t31.bin",
+      "elf": null,
+      "format": "opaque",
+      "name": "os02g10-t31.bin",
+      "required": true,
+      "rootfs": true,
+      "sha256": "dce8af706b8663bcefe47b38418fbec469d7b3704665a45544f8bb1845e5f78e",
+      "size": 159736,
+      "source_path": "etc/sensor/os02g10-t31.bin"
+    }
+  ]
+}

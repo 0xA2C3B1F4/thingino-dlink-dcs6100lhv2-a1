@@ -1,0 +1,19 @@
+#!/bin/sh
+
+case "$1" in
+	start | restart)
+		# Raptor's local HTTP and Control checks use loopback before the
+		# normal S40 network pass.
+		/sbin/ifconfig lo 127.0.0.1 netmask 255.0.0.0 up
+		;;
+	stop)
+		# Loopback is shared process infrastructure; do not tear it down here.
+		;;
+	*)
+		echo "Usage: $0 {start|stop|restart}"
+		exit 2
+		;;
+esac
+
+exit 0
+

@@ -1,0 +1,14 @@
+diff --git a/control_proxy.c b/control_proxy.c
+index bbfe219..041d868 100644
+--- a/control_proxy.c
++++ b/control_proxy.c
+@@ -252,6 +252,9 @@ static bool control_proxy_response_header(struct client *cl, char *line)
+		    ((!proxy->onvif &&
+		      !control_proxy_content_type(value, "application/json") &&
+		      !control_proxy_content_type(value, "image/jpeg") &&
++		      !control_proxy_content_type(value, "application/sdp") &&
++		      !control_proxy_content_type(value,
++		        "text/plain; version=0.0.4") &&
+ 		      (!proxy->media || !control_proxy_content_type(value,
+ 		        "multipart/x-mixed-replace"))) ||
+ 		     (proxy->onvif &&

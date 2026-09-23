@@ -1,0 +1,569 @@
+diff --git a/src/conf.c b/src/conf.c
+--- a/src/conf.c
++++ b/src/conf.c
+@@ -73,6 +73,49 @@
+     }
+ }
+ 
++static void free_event_strings(event_t *event)
++{
++    if (!event)
++        return;
++
++    free(event->input_file);
++    free(event->source_value);
++    free(event->source_type);
++    free(event->source_name);
++    free(event->topic);
++    memset(event, 0, sizeof(*event));
++}
++
++static void free_ptz_strings(ptz_node_t *ptz)
++{
++    if (!ptz)
++        return;
++
++    free(ptz->jump_to_rel);
++    free(ptz->jump_to_abs);
++    free(ptz->remove_preset);
++    free(ptz->set_home_position);
++    free(ptz->set_preset);
++    free(ptz->goto_home_position);
++    free(ptz->move_preset);
++    free(ptz->move_out);
++    free(ptz->move_stop);
++    free(ptz->move_in);
++    free(ptz->move_both);
++    free(ptz->move_y);
++    free(ptz->move_x);
++    free(ptz->is_moving);
++    free(ptz->get_position);
++    free(ptz->get_presets);
++    free(ptz->start_tracking);
++    free(ptz->preset_tour_start);
++    free(ptz->preset_tour_stop);
++    free(ptz->preset_tour_pause);
++    free(ptz->jump_to_abs_speed);
++    free(ptz->jump_to_rel_speed);
++    memset(ptz, 0, sizeof(*ptz));
++}
++
+ static void free_imaging_string_list(imaging_string_list_t *list)
+ {
+     if (!list || list->count == 0 || list->items == NULL)
+@@ -354,14 +397,16 @@
+ // Remember to free the string
+ static void get_string_from_json(char **var, JsonValue *j, const char *name)
+ {
++    if (!var)
++        return;
++
+     JsonValue *s = get_object_item(j, name);
+ 
+     if (s && s->type == JSON_STRING) {
+         const char *str_val = s->value.string;
+-        if (str_val != NULL) {
+-            *var = (char *) malloc((strlen(str_val) + 1) * sizeof(char));
+-            strcpy(*var, str_val);
+-        }
++        char *copy = dup_cstring(str_val);
++        if (copy)
++            *var = copy;
+     }
+ }
+ 
+@@ -464,6 +509,7 @@
+     JsonValue *json_file;
+ 
+     int i;
++    int result = 0;
+     char stmp[MAX_LEN];
+ 
+     json_file = load_config(file);
+@@ -642,11 +688,27 @@
+         for (int i = 0; i < array_len; i++) {
+             item = get_array_item(value, i);
+             if (item && item->type == JSON_STRING) {
+-                service_ctx.scopes_num++;
+-                service_ctx.scopes = (char **) realloc(service_ctx.scopes, service_ctx.scopes_num * sizeof(char *));
+                 const char *str_val = item->value.string;
+-                service_ctx.scopes[service_ctx.scopes_num - 1] = (char *) malloc((strlen(str_val) + 1) * sizeof(char));
+-                strcpy(service_ctx.scopes[service_ctx.scopes_num - 1], str_val);
++                if (!str_val)
++                    continue;
++                char *scope = dup_cstring(str_val);
++                if (!scope) {
++                    log_error("Failed to allocate scope");
++                    result = -1;
++                    goto cleanup;
++                }
++                int next_count = service_ctx.scopes_num + 1;
++                char **scopes = (char **) realloc(
++                    service_ctx.scopes, (size_t) next_count * sizeof(char *));
++                if (!scopes) {
++                    free(scope);
++                    log_error("Failed to allocate scope list");
++                    result = -1;
++                    goto cleanup;
++                }
++                service_ctx.scopes = scopes;
++                service_ctx.scopes[service_ctx.scopes_num] = scope;
++                service_ctx.scopes_num = next_count;
+             }
+         }
+     }
+@@ -659,6 +721,21 @@
+         get_string_from_json(&(service_ctx.password), server_section, "password");
+     else
+         get_string_from_json(&(service_ctx.password), json_file, "password");
++    /* A configured credential must never become anonymous after allocation
++     * failure. Keep the existing nested-server precedence for each field. */
++    JsonValue *username_node = server_section ? get_object_item(server_section, "username") : NULL;
++    JsonValue *password_node = server_section ? get_object_item(server_section, "password") : NULL;
++    if (!username_node) username_node = get_object_item(json_file, "username");
++    if (!password_node) password_node = get_object_item(json_file, "password");
++    if ((username_node || password_node) &&
++        (!username_node || !password_node ||
++         username_node->type != JSON_STRING || password_node->type != JSON_STRING ||
++         !service_ctx.username || !service_ctx.password ||
++         !*service_ctx.username || !*service_ctx.password)) {
++        log_error("Unable to load configured authentication credentials");
++        result = -1;
++        goto cleanup;
++    }
+     get_bool_from_json(&(service_ctx.adv_enable_media2), json_file, "adv_enable_media2");
+     get_bool_from_json(&(service_ctx.adv_fault_if_unknown), json_file, "adv_fault_if_unknown");
+     get_bool_from_json(&(service_ctx.adv_fault_if_set), json_file, "adv_fault_if_set");
+@@ -778,14 +855,17 @@
+                     profile.audio_decoder = AAC;
+                 free(tmp);
+             }
+-            service_ctx.profiles_num++;
+-            service_ctx.profiles = (stream_profile_t *) realloc(
+-                service_ctx.profiles, service_ctx.profiles_num * sizeof(stream_profile_t));
+-            if (!service_ctx.profiles) {
++            int next_count = service_ctx.profiles_num + 1;
++            stream_profile_t *profiles = (stream_profile_t *) realloc(
++                service_ctx.profiles, (size_t) next_count * sizeof(stream_profile_t));
++            if (!profiles) {
+                 log_error("Failed to allocate memory for profile '%s'", key ? key : "(null)");
+                 free_stream_profile_strings(&profile);
+-                return -1;
++                result = -1;
++                goto cleanup;
+             }
++            service_ctx.profiles = profiles;
++            service_ctx.profiles_num = next_count;
+             service_ctx.profiles[service_ctx.profiles_num - 1] = profile;
+             stream_profile_t *profile_ptr = &service_ctx.profiles[service_ctx.profiles_num - 1];
+ 
+@@ -943,36 +1023,42 @@
+             if (!item)
+                 continue;
+ 
+-            service_ctx.relay_outputs_num++;
+-            log_debug("Processing relay %zu, relay_outputs_num now: %d", i, service_ctx.relay_outputs_num);
+-            if (service_ctx.relay_outputs_num >= MAX_RELAY_OUTPUTS) {
++            if (service_ctx.relay_outputs_num + 1 >= MAX_RELAY_OUTPUTS) {
+                 log_error("Too many relay outputs, max is: %d", MAX_RELAY_OUTPUTS);
+-                service_ctx.relay_outputs_num--;
+                 continue;
+             }
+ 
+-            service_ctx.relay_outputs = (relay_output_t *) realloc(service_ctx.relay_outputs, service_ctx.relay_outputs_num * sizeof(relay_output_t));
+-            service_ctx.relay_outputs[service_ctx.relay_outputs_num - 1].token = NULL;
+-            service_ctx.relay_outputs[service_ctx.relay_outputs_num - 1].idle_state = IDLE_STATE_CLOSE;
+-            service_ctx.relay_outputs[service_ctx.relay_outputs_num - 1].close = NULL;
+-            service_ctx.relay_outputs[service_ctx.relay_outputs_num - 1].open = NULL;
++            int next_count = service_ctx.relay_outputs_num + 1;
++            relay_output_t *relays = (relay_output_t *) realloc(
++                service_ctx.relay_outputs, (size_t) next_count * sizeof(relay_output_t));
++            if (!relays) {
++                log_error("Failed to allocate relay outputs");
++                result = -1;
++                goto cleanup;
++            }
++            service_ctx.relay_outputs = relays;
++            service_ctx.relay_outputs_num = next_count;
++            log_debug("Processing relay %zu, relay_outputs_num now: %d", i, service_ctx.relay_outputs_num);
++            relay_output_t *relay = &service_ctx.relay_outputs[service_ctx.relay_outputs_num - 1];
++            memset(relay, 0, sizeof(*relay));
++            relay->idle_state = IDLE_STATE_CLOSE;
+             char *tmp = NULL;
+-            get_string_from_json(&(service_ctx.relay_outputs[service_ctx.relay_outputs_num - 1].token), item, "token");
++            get_string_from_json(&relay->token, item, "token");
+             get_string_from_json(&tmp, item, "idle_state");
+             if (tmp) {
+                 if (!strcasecmp(tmp, "open"))
+-                    service_ctx.relay_outputs[service_ctx.relay_outputs_num - 1].idle_state = IDLE_STATE_OPEN;
++                    relay->idle_state = IDLE_STATE_OPEN;
+                 free(tmp);
+             }
+-            get_string_from_json(&(service_ctx.relay_outputs[service_ctx.relay_outputs_num - 1].close), item, "close");
+-            get_string_from_json(&(service_ctx.relay_outputs[service_ctx.relay_outputs_num - 1].open), item, "open");
++            get_string_from_json(&relay->close, item, "close");
++            get_string_from_json(&relay->open, item, "open");
+             log_debug("Relay %d configured - close: %s, open: %s",
+                       service_ctx.relay_outputs_num - 1,
+-                      service_ctx.relay_outputs[service_ctx.relay_outputs_num - 1].close
+-                          ? service_ctx.relay_outputs[service_ctx.relay_outputs_num - 1].close
++                      relay->close
++                          ? relay->close
+                           : "(null)",
+-                      service_ctx.relay_outputs[service_ctx.relay_outputs_num - 1].open
+-                          ? service_ctx.relay_outputs[service_ctx.relay_outputs_num - 1].open
++                      relay->open
++                          ? relay->open
+                           : "(null)");
+         }
+         log_debug("Finished loading relays. Total relay_outputs_num: %d", service_ctx.relay_outputs_num);
+@@ -990,23 +1076,26 @@
+             if (!item)
+                 continue;
+ 
+-            service_ctx.events_num++;
+-            if (service_ctx.events_num > MAX_EVENTS) {
++            if (service_ctx.events_num >= MAX_EVENTS) {
+                 log_error("Too many events, max is: %d", MAX_EVENTS);
+-                service_ctx.events_num--;
+                 break;
+             }
+-            service_ctx.events = (event_t *) realloc(service_ctx.events, service_ctx.events_num * sizeof(event_t));
+-            service_ctx.events[service_ctx.events_num - 1].topic = NULL;
+-            service_ctx.events[service_ctx.events_num - 1].source_name = NULL;
+-            service_ctx.events[service_ctx.events_num - 1].source_type = NULL;
+-            service_ctx.events[service_ctx.events_num - 1].source_value = NULL;
+-            service_ctx.events[service_ctx.events_num - 1].input_file = NULL;
+-            get_string_from_json(&(service_ctx.events[service_ctx.events_num - 1].topic), item, "topic");
+-            get_string_from_json(&(service_ctx.events[service_ctx.events_num - 1].source_name), item, "source_name");
+-            get_string_from_json(&(service_ctx.events[service_ctx.events_num - 1].source_type), item, "source_type");
+-            get_string_from_json(&(service_ctx.events[service_ctx.events_num - 1].source_value), item, "source_value");
+-            get_string_from_json(&(service_ctx.events[service_ctx.events_num - 1].input_file), item, "input_file");
++            int next_count = service_ctx.events_num + 1;
++            event_t *events = (event_t *) realloc(
++                service_ctx.events, (size_t) next_count * sizeof(event_t));
++            if (!events) {
++                log_error("Failed to allocate events");
++                result = -1;
++                goto cleanup;
++            }
++            service_ctx.events = events;
++            memset(&service_ctx.events[service_ctx.events_num], 0, sizeof(event_t));
++            get_string_from_json(&service_ctx.events[service_ctx.events_num].topic, item, "topic");
++            get_string_from_json(&service_ctx.events[service_ctx.events_num].source_name, item, "source_name");
++            get_string_from_json(&service_ctx.events[service_ctx.events_num].source_type, item, "source_type");
++            get_string_from_json(&service_ctx.events[service_ctx.events_num].source_value, item, "source_value");
++            get_string_from_json(&service_ctx.events[service_ctx.events_num].input_file, item, "input_file");
++            service_ctx.events_num = next_count;
+         }
+     }
+ 
+@@ -1023,8 +1112,16 @@
+                 break;
+             }
+ 
+-            service_ctx.imaging_num++;
+-            service_ctx.imaging = (imaging_entry_t *) realloc(service_ctx.imaging, service_ctx.imaging_num * sizeof(imaging_entry_t));
++            int next_count = service_ctx.imaging_num + 1;
++            imaging_entry_t *imaging = (imaging_entry_t *) realloc(
++                service_ctx.imaging, (size_t) next_count * sizeof(imaging_entry_t));
++            if (!imaging) {
++                log_error("Failed to allocate imaging entries");
++                result = -1;
++                goto cleanup;
++            }
++            service_ctx.imaging = imaging;
++            service_ctx.imaging_num = next_count;
+             imaging_entry_t *entry = &service_ctx.imaging[service_ctx.imaging_num - 1];
+             memset(entry, 0, sizeof(*entry));
+             entry->ircut_mode = IRCUT_MODE_AUTO;
+@@ -1156,37 +1253,65 @@
+             service_ctx.events_enable = EVENTS_PULLPOINT;
+ 
+         for (i = 0; i < service_ctx.relay_outputs_num; i++) {
+-            service_ctx.events_num++;
+-            if (service_ctx.events_num > MAX_EVENTS) {
++            if (service_ctx.events_num >= MAX_EVENTS) {
+                 log_error("Unable to add relay event, too many events, max is: %d", MAX_EVENTS);
+-                return -2;
++                result = -2;
++                goto cleanup;
+             }
+ 
+             log_debug("Adding event for relay output %d", i);
+-            service_ctx.events = (event_t *) realloc(service_ctx.events, service_ctx.events_num * sizeof(event_t));
+-            service_ctx.events[service_ctx.events_num - 1].topic = (char *) malloc(strlen("tns1:Device/Trigger/Relay") + 1);
+-            strcpy(service_ctx.events[service_ctx.events_num - 1].topic, "tns1:Device/Trigger/Relay");
+-            log_debug("topic: tns1:Device/Trigger/Relay");
+-            service_ctx.events[service_ctx.events_num - 1].source_name = (char *) malloc(strlen("RelayToken") + 1);
+-            strcpy(service_ctx.events[service_ctx.events_num - 1].source_name, "RelayToken");
++            int next_count = service_ctx.events_num + 1;
++            event_t *events = (event_t *) realloc(
++                service_ctx.events, (size_t) next_count * sizeof(event_t));
++            if (!events) {
++                log_error("Failed to allocate relay event list");
++                result = -1;
++                goto cleanup;
++            }
++            service_ctx.events = events;
++            event_t *event = &service_ctx.events[service_ctx.events_num];
++            memset(event, 0, sizeof(*event));
++            service_ctx.events_num = next_count;
++            event->topic = dup_cstring("tns1:Device/Trigger/Relay");
++            if (!event->topic) {
++                log_error("Failed to allocate relay event topic");
++                result = -1;
++                goto cleanup;
++            }
++            log_debug("topic: tns1:Device/Trigger/Relay");
++            event->source_name = dup_cstring("RelayToken");
++            if (!event->source_name) {
++                log_error("Failed to allocate relay event source name");
++                result = -1;
++                goto cleanup;
++            }
+             log_debug("source_name: RelayToken");
+-            service_ctx.events[service_ctx.events_num - 1].source_type = (char *) malloc(strlen("tt:ReferenceToken") + 1);
+-            strcpy(service_ctx.events[service_ctx.events_num - 1].source_type, "tt:ReferenceToken");
++            event->source_type = dup_cstring("tt:ReferenceToken");
++            if (!event->source_type) {
++                log_error("Failed to allocate relay event source type");
++                result = -1;
++                goto cleanup;
++            }
+             log_debug("source_type: tt:ReferenceToken");
+             sprintf(stmp, "RelayOutputToken_%d", i);
+-            service_ctx.events[service_ctx.events_num - 1].source_value = (char *) malloc(strlen(stmp) + 1);
+-            strcpy(service_ctx.events[service_ctx.events_num - 1].source_value, stmp);
++            event->source_value = dup_cstring(stmp);
++            if (!event->source_value) {
++                log_error("Failed to allocate relay event source value");
++                result = -1;
++                goto cleanup;
++            }
+             log_debug("source_value: %s", stmp);
+             sprintf(stmp, "/tmp/onvif_notify_server/relay_output_%d", i);
+-            service_ctx.events[service_ctx.events_num - 1].input_file = (char *) malloc(strlen(stmp) + 1);
+-            strcpy(service_ctx.events[service_ctx.events_num - 1].input_file, stmp);
++            event->input_file = dup_cstring(stmp);
++            if (!event->input_file) {
++                log_error("Failed to allocate relay event input file");
++                result = -1;
++                goto cleanup;
++            }
+             log_debug("input_file: %s", stmp);
+         }
+     }
+ 
+-    // Keep json_file alive - it will be freed by the system when the program exits
+-    // In a long-running program, you would store json_file globally and free it in cleanup
+-
+     // Ensure the highest resolution profile is Profile_0 (Main Stream)
+     if (service_ctx.profiles_num > 1) {
+         // Simple bubble sort for descending resolution
+@@ -1206,98 +1331,61 @@
+         }
+     }
+ 
+-    return 0;
++cleanup:
++    free_json_value(json_file);
++    return result;
+ }
+ 
+ void free_conf_file()
+ {
+     int i;
+ 
+-    if (service_ctx.events_enable == 1) {
++    if (service_ctx.events != NULL) {
+         for (i = service_ctx.events_num - 1; i >= 0; i--) {
+-            if (service_ctx.events[i].input_file != NULL)
+-                free(service_ctx.events[i].input_file);
+-            if (service_ctx.events[i].source_value != NULL)
+-                free(service_ctx.events[i].source_value);
+-            if (service_ctx.events[i].source_type != NULL)
+-                free(service_ctx.events[i].source_type);
+-            if (service_ctx.events[i].source_name != NULL)
+-                free(service_ctx.events[i].source_name);
+-            if (service_ctx.events[i].topic != NULL)
+-                free(service_ctx.events[i].topic);
++            free_event_strings(&service_ctx.events[i]);
+         }
++        free(service_ctx.events);
++        service_ctx.events = NULL;
+     }
++    service_ctx.events_num = 0;
+ 
+     if (service_ctx.audio.backchannel.name != NULL)
+         free(service_ctx.audio.backchannel.name);
++    service_ctx.audio.backchannel.name = NULL;
+     if (service_ctx.audio.backchannel.token != NULL)
+         free(service_ctx.audio.backchannel.token);
++    service_ctx.audio.backchannel.token = NULL;
+     if (service_ctx.audio.backchannel.configuration_token != NULL)
+         free(service_ctx.audio.backchannel.configuration_token);
++    service_ctx.audio.backchannel.configuration_token = NULL;
+     if (service_ctx.audio.backchannel.receive_token != NULL)
+         free(service_ctx.audio.backchannel.receive_token);
++    service_ctx.audio.backchannel.receive_token = NULL;
+     if (service_ctx.audio.backchannel.uri != NULL)
+         free(service_ctx.audio.backchannel.uri);
++    service_ctx.audio.backchannel.uri = NULL;
+     if (service_ctx.audio.backchannel.transport != NULL)
+         free(service_ctx.audio.backchannel.transport);
++    service_ctx.audio.backchannel.transport = NULL;
+ 
+-    if (service_ctx.ptz_node.enable == 1) {
+-        if (service_ctx.ptz_node.jump_to_rel != NULL)
+-            free(service_ctx.ptz_node.jump_to_rel);
+-        if (service_ctx.ptz_node.jump_to_abs != NULL)
+-            free(service_ctx.ptz_node.jump_to_abs);
+-        if (service_ctx.ptz_node.remove_preset != NULL)
+-            free(service_ctx.ptz_node.remove_preset);
+-        if (service_ctx.ptz_node.set_home_position != NULL)
+-            free(service_ctx.ptz_node.set_home_position);
+-        if (service_ctx.ptz_node.set_preset != NULL)
+-            free(service_ctx.ptz_node.set_preset);
+-        if (service_ctx.ptz_node.goto_home_position != NULL)
+-            free(service_ctx.ptz_node.goto_home_position);
+-        if (service_ctx.ptz_node.move_preset != NULL)
+-            free(service_ctx.ptz_node.move_preset);
+-        if (service_ctx.ptz_node.move_out != NULL)
+-            free(service_ctx.ptz_node.move_out);
+-        if (service_ctx.ptz_node.move_stop != NULL)
+-            free(service_ctx.ptz_node.move_stop);
+-        if (service_ctx.ptz_node.move_in != NULL)
+-            free(service_ctx.ptz_node.move_in);
+-        if (service_ctx.ptz_node.move_both != NULL)
+-            free(service_ctx.ptz_node.move_both);
+-        if (service_ctx.ptz_node.move_y != NULL)
+-            free(service_ctx.ptz_node.move_y);
+-        if (service_ctx.ptz_node.move_x != NULL)
+-            free(service_ctx.ptz_node.move_x);
+-        if (service_ctx.ptz_node.is_moving != NULL)
+-            free(service_ctx.ptz_node.is_moving);
+-        if (service_ctx.ptz_node.get_position != NULL)
+-            free(service_ctx.ptz_node.get_position);
+-        if (service_ctx.ptz_node.get_presets != NULL)
+-            free(service_ctx.ptz_node.get_presets);
+-        if (service_ctx.ptz_node.start_tracking != NULL)
+-            free(service_ctx.ptz_node.start_tracking);
+-        if (service_ctx.ptz_node.preset_tour_start != NULL)
+-            free(service_ctx.ptz_node.preset_tour_start);
+-        if (service_ctx.ptz_node.preset_tour_stop != NULL)
+-            free(service_ctx.ptz_node.preset_tour_stop);
+-        if (service_ctx.ptz_node.preset_tour_pause != NULL)
+-            free(service_ctx.ptz_node.preset_tour_pause);
+-        if (service_ctx.ptz_node.jump_to_abs_speed != NULL)
+-            free(service_ctx.ptz_node.jump_to_abs_speed);
+-        if (service_ctx.ptz_node.jump_to_rel_speed != NULL)
+-            free(service_ctx.ptz_node.jump_to_rel_speed);
+-    }
++    free_ptz_strings(&service_ctx.ptz_node);
+ 
+-    for (i = service_ctx.relay_outputs_num - 1; i >= 0; i--) {
+-        if (service_ctx.relay_outputs[i].open != NULL)
+-            free(service_ctx.relay_outputs[i].open);
+-        if (service_ctx.relay_outputs[i].close != NULL)
+-            free(service_ctx.relay_outputs[i].close);
+-    }
+-    if (service_ctx.relay_outputs != NULL)
++    if (service_ctx.relay_outputs != NULL) {
++        for (i = service_ctx.relay_outputs_num - 1; i >= 0; i--) {
++            if (service_ctx.relay_outputs[i].token != NULL)
++                free(service_ctx.relay_outputs[i].token);
++            if (service_ctx.relay_outputs[i].open != NULL)
++                free(service_ctx.relay_outputs[i].open);
++            if (service_ctx.relay_outputs[i].close != NULL)
++                free(service_ctx.relay_outputs[i].close);
++        }
+         free(service_ctx.relay_outputs);
++        service_ctx.relay_outputs = NULL;
++    }
++    service_ctx.relay_outputs_num = 0;
+ 
+-    for (i = service_ctx.imaging_num - 1; i >= 0; i--) {
++    if (service_ctx.imaging != NULL) {
++        for (i = service_ctx.imaging_num - 1; i >= 0; i--) {
+         if (service_ctx.imaging[i].video_source_token != NULL)
+             free(service_ctx.imaging[i].video_source_token);
+         if (service_ctx.imaging[i].cmd_ircut_on != NULL)
+@@ -1342,45 +1430,60 @@
+             }
+             free(service_ctx.imaging[i].presets);
+         }
+-    }
+-    if (service_ctx.imaging != NULL)
++        }
+         free(service_ctx.imaging);
+-
+-    for (i = service_ctx.profiles_num - 1; i >= 0; i--) {
+-        if (service_ctx.profiles[i].snapurl != NULL)
+-            free(service_ctx.profiles[i].snapurl);
+-        if (service_ctx.profiles[i].url != NULL)
+-            free(service_ctx.profiles[i].url);
+-        if (service_ctx.profiles[i].name != NULL)
+-            free(service_ctx.profiles[i].name);
++        service_ctx.imaging = NULL;
+     }
+-    if (service_ctx.profiles != NULL)
+-        free(service_ctx.profiles);
++    service_ctx.imaging_num = 0;
+ 
+-    for (i = service_ctx.scopes_num - 1; i >= 0; i--) {
+-        free(service_ctx.scopes[i]);
++    if (service_ctx.profiles != NULL) {
++        for (i = service_ctx.profiles_num - 1; i >= 0; i--) {
++            if (service_ctx.profiles[i].snapurl != NULL)
++                free(service_ctx.profiles[i].snapurl);
++            if (service_ctx.profiles[i].url != NULL)
++                free(service_ctx.profiles[i].url);
++            if (service_ctx.profiles[i].name != NULL)
++                free(service_ctx.profiles[i].name);
++        }
++        free(service_ctx.profiles);
++        service_ctx.profiles = NULL;
+     }
+-    if (service_ctx.scopes != NULL)
++    service_ctx.profiles_num = 0;
++
++    if (service_ctx.scopes != NULL) {
++        for (i = service_ctx.scopes_num - 1; i >= 0; i--) {
++            free(service_ctx.scopes[i]);
++        }
+         free(service_ctx.scopes);
++        service_ctx.scopes = NULL;
++    }
++    service_ctx.scopes_num = 0;
+ 
+-    if (service_ctx.events != NULL)
+-        free(service_ctx.events);
+     if (service_ctx.ifs != NULL)
+         free(service_ctx.ifs);
++    service_ctx.ifs = NULL;
+     if (service_ctx.hardware_id != NULL)
+         free(service_ctx.hardware_id);
++    service_ctx.hardware_id = NULL;
+     if (service_ctx.serial_num != NULL)
+         free(service_ctx.serial_num);
++    service_ctx.serial_num = NULL;
+     if (service_ctx.firmware_ver != NULL)
+         free(service_ctx.firmware_ver);
++    service_ctx.firmware_ver = NULL;
+     if (service_ctx.model != NULL)
+         free(service_ctx.model);
++    service_ctx.model = NULL;
+     if (service_ctx.manufacturer != NULL)
+         free(service_ctx.manufacturer);
++    service_ctx.manufacturer = NULL;
+     if (service_ctx.password != NULL)
+         free(service_ctx.password);
++    service_ctx.password = NULL;
+     if (service_ctx.username != NULL)
+         free(service_ctx.username);
++    service_ctx.username = NULL;
+     if (service_ctx.raw_log_directory != NULL)
+         free(service_ctx.raw_log_directory);
++    service_ctx.raw_log_directory = NULL;
+ }

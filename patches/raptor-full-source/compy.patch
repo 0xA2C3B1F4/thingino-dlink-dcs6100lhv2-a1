@@ -1,0 +1,622 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index d97e1648250072d3f551d629dc38fa5aa4f75000..83414e64c5994a3dc0f83e369ec838e632fc46c4 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -16,6 +16,25 @@ option(COMPY_TLS_OPENSSL "Use OpenSSL for TLS/SRTP" OFF)
+ 
+ include(FetchContent)
+ 
++if(DEFINED ENV{COMPY_FETCHCONTENT_SOURCE_ROOT})
++  file(COPY "$ENV{COMPY_FETCHCONTENT_SOURCE_ROOT}/slice99-src/"
++       DESTINATION "${CMAKE_BINARY_DIR}/_deps/slice99-src")
++  file(COPY "$ENV{COMPY_FETCHCONTENT_SOURCE_ROOT}/datatype99-src/"
++       DESTINATION "${CMAKE_BINARY_DIR}/_deps/datatype99-src")
++  file(COPY "$ENV{COMPY_FETCHCONTENT_SOURCE_ROOT}/interface99-src/"
++       DESTINATION "${CMAKE_BINARY_DIR}/_deps/interface99-src")
++  file(COPY "$ENV{COMPY_FETCHCONTENT_SOURCE_ROOT}/metalang99-src/"
++       DESTINATION "${CMAKE_BINARY_DIR}/_deps/metalang99-src")
++  set(FETCHCONTENT_SOURCE_DIR_SLICE99
++      "${CMAKE_BINARY_DIR}/_deps/slice99-src")
++  set(FETCHCONTENT_SOURCE_DIR_DATATYPE99
++      "${CMAKE_BINARY_DIR}/_deps/datatype99-src")
++  set(FETCHCONTENT_SOURCE_DIR_INTERFACE99
++      "${CMAKE_BINARY_DIR}/_deps/interface99-src")
++  set(FETCHCONTENT_SOURCE_DIR_METALANG99
++      "${CMAKE_BINARY_DIR}/_deps/metalang99-src")
++endif()
++
+ FetchContent_Declare(
+   slice99
+   URL https://github.com/Hirrolot/slice99/archive/refs/tags/v0.7.8.tar.gz)
+diff --git a/include/compy/nal_transport.h b/include/compy/nal_transport.h
+index 823ad5e647f19aa169e5289f6de6f46f9afd30f1..d8fa462293c6c24dd4f9617d42786cb7bb1fdbea 100644
+--- a/include/compy/nal_transport.h
++++ b/include/compy/nal_transport.h
+@@ -14,6 +14,7 @@
+ #include <compy/nal.h>
+ #include <compy/rtp_transport.h>
+ 
++#include <stdbool.h>
+ #include <stddef.h>
+ #include <stdint.h>
+ 
+@@ -102,6 +103,17 @@ int Compy_NalTransport_send_packet(
+     Compy_NalTransport *self, Compy_RtpTimestamp ts,
+     Compy_NalUnit nalu) COMPY_PRIV_MUST_USE;
+ 
++/**
++ * Sends an RTP/NAL packet with an explicit access-unit marker decision.
++ *
++ * The marker is applied to the single packet or, for a fragmented NAL unit,
++ * only to the final FU packet. This lets a caller packetizing several NAL
++ * units from one access unit mark only the access unit's final packet.
++ */
++int Compy_NalTransport_send_packet_with_marker(
++    Compy_NalTransport *self, Compy_RtpTimestamp ts, Compy_NalUnit nalu,
++    bool marker) COMPY_PRIV_MUST_USE;
++
+ /**
+  * Implements #Compy_Droppable_IFACE for #Compy_NalTransport.
+  *
+diff --git a/include/compy/rtp_transport.h b/include/compy/rtp_transport.h
+index 0641e23eed29328e45bb8d4e82ea774f678cb314..377ed18c6db2144497a632b7494519a8077b6c54 100644
+--- a/include/compy/rtp_transport.h
++++ b/include/compy/rtp_transport.h
+@@ -150,13 +150,50 @@ uint32_t Compy_RtpTransport_get_octet_count(const Compy_RtpTransport *self);
+ uint32_t
+ Compy_RtpTransport_get_last_rtp_timestamp(const Compy_RtpTransport *self);
+ 
++/**
++ * Supplies a media-clock reference for RTCP Sender Reports.
++ *
++ * Associates an RTP timestamp with the CLOCK_MONOTONIC sampling instant that
++ * produced it. Applications which send Raw RTP timestamps should update this
++ * after sending a media sample. This lets RTCP project the actual media clock
++ * to the report instant instead of treating network send scheduling as the
++ * sampling clock.
++ *
++ * Like every transport operation, callers must serialize this against the
++ * send and RTCP paths: the reference is multiple fields and a torn update
++ * projects a wildly wrong report (a half-written 64-bit instant is off by
++ * whole seconds on 32-bit targets).
++ *
++ * @param[out] self The RTP transport.
++ * @param[in] rtp_timestamp RTP timestamp of the media sample.
++ * @param[in] monotonic_time_us Sampling instant in CLOCK_MONOTONIC
++ * microseconds.
++ *
++ * @pre `self != NULL`
++ */
++void Compy_RtpTransport_set_clock_reference(
++    Compy_RtpTransport *self, uint32_t rtp_timestamp,
++    uint64_t monotonic_time_us);
++
++/**
++ * Projects the RTP media clock to a CLOCK_MONOTONIC instant.
++ *
++ * Primarily exposed for deterministic clock-mapping tests. Applications
++ * normally use #Compy_RtpTransport_get_rtp_timestamp_now.
++ *
++ * @pre `self != NULL`
++ */
++uint32_t Compy_RtpTransport_get_rtp_timestamp_at(
++    const Compy_RtpTransport *self, uint64_t monotonic_time_us);
++
+ /**
+  * Returns the RTP timestamp extrapolated to the current instant.
+  *
+- * Uses the last sent RTP timestamp plus elapsed time since that send,
+- * scaled by the clock rate. This gives the RTP clock value at "now,"
+- * suitable for RTCP SR where the NTP and RTP timestamps must represent
+- * the same instant (RFC 3550 Section 6.4.1).
++ * Uses the latest media clock reference when available, scaled by the RTP
++ * clock rate. This gives the RTP clock value at "now," suitable for RTCP SR
++ * where the NTP and RTP timestamps must represent the same instant (RFC 3550
++ * Section 6.4.1). Falls back to the last packet's send time for callers that
++ * have not supplied a media clock reference.
+  *
+  * @pre `self != NULL`
+  */
+diff --git a/src/nal_transport.c b/src/nal_transport.c
+index 177c5811c3d0092b01210bdaca2184fd7ff1ac58..733a55405ce2bd17f9e6cfa3b4589fec5e7e1883 100644
+--- a/src/nal_transport.c
++++ b/src/nal_transport.c
+@@ -10,10 +10,10 @@
+ 
+ static int send_fragmentized_nal_data(
+     Compy_RtpTransport *t, Compy_RtpTimestamp ts, size_t max_packet_size,
+-    Compy_NalUnit nalu);
++    Compy_NalUnit nalu, bool marker);
+ static int send_fu(
+     Compy_RtpTransport *t, Compy_RtpTimestamp ts, Compy_NalUnit fu,
+-    bool is_first_fragment, bool is_last_fragment);
++    bool is_first_fragment, bool is_last_fragment, bool marker);
+ 
+ Compy_NalTransportConfig Compy_NalTransportConfig_default(void) {
+     return (Compy_NalTransportConfig){
+@@ -64,6 +64,14 @@ bool Compy_NalTransport_is_full(Compy_NalTransport *self) {
+ 
+ int Compy_NalTransport_send_packet(
+     Compy_NalTransport *self, Compy_RtpTimestamp ts, Compy_NalUnit nalu) {
++    const bool marker = Compy_NalHeader_is_coded_slice_idr(nalu.header) ||
++                        Compy_NalHeader_is_coded_slice_non_idr(nalu.header);
++    return Compy_NalTransport_send_packet_with_marker(self, ts, nalu, marker);
++}
++
++int Compy_NalTransport_send_packet_with_marker(
++    Compy_NalTransport *self, Compy_RtpTimestamp ts, Compy_NalUnit nalu,
++    bool marker) {
+     assert(self);
+ 
+     const size_t max_packet_size = MATCHES(nalu.header, Compy_NalHeader_H264)
+@@ -73,9 +81,6 @@ int Compy_NalTransport_send_packet(
+                      Compy_NalHeader_size(nalu.header) + nalu.payload.len;
+ 
+     if (nalu_size < max_packet_size) {
+-        const bool marker = Compy_NalHeader_is_coded_slice_idr(nalu.header) ||
+-                            Compy_NalHeader_is_coded_slice_non_idr(nalu.header);
+-
+         const size_t header_buf_size = Compy_NalHeader_size(nalu.header);
+         uint8_t *header_buf = alloca(header_buf_size);
+         Compy_NalHeader_serialize(nalu.header, header_buf);
+@@ -86,14 +91,14 @@ int Compy_NalTransport_send_packet(
+     }
+ 
+     return send_fragmentized_nal_data(
+-        self->transport, ts, max_packet_size, nalu);
++        self->transport, ts, max_packet_size, nalu, marker);
+ }
+ 
+ // See <https://tools.ietf.org/html/rfc6184#section-5.8> (H.264),
+ // <https://tools.ietf.org/html/rfc7798#section-4.4.3> (H.265).
+ static int send_fragmentized_nal_data(
+     Compy_RtpTransport *t, Compy_RtpTimestamp ts, size_t max_packet_size,
+-    Compy_NalUnit nalu) {
++    Compy_NalUnit nalu, bool marker) {
+     // Account for the FU header overhead so each fragment's total RTP payload
+     // (FU header + fragment data) stays within max_packet_size.
+     const size_t fu_overhead = Compy_NalHeader_fu_size(nalu.header);
+@@ -115,7 +120,8 @@ static int send_fragmentized_nal_data(
+                              : (packet_idx + 1) * max_packet_size);
+         const Compy_NalUnit fu = {nalu.header, fu_data};
+ 
+-        if (send_fu(t, ts, fu, is_first_fragment, is_last_fragment) == -1) {
++        if (send_fu(
++                t, ts, fu, is_first_fragment, is_last_fragment, marker) == -1) {
+             return -1;
+         }
+     }
+@@ -127,7 +133,8 @@ static int send_fragmentized_nal_data(
+         const bool is_first_fragment = 0 == packets_count,
+                    is_last_fragment = true;
+ 
+-        if (send_fu(t, ts, fu, is_first_fragment, is_last_fragment) == -1) {
++        if (send_fu(
++                t, ts, fu, is_first_fragment, is_last_fragment, marker) == -1) {
+             return -1;
+         }
+     }
+@@ -137,14 +144,14 @@ static int send_fragmentized_nal_data(
+ 
+ static int send_fu(
+     Compy_RtpTransport *t, Compy_RtpTimestamp ts, Compy_NalUnit fu,
+-    bool is_first_fragment, bool is_last_fragment) {
++    bool is_first_fragment, bool is_last_fragment, bool marker) {
+     const size_t fu_header_size = Compy_NalHeader_fu_size(fu.header);
+     U8Slice99 fu_header = U8Slice99_new(alloca(fu_header_size), fu_header_size);
+ 
+     Compy_NalHeader_write_fu_header(
+         fu.header, fu_header.ptr, is_first_fragment, is_last_fragment);
+ 
+-    const bool marker = is_last_fragment;
++    marker = marker && is_last_fragment;
+ 
+     return Compy_RtpTransport_send_packet(t, ts, marker, fu_header, fu.payload);
+ }
+diff --git a/src/rtcp.c b/src/rtcp.c
+index 5c5747c03c330a4dfcc926d9fcbe6889b9b54d49..44572ffd35c7a0f33481ac1fb726bf3a83c09d6f 100644
+--- a/src/rtcp.c
++++ b/src/rtcp.c
+@@ -17,6 +17,9 @@ struct Compy_Rtcp {
+     bool has_rr;
+ };
+ 
++static void ntp_anchor_ref(void);
++static void ntp_anchor_unref(void);
++
+ Compy_Rtcp *Compy_Rtcp_new(
+     Compy_RtpTransport *rtp, Compy_Transport rtcp_transport,
+     const char *cname) {
+@@ -34,6 +37,8 @@ Compy_Rtcp *Compy_Rtcp_new(
+     memset(&self->last_rr, 0, sizeof(self->last_rr));
+     self->has_rr = false;
+ 
++    ntp_anchor_ref();
++
+     return self;
+ }
+ 
+@@ -43,6 +48,7 @@ static void Compy_Rtcp_drop(VSelf) {
+ 
+     VCALL_SUPER(self->rtcp_transport, Compy_Droppable, drop);
+     free(self);
++    ntp_anchor_unref();
+ }
+ 
+ implExtern(Compy_Droppable, Compy_Rtcp);
+@@ -54,37 +60,88 @@ implExtern(Compy_Droppable, Compy_Rtcp);
+  * NTP epoch. Using CLOCK_REALTIME directly would drift relative to the
+  * RTP clock, causing clients to recalibrate PTS on each SR.
+  */
+-static int64_t g_mono_to_ntp_sec;
+-static pthread_once_t g_ntp_once = PTHREAD_ONCE_INIT;
++static pthread_mutex_t g_ntp_lock = PTHREAD_MUTEX_INITIALIZER;
++static bool g_ntp_armed;
++static int64_t g_mono_to_rt_ns;
++static int g_rtcp_instances; /* guarded by g_ntp_lock */
+ 
+-static void ntp_init_once(void) {
++static void ntp_anchor_arm_locked(void) {
+     struct timespec rt, mt;
+     clock_gettime(CLOCK_REALTIME, &rt);
+     clock_gettime(CLOCK_MONOTONIC, &mt);
+-    g_mono_to_ntp_sec = (int64_t)(rt.tv_sec - mt.tv_sec) + NTP_EPOCH_OFFSET;
++    /*
++     * Full-precision offset. Computing it from tv_sec alone discarded
++     * both fractional parts, biasing every SR NTP timestamp by the
++     * fraction of the boot-time realtime/monotonic offset -- a constant
++     * anywhere in (-1s, +1s), identical across daemon restarts, only
++     * changing on reboot. Invisible to receivers (both tracks share
++     * it, so A/V stays aligned) until something maps SR NTP against a
++     * real wall clock, which is how a latency measurement read
++     * -519 ms on a camera whose clock was 0.6 ms off.
++     */
++    int64_t rt_ns = (int64_t)rt.tv_sec * 1000000000LL + rt.tv_nsec;
++    int64_t mt_ns = (int64_t)mt.tv_sec * 1000000000LL + mt.tv_nsec;
++    g_mono_to_rt_ns = rt_ns - mt_ns;
++    g_ntp_armed = true;
+ }
+ 
+-static void get_ntp_timestamp(uint32_t *msw, uint32_t *lsw) {
+-    pthread_once(&g_ntp_once, ntp_init_once);
++static void get_ntp_timestamp_at(
++    const struct timespec *monotonic_time, uint32_t *msw, uint32_t *lsw) {
++    pthread_mutex_lock(&g_ntp_lock);
++    if (!g_ntp_armed)
++        ntp_anchor_arm_locked();
++    int64_t offset_ns = g_mono_to_rt_ns;
++    pthread_mutex_unlock(&g_ntp_lock);
+ 
+-    struct timespec ts;
+-    clock_gettime(CLOCK_MONOTONIC, &ts);
++    int64_t now_ns = (int64_t)monotonic_time->tv_sec * 1000000000LL +
++                     monotonic_time->tv_nsec + offset_ns;
+ 
+-    *msw = (uint32_t)(ts.tv_sec + g_mono_to_ntp_sec);
+-    *lsw = (uint32_t)(((uint64_t)ts.tv_nsec << 32) / 1000000000ULL);
++    *msw = (uint32_t)(now_ns / 1000000000LL + (int64_t)NTP_EPOCH_OFFSET);
++    *lsw =
++        (uint32_t)(((uint64_t)(now_ns % 1000000000LL) << 32) / 1000000000ULL);
++}
++
++/*
++ * The anchor holds for as long as any RTCP instance exists, so no
++ * receiver ever sees the NTP-RTP relationship recalibrate mid-session.
++ * When the last instance drops it is disarmed, and the next session
++ * anchors afresh. That closes the boot-order gap: on cameras that
++ * stream to an auto-reconnecting client before NTP first syncs, the
++ * anchor used to freeze the boot clock for the daemon's lifetime; now
++ * one reconnect after sync is enough to carry correct wallclock.
++ */
++static void ntp_anchor_ref(void) {
++    pthread_mutex_lock(&g_ntp_lock);
++    g_rtcp_instances++;
++    pthread_mutex_unlock(&g_ntp_lock);
++}
++
++static void ntp_anchor_unref(void) {
++    pthread_mutex_lock(&g_ntp_lock);
++    if (--g_rtcp_instances == 0)
++        g_ntp_armed = false;
++    pthread_mutex_unlock(&g_ntp_lock);
+ }
+ 
+ int Compy_Rtcp_send_sr(Compy_Rtcp *self) {
+     assert(self);
+ 
++    /* Sample the report instant once. The NTP and RTP fields must describe
++     * this same instant (RFC 3550 Section 6.4.1). */
++    struct timespec now;
++    clock_gettime(CLOCK_MONOTONIC, &now);
++    const uint64_t now_us =
++        (uint64_t)now.tv_sec * 1000000 + (uint64_t)now.tv_nsec / 1000;
++
+     uint32_t ntp_msw, ntp_lsw;
+-    get_ntp_timestamp(&ntp_msw, &ntp_lsw);
++    get_ntp_timestamp_at(&now, &ntp_msw, &ntp_lsw);
+ 
+     const Compy_RtcpSenderInfo info = {
+         .ssrc = Compy_RtpTransport_get_ssrc(self->rtp),
+         .ntp_timestamp_msw = ntp_msw,
+         .ntp_timestamp_lsw = ntp_lsw,
+-        .rtp_timestamp = Compy_RtpTransport_get_rtp_timestamp_now(self->rtp),
++        .rtp_timestamp =
++            Compy_RtpTransport_get_rtp_timestamp_at(self->rtp, now_us),
+         .sender_packet_count = Compy_RtpTransport_get_packet_count(self->rtp),
+         .sender_octet_count = Compy_RtpTransport_get_octet_count(self->rtp),
+     };
+diff --git a/src/rtp_transport.c b/src/rtp_transport.c
+index 7e9e69c8e645e3a5716b7cc075acf616977ceb23..33b3630ba06eb9b3a8aad2480c1a3a777b65f167 100644
+--- a/src/rtp_transport.c
++++ b/src/rtp_transport.c
+@@ -27,6 +27,9 @@ struct Compy_RtpTransport {
+     uint32_t octet_count;
+     uint32_t last_rtp_timestamp;
+     uint64_t last_send_time_us; /* CLOCK_MONOTONIC µs at last send */
++    uint32_t clock_ref_rtp_timestamp;
++    uint64_t clock_ref_time_us; /* Media sampling time, CLOCK_MONOTONIC µs */
++    bool has_clock_ref;
+ 
+     /* Optional one-byte header extension (RFC 8285) */
+     uint8_t ext_data[12]; /* extension payload (max 12 bytes padded) */
+@@ -64,6 +67,10 @@ Compy_RtpTransport *Compy_RtpTransport_new(
+     self->packet_count = 0;
+     self->octet_count = 0;
+     self->last_rtp_timestamp = 0;
++    self->last_send_time_us = 0;
++    self->clock_ref_rtp_timestamp = 0;
++    self->clock_ref_time_us = 0;
++    self->has_clock_ref = false;
+     self->ext_len = 0;
+     memset(self->ext_data, 0, sizeof(self->ext_data));
+ 
+@@ -125,6 +132,21 @@ int Compy_RtpTransport_send_packet(
+         clock_gettime(CLOCK_MONOTONIC, &mts);
+         self->last_send_time_us =
+             (uint64_t)mts.tv_sec * 1000000 + (uint64_t)mts.tv_nsec / 1000;
++
++        /* SysClockUs already carries the sampling instant. Raw timestamps do
++         * not, so applications using an external media clock can provide the
++         * corresponding instant with Compy_RtpTransport_set_clock_reference.
++         */
++        match(ts) {
++            of(Compy_RtpTimestamp_Raw, raw_ts) {
++                (void)raw_ts;
++            }
++            of(Compy_RtpTimestamp_SysClockUs, time_us) {
++                self->clock_ref_rtp_timestamp = self->last_rtp_timestamp;
++                self->clock_ref_time_us = *time_us;
++                self->has_clock_ref = true;
++            }
++        }
+     }
+ 
+     return ret;
+@@ -200,16 +222,48 @@ Compy_RtpTransport_get_last_rtp_timestamp(const Compy_RtpTransport *self) {
+     return self->last_rtp_timestamp;
+ }
+ 
++void Compy_RtpTransport_set_clock_reference(
++    Compy_RtpTransport *self, uint32_t rtp_timestamp,
++    uint64_t monotonic_time_us) {
++    assert(self);
++    self->clock_ref_rtp_timestamp = rtp_timestamp;
++    self->clock_ref_time_us = monotonic_time_us;
++    self->has_clock_ref = true;
++}
++
++uint32_t Compy_RtpTransport_get_rtp_timestamp_at(
++    const Compy_RtpTransport *self, uint64_t monotonic_time_us) {
++    assert(self);
++
++    uint32_t reference_rtp;
++    uint64_t reference_us;
++    if (self->has_clock_ref) {
++        reference_rtp = self->clock_ref_rtp_timestamp;
++        reference_us = self->clock_ref_time_us;
++    } else if (self->last_send_time_us != 0) {
++        /* Compatibility fallback for Raw callers that have not supplied the
++         * media sampling clock. This retains the historical behavior, but a
++         * send-time anchor can jitter when packet delivery is scheduled at a
++         * different phase from the media clock. */
++        reference_rtp = self->last_rtp_timestamp;
++        reference_us = self->last_send_time_us;
++    } else {
++        return self->last_rtp_timestamp;
++    }
++
++    const int64_t elapsed_us =
++        (int64_t)monotonic_time_us - (int64_t)reference_us;
++    const int64_t elapsed_ticks =
++        elapsed_us * (int64_t)self->clock_rate / 1000000;
++    return reference_rtp + (uint32_t)elapsed_ticks;
++}
++
+ uint32_t
+ Compy_RtpTransport_get_rtp_timestamp_now(const Compy_RtpTransport *self) {
+     assert(self);
+-    if (self->last_send_time_us == 0)
+-        return self->last_rtp_timestamp;
+     struct timespec ts;
+     clock_gettime(CLOCK_MONOTONIC, &ts);
+-    uint64_t now_us =
++    const uint64_t now_us =
+         (uint64_t)ts.tv_sec * 1000000 + (uint64_t)ts.tv_nsec / 1000;
+-    uint64_t elapsed_us = now_us - self->last_send_time_us;
+-    return self->last_rtp_timestamp +
+-           (uint32_t)(elapsed_us * self->clock_rate / 1000000);
++    return Compy_RtpTransport_get_rtp_timestamp_at(self, now_us);
+ }
+diff --git a/tests/nal.c b/tests/nal.c
+index b9718a6abcbe79946f6a28f77562abb54e049785..ce8b035381080afc8f92dbd6696ae2a949c7706d 100644
+--- a/tests/nal.c
++++ b/tests/nal.c
+@@ -264,6 +264,63 @@ TEST fu_h264_small_nalu_no_fragmentation(void) {
+     PASS();
+ }
+ 
++TEST access_unit_marker_is_explicit(void) {
++    FragTestCtx ctx;
++    frag_setup(&ctx, 1200, 4096);
++
++    uint8_t payload[5] = {0x01, 0x02, 0x03, 0x04, 0x05};
++    Compy_NalUnit nalu = {
++        .header = Compy_NalHeader_H264(Compy_H264NalHeader_parse(0x65)),
++        .payload = U8Slice99_new(payload, sizeof payload),
++    };
++    Compy_RtpTimestamp timestamp = Compy_RtpTimestamp_Raw(90000);
++
++    ASSERT_EQ(
++        0,
++        Compy_NalTransport_send_packet_with_marker(
++            ctx.nal, timestamp, nalu, false));
++    ASSERT_EQ(
++        0,
++        Compy_NalTransport_send_packet_with_marker(
++            ctx.nal, timestamp, nalu, true));
++
++    TestPacketCapture cap;
++    capture_init(&cap);
++    capture_recv_all(&cap, ctx.fds[1]);
++    ASSERT_EQ(2, cap.count);
++    ASSERT_FALSE(packet_rtp_marker(&cap.packets[0]));
++    ASSERT(packet_rtp_marker(&cap.packets[1]));
++
++    frag_teardown(&ctx);
++    PASS();
++}
++
++TEST fragmented_nonfinal_nalu_has_no_marker(void) {
++    FragTestCtx ctx;
++    frag_setup(&ctx, 20, 20);
++
++    uint8_t payload[100] = {0};
++    Compy_NalUnit nalu = {
++        .header = Compy_NalHeader_H264(Compy_H264NalHeader_parse(0x65)),
++        .payload = U8Slice99_new(payload, sizeof payload),
++    };
++    ASSERT_EQ(
++        0,
++        Compy_NalTransport_send_packet_with_marker(
++            ctx.nal, Compy_RtpTimestamp_Raw(90000), nalu, false));
++
++    TestPacketCapture cap;
++    capture_init(&cap);
++    capture_recv_all(&cap, ctx.fds[1]);
++    ASSERT(cap.count >= 2);
++    for (int i = 0; i < cap.count; i++) {
++        ASSERT_FALSE(packet_rtp_marker(&cap.packets[i]));
++    }
++
++    frag_teardown(&ctx);
++    PASS();
++}
++
+ /* --- Test: boundary NALU triggers fragmentation (regression for S+E bug) ---
+  */
+ TEST fu_h264_boundary_nalu_fragments(void) {
+@@ -507,6 +564,8 @@ SUITE(nal) {
+     RUN_TEST(test_start_code_4b);
+ 
+     RUN_TEST(fu_h264_small_nalu_no_fragmentation);
++    RUN_TEST(access_unit_marker_is_explicit);
++    RUN_TEST(fragmented_nonfinal_nalu_has_no_marker);
+     RUN_TEST(fu_h264_boundary_nalu_fragments);
+     RUN_TEST(fu_h264_large_nalu_se_bits);
+     RUN_TEST(fu_h264_payload_integrity);
+diff --git a/tests/rtcp.c b/tests/rtcp.c
+index 3ff7709a80e613e4999a94986859dae923d37856..254c70e8a458492125162ae183d24804f6838929 100644
+--- a/tests/rtcp.c
++++ b/tests/rtcp.c
+@@ -177,6 +177,81 @@ TEST rtp_stats_tracking(void) {
+     PASS();
+ }
+ 
++TEST rtp_clock_reference_projects_media_clock(void) {
++    int fds[2];
++    ASSERT(socketpair(AF_UNIX, SOCK_SEQPACKET, 0, fds) == 0);
++
++    Compy_Transport t = compy_transport_udp(fds[0]);
++    Compy_RtpTransport *rtp = Compy_RtpTransport_new(t, 97, 48000);
++
++    const uint32_t base_rtp = 0x12345678;
++    const uint64_t base_us = 10000000;
++    Compy_RtpTransport_set_clock_reference(rtp, base_rtp, base_us);
++
++    ASSERT_EQ(
++        base_rtp + 240000,
++        Compy_RtpTransport_get_rtp_timestamp_at(rtp, base_us + 5000000));
++    ASSERT_EQ(
++        base_rtp - 48000,
++        Compy_RtpTransport_get_rtp_timestamp_at(rtp, base_us - 1000000));
++
++    VCALL(DYN(Compy_RtpTransport, Compy_Droppable, rtp), drop);
++    close(fds[1]);
++    PASS();
++}
++
++TEST rtp_sysclock_send_sets_clock_reference(void) {
++    int fds[2];
++    ASSERT(socketpair(AF_UNIX, SOCK_SEQPACKET, 0, fds) == 0);
++
++    Compy_Transport t = compy_transport_udp(fds[0]);
++    Compy_RtpTransport *rtp = Compy_RtpTransport_new(t, 96, 90000);
++
++    /* A SysClockUs send carries its own sampling instant, so the media
++     * clock reference must arm implicitly: projecting one second past
++     * the send instant lands one second of RTP clock past the stamped
++     * timestamp (90 ticks/ms at 90kHz). */
++    const uint64_t sent_at_us = 20000000;
++    uint8_t payload[10] = {0};
++    int ret __attribute__((unused)) = Compy_RtpTransport_send_packet(
++        rtp, Compy_RtpTimestamp_SysClockUs(sent_at_us), false,
++        U8Slice99_empty(), U8Slice99_new(payload, sizeof payload));
++
++    const uint32_t stamped = Compy_RtpTransport_get_last_rtp_timestamp(rtp);
++    ASSERT_EQ(
++        stamped + 90000,
++        Compy_RtpTransport_get_rtp_timestamp_at(rtp, sent_at_us + 1000000));
++
++    VCALL(DYN(Compy_RtpTransport, Compy_Droppable, rtp), drop);
++    close(fds[1]);
++    PASS();
++}
++
++TEST rtp_raw_send_without_reference_keeps_send_anchor(void) {
++    int fds[2];
++    ASSERT(socketpair(AF_UNIX, SOCK_SEQPACKET, 0, fds) == 0);
++
++    Compy_Transport t = compy_transport_udp(fds[0]);
++    Compy_RtpTransport *rtp = Compy_RtpTransport_new(t, 96, 90000);
++
++    /* Raw senders that never supply a reference keep the historical
++     * send-time anchor: the projection must still move with real time
++     * from the last send, never return a frozen timestamp. */
++    uint8_t payload[10] = {0};
++    int ret __attribute__((unused)) = Compy_RtpTransport_send_packet(
++        rtp, Compy_RtpTimestamp_Raw(5000), false, U8Slice99_empty(),
++        U8Slice99_new(payload, sizeof payload));
++
++    const uint32_t now_proj = Compy_RtpTransport_get_rtp_timestamp_now(rtp);
++    const int32_t advance = (int32_t)(now_proj - 5000);
++    ASSERT(advance >= 0);
++    ASSERT(advance < 90000); /* within a second of the send */
++
++    VCALL(DYN(Compy_RtpTransport, Compy_Droppable, rtp), drop);
++    close(fds[1]);
++    PASS();
++}
++
+ TEST rtp_ssrc_nonzero_entropy(void) {
+     /* Verify SSRC uses OS entropy (not zero from unseeded rand) */
+     int fds[2];
+@@ -334,6 +409,9 @@ SUITE(rtcp) {
+     RUN_TEST(rtcp_send_bye);
+     RUN_TEST(rtcp_handle_rr);
+     RUN_TEST(rtp_stats_tracking);
++    RUN_TEST(rtp_clock_reference_projects_media_clock);
++    RUN_TEST(rtp_sysclock_send_sets_clock_reference);
++    RUN_TEST(rtp_raw_send_without_reference_keeps_send_anchor);
+     RUN_TEST(rtp_ssrc_nonzero_entropy);
+     RUN_TEST(rtp_seq_increments);
+     RUN_TEST(rtcp_sr_reflects_rtp_stats);

@@ -1,0 +1,18 @@
+diff --git a/overlay/init b/overlay/init
+--- a/overlay/init
++++ b/overlay/init
+@@ -87,8 +87,12 @@ mount -t proc proc /proc ||
+ 	die "Failed to mount /proc!"
+ 
+-# Skip if rootfs is NFS, MMC or RAM
+-grep -q 'root=.*nfs\|mmcblk\|ram' /proc/cmdline &&
++# Skip NFS, MMC and RAM roots unless the bounded D-Link verifier mounted the
++# fixed MTD system partition and handed control to this exact /init.
++if grep -q 'root=.*nfs\|mmcblk\|ram' /proc/cmdline &&
++	[ "${THINGINO_DLINK_VERIFIED_MTD_ROOT:-0}" != 1 ]; then
+ 	die "Not an MTD RootFS!"
++fi
++unset THINGINO_DLINK_VERIFIED_MTD_ROOT
+ 
+ # Mount data partition (single overlay covering whole filesystem)
+ if grep -q 'ubi\.mtd=' /proc/cmdline; then

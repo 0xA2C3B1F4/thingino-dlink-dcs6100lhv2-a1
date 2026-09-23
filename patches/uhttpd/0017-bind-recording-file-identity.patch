@@ -1,0 +1,182 @@
+diff --git a/uhttpd.h b/uhttpd.h
+--- a/uhttpd.h
++++ b/uhttpd.h
+@@ -242,6 +242,7 @@
+ 	bool authorizing;
+ 	bool local_file;
+ 	bool local_file_download;
++	char local_file_identity[160];
+ 	bool stream_until_eof;
+ 	char backend_url[256];
+ 	char local_file_path[PATH_MAX];
+@@ -398,7 +399,7 @@
+ 
+ struct path_info *uh_path_lookup(struct client *cl, const char *url);
+ void uh_file_serve_absolute(struct client *cl, const char *path, bool download,
+-			    const char *range);
++			    const char *range, const char *identity);
+ 
+ static inline void uh_client_ref(struct client *cl)
+ {
+diff --git a/control_proxy.c b/control_proxy.c
+--- a/control_proxy.c
++++ b/control_proxy.c
+@@ -416,6 +416,14 @@
+ 			return false;
+ 		proxy->www_authenticate_seen = true;
+ 		blobmsg_add_string(&proxy->hdr, "WWW-Authenticate", value);
++		return true;
++	}
++
++	if (!strcasecmp(line, "X-Thingino-File-Identity")) {
++		if (!proxy->authorizing || !proxy->local_file || proxy->local_file_identity[0] ||
++		    strncmp(value, "v1 ", 3) || strlen(value) >= sizeof(proxy->local_file_identity))
++			return false;
++		snprintf(proxy->local_file_identity, sizeof(proxy->local_file_identity), "%s", value);
+ 		return true;
+ 	}
+ 
+@@ -896,10 +904,15 @@
+ 	struct dispatch_control_proxy *proxy = &cl->dispatch.control_proxy;
+ 	char path[PATH_MAX];
+ 	char range[128];
++	char identity[160];
+ 	const char *requested_range = control_proxy_header(cl, "range");
+ 	bool download = proxy->local_file_download;
+ 
+ 	snprintf(path, sizeof(path), "%s", proxy->local_file_path);
++	snprintf(identity, sizeof(identity), "%s", proxy->local_file_identity);
++	/* A legacy authorization cannot expose internal Raptor recording files. */
++	if (!strncmp(path, "/mnt/mmcblk0p1/raptor/", 22) && !identity[0])
++		return false;
+ 	if (requested_range) {
+ 		if (strlen(requested_range) >= sizeof(range))
+ 			return false;
+@@ -909,7 +922,7 @@
+ 	}
+ 	control_proxy_free(cl);
+ 	memset(&cl->dispatch, 0, sizeof(cl->dispatch));
+-	uh_file_serve_absolute(cl, path, download, range[0] ? range : NULL);
++	uh_file_serve_absolute(cl, path, download, range[0] ? range : NULL, identity);
+ 	return true;
+ }
+ 
+diff --git a/file.c b/file.c
+--- a/file.c
++++ b/file.c
+@@ -34,6 +34,7 @@
+ 
+ #include <libubox/blobmsg.h>
+ 
++#include "recording_file.h"
+ #include "uhttpd.h"
+ #include "mimetypes.h"
+ 
+@@ -777,7 +778,7 @@
+ }
+ 
+ void uh_file_serve_absolute(struct client *cl, const char *path, bool download,
+-			    const char *range)
++			    const char *range, const char *identity)
+ {
+ 	struct path_info pi = { 0 };
+ 	char resolved[PATH_MAX];
+@@ -789,11 +790,13 @@
+ 	    (strncmp(resolved, "/mnt/", 5) &&
+ 	     strncmp(resolved, "/media/", 7)) ||
+ 	    lstat(path, &pi.stat) || !S_ISREG(pi.stat.st_mode) ||
+-	    S_ISLNK(pi.stat.st_mode)) {
++	    S_ISLNK(pi.stat.st_mode) ||
++	    ((!identity || !identity[0]) && !strncmp(resolved, "/mnt/mmcblk0p1/raptor/", 22))) {
+ 		uh_client_error(cl, 403, "Forbidden", NULL);
+ 		return;
+ 	}
+-	fd = open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
++	fd = identity && identity[0] ? recording_file_open(path, identity) :
++		open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+ 	if (fd < 0 || fstat(fd, &pi.stat) || !S_ISREG(pi.stat.st_mode)) {
+ 		if (fd >= 0)
+ 			close(fd);
+diff --git a/recording_file.h b/recording_file.h
+new file mode 100644
+--- /dev/null
++++ b/recording_file.h
+@@ -0,0 +1,78 @@
++/* Bind an authorized recording to the descriptor used by the file streamer. */
++#ifndef THINGINO_RECORDING_FILE_H
++#define THINGINO_RECORDING_FILE_H
++#include <fcntl.h>
++#include <inttypes.h>
++#include <stdbool.h>
++#include <stdio.h>
++#include <string.h>
++#include <sys/stat.h>
++#include <unistd.h>
++
++#define RECORDING_IDENTITY_MAX 160
++#ifdef __APPLE__
++#define RECORDING_NSEC(st) ((st).st_mtimespec.tv_nsec)
++#else
++#define RECORDING_NSEC(st) ((st).st_mtim.tv_nsec)
++#endif
++
++static bool recording_file_matches(int fd, const char *expected)
++{
++    struct stat st;
++    char actual[RECORDING_IDENTITY_MAX];
++    if (!expected || !expected[0] || fstat(fd, &st) || !S_ISREG(st.st_mode) || st.st_nlink != 1)
++        return false;
++    int n = snprintf(actual, sizeof(actual), "v1 %ju %ju %ju %jd %ld",
++                     (uintmax_t)st.st_dev, (uintmax_t)st.st_ino, (uintmax_t)st.st_size,
++                     (intmax_t)st.st_mtime, RECORDING_NSEC(st));
++    return n > 0 && (size_t)n < sizeof(actual) && !strcmp(actual, expected);
++}
++
++/* Every component is opened relative to a held directory; no symlink is followed. */
++static int recording_file_open_at(int root, const char *relative, const char *expected)
++{
++    char path[513], *part, *next, *save;
++    if (!relative || !relative[0] || relative[0] == '/' || strlen(relative) >= sizeof(path) ||
++        relative[strlen(relative)-1] == '/' || strstr(relative, "//"))
++        return -1;
++    snprintf(path, sizeof(path), "%s", relative);
++    int parent = fcntl(root, F_DUPFD_CLOEXEC, 0);
++    if (parent < 0)
++        return -1;
++    for (part = strtok_r(path, "/", &save); part; part = next) {
++        next = strtok_r(NULL, "/", &save);
++        if (!strcmp(part, ".") || !strcmp(part, "..")) {
++            close(parent);
++            return -1;
++        }
++        int flags = O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK;
++        if (next)
++            flags |= O_DIRECTORY;
++        int fd = openat(parent, part, flags);
++        close(parent);
++        if (fd < 0)
++            return -1;
++        if (!next) {
++            if (recording_file_matches(fd, expected))
++                return fd;
++            close(fd);
++            return -1;
++        }
++        parent = fd;
++    }
++    close(parent);
++    return -1;
++}
++
++static int recording_file_open(const char *path, const char *expected)
++{
++    if (!path || path[0] != '/' || (strncmp(path, "/mnt/", 5) && strncmp(path, "/media/", 7)))
++        return -1;
++    int root = open("/", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
++    if (root < 0)
++        return -1;
++    int fd = recording_file_open_at(root, path + 1, expected);
++    close(root);
++    return fd;
++}
++#endif

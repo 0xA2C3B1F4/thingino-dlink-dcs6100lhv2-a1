@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "target": {
+    "model": "DCS-6100LHV2",
+    "hardware_revision": "A1",
+    "nor_size_bytes": 16777216
+  },
+  "full_flash_image_allowed": false,
+  "partitions": [
+    {
+      "name": "boot",
+      "mtd": 0,
+      "offset_bytes": 0,
+      "size_bytes": 262144,
+      "write_allowed": false
+    },
+    {
+      "name": "kernel",
+      "mtd": 1,
+      "offset_bytes": 262144,
+      "size_bytes": 1835008,
+      "write_allowed": false
+    },
+    {
+      "name": "rootfs",
+      "mtd": 2,
+      "offset_bytes": 2097152,
+      "size_bytes": 4718592,
+      "write_allowed": false
+    },
+    {
+      "name": "userdata",
+      "mtd": 3,
+      "offset_bytes": 6815744,
+      "size_bytes": 8126464,
+      "write_allowed": false
+    },
+    {
+      "name": "userdata2",
+      "mtd": 4,
+      "offset_bytes": 14942208,
+      "size_bytes": 1572864,
+      "write_allowed": false
+    },
+    {
+      "name": "userdata3",
+      "mtd": 5,
+      "offset_bytes": 16515072,
+      "size_bytes": 262144,
+      "write_allowed": false
+    }
+  ]
+}

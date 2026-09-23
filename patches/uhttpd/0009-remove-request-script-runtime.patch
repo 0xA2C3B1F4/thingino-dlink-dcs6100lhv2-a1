@@ -1,0 +1,424 @@
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -25,7 +25,11 @@
+ FIND_PATH(ubox_include_dir libubox/usock.h)
+ INCLUDE_DIRECTORIES(${ubox_include_dir})
+ 
+-SET(SOURCES main.c listen.c client.c utils.c file.c auth.c cgi.c relay.c proc.c plugin.c handler.c control_proxy.c)
++IF(LUA_SUPPORT OR UBUS_SUPPORT OR UCODE_SUPPORT)
++	MESSAGE(FATAL_ERROR "D-Link production uhttpd does not support request script plugins")
++ENDIF()
++
++SET(SOURCES main.c listen.c client.c utils.c file.c auth.c control_proxy.c)
+ IF(TLS_SUPPORT)
+ 	SET(SOURCES ${SOURCES} tls.c)
+ 	ADD_DEFINITIONS(-DHAVE_TLS)
+@@ -37,12 +41,9 @@
+ ENDIF()
+ 
+ FIND_LIBRARY(ubox NAMES ubox)
+-FIND_LIBRARY(json_script NAMES json_script)
+-FIND_LIBRARY(blobmsg_json NAMES blobmsg_json)
+ 
+ ADD_EXECUTABLE(uhttpd ${SOURCES})
+-FIND_LIBRARY(libjson NAMES json-c json)
+-TARGET_LINK_LIBRARIES(uhttpd ${ubox} dl ${json_script} ${blobmsg_json} ${libjson} ${LIBS})
++TARGET_LINK_LIBRARIES(uhttpd ${ubox} dl ${LIBS})
+ 
+ SET(PLUGINS "")
+ IF(LUA_SUPPORT)
+--- a/main.c
++++ b/main.c
+@@ -45,7 +45,6 @@
+ {
+ 	uloop_init();
+ 	uh_setup_listeners();
+-	uh_plugin_post_init();
+ 	uloop_run();
+ 
+ 	return 0;
+@@ -90,14 +89,6 @@
+ 
+ 			conf.error_handler = strdup(col1);
+ 		}
+-		else if ((line[0] == '*') && (strchr(line, ':') != NULL)) {
+-			if (!(col1 = strchr(line, '*')) || (*col1++ = 0) ||
+-				!(col2 = strchr(col1, ':')) || (*col2++ = 0) ||
+-				!(eol = strchr(col2, '\n')) || (*eol++  = 0))
+-				continue;
+-
+-			uh_interpreter_add(col1, col2);
+-		}
+ 	}
+ 
+ 	fclose(c);
+@@ -149,7 +140,6 @@
+ 		"	-S              Do not follow symbolic links outside of the docroot\n"
+ 		"	-D              Do not allow directory listings, send 403 instead\n"
+ 		"	-R              Enable RFC1918 filter\n"
+-		"	-n count        Maximum allowed number of concurrent script requests\n"
+ 		"	-N count        Maximum allowed number of concurrent connections\n"
+ #ifdef HAVE_LUA
+ 		"	-l string       URL prefix for Lua handler\n"
+@@ -166,10 +156,6 @@
+ 		"	-X		Enable CORS HTTP headers on JSON-RPC api\n"
+ 		"	-e		Events subscription reconnection time (retry value)\n"
+ #endif
+-		"	-x string       URL prefix for CGI handler, default is '/cgi-bin'\n"
+-		"	-y alias[=path]	URL alias handle\n"
+-		"	-i .ext=path    Use interpreter at path for files with the given extension\n"
+-		"	-t seconds      CGI, Lua and UBUS script timeout in seconds, default is 60\n"
+ 		"	-T seconds      Network timeout in seconds, default is 30\n"
+ 		"	-k seconds      HTTP keepalive timeout\n"
+ 		"	-A seconds      TCP keepalive timeout, default is unset\n"
+@@ -183,15 +169,10 @@
+ 
+ static void init_defaults_pre(void)
+ {
+-	conf.script_timeout = 60;
+ 	conf.network_timeout = 30;
+ 	conf.http_keepalive = 20;
+-	conf.max_script_requests = 3;
+ 	conf.max_connections = 100;
+ 	conf.realm = "Protected Area";
+-	conf.cgi_prefix = "/cgi-bin";
+-	conf.cgi_path = "/sbin:/usr/sbin:/bin:/usr/bin";
+-	INIT_LIST_HEAD(&conf.cgi_alias);
+ 	INIT_LIST_HEAD(&conf.lua_prefix);
+ #if HAVE_UCODE
+ 	INIT_LIST_HEAD(&conf.ucode_prefix);
+@@ -204,32 +185,8 @@
+ 	uh_index_add("index.htm");
+ 	uh_index_add("default.html");
+ 	uh_index_add("default.htm");
+-
+-	if (conf.cgi_prefix) {
+-		char *str = malloc(strlen(conf.docroot) + strlen(conf.cgi_prefix) + 1);
+-
+-		strcpy(str, conf.docroot);
+-		strcat(str, conf.cgi_prefix);
+-		conf.cgi_docroot_path = str;
+-		conf.cgi_prefix_len = strlen(conf.cgi_prefix);
+-	};
+ }
+ 
+-static void fixup_prefix(char *str)
+-{
+-	int len;
+-
+-	if (!str || !str[0])
+-		return;
+-
+-	len = strlen(str) - 1;
+-
+-	while (len >= 0 && str[len] == '/')
+-		len--;
+-
+-	str[len + 1] = 0;
+-}
+-
+ #ifdef HAVE_LUA
+ static void add_lua_prefix(const char *prefix, const char *handler) {
+ 	struct lua_prefix *p;
+@@ -270,7 +227,6 @@
+ 
+ int main(int argc, char **argv)
+ {
+-	struct alias *alias;
+ 	bool nofork = false;
+ 	char *port;
+ 	int opt, ch;
+@@ -293,7 +249,7 @@
+ 	init_defaults_pre();
+ 	signal(SIGPIPE, SIG_IGN);
+ 
+-	while ((ch = getopt(argc, argv, "A:ab:C:c:Dd:E:e:fh:H:I:i:K:k:L:l:m:N:n:O:o:P:p:qRr:Ss:T:t:U:u:Xx:y:")) != -1) {
++	while ((ch = getopt(argc, argv, "A:ab:C:c:Dd:E:e:fh:I:K:k:L:l:m:N:O:o:P:p:qRr:Ss:T:U:u:X")) != -1) {
+ 		switch(ch) {
+ #ifdef HAVE_TLS
+ 		case 'C':
+@@ -340,14 +296,6 @@
+ 			conf.docroot = strdup(uh_buf);
+ 			break;
+ 
+-		case 'H':
+-			if (uh_handler_add(optarg)) {
+-				fprintf(stderr, "Error: Failed to load handler script %s\n",
+-					optarg);
+-				exit(1);
+-			}
+-			break;
+-
+ 		case 'E':
+ 			if (optarg[0] != '/') {
+ 				fprintf(stderr, "Error: Invalid error handler: %s\n",
+@@ -382,49 +330,10 @@
+ 			conf.rfc1918_filter = 1;
+ 			break;
+ 
+-		case 'n':
+-			conf.max_script_requests = atoi(optarg);
+-			break;
+-
+ 		case 'N':
+ 			conf.max_connections = atoi(optarg);
+-			break;
+-
+-		case 'x':
+-			fixup_prefix(optarg);
+-			conf.cgi_prefix = optarg;
+-			break;
+-
+-		case 'y':
+-			alias = calloc(1, sizeof(*alias));
+-			if (!alias) {
+-				fprintf(stderr, "Error: failed to allocate alias\n");
+-				exit(1);
+-			}
+-			alias->alias = strdup(optarg);
+-			alias->path = strchr(alias->alias, '=');
+-			if (alias->path)
+-				*alias->path++ = 0;
+-			list_add(&alias->list, &conf.cgi_alias);
+ 			break;
+ 
+-		case 'i':
+-			optarg = strdup(optarg);
+-			port = strchr(optarg, '=');
+-			if (optarg[0] != '.' || !port) {
+-				fprintf(stderr, "Error: Invalid interpreter: %s\n",
+-						optarg);
+-				exit(1);
+-			}
+-
+-			*port++ = 0;
+-			uh_interpreter_add(optarg, port);
+-			break;
+-
+-		case 't':
+-			conf.script_timeout = atoi(optarg);
+-			break;
+-
+ 		case 'T':
+ 			conf.network_timeout = atoi(optarg);
+ 			break;
+--- a/file.c
++++ b/file.c
+@@ -41,17 +41,6 @@
+ 
+ static LIST_HEAD(index_files);
+ static LIST_HEAD(dispatch_handlers);
+-static LIST_HEAD(pending_requests);
+-static int n_requests;
+-
+-struct deferred_request {
+-	struct list_head list;
+-	struct dispatch_handler *d;
+-	struct client *cl;
+-	struct path_info pi;
+-	char *url;
+-	bool called, path;
+-};
+ 
+ struct index_file {
+ 	struct list_head list;
+@@ -889,117 +878,12 @@
+ 	}
+ 
+ 	return NULL;
+-}
+-
+-static void
+-uh_invoke_script(struct client *cl, struct dispatch_handler *d, char *url, struct path_info *pi)
+-{
+-	n_requests++;
+-	d->handle_request(cl, url, pi);
+-}
+-
+-static void uh_complete_request(struct client *cl)
+-{
+-	struct deferred_request *dr;
+-
+-	n_requests--;
+-
+-	while (!list_empty(&pending_requests)) {
+-		if (n_requests >= conf.max_script_requests)
+-			return;
+-
+-		dr = list_first_entry(&pending_requests, struct deferred_request, list);
+-		list_del(&dr->list);
+-
+-		cl = dr->cl;
+-		dr->called = true;
+-		cl->dispatch.data_blocked = false;
+-		uh_invoke_script(cl, dr->d, dr->url, dr->path ? &dr->pi : NULL);
+-		client_poll_post_data(cl);
+-		ustream_poll(cl->us);
+-	}
+-}
+-
+-
+-static void
+-uh_free_pending_request(struct client *cl)
+-{
+-	struct deferred_request *dr = cl->dispatch.req_data;
+-
+-	if (dr->called)
+-		uh_complete_request(cl);
+-	else
+-		list_del(&dr->list);
+-	free(dr);
+-}
+-
+-static size_t field_len(const char *ptr)
+-{
+-	if (!ptr)
+-		return 0;
+-
+-	return strlen(ptr) + 1;
+-}
+-
+-#define path_info_fields \
+-	_field(root) \
+-	_field(phys) \
+-	_field(name) \
+-	_field(info) \
+-	_field(query)
+-
+-static void
+-uh_defer_script(struct client *cl, struct dispatch_handler *d, char *url, struct path_info *pi)
+-{
+-	struct deferred_request *dr;
+-	char *_url, *_root, *_phys, *_name, *_info, *_query;
+-
+-	cl->dispatch.req_free = uh_free_pending_request;
+-
+-	if (pi) {
+-		/* allocate enough memory to duplicate all path_info strings in one block */
+-#undef _field
+-#define _field(_name) &_##_name, field_len(pi->_name),
+-		dr = calloc_a(sizeof(*dr), &_url, strlen(url) + 1, path_info_fields NULL);
+-		if (!dr) {
+-			uh_client_error(cl, 500, "Internal Server Error", "Out of memory");
+-			return;
+-		}
+-
+-		memcpy(&dr->pi, pi, sizeof(*pi));
+-		dr->path = true;
+-
+-		/* copy all path_info strings */
+-#undef _field
+-#define _field(_name) if (pi->_name) dr->pi._name = strcpy(_##_name, pi->_name);
+-		path_info_fields
+-	} else {
+-		dr = calloc_a(sizeof(*dr), &_url, strlen(url) + 1, NULL);
+-		if (!dr) {
+-			uh_client_error(cl, 500, "Internal Server Error", "Out of memory");
+-			return;
+-		}
+-	}
+-
+-	cl->dispatch.req_data = dr;
+-	cl->dispatch.data_blocked = true;
+-	dr->url = strcpy(_url, url);
+-	dr->cl = cl;
+-	dr->d = d;
+-	list_add(&dr->list, &pending_requests);
+ }
+ 
+ static void
+ uh_invoke_handler(struct client *cl, struct dispatch_handler *d, char *url, struct path_info *pi)
+ {
+-	if (!d->script)
+-		return d->handle_request(cl, url, pi);
+-
+-	if (n_requests >= conf.max_script_requests)
+-		return uh_defer_script(cl, d, url, pi);
+-
+-	cl->dispatch.req_free = uh_complete_request;
+-	uh_invoke_script(cl, d, url, pi);
++	d->handle_request(cl, url, pi);
+ }
+ 
+ static bool __handle_file_request(struct client *cl, char *url, bool is_error_handler)
+@@ -1055,47 +939,6 @@
+ 	return true;
+ }
+ 
+-static char *uh_handle_alias(char *old_url)
+-{
+-	struct alias *alias;
+-	static char *new_url;
+-	static int url_len;
+-
+-	if (!list_empty(&conf.cgi_alias)) list_for_each_entry(alias, &conf.cgi_alias, list) {
+-		int old_len;
+-		int new_len;
+-		int path_len = 0;
+-
+-		if (!uh_path_match(alias->alias, old_url))
+-			continue;
+-
+-		if (alias->path)
+-			path_len = strlen(alias->path);
+-
+-		old_len = strlen(old_url) + 1;
+-		new_len = old_len + MAX(conf.cgi_prefix_len, path_len);
+-
+-		if (new_len > url_len) {
+-			char *tmp = realloc(new_url, new_len);
+-			if (!tmp)
+-				return NULL;
+-			new_url = tmp;
+-			url_len = new_len;
+-		}
+-
+-		*new_url = '\0';
+-
+-		if (alias->path)
+-			strcpy(new_url, alias->path);
+-		else if (conf.cgi_prefix)
+-			strcpy(new_url, conf.cgi_prefix);
+-		strcat(new_url, old_url);
+-
+-		return new_url;
+-	}
+-	return old_url;
+-}
+-
+ void uh_handle_request(struct client *cl)
+ {
+ 	struct http_request *req = &cl->request;
+@@ -1104,16 +947,6 @@
+ 	char *error_handler, *escaped_url;
+ 
+ 	blob_buf_init(&cl->hdr_response, 0);
+-	url = uh_handle_alias(url);
+-	if (!url) {
+-		uh_client_error(cl, 500, "Internal Server Error", "Out of memory");
+-		return;
+-	}
+-
+-	uh_handler_run(cl, &url, false);
+-	if (!url)
+-		return;
+-
+ 	req->redirect_status = 200;
+ 	d = dispatch_find(url, NULL);
+ 	if (d)
+@@ -1122,15 +955,6 @@
+ 	if (__handle_file_request(cl, url, false))
+ 		return;
+ 
+-	if (uh_handler_run(cl, &url, true)) {
+-		if (!url)
+-			return;
+-
+-		uh_handler_run(cl, &url, false);
+-		if (__handle_file_request(cl, url, false))
+-			return;
+-	}
+-
+ 	req->redirect_status = 404;
+ 	if (conf.error_handler) {
+ 		error_handler = alloca(strlen(conf.error_handler) + 1);

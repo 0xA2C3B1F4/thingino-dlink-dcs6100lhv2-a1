@@ -1,0 +1,46 @@
+diff --git a/file.c b/file.c
+--- a/file.c
++++ b/file.c
+@@ -622,8 +622,42 @@ static void uh_file_free(struct client *cl)
+ 	close(cl->dispatch.file.fd);
+ }
+ 
++static bool uh_file_is_html(const char *name)
++{
++	const char *extension;
++
++	if (!name)
++		return false;
++	extension = strrchr(name, '.');
++	return extension &&
++	       (!strcmp(extension, ".html") || !strcmp(extension, ".htm"));
++}
++
+ static void uh_file_data(struct client *cl, struct path_info *pi, int fd)
+ {
++	/*
++	 * The D-Link WebUI shell selects content-addressed JavaScript and CSS.
++	 * Never let a cached HTML shell retain an older unversioned asset URL
++	 * across a firmware update.
++	 */
++	if (uh_file_is_html(pi->name)) {
++		cl->dispatch.no_cache = true;
++		blobmsg_add_string(&cl->hdr_response, "Cache-Control",
++			"no-store, max-age=0");
++		blobmsg_add_string(&cl->hdr_response, "Pragma", "no-cache");
++		blobmsg_add_string(&cl->hdr_response, "Expires", "0");
++		blobmsg_add_string(&cl->hdr_response, "Content-Security-Policy",
++			"default-src 'self'; base-uri 'none'; object-src 'none'; "
++			"frame-ancestors 'none'; script-src 'self'; style-src 'self'; "
++			"img-src 'self' data: blob:; media-src 'self' blob:; "
++			"connect-src 'self'; worker-src 'self' blob:; manifest-src 'self'");
++		blobmsg_add_string(&cl->hdr_response, "X-Frame-Options", "DENY");
++		blobmsg_add_string(&cl->hdr_response, "Referrer-Policy", "no-referrer");
++		blobmsg_add_string(&cl->hdr_response, "Permissions-Policy",
++			"camera=(), microphone=(), geolocation=()");
++	}
++	blobmsg_add_string(&cl->hdr_response, "X-Content-Type-Options", "nosniff");
++
+ 	/* test preconditions */
+ 	if (!cl->dispatch.no_cache &&
+ 	    (!uh_file_if_modified_since(cl, &pi->stat) ||

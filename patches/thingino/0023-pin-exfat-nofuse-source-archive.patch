@@ -1,0 +1,26 @@
+diff --git a/package/exfat-nofuse/exfat-nofuse.mk b/package/exfat-nofuse/exfat-nofuse.mk
+--- a/package/exfat-nofuse/exfat-nofuse.mk
++++ b/package/exfat-nofuse/exfat-nofuse.mk
+@@ -1,10 +1,8 @@
+-EXFAT_NOFUSE_SITE_METHOD = git
+-EXFAT_NOFUSE_SITE = https://github.com/dorimanx/exfat-nofuse
+-EXFAT_NOFUSE_SITE_BRANCH = master
+ EXFAT_NOFUSE_VERSION = 01c30ad52625a7261e1b0d874553b6ca7af25966
++EXFAT_NOFUSE_SITE = $(call github,dorimanx,exfat-nofuse,$(EXFAT_NOFUSE_VERSION))
+ 
+ EXFAT_NOFUSE_LICENSE = GPL-2.0+
+-EXFAT_NOFUSE_LICENSE_FILES = COPYING
++EXFAT_NOFUSE_LICENSE_FILES = LICENSE
+ 
+ define EXFAT_NOFUSE_BUILD_CMDS
+ 	$(MAKE) CROSS_COMPILE=$(TARGET_CROSS) -C $(@D) KDIR=$(LINUX_DIR)
+diff --git a/package/exfat-nofuse/exfat-nofuse.hash b/package/exfat-nofuse/exfat-nofuse.hash
+new file mode 100644
+--- /dev/null
++++ b/package/exfat-nofuse/exfat-nofuse.hash
+@@ -0,0 +1,5 @@
++# Locally calculated from the commit-pinned GitHub archive.
++sha256  b88a98f0a7e1b987465f5ccfcafb384b293506c7fec9d3b91b803e0fe5b16e0a  exfat-nofuse-01c30ad52625a7261e1b0d874553b6ca7af25966.tar.gz
++
++# License file
++sha256  8177f97513213526df2cf6184d8ff986c675afb514d4e68a404010521b880643  LICENSE

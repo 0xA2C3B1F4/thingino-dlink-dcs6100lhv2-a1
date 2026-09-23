@@ -1,0 +1,35 @@
+#!/bin/sh
+# Read-only acceptance hook for the composed Raptor runtime.
+set -eu
+PATH=/bin:/sbin:/usr/bin:/usr/sbin
+export PATH
+state=/run/raptor-boot
+
+owner_running() {
+	name=$1
+	binary=$2
+	test -f "$state/$name.pid"
+	IFS= read -r pid <"$state/$name.pid"
+	case "$pid" in ''|*[!0-9]*) return 1 ;; esac
+	test "$(readlink "/proc/$pid/exe")" = "$binary"
+	kill -0 "$pid"
+}
+
+start() {
+	test "$(cat "$state/ready")" = started
+	for name in rvd rhd rod rsd ric rad rwd; do
+		owner_running "$name" "/usr/bin/$name"
+	done
+	owner_running rmr0 /usr/bin/rmr
+	owner_running storage /usr/sbin/thingino-controld
+	owner_running control /usr/sbin/thingino-controld
+	printf '%s
+' 'D-Link media: composed Raptor owners are running'
+}
+
+case "${1:-}" in
+	start) start ;;
+	stop) true ;;
+	*) exit 1 ;;
+esac
+

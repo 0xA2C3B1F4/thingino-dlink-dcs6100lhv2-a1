@@ -1,0 +1,35 @@
+diff --git a/scripts/rootfs_script.sh b/scripts/rootfs_script.sh
+--- a/scripts/rootfs_script.sh
++++ b/scripts/rootfs_script.sh
+@@ -173,3 +173,29 @@ fi
+ # Thingino disables CONFIG_LONG_OPTS; --long-options silently fail at runtime.
+ # ---------------------------------------------------------------------------
+ $BR2_EXTERNAL/scripts/check-busybox-lopts.sh "${TARGET_DIR}" 1
++
++# The D-Link profile has one source-built static WebUI. Replace the complete
++# package-contributed tree here, after every package install hook has run, so
++# extension packages cannot restore CGI, helper scripts, or stale assets.
++DCS6100_WEBUI_DIST="${BR2_EXTERNAL}/dcs6100-webui/dist"
++test -d "${DCS6100_WEBUI_DIST}"
++test -z "$(find "${DCS6100_WEBUI_DIST}" -type l -print -quit)"
++node "${BR2_EXTERNAL}/dcs6100-webui/scripts/firmware-bundle.mjs" "${DCS6100_WEBUI_DIST}"
++
++rm -rf "${TARGET_DIR}/var/www"
++install -d -m 0755 "${TARGET_DIR}/var/www"
++cp -R "${DCS6100_WEBUI_DIST}/." "${TARGET_DIR}/var/www/"
++find "${TARGET_DIR}/var/www" -type d -exec chmod 0755 {} +
++find "${TARGET_DIR}/var/www" -type f -exec chmod 0644 {} +
++find "${TARGET_DIR}/var/www" -exec touch -d "@${SOURCE_DATE_EPOCH}" {} +
++
++rm -rf "${TARGET_DIR}/usr/libexec/thingino-webui"
++rm -f "${TARGET_DIR}/etc/init.d/S48webui-config" \
++	"${TARGET_DIR}/etc/init.d/S91mqttsub" \
++	"${TARGET_DIR}/etc/init.d/S95recordmgr" \
++	"${TARGET_DIR}/usr/sbin/formatsd" \
++	"${TARGET_DIR}/usr/sbin/envfromcard" \
++	"${TARGET_DIR}/usr/sbin/mqtt-sub-dispatcher" \
++	"${TARGET_DIR}/usr/sbin/recordmgr" \
++	"${TARGET_DIR}/usr/sbin/telegram-cam-register" \
++	"${TARGET_DIR}/usr/sbin/telegram-cam-agent"
+-- 
+2.50.1

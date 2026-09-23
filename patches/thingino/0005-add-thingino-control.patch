@@ -1,0 +1,69 @@
+diff --git a/Config.in b/Config.in
+--- a/Config.in
++++ b/Config.in
+@@ -204,8 +204,9 @@
+ source "$BR2_EXTERNAL_THINGINO_PATH/package/libsrt/Config.in"
+ source "$BR2_EXTERNAL_THINGINO_PATH/package/lightnvr/Config.in"
+ source "$BR2_EXTERNAL_THINGINO_PATH/package/llhttp/Config.in"
+ source "$BR2_EXTERNAL_THINGINO_PATH/package/nino/Config.in"
+ source "$BR2_EXTERNAL_THINGINO_PATH/package/thingino-agent/Config.in"
++source "$BR2_EXTERNAL_THINGINO_PATH/package/thingino-control/Config.in"
+ source "$BR2_EXTERNAL_THINGINO_PATH/package/thingino-esphome/Config.in"
+ source "$BR2_EXTERNAL_THINGINO_PATH/package/thingino-freetype/Config.in"
+ source "$BR2_EXTERNAL_THINGINO_PATH/package/thingino-ha/Config.in"
+diff --git a/package/thingino-control/Config.in b/package/thingino-control/Config.in
+new file mode 100644
+--- /dev/null
++++ b/package/thingino-control/Config.in
+@@ -0,0 +1,16 @@
++config BR2_PACKAGE_THINGINO_CONTROL
++	bool "thingino-control"
++	select BR2_PACKAGE_THINGINO_CORE
++	select BR2_PACKAGE_THINGINO_MOSQUITTO_20X
++	help
++	  Rust WebUI and API control plane for Thingino cameras.
++
++	  The loopback-only thingino-controld process owns authentication,
++	  sessions, configuration, and camera actions. uhttpd remains a static
++	  file server and bounded nonblocking ingress. Media endpoints may be
++	  relayed directly to the selected media backend when passing them through Rust would add
++	  avoidable copies.
++
++	  DCS6100_RUST_TOOLCHAIN_DIR, DCS6100_RUST_SOURCE_DIR, and
++	  DCS6100_INGENIC_TOOLCHAIN_DIR must identify validated read-only input
++	  roots. The build fails instead of using an unreviewed libc.
+diff --git a/package/thingino-control/thingino-control.mk b/package/thingino-control/thingino-control.mk
+new file mode 100644
+--- /dev/null
++++ b/package/thingino-control/thingino-control.mk
+@@ -0,0 +1,30 @@
++THINGINO_CONTROL_SITE_METHOD = local
++THINGINO_CONTROL_SITE = $(THINGINO_CONTROL_PKGDIR)
++THINGINO_CONTROL_LICENSE = MIT
++THINGINO_CONTROL_LICENSE_FILES = LICENSE
++THINGINO_CONTROL_DEPENDENCIES = host-python3 thingino-core thingino-mosquitto-20x
++
++define THINGINO_CONTROL_BUILD_CMDS
++	$(INSTALL) -d $(@D)/rust-target
++	env LD_LIBRARY_PATH="$(HOST_DIR)/lib" \
++		$(HOST_DIR)/bin/python3 $(@D)/build-rust.py \
++		--rust-toolchain-root "$(DCS6100_RUST_TOOLCHAIN_DIR)" \
++		--rustc-source-root "$(DCS6100_RUST_SOURCE_DIR)" \
++		--ingenic-toolchain-root "$(DCS6100_INGENIC_TOOLCHAIN_DIR)" \
++		--mips-toolchain-root "$(HOST_DIR)/opt/ext-toolchain" \
++		--manifest $(@D)/rust/Cargo.toml \
++		--raptor-backend \
++		--scratch-root $(@D)/rust-target \
++		--data-volume-root /workspace \
++		--repository-root /workspace/source \
++		--output $(@D)/thingino-controld \
++		--readelf "$(HOST_DIR)/opt/ext-toolchain/bin/mipsel-thingino-linux-gnu-readelf"
++endef
++
++define THINGINO_CONTROL_INSTALL_TARGET_CMDS
++	$(INSTALL) -D -m 0644 $(@D)/files/thingino-control.json $(TARGET_DIR)/usr/share/thingino-defaults/20-control.json
++	$(INSTALL) -D -m 0755 $(@D)/files/S95thingino-control $(TARGET_DIR)/etc/init.d/S95thingino-control
++	$(INSTALL) -D -m 0755 $(@D)/thingino-controld $(TARGET_DIR)/usr/sbin/thingino-controld
++endef
++
++$(eval $(generic-package))

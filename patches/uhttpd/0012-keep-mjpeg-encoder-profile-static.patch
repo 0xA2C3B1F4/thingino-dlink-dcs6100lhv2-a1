@@ -1,0 +1,14 @@
+diff --git a/control_proxy.c b/control_proxy.c
+index 06f677f..8e65793 100644
+--- a/control_proxy.c
++++ b/control_proxy.c
+@@ -691,9 +691,6 @@ static bool control_proxy_media_url(struct dispatch_control_proxy *proxy,
+ 	} \
+ } while (0)
+ 	MEDIA_PARAM("f", fps);
+-	MEDIA_PARAM("q", quality);
+-	MEDIA_PARAM("w", width);
+-	MEDIA_PARAM("h", height);
+ #undef MEDIA_PARAM
+ 	return true;
+ }

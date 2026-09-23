@@ -1,0 +1,24 @@
+{
+  "contract": "raptor-stream-codec-v1",
+  "route": "/api/v1/prudynt",
+  "domains": ["stream0", "stream1"],
+  "request": {
+    "min_streams": 1,
+    "max_streams": 2,
+    "fields": {
+      "format": {
+        "type": "string",
+        "enum": ["H264", "H265"]
+      }
+    }
+  },
+  "semantics": [
+    "Control preflights every requested stream before the first restart.",
+    "H265 is accepted only when the native capability list includes it.",
+    "RVD requires exact encoder and recreated ring-header agreement.",
+    "Control saves once and requires independent disk and final live agreement for every requested stream.",
+    "Any failure after the first restart attempt is partial_apply and requires reload before explicit retry.",
+    "A failed restart or post-restart readback remains recovery_required until full RVD bootstrap."
+  ],
+  "evidence_limit": "SDK configuration and owner readback; no emitted bitstream or client interoperability claim"
+}

@@ -1,0 +1,124 @@
+{
+  "schema_version": 2,
+  "status": "pinned implementation baseline; binary redistribution gates remain open",
+  "source_date_epoch": 1786006608,
+  "constraints": {
+    "camera_operation_allowed": false,
+    "full_image_build_allowed": false,
+    "network_during_compile_allowed": false,
+    "thingino_packer_allowed": false,
+    "thingino_uboot_allowed": false,
+    "thingino_web_flasher_allowed": false
+  },
+  "sources": {
+    "buildroot": {
+      "acquisition": "submodule",
+      "path": "buildroot",
+      "revision": "3c323d714afbc772050fbf665d67700f9a869d79",
+      "tree": "4e656516e71de8b72a051cfe06e4d09efb50c2e8",
+      "url": "https://github.com/buildroot/buildroot.git"
+    },
+    "ingenic_glibc216_toolchain": {
+      "acquisition": "external-build-toolchain",
+      "redistribution": "not-authorized-by-this-repository",
+      "revision": "81cb9f1e63d1abebf8a9a51efb95b6b3a78d9924",
+      "tree": "88314e07175ad8f5d398d684a5263b15bc2345d0",
+      "url": "https://github.com/Dafang-Hacks/mips-gcc472-glibc216-64bit.git"
+    },
+    "realtek_hostapd": {
+      "acquisition": "buildroot-package",
+      "recipe": "package/wifi-rtw-hostapd/wifi-rtw-hostapd.mk",
+      "revision": "a69d6361ef0185aa7d2e4c774bc2de36fe83d81e",
+      "site_variable": "WIFI_RTW_HOSTAPD_SITE",
+      "tree": "7002de6bd0a677b5e6151363f3b6dde61fd053fd",
+      "url": "https://github.com/lwfinger/rtl8188eu.git",
+      "version_variable": "WIFI_RTW_HOSTAPD_VERSION"
+    },
+    "rtl8188fu": {
+      "acquisition": "buildroot-package",
+      "recipe": "package/wifi-rtl8188fu/wifi-rtl8188fu.mk",
+      "revision": "6e3c1c2d244f5056d2a7ade3dbcf9daa3876fc06",
+      "site_variable": "WIFI_RTL8188FU_SITE",
+      "tree": "f9a0e0ef94fe219726584674caf3254185b29201",
+      "url": "https://github.com/gtxaspec/rtl8188ftv-wifi.git",
+      "version_variable": "WIFI_RTL8188FU_VERSION"
+    },
+    "rust_source": {
+      "acquisition": "archive",
+      "sha256": "62b67230754da642a264ca0cb9fc08820c54e2ed7b3baba0289876d4cdb48c08",
+      "url": "https://static.rust-lang.org/dist/rustc-1.95.0-src.tar.xz",
+      "version": "1.95.0"
+    },
+    "rust_builder_container_amd64": {
+      "acquisition": "oci-image",
+      "digest": "sha256:362e64223cc0da95422b3b13c045186fc0a81250e765d31c025fbddf257f6143",
+      "image": "docker.io/library/debian",
+      "platform": "linux/amd64",
+      "version": "bookworm-slim"
+    },
+    "rust_builder_container_arm64": {
+      "acquisition": "oci-image",
+      "digest": "sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241",
+      "image": "docker.io/library/debian",
+      "platform": "linux/arm64",
+      "version": "bookworm-slim"
+    },
+    "rust_std_source_component": {
+      "acquisition": "archive",
+      "sha256": "67b09138c8db96afc4bbfc69ea771ac9a091fd777698acb43f6dfd9fb7dea363",
+      "url": "https://static.rust-lang.org/dist/rust-src-1.95.0.tar.xz",
+      "version": "1.95.0"
+    },
+    "rust_toolchain_aarch64_linux": {
+      "acquisition": "archive",
+      "host": "aarch64-unknown-linux-gnu",
+      "sha256": "094c9c36531911c5cc7dd6ab2d3069ab8dcd744d6239b0bda1387b243dfc391e",
+      "url": "https://static.rust-lang.org/dist/rust-1.95.0-aarch64-unknown-linux-gnu.tar.xz",
+      "version": "1.95.0"
+    },
+    "rust_toolchain_x86_64_linux": {
+      "acquisition": "archive",
+      "host": "x86_64-unknown-linux-gnu",
+      "sha256": "2e0338f18ecbaa4a0f631b9e80e8b8e26bb6fe77dd5454fba8a70cf96c1e84a1",
+      "url": "https://static.rust-lang.org/dist/rust-1.95.0-x86_64-unknown-linux-gnu.tar.xz",
+      "version": "1.95.0"
+    },
+    "thingino_build_toolchain_aarch64": {
+      "acquisition": "source-build",
+      "archive": "thingino-toolchain-aarch64_xburst1_glibc_gcc16-linux-mipsel.tar.gz",
+      "archive_format": "gnu-tar-sort-name-source-date-epoch-gzip-n",
+      "build_target": "buildroot-toolchain-relocatable-sdk",
+      "builder_platform": "linux/arm64",
+      "host": "aarch64-linux",
+      "kernel_headers": "custom-tarball-3.10",
+      "kernel_tarball_sha256": "36540d5fb15951be64d4c150cf3bc291a8d4d6699fb988173f6be30aa1e41b47",
+      "kernel_tarball_url": "https://cdn.kernel.org/pub/linux/kernel/v3.x/linux-3.10.14.tar.xz",
+      "linux_kernel": false,
+      "recipe": "configs/github/toolchain_xburst1_glibc_gcc16_defconfig",
+      "sha256": "9871abf2b79138fdfa2b684cf0f142bfbc3a37a4553e4af3b56804ea6a1b3412",
+      "source": "thingino_firmware",
+      "version": "gcc16-glibc-xburst1"
+    },
+    "thingino_build_toolchain_x86_64": {
+      "acquisition": "unsupported",
+      "host": "x86_64-linux",
+      "reason": "source-built SDK reproducibility is not validated",
+      "version": "gcc16-glibc-xburst1"
+    },
+    "thingino_firmware": {
+      "acquisition": "root",
+      "revision": "94d140dc0a458a23eb48a598e633324ea533f97c",
+      "tree": "33faf5bc496f3b1cb1e0b3c2e93d69f0a565052c",
+      "url": "https://github.com/themactep/thingino-firmware.git"
+    },
+    "thingino_ingenic_sdk": {
+      "acquisition": "buildroot-package",
+      "recipe": "package/ingenic-sdk/ingenic-sdk.mk",
+      "revision": "5e5d7d2c84c5fd64dc2cd5aa54d9638d960736a4",
+      "site_variable": "INGENIC_SDK_SITE",
+      "tree": "10008902f56c7fcc94e5fd30c1c3ff6cc59953d5",
+      "url": "https://github.com/themactep/ingenic-sdk.git",
+      "version_variable": "INGENIC_SDK_VERSION"
+    }
+  }
+}

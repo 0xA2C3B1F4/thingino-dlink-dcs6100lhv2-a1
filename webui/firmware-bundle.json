@@ -1,0 +1,54 @@
+{
+  "contract": "dlink-static-webui-v1",
+  "total_size": 369024,
+  "files": {
+    "assets/app.css": {
+      "size": 26553,
+      "sha256": "a671095afb7863939fb8cd4e38d14a0feccf5c53f15ab4027f10fb72e57809d0"
+    },
+    "assets/app.js": {
+      "size": 337689,
+      "sha256": "34ea9374fe23e05c76444ee7957e87e9e8d27a0904273c8e26f97c7d086029a3"
+    },
+    "icons/grid.svg": {
+      "size": 352,
+      "sha256": "3af69eafc4dec2329532a891ee4cd1da2890e94c14f8c3e2e465f441c3640cbe"
+    },
+    "icons/help-circle.svg": {
+      "size": 310,
+      "sha256": "01119f71e8e22bba9e208ee205ac2e3c64b9dc422c3d94d2cb49e309d912afa8"
+    },
+    "icons/info.svg": {
+      "size": 299,
+      "sha256": "f8414990facbea55b38da12dde132078131abdb70add4ce76b5d1c23e3a84322"
+    },
+    "icons/LICENSE.txt": {
+      "size": 1082,
+      "sha256": "308028e93fcf84972523cdf6e616f73168546b4953895f516d01287f16fe7bee"
+    },
+    "icons/radio.svg": {
+      "size": 346,
+      "sha256": "f16cc07d0e208c901e2ba644d84c7584a29cd898c921538a669d15bb434c42af"
+    },
+    "icons/settings.svg": {
+      "size": 965,
+      "sha256": "2f584e1a2cd6b941ce50a99b8c74d54aa966bcffd9bee62339dabffd44665e82"
+    },
+    "icons/tool.svg": {
+      "size": 352,
+      "sha256": "35a8ecf042e983811b8cdf58b1b217076d7287fa194ec2e20b60277e914500a0"
+    },
+    "icons/video.svg": {
+      "size": 285,
+      "sha256": "ea4ca261395d957393ff4dfe8f1fba4fee524ec78e06ff87687cc4115ae4246e"
+    },
+    "index.html": {
+      "size": 603,
+      "sha256": "b5a2f284684d4cbac9f6e44a13c34254eed3e28068e89018519ab6904fad4ba2"
+    },
+    "manifest.webmanifest": {
+      "size": 188,
+      "sha256": "38bda3647c9bb6976180108beedeceb0dfde4068a3f157a18ae8527e8d553ce5"
+    }
+  }
+}

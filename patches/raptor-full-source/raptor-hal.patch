@@ -1,0 +1,2308 @@
+diff --git a/Makefile b/Makefile
+index faca62a03951556edad3515df91996aee82b0fbe..8ef8bc8ad740c118166bb51aba4d9caf627c373d 100644
+--- a/Makefile
++++ b/Makefile
+@@ -12,6 +12,7 @@
+ # Optional variables:
+ #   INGENIC_HEADERS - Path to ingenic-headers repo (default: ../ingenic-headers)
+ #   INGENIC_LIB     - Path to ingenic-lib repo (default: ../ingenic-lib)
++#   DLINK_OS02G10_IMP_1_1_4 - D-Link OS02G10 IQ and legacy IMP 1.1.4 ABI
+ #   DEBUG           - Set to 1 for debug build
+ #   V               - Set to 1 for verbose output
+ 
+@@ -89,6 +90,18 @@ ifeq ($(PERSONDET),1)
+ CFLAGS  += -DPERSONDET
+ endif
+ 
++ifeq ($(DLINK_OS02G10_IMP_1_1_4),1)
++CFLAGS  += -DRAPTOR_HAL_DLINK_OS02G10_IMP_1_1_4
++# D-Link's video/OSD closure uses the later T31 ABI, but its IVS move
++# implementation has the 1.1.4 IMPFrameInfo layout.  T31 1.1.6 inserted
++# rotate_osdflag before IMP_IVS_MoveParam.roiRect, shifting every ROI and
++# triggering the vendor filter's bounds assertion.  Keep the proven general
++# HAL headers and select the matched legacy layout for IVS alone.
++DLINK_IVS_SDK_INCLUDE := $(INGENIC_HEADERS)/T31/1.1.4/zh
++src/hal_ivs.o: CFLAGS := $(filter-out -I$(SDK_INCLUDE) -I$(SDK_INCLUDE)/imp,$(CFLAGS)) \
++	-I$(DLINK_IVS_SDK_INCLUDE) -I$(DLINK_IVS_SDK_INCLUDE)/imp
++endif
++
+ # Verbose
+ ifeq ($(V),1)
+ Q :=
+diff --git a/include/raptor_hal.h b/include/raptor_hal.h
+index 2833d06b036ca63d2d451dbae687195463dd22ca..6bf781cb6d27028e1262e40b119e6757b1ae403e 100644
+--- a/include/raptor_hal.h
++++ b/include/raptor_hal.h
+@@ -398,6 +398,8 @@ typedef struct {
+     int samples_per_frame;
+     int chn_count;                /* 1=mono, 2=stereo */
+     int frame_depth;              /* usrFrmDepth [2..50] */
++    int ai_device;                /* IMP AI device selected by the board config */
++    bool ai_device_set;           /* false keeps the platform's legacy default */
+     int ai_vol;                   /* [-30..120], 60=unity */
+     int ai_gain;                  /* [0..31] */
+     rss_audio_input_t input_type; /* AMIC or DMIC */
+@@ -1202,6 +1204,19 @@ typedef struct rss_hal_ops {
+     void *(*mem_pool_phys_to_virt)(void *ctx, uint32_t phys_addr);
+     uint32_t (*mem_pool_virt_to_phys)(void *ctx, void *virt_addr);
+ 
++    /* T31: checked FrameSource output rate, exact positive numerator/denominator. */
++    int (*fs_get_fps)(void *ctx, int chn, uint32_t *fps_num, uint32_t *fps_den);
++
++    /* T31: SDK-owned FrameSource video buffer block count. */
++    int (*fs_get_nr_vbs)(void *ctx, int chn, uint32_t *nr_vbs);
++
++    /* T31 only: preserve live non-rate attributes and verify exact readback.
++     * Caller exclusively owns FS configuration, has stopped all shared-FS
++     * consumers and has confirmed successful FS disable. No lifecycle work
++     * or rollback is performed here; an error may follow a partial apply.
++     * Appending this op requires a matched HAL/consumer rebuild. */
++    int (*fs_set_fps)(void *ctx, int chn, uint32_t fps_num, uint32_t fps_den);
++
+ } rss_hal_ops_t;
+ 
+ /* ================================================================
+diff --git a/src/hal_audio.c b/src/hal_audio.c
+index 348d2c31a21f1b1b3a533c27e10088057b1706f4..d554ec05484706094305363c97b7d44f06fe3440 100644
+--- a/src/hal_audio.c
++++ b/src/hal_audio.c
+@@ -22,9 +22,8 @@
+ int IMP_DMIC_DisableAec(int dmicDevId, int dmicChnId);
+ #endif
+ 
+-/* Audio device and channel constants */
+-/* T31-X: analog mic is device 1; T31-N: device 0
+- * TODO: make this configurable via rss_audio_config_t */
++/* Legacy default. T31-X analog mic is device 1 while T31-N uses device 0;
++ * callers can select the board-specific device through rss_audio_config_t. */
+ #define AI_DEV_ID 1
+ #define AI_CHN_ID 0
+ #define AO_DEV_ID 0
+@@ -49,9 +48,12 @@ int IMP_DMIC_DisableAec(int dmicDevId, int dmicChnId);
+  *   T23/T32/T40/T41: { usrFrmDepth, aecChn, Rev }
+  * ================================================================ */
+ 
+-static int hal_audio_init_amic(const rss_audio_config_t *cfg)
++static int hal_audio_init_amic(rss_hal_ctx_t *c, const rss_audio_config_t *cfg)
+ {
+     int ret;
++    int dev = c->audio_ai_device;
++    if (c->audio_ai_device_enabled || c->audio_ai_channel_enabled || c->audio_ai_init_failed)
++        return RSS_ERR_BUSY;
+ 
+     IMPAudioIOAttr attr;
+     memset(&attr, 0, sizeof(attr));
+@@ -62,17 +64,22 @@ static int hal_audio_init_amic(const rss_audio_config_t *cfg)
+     attr.numPerFrm = cfg->samples_per_frame;
+     attr.chnCnt = 1;
+ 
+-    ret = IMP_AI_SetPubAttr(AI_DEV_ID, &attr);
++    ret = IMP_AI_SetPubAttr(dev, &attr);
+     if (ret != 0) {
+         HAL_LOG_ERR("IMP_AI_SetPubAttr failed: %d", ret);
+         return ret;
+     }
+ 
+-    ret = IMP_AI_Enable(AI_DEV_ID);
++    ret = IMP_AI_Enable(dev);
+     if (ret != 0) {
+         HAL_LOG_ERR("IMP_AI_Enable failed: %d", ret);
++        /* A failed SDK worker start is not an acquired device. The old SDK
++         * can crash in Disable while joining that nonexistent worker. Keep
++         * this context unavailable until the audio process is restarted. */
++        c->audio_ai_init_failed = true;
+         return ret;
+     }
++    c->audio_ai_device_enabled = true;
+ 
+     IMPAudioIChnParam param;
+     memset(&param, 0, sizeof(param));
+@@ -82,29 +89,31 @@ static int hal_audio_init_amic(const rss_audio_config_t *cfg)
+     param.aecChn = 0;
+ #endif
+ 
+-    ret = IMP_AI_SetChnParam(AI_DEV_ID, AI_CHN_ID, &param);
++    ret = IMP_AI_SetChnParam(dev, AI_CHN_ID, &param);
+     if (ret != 0) {
+         HAL_LOG_ERR("IMP_AI_SetChnParam failed: %d", ret);
+         goto err_disable_dev;
+     }
+ 
+-    ret = IMP_AI_EnableChn(AI_DEV_ID, AI_CHN_ID);
++    ret = IMP_AI_EnableChn(dev, AI_CHN_ID);
+     if (ret != 0) {
+         HAL_LOG_ERR("IMP_AI_EnableChn failed: %d", ret);
+         goto err_disable_dev;
+     }
++    c->audio_ai_channel_enabled = true;
+ 
+     if (cfg->ai_vol != 0)
+-        IMP_AI_SetVol(AI_DEV_ID, AI_CHN_ID, cfg->ai_vol);
++        IMP_AI_SetVol(dev, AI_CHN_ID, cfg->ai_vol);
+     if (cfg->ai_gain != 0)
+-        IMP_AI_SetGain(AI_DEV_ID, AI_CHN_ID, cfg->ai_gain);
++        IMP_AI_SetGain(dev, AI_CHN_ID, cfg->ai_gain);
+ 
+-    HAL_LOG_INFO("audio init: amic rate=%d samples=%d depth=%d", cfg->sample_rate,
+-                 cfg->samples_per_frame, cfg->frame_depth);
++    HAL_LOG_INFO("audio init: amic dev=%d rate=%d samples=%d depth=%d", dev,
++                 cfg->sample_rate, cfg->samples_per_frame, cfg->frame_depth);
+     return RSS_OK;
+ 
+ err_disable_dev:
+-    IMP_AI_Disable(AI_DEV_ID);
++    if (IMP_AI_Disable(dev) == 0)
++        c->audio_ai_device_enabled = false;
+     return ret;
+ }
+ 
+@@ -180,13 +189,18 @@ int hal_audio_init(void *ctx, const rss_audio_config_t *cfg)
+         return RSS_ERR_INVAL;
+ 
+     rss_hal_ctx_t *c = (rss_hal_ctx_t *)ctx;
++    if (c->audio_ai_device_enabled || c->audio_ai_channel_enabled || c->audio_ai_init_failed)
++        return RSS_ERR_BUSY;
+     c->audio_input_type = cfg->input_type;
++    c->audio_ai_device = cfg->ai_device_set ? cfg->ai_device : AI_DEV_ID;
++    if (c->audio_ai_device < 0)
++        return RSS_ERR_INVAL;
+ 
+ #ifdef HAL_HAS_DMIC
+     if (cfg->input_type == RSS_AUDIO_INPUT_DMIC)
+         return hal_audio_init_dmic(cfg);
+ #endif
+-    return hal_audio_init_amic(cfg);
++    return hal_audio_init_amic(c, cfg);
+ }
+ 
+ /* ================================================================
+@@ -196,12 +210,13 @@ int hal_audio_init(void *ctx, const rss_audio_config_t *cfg)
+ int hal_audio_deinit(void *ctx)
+ {
+     rss_hal_ctx_t *c = (rss_hal_ctx_t *)ctx;
+-    (void)c;
++    if (!c)
++        return RSS_ERR_INVAL;
+     int ret;
+-    int first_err = 0;
+ 
+ #ifdef HAL_HAS_DMIC
+     if (c->audio_input_type == RSS_AUDIO_INPUT_DMIC) {
++        int first_err = 0;
+         ret = IMP_DMIC_DisableChn(DMIC_DEV_ID, DMIC_CHN_ID);
+         if (ret != 0 && first_err == 0)
+             first_err = ret;
+@@ -212,13 +227,21 @@ int hal_audio_deinit(void *ctx)
+     }
+ #endif
+ 
+-    ret = IMP_AI_DisableChn(AI_DEV_ID, AI_CHN_ID);
+-    if (ret != 0 && first_err == 0)
+-        first_err = ret;
+-    ret = IMP_AI_Disable(AI_DEV_ID);
+-    if (ret != 0 && first_err == 0)
+-        first_err = ret;
+-    return first_err;
++    if (c->audio_ai_init_failed)
++        return RSS_ERR_IO;
++    if (c->audio_ai_channel_enabled) {
++        ret = IMP_AI_DisableChn(c->audio_ai_device, AI_CHN_ID);
++        if (ret != 0)
++            return ret;
++        c->audio_ai_channel_enabled = false;
++    }
++    if (c->audio_ai_device_enabled) {
++        ret = IMP_AI_Disable(c->audio_ai_device);
++        if (ret != 0)
++            return ret;
++        c->audio_ai_device_enabled = false;
++    }
++    return RSS_OK;
+ }
+ 
+ /* ================================================================
+@@ -236,8 +259,8 @@ int hal_audio_set_volume(void *ctx, int dev, int chn, int vol)
+     if (c->audio_input_type == RSS_AUDIO_INPUT_DMIC)
+         return IMP_DMIC_SetVol(DMIC_DEV_ID, DMIC_CHN_ID, vol);
+ #endif
+-    (void)c;
+-    return IMP_AI_SetVol(dev, chn, vol);
++    (void)dev;
++    return IMP_AI_SetVol(c->audio_ai_device, chn, vol);
+ }
+ 
+ int hal_audio_set_gain(void *ctx, int dev, int chn, int gain)
+@@ -247,8 +270,8 @@ int hal_audio_set_gain(void *ctx, int dev, int chn, int gain)
+     if (c->audio_input_type == RSS_AUDIO_INPUT_DMIC)
+         return IMP_DMIC_SetGain(DMIC_DEV_ID, DMIC_CHN_ID, gain);
+ #endif
+-    (void)c;
+-    return IMP_AI_SetGain(dev, chn, gain);
++    (void)dev;
++    return IMP_AI_SetGain(c->audio_ai_device, chn, gain);
+ }
+ 
+ /* ================================================================
+@@ -264,7 +287,7 @@ int hal_audio_set_gain(void *ctx, int dev, int chn, int gain)
+ 
+ int hal_audio_enable_ns(void *ctx, rss_ns_level_t level)
+ {
+-    (void)ctx;
++    rss_hal_ctx_t *c = (rss_hal_ctx_t *)ctx;
+ 
+     /* Translate RSS ns level to SDK Level_ns */
+     int ns_mode;
+@@ -292,7 +315,7 @@ int hal_audio_enable_ns(void *ctx, rss_ns_level_t level)
+      */
+     IMPAudioIOAttr attr;
+     memset(&attr, 0, sizeof(attr));
+-    int ret = IMP_AI_GetPubAttr(AI_DEV_ID, &attr);
++    int ret = IMP_AI_GetPubAttr(c->audio_ai_device, &attr);
+     if (ret != 0) {
+         HAL_LOG_ERR("IMP_AI_GetPubAttr for NS failed: %d", ret);
+         return ret;
+@@ -318,11 +341,11 @@ int hal_audio_disable_ns(void *ctx)
+ 
+ int hal_audio_enable_hpf(void *ctx)
+ {
+-    (void)ctx;
++    rss_hal_ctx_t *c = (rss_hal_ctx_t *)ctx;
+ 
+     IMPAudioIOAttr attr;
+     memset(&attr, 0, sizeof(attr));
+-    int ret = IMP_AI_GetPubAttr(AI_DEV_ID, &attr);
++    int ret = IMP_AI_GetPubAttr(c->audio_ai_device, &attr);
+     if (ret != 0) {
+         HAL_LOG_ERR("IMP_AI_GetPubAttr for HPF failed: %d", ret);
+         return ret;
+@@ -349,14 +372,14 @@ int hal_audio_disable_hpf(void *ctx)
+ 
+ int hal_audio_enable_agc(void *ctx, const rss_agc_config_t *cfg)
+ {
+-    (void)ctx;
++    rss_hal_ctx_t *c = (rss_hal_ctx_t *)ctx;
+ 
+     if (!cfg)
+         return RSS_ERR_INVAL;
+ 
+     IMPAudioIOAttr attr;
+     memset(&attr, 0, sizeof(attr));
+-    int ret = IMP_AI_GetPubAttr(AI_DEV_ID, &attr);
++    int ret = IMP_AI_GetPubAttr(c->audio_ai_device, &attr);
+     if (ret != 0) {
+         HAL_LOG_ERR("IMP_AI_GetPubAttr for AGC failed: %d", ret);
+         return ret;
+@@ -419,13 +442,16 @@ int hal_audio_read_frame(void *ctx, int dev, int chn, rss_audio_frame_t *frame,
+     }
+ #endif
+ 
+-    int ret = IMP_AI_PollingFrame(dev, chn, block ? AUDIO_POLL_TIMEOUT_MS : 0);
++    (void)dev;
++    int ret = IMP_AI_PollingFrame(c->audio_ai_device, chn,
++                                  block ? AUDIO_POLL_TIMEOUT_MS : 0);
+     if (ret != 0)
+         return (ret == -2) ? RSS_ERR_TIMEOUT : ret;
+ 
+     IMPAudioFrame ai_frame;
+     memset(&ai_frame, 0, sizeof(ai_frame));
+-    ret = IMP_AI_GetFrame(dev, chn, &ai_frame, block ? BLOCK : NOBLOCK);
++    ret = IMP_AI_GetFrame(c->audio_ai_device, chn, &ai_frame,
++                          block ? BLOCK : NOBLOCK);
+     if (ret != 0)
+         return ret;
+ 
+@@ -449,8 +475,6 @@ int hal_audio_read_frame(void *ctx, int dev, int chn, rss_audio_frame_t *frame,
+ int hal_audio_release_frame(void *ctx, int dev, int chn, rss_audio_frame_t *frame)
+ {
+     rss_hal_ctx_t *c = (rss_hal_ctx_t *)ctx;
+-    (void)c;
+-
+     if (!frame || !frame->_priv)
+         return RSS_OK;
+ 
+@@ -464,7 +488,8 @@ int hal_audio_release_frame(void *ctx, int dev, int chn, rss_audio_frame_t *fram
+     }
+ #endif
+ 
+-    IMP_AI_ReleaseFrame(dev, chn, frame->_priv);
++    (void)dev;
++    IMP_AI_ReleaseFrame(c->audio_ai_device, chn, frame->_priv);
+     frame->_priv = NULL;
+     return RSS_OK;
+ }
+@@ -748,7 +773,13 @@ int hal_ao_set_gain(void *ctx, int gain)
+ int hal_audio_set_aec_profile_path(void *ctx, const char *dir)
+ {
+     (void)ctx;
+-#if defined(PLATFORM_T23) || defined(PLATFORM_T31) || defined(PLATFORM_T32) ||                     \
++#if defined(RAPTOR_HAL_DLINK_OS02G10_IMP_1_1_4)
++    /* D-Link's matched IMP 1.1.4 audio ABI predates this optional WebRTC
++     * profile setter.  Keep the vtable entry, but do not create an unresolved
++     * dependency on a symbol that is absent from the device closure. */
++    (void)dir;
++    return RSS_ERR_NOTSUP;
++#elif defined(PLATFORM_T23) || defined(PLATFORM_T31) || defined(PLATFORM_T32) ||                  \
+     defined(PLATFORM_T33) || defined(PLATFORM_T40) || defined(PLATFORM_T41)
+     return IMP_AI_Set_WebrtcProfileIni_Path((char *)dir);
+ #else
+@@ -764,8 +795,8 @@ int hal_audio_enable_aec(void *ctx, int ai_dev, int ai_chn, int ao_dev, int ao_c
+     if (c->audio_input_type == RSS_AUDIO_INPUT_DMIC)
+         return IMP_DMIC_EnableAec(DMIC_DEV_ID, DMIC_CHN_ID, ao_dev, ao_chn);
+ #endif
+-    (void)c;
+-    return IMP_AI_EnableAec(ai_dev, ai_chn, ao_dev, ao_chn);
++    (void)ai_dev;
++    return IMP_AI_EnableAec(c->audio_ai_device, ai_chn, ao_dev, ao_chn);
+ }
+ 
+ int hal_audio_disable_aec(void *ctx)
+@@ -775,8 +806,7 @@ int hal_audio_disable_aec(void *ctx)
+     if (c->audio_input_type == RSS_AUDIO_INPUT_DMIC)
+         return IMP_DMIC_DisableAec(DMIC_DEV_ID, DMIC_CHN_ID);
+ #endif
+-    (void)c;
+-    return IMP_AI_DisableAec(AI_DEV_ID, AI_CHN_ID);
++    return IMP_AI_DisableAec(c->audio_ai_device, AI_CHN_ID);
+ }
+ 
+ int hal_audio_get_volume(void *ctx, int dev, int chn, int *vol)
+@@ -788,8 +818,8 @@ int hal_audio_get_volume(void *ctx, int dev, int chn, int *vol)
+     if (c->audio_input_type == RSS_AUDIO_INPUT_DMIC)
+         return IMP_DMIC_GetVol(DMIC_DEV_ID, DMIC_CHN_ID, vol);
+ #endif
+-    (void)c;
+-    return IMP_AI_GetVol(dev, chn, vol);
++    (void)dev;
++    return IMP_AI_GetVol(c->audio_ai_device, chn, vol);
+ }
+ 
+ int hal_audio_get_gain(void *ctx, int dev, int chn, int *gain)
+@@ -801,22 +831,25 @@ int hal_audio_get_gain(void *ctx, int dev, int chn, int *gain)
+     if (c->audio_input_type == RSS_AUDIO_INPUT_DMIC)
+         return IMP_DMIC_GetGain(DMIC_DEV_ID, DMIC_CHN_ID, gain);
+ #endif
+-    (void)c;
+-    return IMP_AI_GetGain(dev, chn, gain);
++    (void)dev;
++    return IMP_AI_GetGain(c->audio_ai_device, chn, gain);
+ }
+ 
+ int hal_audio_set_mute(void *ctx, int dev, int chn, int mute)
+ {
+-    (void)ctx;
+-    return IMP_AI_SetVolMute(dev, chn, mute);
++    rss_hal_ctx_t *c = (rss_hal_ctx_t *)ctx;
++    (void)dev;
++    return IMP_AI_SetVolMute(c->audio_ai_device, chn, mute);
+ }
+ 
+ int hal_audio_set_alc_gain(void *ctx, int dev, int chn, int gain)
+ {
+-    (void)ctx;
++    rss_hal_ctx_t *c = (rss_hal_ctx_t *)ctx;
+ #if defined(PLATFORM_T21) || defined(PLATFORM_T31)
+-    return IMP_AI_SetAlcGain(dev, chn, gain);
++    (void)dev;
++    return IMP_AI_SetAlcGain(c->audio_ai_device, chn, gain);
+ #else
++    (void)c;
+     (void)dev;
+     (void)chn;
+     (void)gain;
+@@ -826,12 +859,14 @@ int hal_audio_set_alc_gain(void *ctx, int dev, int chn, int gain)
+ 
+ int hal_audio_get_alc_gain(void *ctx, int dev, int chn, int *gain)
+ {
+-    (void)ctx;
++    rss_hal_ctx_t *c = (rss_hal_ctx_t *)ctx;
+     if (!gain)
+         return RSS_ERR_INVAL;
+ #if defined(PLATFORM_T21) || defined(PLATFORM_T31)
+-    return IMP_AI_GetAlcGain(dev, chn, gain);
++    (void)dev;
++    return IMP_AI_GetAlcGain(c->audio_ai_device, chn, gain);
+ #else
++    (void)c;
+     (void)dev;
+     (void)chn;
+     return RSS_ERR_NOTSUP;
+@@ -1001,7 +1036,7 @@ int hal_ao_disable_agc(void *ctx)
+ int hal_audio_set_agc_mode(void *ctx, int mode)
+ {
+     (void)ctx;
+-#if defined(PLATFORM_T31)
++#if defined(PLATFORM_T31) && !defined(RAPTOR_HAL_DLINK_OS02G10_IMP_1_1_4)
+     return IMP_AI_SetAgcMode(mode);
+ #else
+     (void)mode;
+@@ -1035,8 +1070,9 @@ int hal_audio_set_hpf_co_freq(void *ctx, int freq)
+  */
+ int hal_audio_enable_aec_ref_frame(void *ctx, int ai_dev, int ai_chn, int ao_dev, int ao_chn)
+ {
+-    (void)ctx;
+-    return IMP_AI_EnableAecRefFrame(ai_dev, ai_chn, ao_dev, ao_chn);
++    rss_hal_ctx_t *c = (rss_hal_ctx_t *)ctx;
++    (void)ai_dev;
++    return IMP_AI_EnableAecRefFrame(c->audio_ai_device, ai_chn, ao_dev, ao_chn);
+ }
+ 
+ /*
+@@ -1047,8 +1083,9 @@ int hal_audio_enable_aec_ref_frame(void *ctx, int ai_dev, int ai_chn, int ao_dev
+  */
+ int hal_audio_disable_aec_ref_frame(void *ctx, int ai_dev, int ai_chn)
+ {
+-    (void)ctx;
+-    return IMP_AI_DisableAecRefFrame(ai_dev, ai_chn, AO_DEV_ID, AO_CHN_ID);
++    rss_hal_ctx_t *c = (rss_hal_ctx_t *)ctx;
++    (void)ai_dev;
++    return IMP_AI_DisableAecRefFrame(c->audio_ai_device, ai_chn, AO_DEV_ID, AO_CHN_ID);
+ }
+ 
+ /*
+@@ -1059,10 +1096,11 @@ int hal_audio_disable_aec_ref_frame(void *ctx, int ai_dev, int ai_chn)
+  */
+ int hal_audio_get_chn_param(void *ctx, int dev, int chn, void *param)
+ {
+-    (void)ctx;
++    rss_hal_ctx_t *c = (rss_hal_ctx_t *)ctx;
+     if (!param)
+         return RSS_ERR_INVAL;
+-    return IMP_AI_GetChnParam(dev, chn, (IMPAudioIChnParam *)param);
++    (void)dev;
++    return IMP_AI_GetChnParam(c->audio_ai_device, chn, (IMPAudioIChnParam *)param);
+ }
+ 
+ /*
+@@ -1073,11 +1111,12 @@ int hal_audio_get_chn_param(void *ctx, int dev, int chn, void *param)
+  */
+ int hal_audio_get_frame_and_ref(void *ctx, int dev, int chn, void *frame, void *ref, int block)
+ {
+-    (void)ctx;
++    rss_hal_ctx_t *c = (rss_hal_ctx_t *)ctx;
+     if (!frame || !ref)
+         return RSS_ERR_INVAL;
+-    return IMP_AI_GetFrameAndRef(dev, chn, (IMPAudioFrame *)frame, (IMPAudioFrame *)ref,
+-                                 block ? BLOCK : NOBLOCK);
++    (void)dev;
++    return IMP_AI_GetFrameAndRef(c->audio_ai_device, chn, (IMPAudioFrame *)frame,
++                                 (IMPAudioFrame *)ref, block ? BLOCK : NOBLOCK);
+ }
+ 
+ /* ================================================================
+diff --git a/src/hal_common.c b/src/hal_common.c
+index 691789c2ef5e5475f59b0b74e80066ca7b6430c4..026e3e270acb1761ea0fd395e1b54c7d2fb15bbd 100644
+--- a/src/hal_common.c
++++ b/src/hal_common.c
+@@ -152,6 +152,11 @@ extern int hal_enc_get_jpeg_qp(void *ctx, int chn, int *qp);
+ 
+ /* Framesource (hal_framesource.c) */
+ extern int hal_fs_create_channel(void *ctx, int chn, const rss_fs_config_t *cfg);
++#if defined(PLATFORM_T31)
++extern int hal_fs_get_fps(void *ctx, int chn, uint32_t *fps_num, uint32_t *fps_den);
++extern int hal_fs_get_nr_vbs(void *ctx, int chn, uint32_t *nr_vbs);
++extern int hal_fs_set_fps(void *ctx, int chn, uint32_t fps_num, uint32_t fps_den);
++#endif
+ extern int hal_fs_set_channel_attr(void *ctx, int chn, const rss_fs_config_t *cfg);
+ extern int hal_fs_destroy_channel(void *ctx, int chn);
+ extern int hal_fs_enable_channel(void *ctx, int chn);
+@@ -664,6 +669,11 @@ static const rss_hal_ops_t g_ops = {
+     /* Framesource */
+     .fs_create_channel = hal_fs_create_channel,
+     .fs_set_channel_attr = hal_fs_set_channel_attr,
++#if defined(PLATFORM_T31)
++    .fs_get_fps = hal_fs_get_fps,
++    .fs_get_nr_vbs = hal_fs_get_nr_vbs,
++    .fs_set_fps = hal_fs_set_fps,
++#endif
+     .fs_destroy_channel = hal_fs_destroy_channel,
+     .fs_enable_channel = hal_fs_enable_channel,
+     .fs_disable_channel = hal_fs_disable_channel,
+@@ -1228,6 +1238,12 @@ static int hal_init(void *ctx, const rss_multi_sensor_config_t *multi_cfg)
+     /* Step 2: open ISP -- same signature on all SoCs */
+     HAL_CHECK(IMP_ISP_Open(), err_out);
+ 
++#if defined(RAPTOR_HAL_DLINK_OS02G10_IMP_1_1_4)
++    /* The DCS-6100LHV2 A1 color baseline requires its matched OS02G10 IQ
++     * before the sensor is added. The file stays outside public artifacts. */
++    HAL_CHECK(IMP_ISP_SetDefaultBinPath("/etc/sensor/os02g10-t31.bin"), err_isp_close);
++#endif
++
+     /* Step 3: add and enable sensors */
+ #if defined(HAL_MULTI_SENSOR)
+     /* T32/T40/T41: IMPVI_NUM per sensor */
+@@ -1276,6 +1292,7 @@ static int hal_init(void *ctx, const rss_multi_sensor_config_t *multi_cfg)
+ 
+     /* Step 5: OSD pool size — caller should set via osd_set_pool_size()
+      * before calling init. Fall back to 512KB if not set. */
++#if !defined(RAPTOR_HAL_DLINK_OS02G10_IMP_1_1_4)
+     if (c->osd_pool_size == 0)
+         c->osd_pool_size = 512 * 1024;
+     IMP_OSD_SetPoolSize((int)c->osd_pool_size);
+@@ -1283,6 +1300,17 @@ static int hal_init(void *ctx, const rss_multi_sensor_config_t *multi_cfg)
+     defined(PLATFORM_T40) || defined(PLATFORM_T41)
+     IMP_ISP_Tuning_SetOsdPoolSize((int)c->osd_pool_size);
+ #endif
++#else
++    /* Preserve the proven minimal D-Link path when OSD is disabled, but honor
++     * the pool RVD explicitly sized before init when burn-in OSD is requested.
++     * IMP_ISP_Tuning_SetOsdPoolSize is not part of this legacy closure. */
++    if (c->osd_pool_size > 0) {
++        HAL_CHECK(IMP_OSD_SetPoolSize((int)c->osd_pool_size), err_disable_sensor);
++        HAL_LOG_INFO("D-Link OSD pool: %u KB", c->osd_pool_size / 1024);
++    } else {
++        HAL_LOG_INFO("D-Link minimal pipeline: skipping unused IMP OSD pool");
++    }
++#endif
+ 
+     /* Step 6: init system (must be before EnableTuning — prudynt order) */
+     HAL_CHECK(IMP_System_Init(), err_disable_sensor);
+diff --git a/src/hal_encoder.c b/src/hal_encoder.c
+index b334320ef295359c99590337c214d0274b1455a6..9e9e4d510eae2202a23588a8af61628adab7a203 100644
+--- a/src/hal_encoder.c
++++ b/src/hal_encoder.c
+@@ -1425,9 +1425,8 @@ int hal_enc_get_channel_attr(void *ctx, int chn, rss_video_config_t *cfg)
+         cfg->profile = 0;
+         break;
+     default:
+-        cfg->codec = RSS_CODEC_H264;
+-        cfg->profile = 2;
+-        break;
++        /* Unknown SDK state is not an observed H.264 High profile. */
++        return RSS_ERR_NOTSUP;
+     }
+ 
+     /* Frame rate */
+@@ -1436,11 +1435,25 @@ int hal_enc_get_channel_attr(void *ctx, int chn, rss_video_config_t *cfg)
+ 
+     /* GOP */
+     cfg->gop_length = chnAttr.gopAttr.uGopLength;
++    switch (chnAttr.gopAttr.uGopCtrlMode) {
++    case IMP_ENC_GOP_CTRL_MODE_DEFAULT:
++        cfg->gop_mode = RSS_GOP_DEFAULT;
++        break;
++    case IMP_ENC_GOP_CTRL_MODE_PYRAMIDAL:
++        cfg->gop_mode = RSS_GOP_PYRAMIDAL;
++        break;
++    case IMP_ENC_GOP_CTRL_MODE_SMARTP:
++        cfg->gop_mode = RSS_GOP_SMARTP;
++        break;
++    default:
++        return RSS_ERR_NOTSUP;
++    }
+ 
+     /* RC mode and bitrate */
+     switch (chnAttr.rcAttr.attrRcMode.rcMode) {
+     case IMP_ENC_RC_MODE_FIXQP:
+         cfg->rc_mode = RSS_RC_FIXQP;
++        cfg->init_qp = chnAttr.rcAttr.attrRcMode.attrFixQp.iInitialQP;
+         break;
+     case IMP_ENC_RC_MODE_CBR:
+         cfg->rc_mode = RSS_RC_CBR;
+@@ -1470,8 +1483,8 @@ int hal_enc_get_channel_attr(void *ctx, int chn, rss_video_config_t *cfg)
+         cfg->max_qp = chnAttr.rcAttr.attrRcMode.attrCappedQuality.iMaxQP;
+         break;
+     default:
+-        cfg->rc_mode = RSS_RC_CBR;
+-        break;
++        /* Do not publish an invented CBR mode as verified readback. */
++        return RSS_ERR_NOTSUP;
+     }
+ #else
+     /* Old SDK (T20/T21/T23/T30) and T32 (hybrid): per-codec struct layout */
+@@ -1970,7 +1983,7 @@ int hal_enc_get_chn_ave_bitrate(void *ctx, int chn, void *stream, int frames, do
+ int hal_enc_set_chn_entropy_mode(void *ctx, int chn, int mode)
+ {
+     (void)ctx;
+-#if defined(PLATFORM_T31)
++#if defined(PLATFORM_T31) && !defined(RAPTOR_HAL_DLINK_OS02G10_IMP_1_1_4)
+     return IMP_Encoder_SetChnEntropyMode(chn, (IMPEncoderEntropyMode)mode);
+ #else
+     (void)chn;
+@@ -2219,9 +2232,11 @@ int hal_enc_set_gop_mode(void *ctx, int chn, rss_gop_mode_t mode)
+     case RSS_GOP_PYRAMIDAL:
+         gopAttr.uGopCtrlMode = IMP_ENC_GOP_CTRL_MODE_PYRAMIDAL;
+         break;
+-    default:
++    case RSS_GOP_DEFAULT:
+         gopAttr.uGopCtrlMode = IMP_ENC_GOP_CTRL_MODE_DEFAULT;
+         break;
++    default:
++        return RSS_ERR_INVAL;
+     }
+ 
+     ret = IMP_Encoder_SetChnGopAttr(chn, &gopAttr);
+@@ -2258,9 +2273,11 @@ int hal_enc_get_gop_mode(void *ctx, int chn, rss_gop_mode_t *mode)
+     case IMP_ENC_GOP_CTRL_MODE_PYRAMIDAL:
+         *mode = RSS_GOP_PYRAMIDAL;
+         break;
+-    default:
++    case IMP_ENC_GOP_CTRL_MODE_DEFAULT:
+         *mode = RSS_GOP_DEFAULT;
+         break;
++    default:
++        return RSS_ERR_NOTSUP;
+     }
+     return RSS_OK;
+ #else
+diff --git a/src/hal_framesource.c b/src/hal_framesource.c
+index 4abf51f4568eee28e25d875af643a866bd252e13..9e38705227a9632df4df0b72fe1be38ab102a314 100644
+--- a/src/hal_framesource.c
++++ b/src/hal_framesource.c
+@@ -12,6 +12,7 @@
+ 
+ #include "hal_internal.h"
+ #include <errno.h>
++#include <limits.h>
+ 
+ /* ================================================================
+  * Pixel format translation
+@@ -217,7 +218,7 @@ int hal_fs_set_rotation(void *ctx, int chn, int degrees)
+     if (degrees == 0)
+         return 0;
+ 
+-#if defined(PLATFORM_T31)
++#if defined(PLATFORM_T31) && !defined(RAPTOR_HAL_DLINK_OS02G10_IMP_1_1_4)
+     {
+         uint8_t rot;
+         IMPFSChnAttr attr;
+@@ -685,3 +686,118 @@ int hal_fs_disable_chn_undistort(void *ctx, int chn)
+     (void)chn;
+     return -ENOTSUP;
+ }
++
++#if defined(PLATFORM_T31)
++/* T31 SDK 1.1.4 IMPFSChnAttr declares both rate fields as signed int.
++ * Preserve the exact ratio; publish neither output until the read is valid. */
++int hal_fs_get_fps(void *ctx, int chn, uint32_t *fps_num, uint32_t *fps_den)
++{
++    (void)ctx;
++    if (!fps_num || !fps_den || fps_num == fps_den)
++        return -EINVAL;
++
++    IMPFSChnAttr attr;
++    memset(&attr, 0, sizeof(attr));
++    int ret = IMP_FrameSource_GetChnAttr(chn, &attr);
++    if (ret != 0) {
++        HAL_LOG_ERR("GetChnAttr(%d) for FPS failed: %d", chn, ret);
++        return ret;
++    }
++    if (attr.outFrmRateNum <= 0 || attr.outFrmRateDen <= 0)
++        return -ERANGE;
++
++    *fps_num = (uint32_t)attr.outFrmRateNum;
++    *fps_den = (uint32_t)attr.outFrmRateDen;
++    return 0;
++}
++
++/* nrVBs belongs to the created FrameSource channel. Read the SDK-owned
++ * attribute instead of repeating the startup configuration. */
++int hal_fs_get_nr_vbs(void *ctx, int chn, uint32_t *nr_vbs)
++{
++    (void)ctx;
++    if (!nr_vbs)
++        return -EINVAL;
++
++    IMPFSChnAttr attr;
++    memset(&attr, 0, sizeof(attr));
++    int ret = IMP_FrameSource_GetChnAttr(chn, &attr);
++    if (ret != 0) {
++        HAL_LOG_ERR("GetChnAttr(%d) for nrVBs failed: %d", chn, ret);
++        return ret;
++    }
++    if (attr.nrVBs <= 0)
++        return -ERANGE;
++
++    *nr_vbs = (uint32_t)attr.nrVBs;
++    return 0;
++}
++
++/* Compare declared fields, including stored coordinates of disabled crops.
++ * Struct padding is not SDK state and must not participate in this check. */
++static bool hal_fs_same_non_rate_attr(const IMPFSChnAttr *before, const IMPFSChnAttr *after)
++{
++    return before->picWidth == after->picWidth &&
++           before->picHeight == after->picHeight &&
++           before->pixFmt == after->pixFmt &&
++           before->crop.enable == after->crop.enable &&
++           before->crop.left == after->crop.left &&
++           before->crop.top == after->crop.top &&
++           before->crop.width == after->crop.width &&
++           before->crop.height == after->crop.height &&
++           before->scaler.enable == after->scaler.enable &&
++           before->scaler.outwidth == after->scaler.outwidth &&
++           before->scaler.outheight == after->scaler.outheight &&
++           before->nrVBs == after->nrVBs &&
++           before->type == after->type &&
++           before->fcrop.enable == after->fcrop.enable &&
++           before->fcrop.left == after->fcrop.left &&
++           before->fcrop.top == after->fcrop.top &&
++           before->fcrop.width == after->fcrop.width &&
++           before->fcrop.height == after->fcrop.height;
++}
++
++/* Caller has stopped all shared-FS consumers and confirmed FS disable, and
++ * excludes concurrent attribute writers. SDK readback proves configuration,
++ * not physical cadence or encoder GOP application. No error implies rollback. */
++int hal_fs_set_fps(void *ctx, int chn, uint32_t fps_num, uint32_t fps_den)
++{
++    (void)ctx;
++    if (fps_num == 0 || fps_den == 0)
++        return -EINVAL;
++    if (fps_num > INT_MAX || fps_den > INT_MAX)
++        return -ERANGE;
++
++    IMPFSChnAttr before = {0};
++    int ret = IMP_FrameSource_GetChnAttr(chn, &before);
++    if (ret != 0) {
++        HAL_LOG_ERR("GetChnAttr(%d) before FPS set failed: %d", chn, ret);
++        return ret;
++    }
++    if (before.outFrmRateNum <= 0 || before.outFrmRateDen <= 0)
++        return -ERANGE;
++
++    IMPFSChnAttr desired = before;
++    desired.outFrmRateNum = (int)fps_num;
++    desired.outFrmRateDen = (int)fps_den;
++    ret = IMP_FrameSource_SetChnAttr(chn, &desired);
++    if (ret != 0) {
++        HAL_LOG_ERR("SetChnAttr(%d) for FPS failed: %d", chn, ret);
++        return ret;
++    }
++
++    IMPFSChnAttr after = {0};
++    ret = IMP_FrameSource_GetChnAttr(chn, &after);
++    if (ret != 0) {
++        HAL_LOG_ERR("GetChnAttr(%d) after FPS set failed: %d", chn, ret);
++        return ret;
++    }
++    if (after.outFrmRateNum != desired.outFrmRateNum ||
++        after.outFrmRateDen != desired.outFrmRateDen ||
++        !hal_fs_same_non_rate_attr(&before, &after)) {
++        HAL_LOG_ERR("GetChnAttr(%d) after FPS set mismatched", chn);
++        return -EIO;
++    }
++    return 0;
++}
++#endif
+diff --git a/src/hal_internal.h b/src/hal_internal.h
+index 877dec9e758e84febc60d589cb3190334368bb02..5cd1fad90f542d2d30300653b3de620e85f7a09e 100644
+--- a/src/hal_internal.h
++++ b/src/hal_internal.h
+@@ -322,7 +322,8 @@ struct rss_hal_ctx {
+     uint32_t chn_fps_den[RSS_MAX_ENC_CHANNELS];
+     int64_t chn_jpeg_last_us[RSS_MAX_ENC_CHANNELS];
+ 
+-    /* Audio input type (AMIC or DMIC) */
++    /* Selected audio input device and type (AMIC or DMIC) */
++    int audio_ai_device;
+     rss_audio_input_t audio_input_type;
+ 
+     /* Audio preallocated structs (reused across get/release calls) */
+@@ -337,6 +338,10 @@ struct rss_hal_ctx {
+     void *platform;
+ 
+     bool initialized;
++    /* AMIC resources are owned only after the corresponding SDK success. */
++    bool audio_ai_device_enabled;
++    bool audio_ai_channel_enabled;
++    bool audio_ai_init_failed;
+ };
+ 
+ /* ═══════════════════════════════════════════════════════════════════════
+diff --git a/src/hal_isp.c b/src/hal_isp.c
+index 08e9ff58769ee4b423e10769564252072445eb38..a6312713729100d4778d33fc6033b58eadb25777 100644
+--- a/src/hal_isp.c
++++ b/src/hal_isp.c
+@@ -108,11 +108,40 @@ int hal_isp_set_hue(void *ctx, int val)
+  * states in the context and re-apply the combined flip on each call.
+  * ================================================================ */
+ 
++#if defined(PLATFORM_T23) || defined(PLATFORM_T31)
++static int hal_isp_set_flip_axis(void *ctx, int enable, bool horizontal)
++{
++    if (!ctx || (enable != 0 && enable != 1))
++        return RSS_ERR_INVAL;
++    IMPISPHVFLIP observed;
++    int ret = IMP_ISP_Tuning_GetHVFlip(&observed);
++    if (ret != RSS_OK)
++        return ret;
++    if ((int)observed < 0 || (int)observed > 3)
++        return RSS_ERR_NOTSUP;
++    int bit = horizontal ? 1 : 2;
++    int desired = ((int)observed & ~bit) | (enable ? bit : 0);
++    if (desired != (int)observed) {
++        ret = IMP_ISP_Tuning_SetHVFLIP((IMPISPHVFLIP)desired);
++        if (ret != RSS_OK)
++            return ret;
++    }
++    rss_hal_ctx_t *state = ctx;
++    state->hflip_state[0] = (desired & 1) != 0;
++    state->vflip_state[0] = (desired & 2) != 0;
++    return RSS_OK;
++}
++#endif
++
+ int hal_isp_set_hflip(void *ctx, int enable)
+ {
+     rss_hal_ctx_t *c = (rss_hal_ctx_t *)ctx;
+ 
++#if !defined(PLATFORM_T23) && !defined(PLATFORM_T31)
+     c->hflip_state[0] = enable ? 1 : 0;
++#else
++    (void)c;
++#endif
+ 
+ #if defined(PLATFORM_T20) || defined(PLATFORM_T21) || defined(PLATFORM_T30)
+     /* Separate H/V flip calls */
+@@ -120,10 +149,7 @@ int hal_isp_set_hflip(void *ctx, int enable)
+     return IMP_ISP_Tuning_SetISPHflip(h);
+ 
+ #elif defined(PLATFORM_T23) || defined(PLATFORM_T31)
+-    /* Combined HVFLIP enum: 0=normal, 1=H, 2=V, 3=HV */
+-    int mode = (c->hflip_state[0] ? 1 : 0) | (c->vflip_state[0] ? 2 : 0);
+-    IMPISPHVFLIP hvflip = (IMPISPHVFLIP)mode;
+-    return IMP_ISP_Tuning_SetHVFLIP(hvflip);
++    return hal_isp_set_flip_axis(ctx, enable, true);
+ 
+ #elif defined(PLATFORM_T40)
+     int mode = (c->hflip_state[0] ? 1 : 0) | (c->vflip_state[0] ? 2 : 0);
+@@ -144,16 +170,18 @@ int hal_isp_set_vflip(void *ctx, int enable)
+ {
+     rss_hal_ctx_t *c = (rss_hal_ctx_t *)ctx;
+ 
++#if !defined(PLATFORM_T23) && !defined(PLATFORM_T31)
+     c->vflip_state[0] = enable ? 1 : 0;
++#else
++    (void)c;
++#endif
+ 
+ #if defined(PLATFORM_T20) || defined(PLATFORM_T21) || defined(PLATFORM_T30)
+     IMPISPTuningOpsMode v = enable ? IMPISP_TUNING_OPS_MODE_ENABLE : IMPISP_TUNING_OPS_MODE_DISABLE;
+     return IMP_ISP_Tuning_SetISPVflip(v);
+ 
+ #elif defined(PLATFORM_T23) || defined(PLATFORM_T31)
+-    int mode = (c->hflip_state[0] ? 1 : 0) | (c->vflip_state[0] ? 2 : 0);
+-    IMPISPHVFLIP hvflip = (IMPISPHVFLIP)mode;
+-    return IMP_ISP_Tuning_SetHVFLIP(hvflip);
++    return hal_isp_set_flip_axis(ctx, enable, false);
+ 
+ #elif defined(PLATFORM_T40)
+     int mode = (c->hflip_state[0] ? 1 : 0) | (c->vflip_state[0] ? 2 : 0);
+@@ -814,6 +842,8 @@ int hal_isp_get_hvflip(void *ctx, int *hflip, int *vflip)
+     int ret = IMP_ISP_Tuning_GetHVFlip(&hvflip);
+     if (ret != 0)
+         return ret;
++    if ((int)hvflip < 0 || (int)hvflip > 3)
++        return RSS_ERR_NOTSUP;
+     *hflip = ((int)hvflip & 1) ? 1 : 0;
+     *vflip = ((int)hvflip & 2) ? 1 : 0;
+     return RSS_OK;
+@@ -917,12 +947,16 @@ int hal_isp_get_antiflicker(void *ctx, rss_antiflicker_t *mode)
+     int ret = IMP_ISP_Tuning_GetAntiFlickerAttr(IMPVI_MAIN, &attr);
+     if (ret != 0)
+         return ret;
+-    if (attr.freq == 50)
++    if (attr.mode == IMPISP_ANTIFLICKER_DISABLE_MODE)
++        *mode = RSS_ANTIFLICKER_OFF;
++    else if (attr.mode != IMPISP_ANTIFLICKER_NORMAL_MODE)
++        return RSS_ERR;
++    else if (attr.freq == 50)
+         *mode = RSS_ANTIFLICKER_50HZ;
+     else if (attr.freq == 60)
+         *mode = RSS_ANTIFLICKER_60HZ;
+     else
+-        *mode = RSS_ANTIFLICKER_OFF;
++        return RSS_ERR;
+     return RSS_OK;
+ #else
+     IMPISPAntiflickerAttr attr;
+@@ -936,9 +970,11 @@ int hal_isp_get_antiflicker(void *ctx, rss_antiflicker_t *mode)
+     case IMPISP_ANTIFLICKER_60HZ:
+         *mode = RSS_ANTIFLICKER_60HZ;
+         break;
+-    default:
++    case IMPISP_ANTIFLICKER_DISABLE:
+         *mode = RSS_ANTIFLICKER_OFF;
+         break;
++    default:
++        return RSS_ERR;
+     }
+     return RSS_OK;
+ #endif
+diff --git a/src/hal_ivs.c b/src/hal_ivs.c
+index dfcfd7acb4c2bbd58008cee71c3fb912e40c890b..07d9db741c76e2ef47b749037e8f936f3dcf343e 100644
+--- a/src/hal_ivs.c
++++ b/src/hal_ivs.c
+@@ -20,6 +20,55 @@
+ #undef IMP_IVS_MOVE_MAX_ROI_CNT
+ #include <imp/imp_ivs_base_move.h>
+ 
++#include <pthread.h>
++
++/*
++ * Ingenic algorithm interfaces retain the parameter pointer for their whole
++ * lifetime.  Keep translated SDK parameters alive until the matching destroy
++ * call instead of passing a function-local structure.
++ */
++#define IVS_OWNED_PARAM_SLOTS 8
++
++typedef struct {
++    void *handle;
++    void *param;
++} ivs_owned_param_t;
++
++static ivs_owned_param_t ivs_owned_params[IVS_OWNED_PARAM_SLOTS];
++static pthread_mutex_t ivs_owned_params_lock = PTHREAD_MUTEX_INITIALIZER;
++
++static bool ivs_own_param(void *handle, void *param)
++{
++    bool stored = false;
++    pthread_mutex_lock(&ivs_owned_params_lock);
++    for (int i = 0; i < IVS_OWNED_PARAM_SLOTS; i++) {
++        if (!ivs_owned_params[i].handle) {
++            ivs_owned_params[i].handle = handle;
++            ivs_owned_params[i].param = param;
++            stored = true;
++            break;
++        }
++    }
++    pthread_mutex_unlock(&ivs_owned_params_lock);
++    return stored;
++}
++
++static void *ivs_take_param(void *handle)
++{
++    void *param = NULL;
++    pthread_mutex_lock(&ivs_owned_params_lock);
++    for (int i = 0; i < IVS_OWNED_PARAM_SLOTS; i++) {
++        if (ivs_owned_params[i].handle == handle) {
++            param = ivs_owned_params[i].param;
++            ivs_owned_params[i].handle = NULL;
++            ivs_owned_params[i].param = NULL;
++            break;
++        }
++    }
++    pthread_mutex_unlock(&ivs_owned_params_lock);
++    return param;
++}
++
+ /*
+  * PersonDet SDK types — from ivs_common.h / ivs_inf_personDet.h.
+  * Declared here rather than including vendor headers that may not
+@@ -183,8 +232,9 @@ int hal_ivs_release_result(void *ctx, int chn, void *result)
+ /* ================================================================
+  * PARAMETER GET / SET
+  *
+- * Get/set algorithm parameters on a running channel.
+- * The param pointer is algorithm-specific (opaque to HAL).
++ * Get/set standard move parameters on a running channel.
++ * The public HAL uses rss_ivs_move_param_t, so never pass that smaller,
++ * layout-independent wrapper directly to the vendor ABI.
+  * ================================================================ */
+ 
+ int hal_ivs_get_param(void *ctx, int chn, void *param)
+@@ -192,7 +242,32 @@ int hal_ivs_get_param(void *ctx, int chn, void *param)
+     (void)ctx;
+     if (!param)
+         return RSS_ERR_INVAL;
+-    return IMP_IVS_GetParam(chn, param);
++
++    IMP_IVS_MoveParam mp = {0};
++    int ret = IMP_IVS_GetParam(chn, &mp);
++    if (ret != 0)
++        return ret;
++
++    rss_ivs_move_param_t *rp = (rss_ivs_move_param_t *)param;
++    memset(rp, 0, sizeof(*rp));
++    rp->skip_frame_count = mp.skipFrameCnt;
++    rp->width = mp.frameInfo.width;
++    rp->height = mp.frameInfo.height;
++    rp->roi_count = mp.roiRectCnt;
++    if (rp->roi_count < 0)
++        rp->roi_count = 0;
++    if (rp->roi_count > RSS_IVS_MAX_ROI)
++        rp->roi_count = RSS_IVS_MAX_ROI;
++
++    for (int i = 0; i < RSS_IVS_MAX_ROI && i < IMP_IVS_MOVE_MAX_ROI_CNT; i++)
++        rp->sense[i] = mp.sense[i];
++    for (int i = 0; i < rp->roi_count; i++) {
++        rp->roi[i].p0_x = mp.roiRect[i].p0.x;
++        rp->roi[i].p0_y = mp.roiRect[i].p0.y;
++        rp->roi[i].p1_x = mp.roiRect[i].p1.x;
++        rp->roi[i].p1_y = mp.roiRect[i].p1.y;
++    }
++    return RSS_OK;
+ }
+ 
+ int hal_ivs_set_param(void *ctx, int chn, void *param)
+@@ -200,7 +275,27 @@ int hal_ivs_set_param(void *ctx, int chn, void *param)
+     (void)ctx;
+     if (!param)
+         return RSS_ERR_INVAL;
+-    return IMP_IVS_SetParam(chn, param);
++
++    const rss_ivs_move_param_t *rp = (const rss_ivs_move_param_t *)param;
++    IMP_IVS_MoveParam mp = {0};
++    mp.skipFrameCnt = rp->skip_frame_count;
++    mp.frameInfo.width = rp->width;
++    mp.frameInfo.height = rp->height;
++    mp.roiRectCnt = rp->roi_count;
++    if (mp.roiRectCnt < 0)
++        mp.roiRectCnt = 0;
++    if (mp.roiRectCnt > IMP_IVS_MOVE_MAX_ROI_CNT)
++        mp.roiRectCnt = IMP_IVS_MOVE_MAX_ROI_CNT;
++
++    for (int i = 0; i < RSS_IVS_MAX_ROI && i < IMP_IVS_MOVE_MAX_ROI_CNT; i++)
++        mp.sense[i] = rp->sense[i];
++    for (int i = 0; i < mp.roiRectCnt; i++) {
++        mp.roiRect[i].p0.x = rp->roi[i].p0_x;
++        mp.roiRect[i].p0.y = rp->roi[i].p0_y;
++        mp.roiRect[i].p1.x = rp->roi[i].p1_x;
++        mp.roiRect[i].p1.y = rp->roi[i].p1_y;
++    }
++    return IMP_IVS_SetParam(chn, &mp);
+ }
+ 
+ /* ================================================================
+@@ -240,26 +335,34 @@ void *hal_ivs_create_move_interface(void *ctx, void *param)
+ 
+     /* Translate RSS wrapper to SDK type */
+     const rss_ivs_move_param_t *rp = (const rss_ivs_move_param_t *)param;
+-    IMP_IVS_MoveParam mp;
+-    memset(&mp, 0, sizeof(mp));
++    IMP_IVS_MoveParam *mp = calloc(1, sizeof(*mp));
++    if (!mp)
++        return NULL;
+ 
+     for (int i = 0; i < IMP_IVS_MOVE_MAX_ROI_CNT && i < RSS_IVS_MAX_ROI; i++)
+-        mp.sense[i] = rp->sense[i];
+-    mp.skipFrameCnt = rp->skip_frame_count;
+-    mp.frameInfo.width = rp->width;
+-    mp.frameInfo.height = rp->height;
+-    mp.roiRectCnt = rp->roi_count;
++        mp->sense[i] = rp->sense[i];
++    mp->skipFrameCnt = rp->skip_frame_count;
++    mp->frameInfo.width = rp->width;
++    mp->frameInfo.height = rp->height;
++    mp->roiRectCnt = rp->roi_count;
+     for (int i = 0; i < rp->roi_count && i < IMP_IVS_MOVE_MAX_ROI_CNT; i++) {
+-        mp.roiRect[i].p0.x = rp->roi[i].p0_x;
+-        mp.roiRect[i].p0.y = rp->roi[i].p0_y;
+-        mp.roiRect[i].p1.x = rp->roi[i].p1_x;
+-        mp.roiRect[i].p1.y = rp->roi[i].p1_y;
++        mp->roiRect[i].p0.x = rp->roi[i].p0_x;
++        mp->roiRect[i].p0.y = rp->roi[i].p0_y;
++        mp->roiRect[i].p1.x = rp->roi[i].p1_x;
++        mp->roiRect[i].p1.y = rp->roi[i].p1_y;
+     }
+ 
+-    HAL_LOG_INFO("IVS move: %dx%d roi=%d sense[0]=%d skip=%d", mp.frameInfo.width,
+-                 mp.frameInfo.height, mp.roiRectCnt, mp.sense[0], mp.skipFrameCnt);
++    HAL_LOG_INFO("IVS move: %dx%d roi=%d sense[0]=%d skip=%d", mp->frameInfo.width,
++                 mp->frameInfo.height, mp->roiRectCnt, mp->sense[0], mp->skipFrameCnt);
+ 
+-    return (void *)IMP_IVS_CreateMoveInterface(&mp);
++    IMPIVSInterface *handle = IMP_IVS_CreateMoveInterface(mp);
++    if (!handle || !ivs_own_param(handle, mp)) {
++        if (handle)
++            IMP_IVS_DestroyMoveInterface(handle);
++        free(mp);
++        return NULL;
++    }
++    return (void *)handle;
+ }
+ 
+ int hal_ivs_destroy_move_interface(void *ctx, void *handle)
+@@ -267,7 +370,9 @@ int hal_ivs_destroy_move_interface(void *ctx, void *handle)
+     (void)ctx;
+     if (!handle)
+         return RSS_ERR_INVAL;
++    void *param = ivs_take_param(handle);
+     IMP_IVS_DestroyMoveInterface((IMPIVSInterface *)handle);
++    free(param);
+     return RSS_OK;
+ }
+ 
+@@ -286,14 +391,22 @@ void *hal_ivs_create_base_move_interface(void *ctx, void *param)
+         return NULL;
+ 
+     const rss_ivs_base_move_param_t *rp = (const rss_ivs_base_move_param_t *)param;
+-    IMP_IVS_BaseMoveParam bp;
+-    memset(&bp, 0, sizeof(bp));
+-    bp.skipFrameCnt = rp->skip_frame_count;
+-    bp.sense = rp->sense;
+-    bp.frameInfo.width = rp->width;
+-    bp.frameInfo.height = rp->height;
+-
+-    return (void *)IMP_IVS_CreateBaseMoveInterface(&bp);
++    IMP_IVS_BaseMoveParam *bp = calloc(1, sizeof(*bp));
++    if (!bp)
++        return NULL;
++    bp->skipFrameCnt = rp->skip_frame_count;
++    bp->sense = rp->sense;
++    bp->frameInfo.width = rp->width;
++    bp->frameInfo.height = rp->height;
++
++    IMPIVSInterface *handle = IMP_IVS_CreateBaseMoveInterface(bp);
++    if (!handle || !ivs_own_param(handle, bp)) {
++        if (handle)
++            IMP_IVS_DestroyBaseMoveInterface(handle);
++        free(bp);
++        return NULL;
++    }
++    return (void *)handle;
+ }
+ 
+ int hal_ivs_destroy_base_move_interface(void *ctx, void *handle)
+@@ -301,7 +414,9 @@ int hal_ivs_destroy_base_move_interface(void *ctx, void *handle)
+     (void)ctx;
+     if (!handle)
+         return RSS_ERR_INVAL;
++    void *param = ivs_take_param(handle);
+     IMP_IVS_DestroyBaseMoveInterface((IMPIVSInterface *)handle);
++    free(param);
+     return RSS_OK;
+ }
+ 
+@@ -322,24 +437,32 @@ void *hal_ivs_create_persondet_interface(void *ctx, void *param)
+         return NULL;
+ 
+     const rss_ivs_persondet_param_t *rp = (const rss_ivs_persondet_param_t *)param;
+-    persondet_param_input_t pp;
+-    memset(&pp, 0, sizeof(pp));
+-
+-    pp.frameInfo.width = rp->width;
+-    pp.frameInfo.height = rp->height;
+-    pp.skip_num = rp->skip_frame_count;
+-    pp.sense = rp->sensitivity > 5 ? 5 : (rp->sensitivity < 0 ? 0 : rp->sensitivity);
+-    pp.detdist = rp->det_distance > 4 ? 4 : (rp->det_distance < 0 ? 0 : rp->det_distance);
+-    pp.enable_move = rp->motion_trigger;
+-    pp.enable_perm = false;
+-    pp.permcnt = 0;
+-    pp.ptime = false;
++    persondet_param_input_t *pp = calloc(1, sizeof(*pp));
++    if (!pp)
++        return NULL;
+ 
+-    HAL_LOG_INFO("IVS persondet param: %dx%d, sense=%d, detdist=%d, skip=%d, move_trig=%d",
+-                 pp.frameInfo.width, pp.frameInfo.height, pp.sense, pp.detdist, pp.skip_num,
+-                 pp.enable_move);
++    pp->frameInfo.width = rp->width;
++    pp->frameInfo.height = rp->height;
++    pp->skip_num = rp->skip_frame_count;
++    pp->sense = rp->sensitivity > 5 ? 5 : (rp->sensitivity < 0 ? 0 : rp->sensitivity);
++    pp->detdist = rp->det_distance > 4 ? 4 : (rp->det_distance < 0 ? 0 : rp->det_distance);
++    pp->enable_move = rp->motion_trigger;
++    pp->enable_perm = false;
++    pp->permcnt = 0;
++    pp->ptime = false;
+ 
+-    return (void *)PersonDetInterfaceInit(&pp);
++    HAL_LOG_INFO("IVS persondet param: %dx%d, sense=%d, detdist=%d, skip=%d, move_trig=%d",
++                 pp->frameInfo.width, pp->frameInfo.height, pp->sense, pp->detdist, pp->skip_num,
++                 pp->enable_move);
++
++    IMPIVSInterface *handle = PersonDetInterfaceInit(pp);
++    if (!handle || !ivs_own_param(handle, pp)) {
++        if (handle)
++            PersonDetInterfaceExit(handle);
++        free(pp);
++        return NULL;
++    }
++    return (void *)handle;
+ }
+ 
+ int hal_ivs_destroy_persondet_interface(void *ctx, void *handle)
+@@ -347,7 +470,9 @@ int hal_ivs_destroy_persondet_interface(void *ctx, void *handle)
+     (void)ctx;
+     if (!handle)
+         return RSS_ERR_INVAL;
++    void *param = ivs_take_param(handle);
+     PersonDetInterfaceExit((IMPIVSInterface *)handle);
++    free(param);
+     return RSS_OK;
+ }
+ #endif
+diff --git a/src/hal_osd.c b/src/hal_osd.c
+index 04f245d2c26fdd6f4e4c874097a4b1361139f3d7..a49fe3a3ef5ab8ccb16135fddc4ade86af695211 100644
+--- a/src/hal_osd.c
++++ b/src/hal_osd.c
+@@ -158,12 +158,20 @@ int hal_osd_create_region(void *ctx, int *handle, const rss_osd_region_t *attr)
+     if (!handle || !attr)
+         return -EINVAL;
+ 
+-    (void)attr;
+-
+-    /* SDK requires CreateRgn(NULL). SetRgnAttr must be called AFTER
+-     * RegisterRgn per vendor sample — caller must call osd_set_region_attr
+-     * after osd_register_region. */
+-    h = IMP_OSD_CreateRgn(NULL);
++    /* D-Link's T31 IMP 1.1.4 cover path requires the complete rectangle at
++     * creation time. Creating a full-frame cover with NULL and setting its
++     * attributes only after registration leaves part of the frame visible.
++     * Keep the existing deferred-attribute path for bitmap regions. */
++#if defined(PLATFORM_T31)
++    if (attr->type == RSS_OSD_COVER) {
++        IMPOSDRgnAttr rgn_attr;
++        hal_build_rgn_attr(&rgn_attr, attr);
++        h = IMP_OSD_CreateRgn(&rgn_attr);
++    } else
++#endif
++    {
++        h = IMP_OSD_CreateRgn(NULL);
++    }
+     if (h == INVHANDLE) {
+         HAL_LOG_ERR("IMP_OSD_CreateRgn failed");
+         return -EIO;
+@@ -196,10 +204,23 @@ int hal_osd_register_region(void *ctx, int handle, int grp)
+ {
+     (void)ctx;
+     int ret;
++    IMPOSDGrpRgnAttr *grp_attr_ptr = NULL;
+ 
+-    /* Register with NULL group attributes; caller sets them via
+-     * osd_show_region or osd_set_region_attr afterward */
+-    ret = IMP_OSD_RegisterRgn((IMPRgnHandle)handle, grp, NULL);
++#if defined(PLATFORM_T31)
++    /* Match the D-Link/Prudynt cover sequence exactly: a cover is visible
++     * in its initial zeroed group attributes when it is registered.  PIC
++     * regions retain the existing deferred show path. */
++    IMPOSDRgnAttr rgn_attr;
++    IMPOSDGrpRgnAttr grp_attr;
++    if (IMP_OSD_GetRgnAttr((IMPRgnHandle)handle, &rgn_attr) == 0 &&
++        rgn_attr.type == OSD_REG_COVER) {
++        memset(&grp_attr, 0, sizeof(grp_attr));
++        grp_attr.show = 1;
++        grp_attr_ptr = &grp_attr;
++    }
++#endif
++
++    ret = IMP_OSD_RegisterRgn((IMPRgnHandle)handle, grp, grp_attr_ptr);
+     if (ret != 0)
+         HAL_LOG_ERR("IMP_OSD_RegisterRgn(%d, %d) failed: %d", handle, grp, ret);
+ 
+@@ -238,6 +259,14 @@ int hal_osd_set_region_attr(void *ctx, int handle, const rss_osd_region_t *attr)
+     if (!attr)
+         return -EINVAL;
+ 
++#if defined(PLATFORM_T31)
++    /* The T31 cover rectangle was already supplied to CreateRgn.  Reapplying
++     * it after RegisterRgn corrupts the full-frame cover on IMP 1.1.4, while
++     * the known-good D-Link/Prudynt sequence does not call SetRgnAttr here. */
++    if (attr->type == RSS_OSD_COVER)
++        return 0;
++#endif
++
+     hal_build_rgn_attr(&rgn_attr, attr);
+ 
+     ret = IMP_OSD_SetRgnAttr((IMPRgnHandle)handle, &rgn_attr);
+@@ -292,6 +321,12 @@ int hal_osd_show_region(void *ctx, int handle, int grp, int show, int layer)
+     memset(&gattr, 0, sizeof(gattr));
+ 
+     gattr.show = show ? 1 : 0;
++#if defined(PLATFORM_T31)
++    /* RVD reserves layer 0 for the full-frame privacy cover.  Match the
++     * zero-initialized group attributes used by the known-good D-Link
++     * Prudynt cover path; bitmap regions retain their alpha and scale. */
++    if (layer != 0) {
++#endif
+     gattr.offPos.x = 0;
+     gattr.offPos.y = 0;
+     gattr.scalex = 1.0f;
+@@ -299,6 +334,9 @@ int hal_osd_show_region(void *ctx, int handle, int grp, int show, int layer)
+     gattr.gAlphaEn = 1;
+     gattr.fgAlhpa = 0xff;
+     gattr.bgAlhpa = 0;
++#if defined(PLATFORM_T31)
++    }
++#endif
+     gattr.layer = layer;
+ 
+     ret = IMP_OSD_SetGrpRgnAttr((IMPRgnHandle)handle, grp, &gattr);
+@@ -307,6 +345,30 @@ int hal_osd_show_region(void *ctx, int handle, int grp, int show, int layer)
+         return ret;
+     }
+ 
++#if defined(PLATFORM_T31)
++    {
++        IMPOSDRgnAttr read_rgn;
++        IMPOSDGrpRgnAttr read_grp;
++        int rgn_ret = IMP_OSD_GetRgnAttr((IMPRgnHandle)handle, &read_rgn);
++        int grp_ret = IMP_OSD_GetGrpRgnAttr((IMPRgnHandle)handle, grp, &read_grp);
++        if (rgn_ret == 0 && grp_ret == 0 && read_rgn.type == OSD_REG_COVER) {
++            HAL_LOG_INFO("T31 cover readback h=%d grp=%d show=%d rect=(%d,%d)-(%d,%d) "
++                         "off=(%d,%d) scale=%.3f/%.3f layer=%d alpha=%d/%u/%u "
++                         "color=0x%08x",
++                         handle, grp, read_grp.show, read_rgn.rect.p0.x,
++                         read_rgn.rect.p0.y, read_rgn.rect.p1.x,
++                         read_rgn.rect.p1.y, read_grp.offPos.x, read_grp.offPos.y,
++                         read_grp.scalex, read_grp.scaley, read_grp.layer,
++                         read_grp.gAlphaEn,
++                         (unsigned)read_grp.fgAlhpa, (unsigned)read_grp.bgAlhpa,
++                         read_rgn.data.coverData.color);
++        } else if (rgn_ret != 0 || grp_ret != 0) {
++            HAL_LOG_WARN("T31 cover readback h=%d grp=%d failed: rgn=%d grp=%d",
++                         handle, grp, rgn_ret, grp_ret);
++        }
++    }
++#endif
++
+     /* IMP_OSD_Start is called separately by the pipeline init (after
+      * System_Bind per SDK spec). Do NOT call it here — starting OSD
+      * from show_region can crash the encoder if called at wrong time. */
+diff --git a/tests/test_audio_acquisition.c b/tests/test_audio_acquisition.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..8ac80b98d3e9521706265ad49e59b4a3ea0547cc
+--- /dev/null
++++ b/tests/test_audio_acquisition.c
+@@ -0,0 +1,184 @@
++#include "hal_internal.h"
++#include <assert.h>
++
++extern int hal_audio_init(void *ctx, const rss_audio_config_t *cfg);
++extern int hal_audio_deinit(void *ctx);
++static void discard_log(int level, const char *file, int line, const char *format, ...)
++{
++    (void)level;
++    (void)file;
++    (void)line;
++    (void)format;
++}
++rss_hal_log_func_t rss_hal_log_fn = discard_log;
++
++static int fail_stage;
++static int disables;
++static int channel_disables;
++static int fail_disable;
++
++int IMP_AI_SetPubAttr(int dev, IMPAudioIOAttr *attr)
++{
++    assert(dev == 1 && attr->samplerate == 16000);
++    return fail_stage == 1 ? -1 : 0;
++}
++int IMP_AI_Enable(int dev)
++{
++    assert(dev == 1);
++    return fail_stage == 2 ? 11 : 0;
++}
++int IMP_AI_SetChnParam(int dev, int ch, IMPAudioIChnParam *attr)
++{
++    assert(dev == 1 && ch == 0 && attr->usrFrmDepth == 20);
++    return fail_stage == 3 ? -3 : 0;
++}
++int IMP_AI_EnableChn(int dev, int ch)
++{
++    assert(dev == 1 && ch == 0);
++    return fail_stage == 4 ? -4 : 0;
++}
++int IMP_AI_DisableChn(int dev, int ch)
++{
++    assert(dev == 1 && ch == 0);
++    channel_disables++;
++    return fail_disable == 1 ? -5 : 0;
++}
++int IMP_AI_Disable(int dev)
++{
++    assert(dev == 1);
++    disables++;
++    return fail_disable == 2 ? -6 : 0;
++}
++int IMP_AI_SetVol(int dev, int ch, int value)
++{
++    (void)dev;
++    (void)ch;
++    (void)value;
++    return 0;
++}
++int IMP_AI_SetGain(int dev, int ch, int value)
++{
++    (void)dev;
++    (void)ch;
++    (void)value;
++    return 0;
++}
++
++/* Link the real T31 dispatcher, but reject any unintended DMIC call. */
++int IMP_DMIC_SetUserInfo(int dev, int aec, int needed)
++{
++    (void)dev;
++    (void)aec;
++    (void)needed;
++    assert(false);
++    return -1;
++}
++int IMP_DMIC_SetPubAttr(int dev, IMPDmicAttr *attr)
++{
++    (void)dev;
++    (void)attr;
++    assert(false);
++    return -1;
++}
++int IMP_DMIC_Enable(int dev)
++{
++    (void)dev;
++    assert(false);
++    return -1;
++}
++int IMP_DMIC_Disable(int dev)
++{
++    (void)dev;
++    assert(false);
++    return -1;
++}
++int IMP_DMIC_EnableChn(int dev, int ch)
++{
++    (void)dev;
++    (void)ch;
++    assert(false);
++    return -1;
++}
++int IMP_DMIC_DisableChn(int dev, int ch)
++{
++    (void)dev;
++    (void)ch;
++    assert(false);
++    return -1;
++}
++int IMP_DMIC_SetChnParam(int dev, int ch, IMPDmicChnParam *attr)
++{
++    (void)dev;
++    (void)ch;
++    (void)attr;
++    assert(false);
++    return -1;
++}
++int IMP_DMIC_SetVol(int dev, int ch, int value)
++{
++    (void)dev;
++    (void)ch;
++    (void)value;
++    assert(false);
++    return -1;
++}
++int IMP_DMIC_SetGain(int dev, int ch, int value)
++{
++    (void)dev;
++    (void)ch;
++    (void)value;
++    assert(false);
++    return -1;
++}
++
++int main(void)
++{
++    const rss_audio_config_t cfg = {
++        .sample_rate = 16000,
++        .samples_per_frame = 320,
++        .frame_depth = 20,
++        .chn_count = 1,
++        .ai_device_set = true,
++        .ai_device = 1,
++        .input_type = RSS_AUDIO_INPUT_AMIC,
++    };
++    for (int stage = 1; stage <= 4; ++stage) {
++        rss_hal_ctx_t ctx = {0};
++        fail_stage = stage;
++        disables = channel_disables = 0;
++        assert(hal_audio_init(&ctx, &cfg) != 0);
++        int result = hal_audio_deinit(&ctx);
++        assert(channel_disables == 0);
++        assert(disables == (stage >= 3 ? 1 : 0));
++        if (stage == 2) {
++            assert(result != 0 && ctx.audio_ai_init_failed);
++            assert(hal_audio_init(&ctx, &cfg) == RSS_ERR_BUSY);
++            assert(disables == 0 && channel_disables == 0);
++        } else {
++            assert(result == 0);
++        }
++    }
++    fail_stage = 0;
++    rss_hal_ctx_t ctx = {0};
++    assert(hal_audio_init(&ctx, &cfg) == 0);
++    assert(ctx.audio_ai_device_enabled && ctx.audio_ai_channel_enabled);
++    rss_audio_config_t other = cfg;
++    other.ai_device = 0;
++    assert(hal_audio_init(&ctx, &other) == RSS_ERR_BUSY);
++    assert(ctx.audio_ai_device == 1);
++    disables = channel_disables = 0;
++    fail_disable = 1;
++    assert(hal_audio_deinit(&ctx) == -5);
++    assert(disables == 0 && ctx.audio_ai_channel_enabled);
++    fail_disable = 2;
++    assert(hal_audio_deinit(&ctx) == -6);
++    assert(!ctx.audio_ai_channel_enabled && ctx.audio_ai_device_enabled);
++    fail_disable = 0;
++    assert(hal_audio_deinit(&ctx) == 0);
++    assert(!ctx.audio_ai_channel_enabled && !ctx.audio_ai_device_enabled);
++    int before = disables + channel_disables;
++    assert(hal_audio_deinit(&ctx) == 0);
++    assert(disables + channel_disables == before);
++    puts("AMIC acquired-only cleanup and explicit failed-enable restart passed");
++    return 0;
++}
+diff --git a/tests/test_encoder_readback.c b/tests/test_encoder_readback.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..d9c615f6bf287db2ed67565a33f448b55b8782de
+--- /dev/null
++++ b/tests/test_encoder_readback.c
+@@ -0,0 +1,95 @@
++#include "hal_internal.h"
++#include <assert.h>
++
++extern int hal_enc_get_channel_attr(void *ctx, int chn, rss_video_config_t *cfg);
++extern int hal_enc_get_gop_mode(void *ctx, int chn, rss_gop_mode_t *mode);
++
++static IMPEncoderCHNAttr sdk_attr;
++static int sdk_error;
++static int sdk_calls;
++static void log_error(int level, const char *file, int line, const char *format, ...)
++{
++    assert(level == HAL_LOG_LVL_ERR && file && line > 0 && format);
++}
++rss_hal_log_func_t rss_hal_log_fn = log_error;
++
++int IMP_Encoder_GetChnAttr(int channel, IMPEncoderCHNAttr *attr)
++{
++    assert(channel == 7);
++    sdk_calls++;
++    *attr = sdk_attr;
++    return sdk_error;
++}
++
++int IMP_Encoder_GetChnGopAttr(int channel, IMPEncoderGopAttr *attr)
++{
++    assert(channel == 7);
++    *attr = sdk_attr.gopAttr;
++    return sdk_error;
++}
++
++int main(void)
++{
++    const IMPEncoderProfile profiles[] = {
++        IMP_ENC_PROFILE_AVC_BASELINE, IMP_ENC_PROFILE_AVC_MAIN,
++        IMP_ENC_PROFILE_AVC_HIGH, IMP_ENC_PROFILE_HEVC_MAIN,
++        IMP_ENC_PROFILE_JPEG,
++    };
++    const rss_codec_t codecs[] = {
++        RSS_CODEC_H264, RSS_CODEC_H264, RSS_CODEC_H264,
++        RSS_CODEC_H265, RSS_CODEC_JPEG,
++    };
++    const int mapped_profiles[] = {0, 1, 2, 0, 0};
++    rss_video_config_t live;
++    sdk_attr.encAttr.uWidth = 1920;
++    sdk_attr.encAttr.uHeight = 1080;
++    sdk_attr.rcAttr.outFrmRate.frmRateNum = 15;
++    sdk_attr.rcAttr.outFrmRate.frmRateDen = 1;
++    sdk_attr.gopAttr.uGopLength = 30;
++    sdk_attr.gopAttr.uGopCtrlMode = IMP_ENC_GOP_CTRL_MODE_DEFAULT;
++    sdk_attr.rcAttr.attrRcMode.rcMode = IMP_ENC_RC_MODE_CBR;
++    sdk_attr.rcAttr.attrRcMode.attrCbr.uTargetBitRate = 2000;
++    for (size_t i = 0; i < sizeof(profiles) / sizeof(profiles[0]); i++) {
++        sdk_attr.encAttr.eProfile = profiles[i];
++        assert(hal_enc_get_channel_attr(NULL, 7, &live) == RSS_OK);
++        assert(live.codec == codecs[i] && live.profile == mapped_profiles[i]);
++        assert(live.width == 1920 && live.height == 1080);
++        assert(live.fps_num == 15 && live.fps_den == 1 && live.gop_length == 30);
++    }
++    sdk_attr.encAttr.eProfile = (IMPEncoderProfile)0x7fffffff;
++    assert(hal_enc_get_channel_attr(NULL, 7, &live) == RSS_ERR_NOTSUP);
++    sdk_attr.encAttr.eProfile = IMP_ENC_PROFILE_AVC_HIGH;
++    sdk_attr.rcAttr.attrRcMode.rcMode = IMP_ENC_RC_MODE_FIXQP;
++    sdk_attr.rcAttr.attrRcMode.attrFixQp.iInitialQP = 37;
++    assert(hal_enc_get_channel_attr(NULL, 7, &live) == RSS_OK);
++    assert(live.rc_mode == RSS_RC_FIXQP && live.init_qp == 37 && live.bitrate == 0);
++    sdk_attr.gopAttr.uGopCtrlMode = IMP_ENC_GOP_CTRL_MODE_PYRAMIDAL;
++    assert(hal_enc_get_channel_attr(NULL, 7, &live) == RSS_OK);
++    assert(live.gop_mode == RSS_GOP_PYRAMIDAL);
++    sdk_attr.gopAttr.uGopCtrlMode = IMP_ENC_GOP_CTRL_MODE_SMARTP;
++    assert(hal_enc_get_channel_attr(NULL, 7, &live) == RSS_OK);
++    assert(live.gop_mode == RSS_GOP_SMARTP);
++    sdk_attr.gopAttr.uGopCtrlMode = (IMPEncoderGopCtrlMode)0x7f;
++    assert(hal_enc_get_channel_attr(NULL, 7, &live) == RSS_ERR_NOTSUP);
++    rss_gop_mode_t gop_mode = RSS_GOP_DEFAULT;
++    assert(hal_enc_get_gop_mode(NULL, 7, &gop_mode) == RSS_ERR_NOTSUP);
++    sdk_attr.gopAttr.uGopCtrlMode = IMP_ENC_GOP_CTRL_MODE_DEFAULT;
++    assert(hal_enc_get_gop_mode(NULL, 7, &gop_mode) == RSS_OK);
++    assert(gop_mode == RSS_GOP_DEFAULT);
++    sdk_attr.gopAttr.uGopCtrlMode = IMP_ENC_GOP_CTRL_MODE_PYRAMIDAL;
++    assert(hal_enc_get_gop_mode(NULL, 7, &gop_mode) == RSS_OK);
++    assert(gop_mode == RSS_GOP_PYRAMIDAL);
++    sdk_attr.gopAttr.uGopCtrlMode = IMP_ENC_GOP_CTRL_MODE_SMARTP;
++    assert(hal_enc_get_gop_mode(NULL, 7, &gop_mode) == RSS_OK);
++    assert(gop_mode == RSS_GOP_SMARTP);
++    sdk_attr.gopAttr.uGopCtrlMode = IMP_ENC_GOP_CTRL_MODE_DEFAULT;
++    sdk_attr.rcAttr.attrRcMode.rcMode = 0x7fffffff;
++    assert(hal_enc_get_channel_attr(NULL, 7, &live) == RSS_ERR_NOTSUP);
++    sdk_error = -7;
++    assert(hal_enc_get_channel_attr(NULL, 7, &live) == -7);
++    int before = sdk_calls;
++    assert(hal_enc_get_channel_attr(NULL, 7, NULL) == RSS_ERR_INVAL);
++    assert(sdk_calls == before);
++    puts("Encoder profile and unknown SDK readback checks passed");
++    return 0;
++}
+diff --git a/tests/test_fs_fps.c b/tests/test_fs_fps.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..3983f329603842ed5954de8e9874c1a0c02f692b
+--- /dev/null
++++ b/tests/test_fs_fps.c
+@@ -0,0 +1,107 @@
++#include "hal_internal.h"
++#include <assert.h>
++#include <limits.h>
++
++extern int hal_fs_get_fps(void *ctx, int chn, uint32_t *num, uint32_t *den);
++
++_Static_assert(_Generic(((IMPFSChnAttr *)0)->outFrmRateNum, int: 1, default: 0),
++               "T31 1.1.4 numerator is signed int");
++_Static_assert(_Generic(((IMPFSChnAttr *)0)->outFrmRateDen, int: 1, default: 0),
++               "T31 1.1.4 denominator is signed int");
++
++static int sdk_num;
++static int sdk_den;
++static int sdk_error;
++static int sdk_calls;
++static int log_calls;
++static int expected_channel = 7;
++static bool partial_write;
++
++static void log_error(int level, const char *file, int line, const char *fmt, ...)
++{
++    assert(level == HAL_LOG_LVL_ERR);
++    assert(file != NULL);
++    assert(line > 0);
++    assert(fmt != NULL);
++    log_calls++;
++}
++
++rss_hal_log_func_t rss_hal_log_fn = log_error;
++
++int IMP_FrameSource_GetChnAttr(int channel, IMPFSChnAttr *attr)
++{
++    assert(channel == expected_channel);
++    assert(attr != NULL);
++    IMPFSChnAttr empty = {0};
++    assert(memcmp(attr, &empty, sizeof(empty)) == 0);
++    sdk_calls++;
++    attr->outFrmRateNum = sdk_num;
++    if (!partial_write)
++        attr->outFrmRateDen = sdk_den;
++    return sdk_error;
++}
++
++int main(void)
++{
++    const rss_hal_ops_t ops = {.fs_get_fps = hal_fs_get_fps};
++    const int ratios[][2] = {{15, 1}, {30000, 1001}, {30, 2}, {1, INT_MAX}, {INT_MAX, 1}};
++    for (size_t i = 0; i < sizeof(ratios) / sizeof(ratios[0]); i++) {
++        sdk_num = ratios[i][0];
++        sdk_den = ratios[i][1];
++        uint32_t num = 111;
++        uint32_t den = 222;
++        assert(ops.fs_get_fps(NULL, expected_channel, &num, &den) == 0);
++        assert(num == (uint32_t)sdk_num);
++        assert(den == (uint32_t)sdk_den);
++    }
++
++    const int invalid[][2] = {{0, 1}, {-1, 1}, {15, 0}, {15, -1}, {INT_MIN, INT_MIN}};
++    for (size_t i = 0; i < sizeof(invalid) / sizeof(invalid[0]); i++) {
++        sdk_num = invalid[i][0];
++        sdk_den = invalid[i][1];
++        uint32_t num = 111;
++        uint32_t den = 222;
++        assert(ops.fs_get_fps(NULL, expected_channel, &num, &den) == -ERANGE);
++        assert(num == 111);
++        assert(den == 222);
++    }
++
++    sdk_num = 15;
++    sdk_den = 1;
++    const int errors[] = {-42, 9};
++    for (size_t i = 0; i < sizeof(errors) / sizeof(errors[0]); i++) {
++        uint32_t num = 111;
++        uint32_t den = 222;
++        sdk_error = errors[i];
++        assert(ops.fs_get_fps(NULL, expected_channel, &num, &den) == sdk_error);
++        assert(num == 111);
++        assert(den == 222);
++    }
++    assert(log_calls == 2);
++    sdk_error = 0;
++
++    uint32_t num = 111;
++    uint32_t den = 222;
++    partial_write = true;
++    assert(ops.fs_get_fps(NULL, expected_channel, &num, &den) == -ERANGE);
++    assert(num == 111);
++    assert(den == 222);
++    partial_write = false;
++
++    int before = sdk_calls;
++    assert(ops.fs_get_fps(NULL, expected_channel, NULL, &den) == -EINVAL);
++    assert(ops.fs_get_fps(NULL, expected_channel, &num, NULL) == -EINVAL);
++    assert(ops.fs_get_fps(NULL, expected_channel, &num, &num) == -EINVAL);
++    assert(sdk_calls == before);
++    assert(num == 111);
++    assert(den == 222);
++
++    /* Channel validity belongs to the SDK; no guessed platform maximum. */
++    expected_channel = -1;
++    sdk_error = -22;
++    assert(ops.fs_get_fps(NULL, expected_channel, &num, &den) == -22);
++    assert(num == 111);
++    assert(den == 222);
++    puts("FrameSource FPS SDK mapping and failure checks passed");
++    return 0;
++}
+diff --git a/tests/test_fs_nr_vbs.c b/tests/test_fs_nr_vbs.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..a25d1d61a3787e64fc0306824a2f1282e1364ccf
+--- /dev/null
++++ b/tests/test_fs_nr_vbs.c
+@@ -0,0 +1,66 @@
++#include <assert.h>
++#include <errno.h>
++#include <stdint.h>
++#include <stdio.h>
++#include <string.h>
++
++#include "hal_internal.h"
++
++extern int hal_fs_get_nr_vbs(void *ctx, int chn, uint32_t *nr_vbs);
++
++static int sdk_result;
++static int sdk_nr_vbs;
++static int expected_channel;
++static int log_calls;
++
++static void log_error(int level, const char *file, int line, const char *fmt, ...)
++{
++    assert(level == HAL_LOG_LVL_ERR);
++    assert(file && line > 0 && fmt);
++    log_calls++;
++}
++
++rss_hal_log_func_t rss_hal_log_fn = log_error;
++
++int IMP_FrameSource_GetChnAttr(int channel, IMPFSChnAttr *attr)
++{
++    assert(channel == expected_channel);
++    assert(attr);
++    if (sdk_result)
++        return sdk_result;
++    memset(attr, 0, sizeof(*attr));
++    attr->nrVBs = sdk_nr_vbs;
++    return 0;
++}
++
++int main(void)
++{
++    expected_channel = 4;
++    uint32_t value = 99;
++
++    sdk_nr_vbs = 1;
++    assert(hal_fs_get_nr_vbs(NULL, expected_channel, &value) == 0);
++    assert(value == 1);
++
++    sdk_nr_vbs = 3;
++    assert(hal_fs_get_nr_vbs(NULL, expected_channel, &value) == 0);
++    assert(value == 3);
++
++    value = 77;
++    sdk_nr_vbs = 0;
++    assert(hal_fs_get_nr_vbs(NULL, expected_channel, &value) == -ERANGE);
++    assert(value == 77);
++    sdk_nr_vbs = -1;
++    assert(hal_fs_get_nr_vbs(NULL, expected_channel, &value) == -ERANGE);
++    assert(value == 77);
++
++    sdk_result = -17;
++    assert(hal_fs_get_nr_vbs(NULL, expected_channel, &value) == -17);
++    assert(value == 77);
++    assert(log_calls == 1);
++    sdk_result = 0;
++    assert(hal_fs_get_nr_vbs(NULL, expected_channel, NULL) == -EINVAL);
++
++    puts("T31 FrameSource nrVBs readback checks passed");
++    return 0;
++}
+diff --git a/tests/test_fs_set_fps.c b/tests/test_fs_set_fps.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..66c1cf20318ef0b41924ae57c6e5bc20cb8c1340
+--- /dev/null
++++ b/tests/test_fs_set_fps.c
+@@ -0,0 +1,296 @@
++#include "hal_internal.h"
++#include <assert.h>
++#include <limits.h>
++
++extern int hal_fs_set_fps(void *ctx, int chn, uint32_t num, uint32_t den);
++
++_Static_assert(_Generic(((IMPFSChnAttr *)0)->outFrmRateNum, int: 1, default: 0),
++               "T31 1.1.4 numerator is signed int");
++_Static_assert(_Generic(((IMPFSChnAttr *)0)->outFrmRateDen, int: 1, default: 0),
++               "T31 1.1.4 denominator is signed int");
++
++static IMPFSChnAttr original;
++static IMPFSChnAttr live;
++static int get_calls;
++static int set_calls;
++static int initial_error;
++static int set_error;
++static int final_error;
++static int changed_field;
++static bool partial_initial_get;
++static bool partial_final_get;
++static uint32_t expected_num;
++static uint32_t expected_den;
++static int expected_channel;
++
++static void log_error(int level, const char *file, int line, const char *fmt, ...)
++{
++    assert(level == HAL_LOG_LVL_ERR);
++    assert(file != NULL);
++    assert(line > 0);
++    assert(fmt != NULL);
++}
++
++rss_hal_log_func_t rss_hal_log_fn = log_error;
++
++static void assert_non_rate_equal(const IMPFSChnAttr *a, const IMPFSChnAttr *b)
++{
++    assert(a->picWidth == b->picWidth);
++    assert(a->picHeight == b->picHeight);
++    assert(a->pixFmt == b->pixFmt);
++    assert(a->crop.enable == b->crop.enable);
++    assert(a->crop.left == b->crop.left);
++    assert(a->crop.top == b->crop.top);
++    assert(a->crop.width == b->crop.width);
++    assert(a->crop.height == b->crop.height);
++    assert(a->scaler.enable == b->scaler.enable);
++    assert(a->scaler.outwidth == b->scaler.outwidth);
++    assert(a->scaler.outheight == b->scaler.outheight);
++    assert(a->nrVBs == b->nrVBs);
++    assert(a->type == b->type);
++    assert(a->fcrop.enable == b->fcrop.enable);
++    assert(a->fcrop.left == b->fcrop.left);
++    assert(a->fcrop.top == b->fcrop.top);
++    assert(a->fcrop.width == b->fcrop.width);
++    assert(a->fcrop.height == b->fcrop.height);
++}
++
++/* One independent readback mutation for every declared non-rate field. */
++static void mutate_field(IMPFSChnAttr *attr, int field)
++{
++    switch (field) {
++    case 0:
++        attr->picWidth++;
++        break;
++    case 1:
++        attr->picHeight++;
++        break;
++    case 2:
++        attr->pixFmt = PIX_FMT_YUYV422;
++        break;
++    case 3:
++        attr->crop.enable = !attr->crop.enable;
++        break;
++    case 4:
++        attr->crop.left++;
++        break;
++    case 5:
++        attr->crop.top++;
++        break;
++    case 6:
++        attr->crop.width++;
++        break;
++    case 7:
++        attr->crop.height++;
++        break;
++    case 8:
++        attr->scaler.enable = !attr->scaler.enable;
++        break;
++    case 9:
++        attr->scaler.outwidth++;
++        break;
++    case 10:
++        attr->scaler.outheight++;
++        break;
++    case 11:
++        attr->nrVBs++;
++        break;
++    case 12:
++        attr->type = FS_PHY_CHANNEL;
++        break;
++    case 13:
++        attr->fcrop.enable = !attr->fcrop.enable;
++        break;
++    case 14:
++        attr->fcrop.left++;
++        break;
++    case 15:
++        attr->fcrop.top++;
++        break;
++    case 16:
++        attr->fcrop.width++;
++        break;
++    case 17:
++        attr->fcrop.height++;
++        break;
++    case 18:
++        attr->outFrmRateNum++;
++        break;
++    case 19:
++        attr->outFrmRateDen++;
++        break;
++    case 20:
++        /* Equivalent normalized rate is not exact requested readback. */
++        attr->outFrmRateNum = 15;
++        attr->outFrmRateDen = 1;
++        break;
++    default:
++        assert(field == -1);
++    }
++}
++
++int IMP_FrameSource_GetChnAttr(int channel, IMPFSChnAttr *attr)
++{
++    assert(channel == expected_channel);
++    assert(attr != NULL);
++    IMPFSChnAttr zero = {0};
++    assert_non_rate_equal(attr, &zero);
++    assert(attr->outFrmRateNum == 0);
++    assert(attr->outFrmRateDen == 0);
++    get_calls++;
++    assert(get_calls <= 2);
++    if (get_calls == 1) {
++        assert(set_calls == 0);
++        if (partial_initial_get)
++            attr->outFrmRateNum = original.outFrmRateNum;
++        else
++            *attr = original;
++        return initial_error;
++    }
++    assert(set_calls == 1);
++    if (partial_final_get)
++        attr->outFrmRateNum = live.outFrmRateNum;
++    else
++        *attr = live;
++    mutate_field(attr, changed_field);
++    return final_error;
++}
++
++int IMP_FrameSource_SetChnAttr(int channel, const IMPFSChnAttr *attr)
++{
++    assert(channel == expected_channel);
++    assert(attr != NULL);
++    assert(get_calls == 1);
++    assert(set_calls == 0);
++    set_calls++;
++    assert_non_rate_equal(attr, &original);
++    assert(attr->outFrmRateNum == (int)expected_num);
++    assert(attr->outFrmRateDen == (int)expected_den);
++    /* Simulate application even when Set returns an error. No rollback is
++     * promised, and the implementation must not issue a corrective Set. */
++    live = *attr;
++    return set_error;
++}
++
++static void reset(void)
++{
++    original = (IMPFSChnAttr){
++        .picWidth = 1920,
++        .picHeight = 1080,
++        .pixFmt = PIX_FMT_NV12,
++        .crop = {.enable = 0, .left = 5, .top = 7, .width = 1900, .height = 1040},
++        .scaler = {.enable = 1, .outwidth = 1280, .outheight = 720},
++        .outFrmRateNum = 25,
++        .outFrmRateDen = 1,
++        .nrVBs = 6,
++        .type = FS_EXT_CHANNEL,
++        .fcrop = {.enable = 1, .left = 9, .top = 11, .width = 1260, .height = 700},
++    };
++    live = original;
++    get_calls = 0;
++    set_calls = 0;
++    initial_error = 0;
++    set_error = 0;
++    final_error = 0;
++    changed_field = -1;
++    partial_initial_get = false;
++    partial_final_get = false;
++    expected_num = 30;
++    expected_den = 2;
++    expected_channel = 7;
++}
++
++static int set_rate(uint32_t num, uint32_t den)
++{
++    const rss_hal_ops_t ops = {.fs_set_fps = hal_fs_set_fps};
++    expected_num = num;
++    expected_den = den;
++    return ops.fs_set_fps(NULL, expected_channel, num, den);
++}
++
++int main(void)
++{
++    const uint32_t ratios[][2] = {
++        {15, 1}, {30000, 1001}, {30, 2}, {1, INT_MAX}, {INT_MAX, 1}, {INT_MAX, INT_MAX},
++    };
++    for (size_t i = 0; i < sizeof(ratios) / sizeof(ratios[0]); i++) {
++        reset();
++        assert(set_rate(ratios[i][0], ratios[i][1]) == 0);
++        assert(get_calls == 2);
++        assert(set_calls == 1);
++        assert_non_rate_equal(&live, &original);
++        assert(live.outFrmRateNum == (int)ratios[i][0]);
++        assert(live.outFrmRateDen == (int)ratios[i][1]);
++    }
++    const uint32_t invalid[][2] = {
++        {0, 1}, {1, 0}, {0, 0}, {UINT32_MAX, 1}, {1, UINT32_MAX},
++        {(uint32_t)INT_MAX + 1, 1}, {1, (uint32_t)INT_MAX + 1},
++    };
++    for (size_t i = 0; i < sizeof(invalid) / sizeof(invalid[0]); i++) {
++        reset();
++        int expected = invalid[i][0] == 0 || invalid[i][1] == 0 ? -EINVAL : -ERANGE;
++        assert(set_rate(invalid[i][0], invalid[i][1]) == expected);
++        assert(get_calls == 0);
++        assert(set_calls == 0);
++    }
++    const int invalid_live[][2] = {{0, 1}, {-1, 1}, {25, 0}, {25, -1}, {INT_MIN, INT_MIN}};
++    for (size_t i = 0; i < sizeof(invalid_live) / sizeof(invalid_live[0]); i++) {
++        reset();
++        original.outFrmRateNum = invalid_live[i][0];
++        original.outFrmRateDen = invalid_live[i][1];
++        assert(set_rate(15, 1) == -ERANGE);
++        assert(get_calls == 1);
++        assert(set_calls == 0);
++    }
++    const int errors[] = {-42, 9};
++    for (size_t i = 0; i < sizeof(errors) / sizeof(errors[0]); i++) {
++        reset();
++        initial_error = errors[i];
++        assert(set_rate(15, 1) == errors[i]);
++        assert(get_calls == 1);
++        assert(set_calls == 0);
++        reset();
++        set_error = errors[i];
++        assert(set_rate(15, 1) == errors[i]);
++        assert(get_calls == 1);
++        assert(set_calls == 1);
++        assert(live.outFrmRateNum == 15);
++        reset();
++        final_error = errors[i];
++        assert(set_rate(15, 1) == errors[i]);
++        assert(get_calls == 2);
++        assert(set_calls == 1);
++        assert(live.outFrmRateNum == 15);
++    }
++    for (int field = 0; field <= 20; field++) {
++        reset();
++        changed_field = field;
++        assert(set_rate(30, 2) == -EIO);
++        assert(get_calls == 2);
++        assert(set_calls == 1);
++    }
++    reset();
++    partial_initial_get = true;
++    assert(set_rate(15, 1) == -ERANGE);
++    assert(get_calls == 1);
++    assert(set_calls == 0);
++    reset();
++    partial_final_get = true;
++    assert(set_rate(15, 1) == -EIO);
++    assert(get_calls == 2);
++    assert(set_calls == 1);
++    reset();
++    original.crop.enable = 1;
++    original.scaler.enable = 0;
++    original.fcrop.enable = 0;
++    assert(set_rate(25, 1) == 0);
++    assert_non_rate_equal(&live, &original);
++    reset();
++    expected_channel = -1;
++    initial_error = -22;
++    assert(set_rate(15, 1) == -22);
++    assert(get_calls == 1);
++    assert(set_calls == 0);
++    puts("FrameSource FPS live attribute preservation and failure checks passed");
++    return 0;
++}
+diff --git a/tests/test_isp_antiflicker.c b/tests/test_isp_antiflicker.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..e6b712638108107e51859c08b2881b7169a26b72
+--- /dev/null
++++ b/tests/test_isp_antiflicker.c
+@@ -0,0 +1,47 @@
++#include "hal_internal.h"
++#include <assert.h>
++#include <stdio.h>
++
++extern int hal_isp_set_antiflicker(void *, rss_antiflicker_t);
++extern int hal_isp_get_antiflicker(void *, rss_antiflicker_t *);
++
++static IMPISPAntiflickerAttr hardware;
++static int set_result, get_result, set_calls, get_calls;
++
++int IMP_ISP_Tuning_SetAntiFlickerAttr(IMPISPAntiflickerAttr value)
++{
++    set_calls++;
++    if (set_result) return set_result;
++    hardware = value;
++    return RSS_OK;
++}
++
++int IMP_ISP_Tuning_GetAntiFlickerAttr(IMPISPAntiflickerAttr *value)
++{
++    get_calls++;
++    if (get_result) return get_result;
++    *value = hardware;
++    return RSS_OK;
++}
++
++int main(void)
++{
++    rss_antiflicker_t observed = RSS_ANTIFLICKER_OFF;
++    for (int mode = RSS_ANTIFLICKER_OFF; mode <= RSS_ANTIFLICKER_60HZ; ++mode) {
++        assert(hal_isp_set_antiflicker(NULL, (rss_antiflicker_t)mode) == RSS_OK);
++        assert((int)hardware == mode);
++        assert(hal_isp_get_antiflicker(NULL, &observed) == RSS_OK);
++        assert((int)observed == mode);
++    }
++    assert(set_calls == 3 && get_calls == 3);
++    hardware = IMPISP_ANTIFLICKER_BUTT;
++    assert(hal_isp_get_antiflicker(NULL, &observed) == RSS_ERR);
++    get_result = -8;
++    assert(hal_isp_get_antiflicker(NULL, &observed) == -8);
++    get_result = 0;
++    set_result = -7;
++    assert(hal_isp_set_antiflicker(NULL, RSS_ANTIFLICKER_50HZ) == -7);
++    assert(hal_isp_get_antiflicker(NULL, NULL) == RSS_ERR_INVAL);
++    puts("T31 anti-flicker uses exact Off/50 Hz/60 Hz SDK setter and getter values");
++    return 0;
++}
+diff --git a/tests/test_isp_flip.c b/tests/test_isp_flip.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..d8c65e814ac7707e592de708c27e81582eeeedb6
+--- /dev/null
++++ b/tests/test_isp_flip.c
+@@ -0,0 +1,65 @@
++#include "hal_internal.h"
++#include <assert.h>
++
++extern int hal_isp_set_hflip(void *ctx, int enable);
++extern int hal_isp_set_vflip(void *ctx, int enable);
++extern int hal_isp_get_hvflip(void *ctx, int *horizontal, int *vertical);
++
++static int hardware;
++static int get_error, set_error, set_calls;
++
++int IMP_ISP_Tuning_GetHVFlip(IMPISPHVFLIP *value)
++{
++    *value = (IMPISPHVFLIP)hardware;
++    return get_error;
++}
++
++int IMP_ISP_Tuning_SetHVFLIP(IMPISPHVFLIP value)
++{
++    set_calls++;
++    if (set_error)
++        return set_error;
++    hardware = value;
++    return RSS_OK;
++}
++
++int main(void)
++{
++    rss_hal_ctx_t state = {0};
++    for (int initial = 0; initial < 4; initial++) {
++        for (int desired = 0; desired < 2; desired++) {
++            hardware = initial;
++            state.hflip_state[0] = !(initial & 1);
++            state.vflip_state[0] = !(initial & 2);
++            assert(hal_isp_set_hflip(&state, desired) == RSS_OK);
++            assert(hardware == ((initial & 2) | desired));
++            hardware = initial;
++            assert(hal_isp_set_vflip(&state, desired) == RSS_OK);
++            assert(hardware == ((initial & 1) | (desired << 1)));
++            int horizontal = -1, vertical = -1;
++            assert(hal_isp_get_hvflip(&state, &horizontal, &vertical) == RSS_OK);
++            assert(horizontal == (hardware & 1) && vertical == ((hardware >> 1) & 1));
++        }
++    }
++    state.hflip_state[0] = 0;
++    state.vflip_state[0] = 1;
++    hardware = 2;
++    get_error = -7;
++    int before = set_calls;
++    assert(hal_isp_set_hflip(&state, 1) == -7 && set_calls == before);
++    get_error = 0;
++    set_error = -8;
++    assert(hal_isp_set_hflip(&state, 1) == -8);
++    assert(state.hflip_state[0] == 0 && state.vflip_state[0] == 1);
++    set_error = 0;
++    hardware = 4;
++    before = set_calls;
++    assert(hal_isp_set_vflip(&state, 1) == RSS_ERR_NOTSUP && set_calls == before);
++    int horizontal = -1, vertical = -1;
++    assert(hal_isp_get_hvflip(&state, &horizontal, &vertical) == RSS_ERR_NOTSUP);
++    assert(horizontal == -1 && vertical == -1);
++    assert(hal_isp_set_hflip(NULL, 1) == RSS_ERR_INVAL);
++    assert(hal_isp_set_vflip(&state, 2) == RSS_ERR_INVAL);
++    puts("ISP flip preserves the observed opposite axis and rejects unknown state");
++    return 0;
++}
+diff --git a/tests/test_isp_wb.c b/tests/test_isp_wb.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..09a06f6f6730196a394952a51e1d7da912705087
+--- /dev/null
++++ b/tests/test_isp_wb.c
+@@ -0,0 +1,48 @@
++#include "hal_internal.h"
++#include <assert.h>
++#include <stdio.h>
++
++extern int hal_isp_set_wb(void *, const rss_wb_config_t *);
++extern int hal_isp_get_wb(void *, rss_wb_config_t *);
++
++static IMPISPWB hardware;
++static int set_result, get_result, set_calls, get_calls;
++
++int IMP_ISP_Tuning_SetWB(IMPISPWB *value)
++{
++    set_calls++;
++    if (set_result) return set_result;
++    hardware = *value;
++    return RSS_OK;
++}
++
++int IMP_ISP_Tuning_GetWB(IMPISPWB *value)
++{
++    get_calls++;
++    if (get_result) return get_result;
++    *value = hardware;
++    return RSS_OK;
++}
++
++int main(void)
++{
++    rss_wb_config_t requested = {.mode = RSS_WB_MANUAL, .r_gain = 300, .b_gain = 400};
++    assert(hal_isp_set_wb(NULL, &requested) == RSS_OK);
++    assert(set_calls == 1 && hardware.mode == ISP_CORE_WB_MODE_MANUAL &&
++           hardware.rgain == 300 && hardware.bgain == 400);
++    rss_wb_config_t observed = {0};
++    assert(hal_isp_get_wb(NULL, &observed) == RSS_OK);
++    assert(get_calls == 1 && observed.mode == RSS_WB_MANUAL &&
++           observed.r_gain == 300 && observed.b_gain == 400);
++    requested = (rss_wb_config_t){.mode = RSS_WB_DAYLIGHT, .r_gain = 128, .b_gain = 128};
++    assert(hal_isp_set_wb(NULL, &requested) == RSS_OK);
++    assert(hal_isp_get_wb(NULL, &observed) == RSS_OK && observed.mode == RSS_WB_DAYLIGHT);
++    set_result = -7;
++    assert(hal_isp_set_wb(NULL, &requested) == -7);
++    get_result = -8;
++    assert(hal_isp_get_wb(NULL, &observed) == -8);
++    assert(hal_isp_set_wb(NULL, NULL) == RSS_ERR_INVAL);
++    assert(hal_isp_get_wb(NULL, NULL) == RSS_ERR_INVAL);
++    puts("T31 grouped White Balance uses exact SetWB/GetWB values and errors");
++    return 0;
++}

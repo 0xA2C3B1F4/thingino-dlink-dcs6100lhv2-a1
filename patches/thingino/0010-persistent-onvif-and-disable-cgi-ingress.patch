@@ -1,0 +1,476 @@
+diff --git a/package/thingino-onvif/files/S94onvif-httpd b/package/thingino-onvif/files/S94onvif-httpd
+new file mode 100644
+index 00000000..cff38efe
+--- /dev/null
++++ b/package/thingino-onvif/files/S94onvif-httpd
+@@ -0,0 +1,64 @@
++#!/bin/sh
++set -u
++
++DAEMON=/usr/sbin/onvif-httpd
++PIDFILE=/run/onvif-httpd.pid
++WORKDIR=/usr/share/onvif
++PORT=1999
++
++owned_pid() {
++	pid=$1
++	case "$pid" in ''|*[!0-9]*) return 1 ;; esac
++	[ -r "/proc/$pid/exe" ] || return 1
++	[ "$(readlink "/proc/$pid/exe" 2>/dev/null)" = "$DAEMON" ]
++}
++
++listening() {
++	hex_port=$(printf '%04X' "$PORT") || return 1
++	awk -v endpoint="0100007F:$hex_port" \
++		'$2 == endpoint && $4 == "0A" { found = 1 } END { exit !found }' \
++		/proc/net/tcp
++}
++
++start() {
++	[ -x "$DAEMON" ] || return 1
++	[ -d "$WORKDIR" ] || return 1
++	if [ -s "$PIDFILE" ]; then
++		IFS= read -r pid <"$PIDFILE" || return 1
++		owned_pid "$pid" && return 0
++	fi
++	rm -f "$PIDFILE"
++	cd "$WORKDIR" || return 1
++	start-stop-daemon -S -b -m -p "$PIDFILE" -x "$DAEMON" || return 1
++	i=0
++	while [ "$i" -lt 50 ]; do
++		if IFS= read -r pid <"$PIDFILE" && owned_pid "$pid" && listening; then
++			return 0
++		fi
++		usleep 100000
++		i=$((i + 1))
++	done
++	return 1
++}
++
++stop() {
++	[ -s "$PIDFILE" ] || return 0
++	IFS= read -r pid <"$PIDFILE" || return 1
++	if owned_pid "$pid"; then
++		kill "$pid" || return 1
++		i=0
++		while owned_pid "$pid" && [ "$i" -lt 50 ]; do
++			usleep 100000
++			i=$((i + 1))
++		done
++	fi
++	owned_pid "$pid" && return 1
++	rm -f "$PIDFILE"
++}
++
++case "${1:-}" in
++	start) start ;;
++	stop) stop ;;
++	restart) stop && start ;;
++	*) echo "Usage: $0 {start|stop|restart}" >&2; exit 1 ;;
++esac
+diff --git a/package/thingino-onvif/thingino-onvif.mk b/package/thingino-onvif/thingino-onvif.mk
+index 442bcda6..a58ac898 100644
+--- a/package/thingino-onvif/thingino-onvif.mk
++++ b/package/thingino-onvif/thingino-onvif.mk
+@@ -30,57 +30,48 @@ define THINGINO_ONVIF_BUILD_CMDS
+ endef
+ 
+ define THINGINO_ONVIF_INSTALL_TARGET_CMDS
+-	$(INSTALL) -m 0755 -d $(TARGET_DIR)/var/www/onvif/device_service_files
+-	$(INSTALL) -m 0644 -t $(TARGET_DIR)/var/www/onvif/device_service_files \
++	$(INSTALL) -m 0755 -d $(TARGET_DIR)/usr/share/onvif/device_service_files
++	$(INSTALL) -m 0644 -t $(TARGET_DIR)/usr/share/onvif/device_service_files \
+ 		$(@D)/res/device_service_files/*
+ 
+-	$(INSTALL) -m 0755 -d $(TARGET_DIR)/var/www/onvif/deviceio_service_files
+-	$(INSTALL) -m 0644 -t $(TARGET_DIR)/var/www/onvif/deviceio_service_files \
++	$(INSTALL) -m 0755 -d $(TARGET_DIR)/usr/share/onvif/deviceio_service_files
++	$(INSTALL) -m 0644 -t $(TARGET_DIR)/usr/share/onvif/deviceio_service_files \
+ 		$(@D)/res/deviceio_service_files/*
+ 
+-	$(INSTALL) -m 0755 -d $(TARGET_DIR)/var/www/onvif/events_service_files
+-	$(INSTALL) -m 0644 -t $(TARGET_DIR)/var/www/onvif/events_service_files \
++	$(INSTALL) -m 0755 -d $(TARGET_DIR)/usr/share/onvif/events_service_files
++	$(INSTALL) -m 0644 -t $(TARGET_DIR)/usr/share/onvif/events_service_files \
+ 		$(@D)/res/events_service_files/*
+ 
+-	$(INSTALL) -m 0755 -d $(TARGET_DIR)/var/www/onvif/generic_files
+-	$(INSTALL) -m 0644 -t $(TARGET_DIR)/var/www/onvif/generic_files \
++	$(INSTALL) -m 0755 -d $(TARGET_DIR)/usr/share/onvif/generic_files
++	$(INSTALL) -m 0644 -t $(TARGET_DIR)/usr/share/onvif/generic_files \
+ 		$(@D)/res/generic_files/*
+ 
+-	$(INSTALL) -m 0755 -d $(TARGET_DIR)/var/www/onvif/imaging_service_files
+-	$(INSTALL) -m 0644 -t $(TARGET_DIR)/var/www/onvif/imaging_service_files \
++	$(INSTALL) -m 0755 -d $(TARGET_DIR)/usr/share/onvif/imaging_service_files
++	$(INSTALL) -m 0644 -t $(TARGET_DIR)/usr/share/onvif/imaging_service_files \
+ 		$(@D)/res/imaging_service_files/*
+ 
+-	$(INSTALL) -m 0755 -d $(TARGET_DIR)/var/www/onvif/media_service_files
+-	$(INSTALL) -m 0644 -t $(TARGET_DIR)/var/www/onvif/media_service_files \
++	$(INSTALL) -m 0755 -d $(TARGET_DIR)/usr/share/onvif/media_service_files
++	$(INSTALL) -m 0644 -t $(TARGET_DIR)/usr/share/onvif/media_service_files \
+ 		$(@D)/res/media_service_files/*
+ 
+-	$(INSTALL) -m 0755 -d $(TARGET_DIR)/var/www/onvif/media2_service_files
+-	$(INSTALL) -m 0644 -t $(TARGET_DIR)/var/www/onvif/media2_service_files \
++	$(INSTALL) -m 0755 -d $(TARGET_DIR)/usr/share/onvif/media2_service_files
++	$(INSTALL) -m 0644 -t $(TARGET_DIR)/usr/share/onvif/media2_service_files \
+ 		$(@D)/res/media2_service_files/*
+ 
+-	$(INSTALL) -m 0755 -d $(TARGET_DIR)/var/www/onvif/notify_files
+-	$(INSTALL) -m 0644 -t $(TARGET_DIR)/var/www/onvif/notify_files \
++	$(INSTALL) -m 0755 -d $(TARGET_DIR)/usr/share/onvif/notify_files
++	$(INSTALL) -m 0644 -t $(TARGET_DIR)/usr/share/onvif/notify_files \
+ 		$(@D)/res/notify_files/*
+ 
+-	$(INSTALL) -m 0755 -d $(TARGET_DIR)/var/www/onvif/ptz_service_files
+-	$(INSTALL) -m 0644 -t $(TARGET_DIR)/var/www/onvif/ptz_service_files \
++	$(INSTALL) -m 0755 -d $(TARGET_DIR)/usr/share/onvif/ptz_service_files
++	$(INSTALL) -m 0644 -t $(TARGET_DIR)/usr/share/onvif/ptz_service_files \
+ 		$(@D)/res/ptz_service_files/*
+ 
+-	$(INSTALL) -m 0755 -d $(TARGET_DIR)/var/www/onvif/wsd_files
+-	$(INSTALL) -m 0644 -t $(TARGET_DIR)/var/www/onvif/wsd_files \
++	$(INSTALL) -m 0755 -d $(TARGET_DIR)/usr/share/onvif/wsd_files
++	$(INSTALL) -m 0644 -t $(TARGET_DIR)/usr/share/onvif/wsd_files \
+ 		$(@D)/res/wsd_files/*
+ 
+-	$(INSTALL) -D -m 0755 $(@D)/onvif_simple_server \
+-		$(TARGET_DIR)/var/www/onvif/onvif.cgi
+-	ln -sf onvif.cgi $(TARGET_DIR)/var/www/onvif/device_service
+-	ln -sf onvif.cgi $(TARGET_DIR)/var/www/onvif/deviceio_service
+-	ln -sf onvif.cgi $(TARGET_DIR)/var/www/onvif/events_service
+-	ln -sf onvif.cgi $(TARGET_DIR)/var/www/onvif/imaging_service
+-	ln -sf onvif.cgi $(TARGET_DIR)/var/www/onvif/media_service
+-	ln -sf onvif.cgi $(TARGET_DIR)/var/www/onvif/media2_service
+-	ln -sf onvif.cgi $(TARGET_DIR)/var/www/onvif/ptz_service
+-
+-	ln -sf /var/www/x/ch0.jpg $(TARGET_DIR)/var/www/onvif/image.cgi
++	$(INSTALL) -D -m 0755 $(@D)/onvif_httpd \
++		$(TARGET_DIR)/usr/sbin/onvif-httpd
+ 
+ 	$(INSTALL) -D -m 0755 $(@D)/onvif_notify_server \
+ 		$(TARGET_DIR)/usr/sbin/onvif_notify_server
+@@ -92,6 +83,8 @@ define THINGINO_ONVIF_INSTALL_TARGET_CMDS
+ 		$(TARGET_DIR)/etc/onvif.json
+ 
+ 	# S96onvif_discovery is streamer-specific and installed by the selected streamer package.
++	$(INSTALL) -D -m 0755 $(THINGINO_ONVIF_PKGDIR)/files/S94onvif-httpd \
++		$(TARGET_DIR)/etc/init.d/S94onvif-httpd
+ 	$(INSTALL) -D -m 0755 $(THINGINO_ONVIF_PKGDIR)/files/S97onvif_notify \
+ 		$(TARGET_DIR)/etc/init.d/S97onvif_notify
+ endef
+diff --git a/package/thingino-uhttpd/0003-onvif-cgi.patch b/package/thingino-uhttpd/0003-onvif-cgi.patch
+deleted file mode 100644
+index 3ee14cc1..00000000
+--- a/package/thingino-uhttpd/0003-onvif-cgi.patch
++++ /dev/null
+@@ -1,119 +0,0 @@
+-diff --git a/cgi.c b/cgi.c
+-index 13a0bc4..3b18c92 100644
+---- a/cgi.c
+-+++ b/cgi.c
+-@@ -94,6 +94,7 @@ static void cgi_handle_request(struct client *cl, char *url, struct path_info *p
+- static bool check_cgi_path(struct path_info *pi, const char *url)
+- {
+- 	struct interpreter *ip;
+-+	struct cgi_prefix *prefix;
+- 	const char *path = pi->phys;
+- 	int path_len = strlen(path);
+- 
+-@@ -112,6 +113,15 @@ static bool check_cgi_path(struct path_info *pi, const char *url)
+- 
+- 	pi->ip = NULL;
+- 
+-+	/* Check new multi-prefix list */
+-+	if (!list_empty(&conf.cgi_prefixes)) {
+-+		list_for_each_entry(prefix, &conf.cgi_prefixes, list) {
+-+			if (uh_path_match(prefix->docroot_path, pi->phys))
+-+				return true;
+-+		}
+-+	}
+-+
+-+	/* Fallback to legacy single prefix */
+- 	if (conf.cgi_docroot_path)
+- 		return uh_path_match(conf.cgi_docroot_path, pi->phys);
+- 
+-diff --git a/main.c b/main.c
+-index de5f2c3..795cc57 100644
+---- a/main.c
+-+++ b/main.c
+-@@ -166,7 +166,7 @@ static int usage(const char *name)
+- 		"	-X		Enable CORS HTTP headers on JSON-RPC api\n"
+- 		"	-e		Events subscription reconnection time (retry value)\n"
+- #endif
+--		"	-x string       URL prefix for CGI handler, default is '/cgi-bin'\n"
+-+		"	-x string       URL prefix for CGI handler, default is '/x'\n"
+- 		"	-y alias[=path]	URL alias handle\n"
+- 		"	-i .ext=path    Use interpreter at path for files with the given extension\n"
+- 		"	-t seconds      CGI, Lua and UBUS script timeout in seconds, default is 60\n"
+-@@ -189,9 +189,10 @@ static void init_defaults_pre(void)
+- 	conf.max_script_requests = 3;
+- 	conf.max_connections = 100;
+- 	conf.realm = "Protected Area";
+--	conf.cgi_prefix = "/cgi-bin";
+-+	conf.cgi_prefix = "/x";
+- 	conf.cgi_path = "/sbin:/usr/sbin:/bin:/usr/bin";
+- 	INIT_LIST_HEAD(&conf.cgi_alias);
+-+	INIT_LIST_HEAD(&conf.cgi_prefixes);
+- 	INIT_LIST_HEAD(&conf.lua_prefix);
+- #if HAVE_UCODE
+- 	INIT_LIST_HEAD(&conf.ucode_prefix);
+-@@ -200,6 +201,8 @@ static void init_defaults_pre(void)
+- 
+- static void init_defaults_post(void)
+- {
+-+	struct cgi_prefix *cgi;
+-+
+- 	uh_index_add("index.html");
+- 	uh_index_add("index.htm");
+- 	uh_index_add("default.html");
+-@@ -213,6 +216,30 @@ static void init_defaults_post(void)
+- 		conf.cgi_docroot_path = str;
+- 		conf.cgi_prefix_len = strlen(conf.cgi_prefix);
+- 	};
+-+
+-+	/* Add /x/ CGI prefix */
+-+	cgi = calloc(1, sizeof(*cgi));
+-+	if (cgi) {
+-+		cgi->prefix = "/x";
+-+		cgi->prefix_len = 2;
+-+		char *str = malloc(strlen(conf.docroot) + 3);
+-+		strcpy(str, conf.docroot);
+-+		strcat(str, "/x");
+-+		cgi->docroot_path = str;
+-+		list_add(&cgi->list, &conf.cgi_prefixes);
+-+	}
+-+
+-+	/* Add /onvif/ CGI prefix */
+-+	cgi = calloc(1, sizeof(*cgi));
+-+	if (cgi) {
+-+		cgi->prefix = "/onvif";
+-+		cgi->prefix_len = 6;
+-+		char *str = malloc(strlen(conf.docroot) + 7);
+-+		strcpy(str, conf.docroot);
+-+		strcat(str, "/onvif");
+-+		cgi->docroot_path = str;
+-+		list_add(&cgi->list, &conf.cgi_prefixes);
+-+	}
+- }
+- 
+- static void fixup_prefix(char *str)
+-diff --git a/uhttpd.h b/uhttpd.h
+-index c755df6..4c90202 100644
+---- a/uhttpd.h
+-+++ b/uhttpd.h
+-@@ -55,6 +55,13 @@ struct alias {
+- 	char *path;
+- };
+- 
+-+struct cgi_prefix {
+-+	struct list_head list;
+-+	const char *prefix;
+-+	const char *docroot_path;
+-+	int prefix_len;
+-+};
+-+
+- struct lua_prefix {
+- 	struct list_head list;
+- 	const char *handler;
+-@@ -97,6 +104,7 @@ struct config {
+- 	int cgi_prefix_len;
+- 	int events_retry;
+- 	struct list_head cgi_alias;
+-+	struct list_head cgi_prefixes;
+- 	struct list_head lua_prefix;
+- #ifdef HAVE_UCODE
+- 	struct list_head ucode_prefix;
+diff --git a/package/thingino-uhttpd/files/S60uhttpd b/package/thingino-uhttpd/files/S60uhttpd
+index 954d1ed4..64c8a5a4 100644
+--- a/package/thingino-uhttpd/files/S60uhttpd
++++ b/package/thingino-uhttpd/files/S60uhttpd
+@@ -4,24 +4,16 @@
+ 
+ DAEMON="uhttpd"
+ PIDFILE="/var/run/uhttpd.pid"
+-PORTAL_MODE_FLAG="/run/portal_mode"
+-
+ UHTTPD_DOCROOT="${UHTTPD_DOCROOT:-/var/www}"
+-UHTTPD_PORTAL_DOCROOT="${UHTTPD_PORTAL_DOCROOT:-/var/www-portal}"
+-UHTTPD_CGI_PREFIX="${UHTTPD_CGI_PREFIX:-/x}"
+-UHTTPD_COMMON_ARGS="${UHTTPD_COMMON_ARGS:--t 0 -T 15 -k 10 -n 20 -N 100}"
++UHTTPD_COMMON_ARGS="${UHTTPD_COMMON_ARGS:--f -T 15 -k 10 -N 100 -E /index.html}"
+ UHTTPD_HTTP_LISTEN="${UHTTPD_HTTP_LISTEN:-80}"
+ UHTTPD_HTTPS_LISTEN="${UHTTPD_HTTPS_LISTEN:-443}"
+-UHTTPD_PORTAL_HTTP_LISTEN="${UHTTPD_PORTAL_HTTP_LISTEN:-172.16.0.1:80}"
+-UHTTPD_PORTAL_HTTPS_LISTEN="${UHTTPD_PORTAL_HTTPS_LISTEN:-172.16.0.1:443}"
+-UHTTPD_ERROR_HANDLER="${UHTTPD_ERROR_HANDLER:-/x/legacy-url-recovery.cgi}"
+ 
+ build_uhttpd_args() {
+ 	local docroot="$1"
+ 	local listen_http="$2"
+ 	local listen_https="$3"
+-	local error_handler="$4"
+-	local args="-h $docroot -x $UHTTPD_CGI_PREFIX $UHTTPD_COMMON_ARGS"
++	local args="-h $docroot $UHTTPD_COMMON_ARGS"
+ 
+ 	if [ -n "$listen_https" ]; then
+ 		args="$args -s $listen_https -C $cert_path -K $key_path"
+@@ -31,10 +23,6 @@ build_uhttpd_args() {
+ 		args="$args -p $listen_http"
+ 	fi
+ 
+-	if [ -n "$error_handler" ]; then
+-		args="$args -E $error_handler"
+-	fi
+-
+ 	if [ -n "$EXTRA_ARGS" ]; then
+ 		args="$args $EXTRA_ARGS"
+ 	fi
+@@ -64,8 +52,7 @@ start() {
+ 		fi
+ 	fi
+ 
+-	# SSL certificate paths (generated by S02ssl). Set before the portal branch
+-	# below, which returns without reaching the client-mode setup.
++	# SSL certificate paths generated by S02ssl.
+ 	cert_path="/etc/ssl/certs/uhttpd.crt"
+ 	key_path="/etc/ssl/private/uhttpd.key"
+ 
+@@ -74,61 +61,13 @@ start() {
+ 			[ -f "$key_path" ] && [ -s "$key_path" ]
+ 	}
+ 
+-	# Portal mode: bind to portal IP, use error handler for captive portal detection
+-	if [ -f "$PORTAL_MODE_FLAG" ]; then
+-		echo -c 15 "Starting uhttpd with Portal interface"
+-
+-		if [ ! -d "$UHTTPD_PORTAL_DOCROOT" ]; then
+-			echo "Portal directory $UHTTPD_PORTAL_DOCROOT not found"
+-			return 1
+-		fi
+-
+-		# Serve HTTPS alongside HTTP when a certificate exists. Port 80 is not
+-		# optional: captive-portal detection is plain HTTP by definition, so the
+-		# OS probes (/generate_204, /hotspot-detect.html, /ncsi.txt) and the
+-		# error handler all need it. 443 is purely additive, for clients that
+-		# address the portal directly and can demand TLS.
+-		#
+-		# Without a certificate, fall back to HTTP only rather than failing to
+-		# serve. Portal mode is the only way to configure a fresh camera, so a
+-		# missing cert must not make one unprovisionable.
+-		if have_certs; then
+-			DAEMON_ARGS_HTTP="$(build_uhttpd_args "$UHTTPD_PORTAL_DOCROOT" "$UHTTPD_PORTAL_HTTP_LISTEN" "$UHTTPD_PORTAL_HTTPS_LISTEN" "/x/portal.cgi")"
+-		else
+-			echo "No usable certificate, portal will be HTTP only"
+-			DAEMON_ARGS_HTTP="$(build_uhttpd_args "$UHTTPD_PORTAL_DOCROOT" "$UHTTPD_PORTAL_HTTP_LISTEN" "" "/x/portal.cgi")"
+-		fi
+-
+-		echo "Starting uhttpd with args: $DAEMON_ARGS_HTTP"
+-		/usr/bin/$DAEMON $DAEMON_ARGS_HTTP 2>&1 &
+-		local uhttpd_pid=$!
+-		echo $uhttpd_pid >$PIDFILE
+-
+-		sleep 3
+-
+-		if pgrep uhttpd >/dev/null 2>&1; then
+-			if netstat -ln | grep -q "172.16.0.1:80.*LISTEN"; then
+-				echo "uhttpd started successfully (Portal mode)"
+-				echo "Portal: http://172.16.0.1/"
+-				return 0
+-			else
+-				echo "uhttpd running but not listening on 172.16.0.1:80"
+-				netstat -ln | grep ":80"
+-				return 1
+-			fi
+-		else
+-			echo "uhttpd process not running"
+-			return 1
+-		fi
+-	else
+-		echo -c 15 "Starting uhttpd"
+-	fi
++	echo -c 15 "Starting uhttpd"
+ 
+ 	# Try SSL first if certificates exist
+ 	if have_certs; then
+ 		echo "SSL certificates found, attempting to start with SSL support..."
+ 
+-		DAEMON_ARGS_SSL="$(build_uhttpd_args "$UHTTPD_DOCROOT" "$UHTTPD_HTTP_LISTEN" "$UHTTPD_HTTPS_LISTEN" "$UHTTPD_ERROR_HANDLER")"
++		DAEMON_ARGS_SSL="$(build_uhttpd_args "$UHTTPD_DOCROOT" "$UHTTPD_HTTP_LISTEN" "$UHTTPD_HTTPS_LISTEN")"
+ 
+ 		# Start uhttpd with SSL
+ 		echo "/usr/bin/$DAEMON $DAEMON_ARGS_SSL" >&2
+@@ -153,7 +92,7 @@ start() {
+ 	fi
+ 
+ 	# Fallback: HTTP-only mode
+-	DAEMON_ARGS_HTTP="$(build_uhttpd_args "$UHTTPD_DOCROOT" "$UHTTPD_HTTP_LISTEN" "" "$UHTTPD_ERROR_HANDLER")"
++	DAEMON_ARGS_HTTP="$(build_uhttpd_args "$UHTTPD_DOCROOT" "$UHTTPD_HTTP_LISTEN" "")"
+ 
+ 	/usr/bin/$DAEMON $DAEMON_ARGS_HTTP >/dev/null 2>&1 &
+ 	local uhttpd_pid=$!
+diff --git a/package/thingino-uhttpd/files/uhttpd b/package/thingino-uhttpd/files/uhttpd
+index 29edccb0..f212e68a 100644
+--- a/package/thingino-uhttpd/files/uhttpd
++++ b/package/thingino-uhttpd/files/uhttpd
+@@ -22,15 +22,11 @@ SSL_DEBUG=0
+ 
+ # Core listen and request handling profile.
+ # Default values match the launch profile verified on-device:
+-# /usr/bin/uhttpd -h /var/www -x /x -t 0 -T 15 -k 10 -n 20 -N 100 -s 443 -C ... -K ... -p 80
++# /usr/bin/uhttpd -h /var/www -f -T 15 -k 10 -N 100 -s 443 -C ... -K ... -p 80
+ UHTTPD_DOCROOT="/var/www"
+-UHTTPD_PORTAL_DOCROOT="/var/www-portal"
+-UHTTPD_CGI_PREFIX="/x"
+-UHTTPD_COMMON_ARGS="-t 0 -T 15 -k 10 -n 20 -N 100"
++UHTTPD_COMMON_ARGS="-f -T 15 -k 10 -N 100 -E /index.html"
+ UHTTPD_HTTP_LISTEN="80"
+ UHTTPD_HTTPS_LISTEN="443"
+-UHTTPD_PORTAL_HTTP_LISTEN="172.16.0.1:80"
+-UHTTPD_ERROR_HANDLER="/x/legacy-url-recovery.cgi"
+ 
+ # Additional uhttpd arguments
+ # Add any extra arguments here
+diff --git a/package/wifi/wifi.mk b/package/wifi/wifi.mk
+index 086b2b4c..bcc594bc 100644
+--- a/package/wifi/wifi.mk
++++ b/package/wifi/wifi.mk
+@@ -211,31 +211,16 @@ define WIFI_INSTALL_TARGET_CMDS
+ 	ln -sfr $(TARGET_DIR)/usr/sbin/wlan $(TARGET_DIR)/usr/sbin/wlansetup
+ 	ln -sfr $(TARGET_DIR)/usr/sbin/wlan $(TARGET_DIR)/usr/sbin/wlantemp
+ 
+-	# Captive Portal
++	# Station configuration is materialized by the D-Link installer. Its
++	# recovery AP lives in the preserved mtd2 supervisor, not in this root.
+ 	$(INSTALL) -D -m 0644 $(WIFI_PKGDIR)/files/wpa_supplicant.conf \
+ 		$(TARGET_DIR)/etc/wpa_supplicant.conf
+ 	$(INSTALL) -D -m 0755 $(WIFI_PKGDIR)/files/disable_wlan \
+ 		$(TARGET_DIR)/etc/network/if-pre-up.d/disable_wlan
+-	$(INSTALL) -D -m 0644 $(WIFI_PKGDIR)/files/dnsd-portal.conf \
+-		$(TARGET_DIR)/etc/dnsd-portal.conf
+-	$(INSTALL) -D -m 0644 $(WIFI_PKGDIR)/files/httpd-portal.conf \
+-		$(TARGET_DIR)/etc/httpd-portal.conf
+-	$(INSTALL) -D -m 0644 $(WIFI_PKGDIR)/files/udhcpd-portal.conf \
++	rm -rf $(TARGET_DIR)/var/www-portal
++	rm -f $(TARGET_DIR)/etc/dnsd-portal.conf \
++		$(TARGET_DIR)/etc/httpd-portal.conf \
+ 		$(TARGET_DIR)/etc/udhcpd-portal.conf
+-	$(INSTALL) -D -m 0644 $(WIFI_PKGDIR)/files/favicon.ico \
+-		$(TARGET_DIR)/var/www-portal/favicon.ico
+-	$(INSTALL) -D -m 0644 $(WIFI_PKGDIR)/files/index.html \
+-		$(TARGET_DIR)/var/www-portal/index.html
+-	$(INSTALL) -D -m 0644 $(WIFI_PKGDIR)/files/portal.min.js \
+-		$(TARGET_DIR)/var/www-portal/portal.min.js
+-	$(INSTALL) -D -m 0644 $(WIFI_PKGDIR)/files/portal.min.css \
+-		$(TARGET_DIR)/var/www-portal/portal.min.css
+-	$(INSTALL) -D -m 0644 $(WIFI_PKGDIR)/files/logo.svg \
+-		$(TARGET_DIR)/var/www-portal/logo.svg
+-	$(INSTALL) -D -m 0755 $(WIFI_PKGDIR)/files/portal.cgi \
+-		$(TARGET_DIR)/var/www-portal/x/portal.cgi
+-	$(INSTALL) -D -m 0755 $(WIFI_PKGDIR)/files/api.cgi \
+-		$(TARGET_DIR)/var/www-portal/x/api.cgi
+ 
+ 	# AP
+ 	$(INSTALL) -D -m 0644 $(WIFI_PKGDIR)/files/dnsd-ap.conf $(TARGET_DIR)/etc/dnsd-ap.conf

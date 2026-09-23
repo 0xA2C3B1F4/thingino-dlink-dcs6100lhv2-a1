@@ -1,0 +1,30 @@
+# Bounded stock-restorer bootstrap. This kernel is not a normal runtime image.
+CONFIG_BINFMT_ELF=y
+CONFIG_CMDLINE_BOOL=y
+CONFIG_CMDLINE="console=ttyS1,115200n8 mem=42M@0x0 rmem=22M@0x2a00000 ipv6.disable=1 init=/sbin/init root=/dev/mtdblock2 rootfstype=squashfs ro panic=10 mtdparts=jz_sfc:256k(boot)ro,1792k(kernel),4608k(rootfs),7936k(userdata),1536k(userdata2)ro,256k(userdata3)ro"
+CONFIG_CMDLINE_OVERRIDE=y
+CONFIG_DEVTMPFS=y
+CONFIG_DEVTMPFS_MOUNT=y
+CONFIG_FAT_FS=y
+CONFIG_JZMMC_V12=m
+CONFIG_JZMMC_V12_MMC0=y
+CONFIG_JZMMC_V12_MMC0_PB_4BIT=y
+CONFIG_MMC=y
+CONFIG_MMC0_MAX_FREQ=24000000
+CONFIG_MMC_BLOCK=y
+CONFIG_MODULES=y
+CONFIG_MTD=y
+CONFIG_MTD_BLOCK=y
+CONFIG_MTD_CMDLINE_PARTS=y
+CONFIG_MTD_JZ_SFC=y
+CONFIG_MTD_JZ_SFC_NOR=y
+# Ingenic platform glue requires the core netlink substrate, but the bounded
+# restorer has no IP stack, network devices, wireless stack, or network tools.
+CONFIG_NET=y
+# CONFIG_INET is not set
+# CONFIG_NETDEVICES is not set
+CONFIG_NLS_UTF8=y
+CONFIG_SQUASHFS=y
+CONFIG_SQUASHFS_XZ=y
+CONFIG_VFAT_FS=y
+# CONFIG_WIRELESS is not set

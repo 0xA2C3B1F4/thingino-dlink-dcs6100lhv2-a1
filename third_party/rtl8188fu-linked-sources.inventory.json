@@ -1,0 +1,3703 @@
+{
+  "build_module": {
+    "sha256": "8bb883b5049a9d54bc1072454ffdb5b36cc0e10e545dede1637bd63bfbe12558",
+    "size": 2140996
+  },
+  "firmware_release_gate_closed": false,
+  "generated_module_source": {
+    "sha256": "f65ef17593c63e81f47fb859f2fb4a8d57db7af52f260bf11a8d6f587bc731ad",
+    "size": 557
+  },
+  "installed_module": {
+    "sha256": "2ac80b9f1d3b08080cb55ed8011379fc8872caa73502269cb3d0591b9ff2735f",
+    "size": 2136164
+  },
+  "kernel_config": {
+    "sha256": "d76a02d21576dba68fa196e2832c6bb4551578a97e0f43dd731cd60d0be4af8a",
+    "size": 48256
+  },
+  "license_review_status": "not-assessed",
+  "link_record": {
+    "sha256": "0fc5f8e6ad3ac33c704d22e00c8059d1cd42a555aeb46fe0049deb2edf8cad21",
+    "size": 17639
+  },
+  "not_covered": [
+    "transitive headers",
+    "kernel corresponding source",
+    "compiler inputs",
+    "complete per-file notice review",
+    "redistribution permission",
+    "corresponding-source delivery archive"
+  ],
+  "schema_version": 1,
+  "scope": "linked-driver-translation-units-not-full-corresponding-source",
+  "source_repository": "https://github.com/gtxaspec/rtl8188ftv-wifi.git",
+  "source_revision": "6e3c1c2d244f5056d2a7ade3dbcf9daa3876fc06",
+  "translation_unit_count": 150,
+  "translation_units": [
+    {
+      "compile_record": "core/crypto/.aes-ccm.o.cmd",
+      "compile_record_identity": {
+        "sha256": "a80fbad45b066ecc097664a46ce6aaa4d3bd328f2cc025fa2e3900c6b11cc59b",
+        "size": 79348
+      },
+      "header_marker_lines": {
+        "BSD": [
+          6
+        ],
+        "Copyright": [
+          4
+        ],
+        "README": [
+          7
+        ]
+      },
+      "object": "core/crypto/aes-ccm.o",
+      "object_identity": {
+        "sha256": "189e5a0ad77707ae453758cbe725da43d57499e7e25ff6ed0538407eef482bcd",
+        "size": 4448
+      },
+      "sha256": "f686d22f0760d2bbf13a914e57c775093b57b493d0b004a5a94b11425611c826",
+      "size": 5042,
+      "source": "core/crypto/aes-ccm.c"
+    },
+    {
+      "compile_record": "core/crypto/.aes-ctr.o.cmd",
+      "compile_record_identity": {
+        "sha256": "9b52b4aa334a707785714b27ddd02a89826ee0835e60c56e5cf8407c6aa9291d",
+        "size": 79348
+      },
+      "header_marker_lines": {
+        "BSD": [
+          6
+        ],
+        "Copyright": [
+          4
+        ],
+        "README": [
+          7
+        ]
+      },
+      "object": "core/crypto/aes-ctr.o",
+      "object_identity": {
+        "sha256": "d4cda2a3d1b28261a9c0b92a7314ce734ac04cc1fe45285422bd65eef0ba8065",
+        "size": 1820
+      },
+      "sha256": "5e244b7d1bbeac1173e2aac950525e20465855d9a43e9a1921741cbabef7abc6",
+      "size": 1664,
+      "source": "core/crypto/aes-ctr.c"
+    },
+    {
+      "compile_record": "core/crypto/.aes-gcm.o.cmd",
+      "compile_record_identity": {
+        "sha256": "4e6531e33eeb0dac66965c10e5e317727f14ef9dcf8d78e7f29589bc713b80ea",
+        "size": 79348
+      },
+      "header_marker_lines": {
+        "BSD": [
+          6
+        ],
+        "Copyright": [
+          4
+        ],
+        "README": [
+          7
+        ]
+      },
+      "object": "core/crypto/aes-gcm.o",
+      "object_identity": {
+        "sha256": "ace10dad2bebfe212932737f2c9606334fd26203ad88288e0d16ae15c4440363",
+        "size": 5880
+      },
+      "sha256": "1fd3fa67298d8e8348f00e72e78dd284085dcde48844b402ddbab239cd535314",
+      "size": 6615,
+      "source": "core/crypto/aes-gcm.c"
+    },
+    {
+      "compile_record": "core/crypto/.aes-internal-enc.o.cmd",
+      "compile_record_identity": {
+        "sha256": "a0e28807df330d1e939b7a0164d26243042fbf930982daf31145c59d429549e9",
+        "size": 79444
+      },
+      "header_marker_lines": {
+        "BSD": [
+          13
+        ],
+        "Copyright": [
+          11
+        ],
+        "README": [
+          14
+        ]
+      },
+      "object": "core/crypto/aes-internal-enc.o",
+      "object_identity": {
+        "sha256": "81844b566d707c6f432a0a9e0619d5d05201ecaa4e4d0a9c48eb0b409dcbc533",
+        "size": 3628
+      },
+      "sha256": "25a48d488a34d51aab84c32eb5cb10eaf3e0662ab75e0e758f4c04e557698b00",
+      "size": 2722,
+      "source": "core/crypto/aes-internal-enc.c"
+    },
+    {
+      "compile_record": "core/crypto/.aes-internal.o.cmd",
+      "compile_record_identity": {
+        "sha256": "f3901665cee415af5b4450b7ecec09193ff2f7471e0ebadc092995f28a94c6e1",
+        "size": 79400
+      },
+      "header_marker_lines": {
+        "BSD": [
+          13
+        ],
+        "Copyright": [
+          11
+        ],
+        "README": [
+          14
+        ]
+      },
+      "object": "core/crypto/aes-internal.o",
+      "object_identity": {
+        "sha256": "6ae44e9d701884c1ccc90b963ea8f59ab2d971a44c82c4f31909f28ef1028a33",
+        "size": 4880
+      },
+      "sha256": "1dadb0c22c4bc7bc98f4b728e759bd355177510fa8eb730917b63b9241d72632",
+      "size": 42188,
+      "source": "core/crypto/aes-internal.c"
+    },
+    {
+      "compile_record": "core/crypto/.aes-omac1.o.cmd",
+      "compile_record_identity": {
+        "sha256": "d1df59916689c4962b593052e4350543ed97e646d64d3d29573a112c49d7a036",
+        "size": 79370
+      },
+      "header_marker_lines": {
+        "BSD": [
+          6
+        ],
+        "Copyright": [
+          4
+        ],
+        "README": [
+          7
+        ]
+      },
+      "object": "core/crypto/aes-omac1.o",
+      "object_identity": {
+        "sha256": "2bc1010a6ba87636bdf396873bbfc31a221770360379ce052d310b7ec6d21ef6",
+        "size": 2716
+      },
+      "sha256": "202332e4ee42dcb9a6646927336ef69983f01a552b033a4c0356ed37706700a4",
+      "size": 4558,
+      "source": "core/crypto/aes-omac1.c"
+    },
+    {
+      "compile_record": "core/crypto/.aes-siv.o.cmd",
+      "compile_record_identity": {
+        "sha256": "6ae8efc47a24c91a0ad42b02d2bdab595201def151bcf3ac646f98d383ff7844",
+        "size": 79465
+      },
+      "header_marker_lines": {
+        "BSD": [
+          5
+        ],
+        "Copyright": [
+          3
+        ],
+        "README": [
+          6
+        ]
+      },
+      "object": "core/crypto/aes-siv.o",
+      "object_identity": {
+        "sha256": "fcd8ac0d5385fc1354c907e4ae29b04cf5ba1873061ba431fd8ea993dcf9587c",
+        "size": 3568
+      },
+      "sha256": "3757d1fd16dec5f48a2ccec1a6eaf3868d80526da388417f5cc75fbedea12d1a",
+      "size": 4148,
+      "source": "core/crypto/aes-siv.c"
+    },
+    {
+      "compile_record": "core/crypto/.ccmp.o.cmd",
+      "compile_record_identity": {
+        "sha256": "218020909dc0b2bd831671e5a410f884df86bbb09473ee7397717872830b9abb",
+        "size": 79440
+      },
+      "header_marker_lines": {
+        "BSD": [
+          5
+        ],
+        "Copyright": [
+          3
+        ],
+        "README": [
+          6
+        ]
+      },
+      "object": "core/crypto/ccmp.o",
+      "object_identity": {
+        "sha256": "14cc963fc52083b289d23ff462cefe708afcdbdd919d7ad7c7895151e4f8b749",
+        "size": 7592
+      },
+      "sha256": "17b0cab6400f65d9b6b0897d0ef4404e02eafadd7e7d4debfdb75cf084f69e4c",
+      "size": 10098,
+      "source": "core/crypto/ccmp.c"
+    },
+    {
+      "compile_record": "core/crypto/.gcmp.o.cmd",
+      "compile_record_identity": {
+        "sha256": "76145b4703c65a028accb291f5b8c4f262ed3ca4e99cdcace626ce58d1bd85b0",
+        "size": 79440
+      },
+      "header_marker_lines": {
+        "BSD": [
+          5
+        ],
+        "Copyright": [
+          3
+        ],
+        "README": [
+          6
+        ]
+      },
+      "object": "core/crypto/gcmp.o",
+      "object_identity": {
+        "sha256": "e85f1893836d967fc75935d7857ae633527fc8ade61d18e6cfcdc5996f66626a",
+        "size": 4324
+      },
+      "sha256": "3209923888184a700240f1c32b5f44bfb8e2ce2bc135cf3a7bc3fb618d916b42",
+      "size": 5360,
+      "source": "core/crypto/gcmp.c"
+    },
+    {
+      "compile_record": "core/crypto/.rtw_crypto_wrap.o.cmd",
+      "compile_record_identity": {
+        "sha256": "52cc55da88a9683c19f4dfb81647cf55751ff9c07ccf01b5c6c065e7d30ca582",
+        "size": 79205
+      },
+      "header_marker_lines": {},
+      "object": "core/crypto/rtw_crypto_wrap.o",
+      "object_identity": {
+        "sha256": "09dc60697cfa3a725aff46038291f1d9c44a2828d4dc0cf31efbbf57eaefaba7",
+        "size": 2552
+      },
+      "sha256": "f20da3d469aa8adb47acc4a1a54e813481148cf27034aaad4b49fc359de5c4b6",
+      "size": 1418,
+      "source": "core/crypto/rtw_crypto_wrap.c"
+    },
+    {
+      "compile_record": "core/crypto/.sha256-internal.o.cmd",
+      "compile_record_identity": {
+        "sha256": "3713dcf4d298c96911922e944fe693815310cd210c6b8060e86c1fea6e2afcb1",
+        "size": 79564
+      },
+      "header_marker_lines": {
+        "BSD": [
+          5
+        ],
+        "Copyright": [
+          3
+        ],
+        "README": [
+          6
+        ]
+      },
+      "object": "core/crypto/sha256-internal.o",
+      "object_identity": {
+        "sha256": "111ac11c8e423acf7a67acc78689a8af098ef0f8021c6e8939e5491f57d21e8c",
+        "size": 3672
+      },
+      "sha256": "a46226b266c28d2d2ee2474847b5232c59dabba0a1809e7b43596294579736ad",
+      "size": 6187,
+      "source": "core/crypto/sha256-internal.c"
+    },
+    {
+      "compile_record": "core/crypto/.sha256-prf.o.cmd",
+      "compile_record_identity": {
+        "sha256": "b852d4f36d07ec0ea4096cd8fa6ecaca513265e19533ef16bc2fd15ff7fed921",
+        "size": 79391
+      },
+      "header_marker_lines": {
+        "BSD": [
+          5
+        ],
+        "Copyright": [
+          3
+        ],
+        "README": [
+          6
+        ]
+      },
+      "object": "core/crypto/sha256-prf.o",
+      "object_identity": {
+        "sha256": "42384719d9f8604d0af1470b14140ae67929916661dcda4ab1c70c6be235d095",
+        "size": 1948
+      },
+      "sha256": "5cca53a2f54159475307f351c984879b4aab29669360b0df6004b1861d7bc3cb",
+      "size": 2945,
+      "source": "core/crypto/sha256-prf.c"
+    },
+    {
+      "compile_record": "core/crypto/.sha256.o.cmd",
+      "compile_record_identity": {
+        "sha256": "5127e4e4a7fdee142b69c712ce2438c29db8cfa3df03f23dbe42b58611949e03",
+        "size": 79347
+      },
+      "header_marker_lines": {
+        "BSD": [
+          5
+        ],
+        "Copyright": [
+          3
+        ],
+        "README": [
+          6
+        ]
+      },
+      "object": "core/crypto/sha256.o",
+      "object_identity": {
+        "sha256": "b6109b1c9060f4201731c3333e80745cd8c801a31471fa003392ec22d6f6effc",
+        "size": 1956
+      },
+      "sha256": "a5d8d4e226c29a7b44a36c4039baec0c6ec51653f157b904630b64de39ddeeb3",
+      "size": 2718,
+      "source": "core/crypto/sha256.c"
+    },
+    {
+      "compile_record": "core/efuse/.rtw_efuse.o.cmd",
+      "compile_record_identity": {
+        "sha256": "cec39e1a0a1868ef6383d05652e23b1afe339d7908afc8b8f88971b95d2ca3bd",
+        "size": 92056
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/efuse/rtw_efuse.o",
+      "object_identity": {
+        "sha256": "1dd0a436a15ebde9b9c1c239de3bc6b0bea4ff47cfaaf94fa57c5d97e6406cb2",
+        "size": 29812
+      },
+      "sha256": "55fc395b4b89bc0f979ca9220c9c93e6fc011cfc2097ceb69c803ba6fbfc502b",
+      "size": 94078,
+      "source": "core/efuse/rtw_efuse.c"
+    },
+    {
+      "compile_record": "core/mesh/.rtw_mesh.o.cmd",
+      "compile_record_identity": {
+        "sha256": "a9a39fdf08e481c2bc92c53807751f9680a31c9b4f453d1e445cb705a3f7462d",
+        "size": 5254
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/mesh/rtw_mesh.o",
+      "object_identity": {
+        "sha256": "cea8406c007db813a898a7d77f8d8fce95a9eb9dff3082b53328fd060e946a5e",
+        "size": 1044
+      },
+      "sha256": "4dc75910989b3c4f3bc8ec7adcfbc04019976a27252d8acfc69f605b84ef4c59",
+      "size": 123149,
+      "source": "core/mesh/rtw_mesh.c"
+    },
+    {
+      "compile_record": "core/mesh/.rtw_mesh_hwmp.o.cmd",
+      "compile_record_identity": {
+        "sha256": "656fe8f003f70924638d72cfc536066ca592eaff22d6aaf8790d5d7eaccd2d3e",
+        "size": 4466
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/mesh/rtw_mesh_hwmp.o",
+      "object_identity": {
+        "sha256": "553054ee0306b72e89fe32f0bd475af1e36e20d78a64bff760548a543a8b5182",
+        "size": 1052
+      },
+      "sha256": "8cc03c196c47db7301c9c742dc9be01cf189401925ca8e18d152b2e3dd336c13",
+      "size": 46292,
+      "source": "core/mesh/rtw_mesh_hwmp.c"
+    },
+    {
+      "compile_record": "core/mesh/.rtw_mesh_pathtbl.o.cmd",
+      "compile_record_identity": {
+        "sha256": "4de08c81be1bf3997623b1fcb317223ee1fb16181604fbc27a056f9b2ca886d4",
+        "size": 4448
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/mesh/rtw_mesh_pathtbl.o",
+      "object_identity": {
+        "sha256": "9046d0184d5bb21bf832674c03a09a727ff7fcce244e5d390a209211a3b8e411",
+        "size": 1052
+      },
+      "sha256": "aaf5adc50a8fd774b7ebc60fb02159a59423b409c21779fd8a5d1e08be906e1a",
+      "size": 33222,
+      "source": "core/mesh/rtw_mesh_pathtbl.c"
+    },
+    {
+      "compile_record": "core/monitor/.rtw_radiotap.o.cmd",
+      "compile_record_identity": {
+        "sha256": "6cb748326028136ba27ea5071d47e3022a38593bd7cf9efc2388ff81847bd02b",
+        "size": 4376
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/monitor/rtw_radiotap.o",
+      "object_identity": {
+        "sha256": "37bc3b218c33fe2fa8e97132e358de04a8236ba97a2eef6dfdab540794ebdf89",
+        "size": 1048
+      },
+      "sha256": "82833feb209b0111849b870995a4c602ad2c3dae2d6f378cf03348809860e487",
+      "size": 17732,
+      "source": "core/monitor/rtw_radiotap.c"
+    },
+    {
+      "compile_record": "core/.rtw_ap.o.cmd",
+      "compile_record_identity": {
+        "sha256": "e86a0aecf4afa25d24de0eede22f22ae5722f9f8e5a66da75b6a25078cf5bafb",
+        "size": 91834
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/rtw_ap.o",
+      "object_identity": {
+        "sha256": "c58a86ed299fbe984e412c732365d3c54bb2f6f7632912f4c8651770cd81d151",
+        "size": 69372
+      },
+      "sha256": "6616ea92ec77d7c783974c4cfeb3849cd46bf0d96111ab5879273e0bc5ad172f",
+      "size": 171406,
+      "source": "core/rtw_ap.c"
+    },
+    {
+      "compile_record": "core/.rtw_beamforming.o.cmd",
+      "compile_record_identity": {
+        "sha256": "e42bbf5469a821ae869c6342e41eed3d3a7aef5ddc19f5848d355b76e7e6ab04",
+        "size": 91735
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/rtw_beamforming.o",
+      "object_identity": {
+        "sha256": "a69bb5eaddf46475b03b2a7a8016ad206d912e1a0a8b05b584f820034f4254ad",
+        "size": 1052
+      },
+      "sha256": "024c1fe881e9774fe410356545e58bf9876ebf0b3d82e499e0d475957ee584fd",
+      "size": 58690,
+      "source": "core/rtw_beamforming.c"
+    },
+    {
+      "compile_record": "core/.rtw_br_ext.o.cmd",
+      "compile_record_identity": {
+        "sha256": "7393d847ca74c3fe1f56abb6565ecbdaeb88aed7b650ba3740f0f1136b85fb57",
+        "size": 79533
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/rtw_br_ext.o",
+      "object_identity": {
+        "sha256": "db74df9f551af2640892cb77a0a38d00b421a3b5c0715c21ae670a3c99ac689e",
+        "size": 23332
+      },
+      "sha256": "01e973e4d11f88d8253dcbdf822100383dfc905dca938785867931f225eb828d",
+      "size": 46262,
+      "source": "core/rtw_br_ext.c"
+    },
+    {
+      "compile_record": "core/.rtw_btcoex.o.cmd",
+      "compile_record_identity": {
+        "sha256": "2a8d6f74d66380bfc09b708c5dc1b1eb19985f3fb7fe34254ad5dac9ba3508cd",
+        "size": 91680
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/rtw_btcoex.o",
+      "object_identity": {
+        "sha256": "242a7f52d0ee42e897a0324f6921caffce53a472c894150ab924d62ca272fd25",
+        "size": 1464
+      },
+      "sha256": "767e2405a3a52c1de90bdb2b5787aa5f9b5b893ee89d95fd418ae3295109483d",
+      "size": 50570,
+      "source": "core/rtw_btcoex.c"
+    },
+    {
+      "compile_record": "core/.rtw_btcoex_wifionly.o.cmd",
+      "compile_record_identity": {
+        "sha256": "79912283a636c8e9210c49ee31dee26add7ee64cd8447ab617ce4c0b12740c13",
+        "size": 91779
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/rtw_btcoex_wifionly.o",
+      "object_identity": {
+        "sha256": "b54a8a0b1fec1216b7c04504c2520f8c26991f232dc67a7758f6319ec1bd863e",
+        "size": 1684
+      },
+      "sha256": "d72cc4fda2ecbef48b342c72e997edf338316d6fd8bcd1ab7de7f86578c5ca6b",
+      "size": 1389,
+      "source": "core/rtw_btcoex_wifionly.c"
+    },
+    {
+      "compile_record": "core/.rtw_chplan.o.cmd",
+      "compile_record_identity": {
+        "sha256": "72eb02b2a9cffa232f17218fb406b0f5dd152668c5cdc892098b1232de1bfd74",
+        "size": 79020
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/rtw_chplan.o",
+      "object_identity": {
+        "sha256": "a29814b195547a540b3de1af7cd79716eefb06cfe911d60c6cc23b2ea3e7a036",
+        "size": 10072
+      },
+      "sha256": "1ea9b99f7f8b060bc0384ff665b88a2ba00f21508429cb707a81ffb3c1b6afe7",
+      "size": 63736,
+      "source": "core/rtw_chplan.c"
+    },
+    {
+      "compile_record": "core/.rtw_cmd.o.cmd",
+      "compile_record_identity": {
+        "sha256": "6837ca8c7771721891bc9dfaf5b1d956f0f01d3e8026164763014a42a601e016",
+        "size": 91905
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/rtw_cmd.o",
+      "object_identity": {
+        "sha256": "8848f1509fa98f0d247ceeee7390a1d2189b4362cd5dd5b2c99d884141772c90",
+        "size": 52716
+      },
+      "sha256": "2a95763023ef9504b88dcb807415218a142676e30f0a60238d7d6c72d6b8a197",
+      "size": 146822,
+      "source": "core/rtw_cmd.c"
+    },
+    {
+      "compile_record": "core/.rtw_debug.o.cmd",
+      "compile_record_identity": {
+        "sha256": "232ba97d874192a3f3e98bb51ca9b839c2fda6f785762096014fd11654d4ab32",
+        "size": 92177
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/rtw_debug.o",
+      "object_identity": {
+        "sha256": "a1d603788d1549b454f6dc9991d18eac5eedb97b3c988e8a7b6ac7e66389302d",
+        "size": 145172
+      },
+      "sha256": "ca32f03e16b14a5ed34977c8f75f6a0a528a7df38953d7509ab4dbfc8b5f16fe",
+      "size": 223474,
+      "source": "core/rtw_debug.c"
+    },
+    {
+      "compile_record": "core/.rtw_ft.o.cmd",
+      "compile_record_identity": {
+        "sha256": "1f2c11070c749af608e64f0ea4a2454ce5fe826540c8d4919192851bb6bd923e",
+        "size": 91684
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/rtw_ft.o",
+      "object_identity": {
+        "sha256": "0bbe12dc01e0bf48097d5421e26e11785e17748b8cd7e1b0ec09830f78a49c77",
+        "size": 1044
+      },
+      "sha256": "2ed96968bdae43f22751bc447ddb935c4c0635d756e688eb7db57d0bffcb8f17",
+      "size": 20890,
+      "source": "core/rtw_ft.c"
+    },
+    {
+      "compile_record": "core/.rtw_ieee80211.o.cmd",
+      "compile_record_identity": {
+        "sha256": "8ea061432d6a875c13cfbc41b40320fd53d840fc52fe91863abb2cd262d0e791",
+        "size": 78988
+      },
+      "header_marker_lines": {
+        "BSD": [
+          35
+        ],
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/rtw_ieee80211.o",
+      "object_identity": {
+        "sha256": "be43c568150bc26b697ff3b7405fca66b90aa7f1bb2aa9b011237a469800b7e8",
+        "size": 34628
+      },
+      "sha256": "ab5f419eedd9036d0f8d92ca061d442a07a00a38342395f8b2ae6e4c3364c68b",
+      "size": 80932,
+      "source": "core/rtw_ieee80211.c"
+    },
+    {
+      "compile_record": "core/.rtw_io.o.cmd",
+      "compile_record_identity": {
+        "sha256": "8c72dbb639719f3105c3e4bea7512041a1003c8b2dab69470d115e72fa18724d",
+        "size": 91733
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/rtw_io.o",
+      "object_identity": {
+        "sha256": "8d8ef5a6ad15d07e73edc6bc1a65efe077dca8fbf4cf0fa1136e3682223d1381",
+        "size": 4900
+      },
+      "sha256": "62528c8d393035e97e41e70c2f90d22acde3b3451c9e3537cbf5b07b20bd4d83",
+      "size": 27362,
+      "source": "core/rtw_io.c"
+    },
+    {
+      "compile_record": "core/.rtw_ioctl_query.o.cmd",
+      "compile_record_identity": {
+        "sha256": "208ce60221e1d0efbc03d90d16fca48d6077f60c5efca4e6a1eb34721cca3caa",
+        "size": 79010
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/rtw_ioctl_query.o",
+      "object_identity": {
+        "sha256": "7ca0c80cdd0ee921d280c30afe7092e79d118cd3d0fad15d126fd8b9ab475fb3",
+        "size": 1052
+      },
+      "sha256": "c4f800b037d70d8ae9bd85140217f670653ea06622745d5aad4e3c8e94e49390",
+      "size": 710,
+      "source": "core/rtw_ioctl_query.c"
+    },
+    {
+      "compile_record": "core/.rtw_ioctl_set.o.cmd",
+      "compile_record_identity": {
+        "sha256": "59b88eb3fd19754f0de48292561c9251df8c8c5342b6a6bc4b17f5747d5c9abc",
+        "size": 91770
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/rtw_ioctl_set.o",
+      "object_identity": {
+        "sha256": "6330d50ff4dbd10b9245793c872f982837075262c9f36ee90fdc24590f0e407b",
+        "size": 11616
+      },
+      "sha256": "c5dd657ea842e8f00fcf73d79b5f16d75f64cb35aa53121989b96209320db866",
+      "size": 23539,
+      "source": "core/rtw_ioctl_set.c"
+    },
+    {
+      "compile_record": "core/.rtw_iol.o.cmd",
+      "compile_record_identity": {
+        "sha256": "60eea75111c6124083a2a55f2315904ddaf51dd1cba31526831f7636a14ef5cd",
+        "size": 78976
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/rtw_iol.o",
+      "object_identity": {
+        "sha256": "35051ac0efab924bd9763bbe84884aa77ffe29130fc183e0ad3f65b9bf8f72e9",
+        "size": 1044
+      },
+      "sha256": "bb10842aa4a1a9e1172e18bed5cae90d513a0e9c7972dd6985ccc258aa3746d4",
+      "size": 10979,
+      "source": "core/rtw_iol.c"
+    },
+    {
+      "compile_record": "core/.rtw_mbo.o.cmd",
+      "compile_record_identity": {
+        "sha256": "575566da672bc3d50998658f740b1d995d987d52f930959ad7de0a0330e5a532",
+        "size": 91647
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/rtw_mbo.o",
+      "object_identity": {
+        "sha256": "71fc97788cb7ead40f19ed51c0459a6f936e2ef92b359253500d4455f5db2a9d",
+        "size": 1044
+      },
+      "sha256": "8cdfcb58261db7391352aedc0fa75b63a7c9a4cd3ed9a2735231ad680b6fea8f",
+      "size": 22204,
+      "source": "core/rtw_mbo.c"
+    },
+    {
+      "compile_record": "core/.rtw_mi.o.cmd",
+      "compile_record_identity": {
+        "sha256": "74eeee6e6f4c0707f13649ec6012803353b75d4bfe21318b1f325f406c0e6e94",
+        "size": 91685
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/rtw_mi.o",
+      "object_identity": {
+        "sha256": "d43ef3ee2af6e5cb97cef81cf99a472bcb7296a6fd5709a5f392f8c0fd67d0dc",
+        "size": 27756
+      },
+      "sha256": "9b2822fa0d259f00a362077c02bce42a9a7035e69140fe093783ed5a0b3aa3e7",
+      "size": 42026,
+      "source": "core/rtw_mi.c"
+    },
+    {
+      "compile_record": "core/.rtw_mlme.o.cmd",
+      "compile_record_identity": {
+        "sha256": "2f699a7e85968ab62fb7bf4f247e126793703a4ff961bc4fb1ee90ed258686f6",
+        "size": 91958
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/rtw_mlme.o",
+      "object_identity": {
+        "sha256": "ef8201f559e575ba19d267a43ae198644baa4827f5637aee9b41bbf03d2fa7dd",
+        "size": 65452
+      },
+      "sha256": "cde8bffd79ed97b830af1b773a2f34078cd9c5e2488b6400ab0f4afbd2341207",
+      "size": 177873,
+      "source": "core/rtw_mlme.c"
+    },
+    {
+      "compile_record": "core/.rtw_mlme_ext.o.cmd",
+      "compile_record_identity": {
+        "sha256": "db6b7bb768faa53ff3670a83e84b565bb7e52c8b810ffffa6fc72c21827a5be6",
+        "size": 92149
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/rtw_mlme_ext.o",
+      "object_identity": {
+        "sha256": "d544e31e74fc0985aa1bf8ccd967beb2b31c9952caf0da8f158ac8dc4f283822",
+        "size": 148184
+      },
+      "sha256": "5e8dd90cf1b0e684a0b29f46c63d16cb02525f0a0ac7aac7324a1448d229069b",
+      "size": 486253,
+      "source": "core/rtw_mlme_ext.c"
+    },
+    {
+      "compile_record": "core/.rtw_odm.o.cmd",
+      "compile_record_identity": {
+        "sha256": "76837e0965f9e761bffe4429698a2e289bd18b672357131fd2efd6f6426436d4",
+        "size": 91647
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/rtw_odm.o",
+      "object_identity": {
+        "sha256": "a70857d0dd344c59ba78b626adba54b6f441900087072c53fd171e620314568a",
+        "size": 8980
+      },
+      "sha256": "50e6f04dbbce74dc1890a203a3704d0a9addc690c062950e31653cb5471796a1",
+      "size": 17110,
+      "source": "core/rtw_odm.c"
+    },
+    {
+      "compile_record": "core/.rtw_p2p.o.cmd",
+      "compile_record_identity": {
+        "sha256": "4d0c56d0bbb9daefd68697f52616c028b4fa6ce247a287cd52c55348c122b704",
+        "size": 78922
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/rtw_p2p.o",
+      "object_identity": {
+        "sha256": "92d5899df1efb4196ffe8184028063b50d495ea1ea1a21316feef3c5a560884f",
+        "size": 1044
+      },
+      "sha256": "657ebe44878a0a61ac0748c7d87ec8a9e2ed328da917aedf0268559b3b8d5956",
+      "size": 152521,
+      "source": "core/rtw_p2p.c"
+    },
+    {
+      "compile_record": "core/.rtw_pwrctrl.o.cmd",
+      "compile_record_identity": {
+        "sha256": "32f61d07b8e1d23342aa3cb1e7894c0a8718b6b49d501a5608bbadd408f7551c",
+        "size": 91997
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/rtw_pwrctrl.o",
+      "object_identity": {
+        "sha256": "c7f62c2c574c4c6d5c1d67f6b4e0f638d2459f62f7bc118a24ba0b547aabf58e",
+        "size": 12744
+      },
+      "sha256": "d9e2774af6317ac47f5f7a93137944ec6f6e5ff3c5b636a9d815a74bf85fc17f",
+      "size": 78795,
+      "source": "core/rtw_pwrctrl.c"
+    },
+    {
+      "compile_record": "core/.rtw_recv.o.cmd",
+      "compile_record_identity": {
+        "sha256": "d2ce73f7eddebadbbab25ff4393f7de156b44da79dd13a18687097dd147dc28b",
+        "size": 91757
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/rtw_recv.o",
+      "object_identity": {
+        "sha256": "e10c1222d4eb45cad70ca213c5e5b1d482b30eaf6e01f2544a7399c88b276906",
+        "size": 40512
+      },
+      "sha256": "73d37226bc3e10938d94a7d3d10a684cff0d4cd40a4846e9ef5e4730e883443d",
+      "size": 143601,
+      "source": "core/rtw_recv.c"
+    },
+    {
+      "compile_record": "core/.rtw_rf.o.cmd",
+      "compile_record_identity": {
+        "sha256": "7080bfe6e37d91b1e955bd1b46798f51f322dad440b13022014c620ca0046ae9",
+        "size": 91636
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/rtw_rf.o",
+      "object_identity": {
+        "sha256": "bd040591e06c25e1bf1e1fbbce4976a082867c36d4952eed8eac93aed1cd257e",
+        "size": 34304
+      },
+      "sha256": "3405068f7acd58f2a9cda308e9d1c07ac4398d8dbf00a34f7c56fc425f43d20c",
+      "size": 52957,
+      "source": "core/rtw_rf.c"
+    },
+    {
+      "compile_record": "core/.rtw_rm.o.cmd",
+      "compile_record_identity": {
+        "sha256": "3bc751f7c17c771f939e010fced81d9adfee207f9ee94a9a452390740ba43679",
+        "size": 91636
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/rtw_rm.o",
+      "object_identity": {
+        "sha256": "68025deb6f9a4e032173764e12ae846d204265b73c7ad285a7e5121c7e0f9753",
+        "size": 1248
+      },
+      "sha256": "5e8437d9408a43b563d2aa00d1f0a51ffc4c60bc9d6c657b681e4184d9f5da12",
+      "size": 59825,
+      "source": "core/rtw_rm.c"
+    },
+    {
+      "compile_record": "core/.rtw_rm_fsm.o.cmd",
+      "compile_record_identity": {
+        "sha256": "a2ad732d5bfebcec295d7685189b609e304b1b52c21b6a51f698e1f24b5f8872",
+        "size": 91680
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/rtw_rm_fsm.o",
+      "object_identity": {
+        "sha256": "179767e46e2f079d22b405242c2b2681b9aa7fa74a645e4299573d9af3a46889",
+        "size": 1048
+      },
+      "sha256": "808db5c76cae975255073c4d396bd18401c7e3392ecfcb6a187646b42fb0e889",
+      "size": 23977,
+      "source": "core/rtw_rm_fsm.c"
+    },
+    {
+      "compile_record": "core/.rtw_rm_util.o.cmd",
+      "compile_record_identity": {
+        "sha256": "c2176c4accf7fd1b7975ce0a5de7baf079bbb78121645dba1d1bafd05253cd9c",
+        "size": 91691
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/rtw_rm_util.o",
+      "object_identity": {
+        "sha256": "1bfcc759f83169a36587bc5895613210129fa45b0f8bd4583eed1623d102a012",
+        "size": 1048
+      },
+      "sha256": "6559156858ad00cece74af57f174f7874eb3807f8eea597620ae21de3184776a",
+      "size": 9567,
+      "source": "core/rtw_rm_util.c"
+    },
+    {
+      "compile_record": "core/.rtw_roch.o.cmd",
+      "compile_record_identity": {
+        "sha256": "ab90f2a6af888ee9e95ee1198dbc1815b2ab25f6e3b4883222c086d62066b308",
+        "size": 78993
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/rtw_roch.o",
+      "object_identity": {
+        "sha256": "6ff181a00b3a8b8f664c8cd49d1d807ab9777a74dd293371d8bd2d2422e1abd6",
+        "size": 9060
+      },
+      "sha256": "fab893a17d75371bdf05b6d18c2fb93fad45383038737f04fea8f6ed9ab32949",
+      "size": 19200,
+      "source": "core/rtw_roch.c"
+    },
+    {
+      "compile_record": "core/.rtw_rson.o.cmd",
+      "compile_record_identity": {
+        "sha256": "1ebbdb17e066bd43cbe04ceed53a909edf15b9951397f03578933ab473bf86eb",
+        "size": 78933
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11,
+          14
+        ]
+      },
+      "object": "core/rtw_rson.o",
+      "object_identity": {
+        "sha256": "94deebf1a8fd50d9d39116f8ef958d9ea157c65a88d2f859a0d3d703c54cfca4",
+        "size": 1044
+      },
+      "sha256": "6c8faf7d2ad2d23e448465ae1326e7841af20a6465425d723905a55309562a25",
+      "size": 18322,
+      "source": "core/rtw_rson.c"
+    },
+    {
+      "compile_record": "core/.rtw_security.o.cmd",
+      "compile_record_identity": {
+        "sha256": "e1d2e7e01dfc725a4ce8b17ed455609e902f916cf77f394b967ddae64d60756b",
+        "size": 79095
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/rtw_security.o",
+      "object_identity": {
+        "sha256": "c183ad7c735673f81835b2b99b5f2f230199631e1a7639afcd9f95468d2f506d",
+        "size": 20544
+      },
+      "sha256": "36dce3b599eef5d4ad138114c087afe0e16ccfbbbbf0b53dfcdbca0bd0112de7",
+      "size": 80777,
+      "source": "core/rtw_security.c"
+    },
+    {
+      "compile_record": "core/.rtw_sreset.o.cmd",
+      "compile_record_identity": {
+        "sha256": "3279e577d512f8ffa058ef86b7297461e1614fa3603628165c5c94a2cc145407",
+        "size": 91680
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/rtw_sreset.o",
+      "object_identity": {
+        "sha256": "80ceed7d91314b3b3de863e48e680709d050d8826afc06e38b2bc651377174b6",
+        "size": 6148
+      },
+      "sha256": "02c69aedcce442cde465d11f71cbda245f0874d566273c324a02a82bd61c6485",
+      "size": 9474,
+      "source": "core/rtw_sreset.c"
+    },
+    {
+      "compile_record": "core/.rtw_sta_mgt.o.cmd",
+      "compile_record_identity": {
+        "sha256": "f1f081e634ddc58f2e898947f51e13b29667a76230d202abf4706b3296237464",
+        "size": 78966
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/rtw_sta_mgt.o",
+      "object_identity": {
+        "sha256": "b883c018dcf6e058726f600b8214bce18af62432800b796435b33b5394689ebd",
+        "size": 18084
+      },
+      "sha256": "82b576d9b97a49ad3e16a7f3ca1302946149db37c6a3d610fba49ea5467c6915",
+      "size": 37466,
+      "source": "core/rtw_sta_mgt.c"
+    },
+    {
+      "compile_record": "core/.rtw_swcrypto.o.cmd",
+      "compile_record_identity": {
+        "sha256": "8e020cb05f6ab44651ad3c95d2479b5f1ed6a9acb3cf14a45da969baa4b68296",
+        "size": 92291
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/rtw_swcrypto.o",
+      "object_identity": {
+        "sha256": "0d52bab33db7f285dcabc195cf9d7396614ff0f1cbfa7fd3c158c0082f0cd557",
+        "size": 5728
+      },
+      "sha256": "7aad63516737ef0fe6ae0dce11c7c19d4ee7a78470a3ecc16faab88bdde580bd",
+      "size": 7698,
+      "source": "core/rtw_swcrypto.c"
+    },
+    {
+      "compile_record": "core/.rtw_tdls.o.cmd",
+      "compile_record_identity": {
+        "sha256": "3421e75aebe6f5dba8864cc7b7e5df080796f40914052e007f4b3a000ba88c2f",
+        "size": 91711
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/rtw_tdls.o",
+      "object_identity": {
+        "sha256": "228cd09aece5236add5371596228b8ee91c89afc48be9cdb4c72dbf59597e4b3",
+        "size": 1044
+      },
+      "sha256": "75bf032599cb33c6b9dfd735e475b541256a84bdc7b2f7a654e66d251fc9730e",
+      "size": 109672,
+      "source": "core/rtw_tdls.c"
+    },
+    {
+      "compile_record": "core/.rtw_vht.o.cmd",
+      "compile_record_identity": {
+        "sha256": "b0a1b4f51a7f9a754a29048eb677d8c52369f8fe9c89b73dd2c0c82063fb7aa6",
+        "size": 91647
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/rtw_vht.o",
+      "object_identity": {
+        "sha256": "e56219d71306d3040389c306e44a19f7cd40f8a5d74dbb05392af9cf4daa6e87",
+        "size": 1044
+      },
+      "sha256": "43bfb0d9800f81670a5c5177a9d977dcce593830bb55b53ed310509b0cac292a",
+      "size": 38664,
+      "source": "core/rtw_vht.c"
+    },
+    {
+      "compile_record": "core/.rtw_wlan_util.o.cmd",
+      "compile_record_identity": {
+        "sha256": "07c3724c7cebe0c9d70861e2fe82116a617c98ff24de6478888b935a4aff4d3f",
+        "size": 91818
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/rtw_wlan_util.o",
+      "object_identity": {
+        "sha256": "7390d32b627936c941b71c7cc71e582df6451c8757638e8b4500a3324175d8c9",
+        "size": 56984
+      },
+      "sha256": "37ff052293ff46ffb47a7ab9f9945e0ff5b0b1641907351d617f94210ee731cd",
+      "size": 142237,
+      "source": "core/rtw_wlan_util.c"
+    },
+    {
+      "compile_record": "core/.rtw_wnm.o.cmd",
+      "compile_record_identity": {
+        "sha256": "d5c0523393b3d98bd4f7e332012911f4d02707b26983bb4d7861337b57c48245",
+        "size": 91647
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/rtw_wnm.o",
+      "object_identity": {
+        "sha256": "3b1a3f179066d5c71753d2095f94311985fec215f7229893da7bae1bbd376aef",
+        "size": 1044
+      },
+      "sha256": "1ce571e6b33b0abe703edcebd4933752af54f974cf10dd618385961be3957fe4",
+      "size": 25347,
+      "source": "core/rtw_wnm.c"
+    },
+    {
+      "compile_record": "core/.rtw_xmit.o.cmd",
+      "compile_record_identity": {
+        "sha256": "0fcd6454577a1af75cc61b87fc80db91a7de9d8493e7052962ace6c8c8b9bc17",
+        "size": 91906
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/rtw_xmit.o",
+      "object_identity": {
+        "sha256": "3202e9e60a4f482909c63e0c6f4f6aa567a607cee47a2788929c99ff19774491",
+        "size": 53464
+      },
+      "sha256": "8dc168b918c9ac2c98946e4b4788f21a31f60cdff4c80638623841f26cd21de1",
+      "size": 166296,
+      "source": "core/rtw_xmit.c"
+    },
+    {
+      "compile_record": "core/wds/.rtw_wds.o.cmd",
+      "compile_record_identity": {
+        "sha256": "730ddc35b88d7fd49c0ee326b6e5d494d4da40187df7e6f9d6814512923daa08",
+        "size": 78962
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "core/wds/rtw_wds.o",
+      "object_identity": {
+        "sha256": "f6ad9aaab4650e5d7ac249e9ea831dd354eb3061ec1fb5d7857d89f4d73bf556",
+        "size": 1044
+      },
+      "sha256": "e5ad2011db96a623c8c959c782542b4b5cc86e690b1fbe49346ae78d57b64c69",
+      "size": 17729,
+      "source": "core/wds/rtw_wds.c"
+    },
+    {
+      "compile_record": "hal/.HalPwrSeqCmd.o.cmd",
+      "compile_record_identity": {
+        "sha256": "4830ddc5a4f6240434222b7a226e96279c712b9d454830bf0911c8e47b2d0572",
+        "size": 79085
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3,
+          16
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "hal/HalPwrSeqCmd.o",
+      "object_identity": {
+        "sha256": "5f2a5085f2d85a2efc2dd0caf64be3c50be5d628f46c11e397f4f4d34b773fc1",
+        "size": 2800
+      },
+      "sha256": "9dcd788ffe4815b7958cb395a4c911c6dfdcc7bf842f3c6ce0d5b98230388eb0",
+      "size": 5519,
+      "source": "hal/HalPwrSeqCmd.c"
+    },
+    {
+      "compile_record": "hal/efuse/rtl8188f/.HalEfuseMask8188F_USB.o.cmd",
+      "compile_record_identity": {
+        "sha256": "3656e17a6b829e6e9b8913a53668db04b6eaa8487686708e92ee03012feea5a8",
+        "size": 79354
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "hal/efuse/rtl8188f/HalEfuseMask8188F_USB.o",
+      "object_identity": {
+        "sha256": "72a993ad1554ab7c1dbfe373fb8ef469bac1dd23590dc4cfa35e78e937def29b",
+        "size": 1624
+      },
+      "sha256": "f262e254af2c87d537552603b59b1975ca7fd9f7a2ceec6d7022ed12e482deb7",
+      "size": 1823,
+      "source": "hal/efuse/rtl8188f/HalEfuseMask8188F_USB.c"
+    },
+    {
+      "compile_record": "hal/.hal_btcoex.o.cmd",
+      "compile_record_identity": {
+        "sha256": "de2283182eefd32367950f285a82d2d226722704edc84cf76ad38e4d865f2bed",
+        "size": 5371
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "hal/hal_btcoex.o",
+      "object_identity": {
+        "sha256": "f32fb50a1737932fe31115fc9837a180db4ea76e7ba62ad266456801832e28a5",
+        "size": 1048
+      },
+      "sha256": "f808c24873e2d623de60cc9316f0b9c774cfc4aacfb1bcaa9f2fadd5a0e843dd",
+      "size": 183955,
+      "source": "hal/hal_btcoex.c"
+    },
+    {
+      "compile_record": "hal/.hal_btcoex_wifionly.o.cmd",
+      "compile_record_identity": {
+        "sha256": "cc4b5f5d25615d2d3e535df6bb0a64c65f424a8cc5712f04f6d271205c375a0a",
+        "size": 91769
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "hal/hal_btcoex_wifionly.o",
+      "object_identity": {
+        "sha256": "949f53ad6d03fb1dbe480cb9632301036e351685c703a0a7e8aa15dbcc8a5684",
+        "size": 1056
+      },
+      "sha256": "010826cdc4c779096caa1d9a8e565197e6d2966d42908561c042b073ddbbe068",
+      "size": 7646,
+      "source": "hal/hal_btcoex_wifionly.c"
+    },
+    {
+      "compile_record": "hal/.hal_com.o.cmd",
+      "compile_record_identity": {
+        "sha256": "7096f326a6cf458175a15e3ebd117b3efc59ac3e14435fad81292db81f35ece2",
+        "size": 92385
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "hal/hal_com.o",
+      "object_identity": {
+        "sha256": "212f1e7b9077d663a2fea9f8ee6805d47143101d15eeedcc305bf212443186d1",
+        "size": 98512
+      },
+      "sha256": "7e289188ec0d0a67f07553a73f93acb95dc2f3e433b55735e902ae06cd4b1c6c",
+      "size": 455137,
+      "source": "hal/hal_com.c"
+    },
+    {
+      "compile_record": "hal/.hal_com_phycfg.o.cmd",
+      "compile_record_identity": {
+        "sha256": "4c29ea118b2151d5cda99b4854ff34786acf0095a72095b9e6e59d600ac95435",
+        "size": 91774
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "hal/hal_com_phycfg.o",
+      "object_identity": {
+        "sha256": "76541ce05d376c9965d2c2737ea5f8580bfdc3dbf06970acebfce381acacb8d4",
+        "size": 115184
+      },
+      "sha256": "14a55c662ba09ce121fc9aa6492e11cd2a41d4190f07b576ff5e36b6301b9e39",
+      "size": 183210,
+      "source": "hal/hal_com_phycfg.c"
+    },
+    {
+      "compile_record": "hal/.hal_dm.o.cmd",
+      "compile_record_identity": {
+        "sha256": "389c457763b7245153420ff8b5f76e8bc2220cc68e9251da12d30811bdd3ea0d",
+        "size": 91722
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "hal/hal_dm.o",
+      "object_identity": {
+        "sha256": "a50a92f0c8590bb1859b7754480853be74bdb72016d4a5a1f54bca7b8e0be723",
+        "size": 40100
+      },
+      "sha256": "f23f7c70c587b741f2fe4cc87063bf2ea3e2ba3981db086f2951a4a3f6b45537",
+      "size": 58388,
+      "source": "hal/hal_dm.c"
+    },
+    {
+      "compile_record": "hal/.hal_dm_acs.o.cmd",
+      "compile_record_identity": {
+        "sha256": "0d2b7c92c65fe0e27bc3288cc5c638115594d68b34c58e676e99947648cfef5a",
+        "size": 91717
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "hal/hal_dm_acs.o",
+      "object_identity": {
+        "sha256": "6df8ed2b490cc2c2bc558554e40e8dcae5f97dd3aa82b87b19cdb726f27a0ba4",
+        "size": 1048
+      },
+      "sha256": "9970b894ad76b019285b9bc561f3df80b5b87fa193928832c42f40821e6f2676",
+      "size": 18098,
+      "source": "hal/hal_dm_acs.c"
+    },
+    {
+      "compile_record": "hal/hal_hci/.hal_usb.o.cmd",
+      "compile_record_identity": {
+        "sha256": "22a8becddde62b1ec5456707b0ca1822cafe89bd442099f03630d948a094e9a4",
+        "size": 91717
+      },
+      "header_marker_lines": {
+        "BSD": [
+          33,
+          37
+        ],
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "hal/hal_hci/hal_usb.o",
+      "object_identity": {
+        "sha256": "fec88917abf1ac01edb4bffe622c2a6f2c0863fe386a09de92d0103b793d94bd",
+        "size": 5816
+      },
+      "sha256": "dfb19ec3125607284abc1325b161815626a04533597dc36fbd88506a6eada741",
+      "size": 13602,
+      "source": "hal/hal_hci/hal_usb.c"
+    },
+    {
+      "compile_record": "hal/.hal_intf.o.cmd",
+      "compile_record_identity": {
+        "sha256": "4baf00071243552cc7f959b325e428db266a70923951a0c1ce50b9b2e88896be",
+        "size": 91648
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "hal/hal_intf.o",
+      "object_identity": {
+        "sha256": "54f8f80d8cc78994b10484079288c747e8a43842bd4d5600af75215597440b1f",
+        "size": 35032
+      },
+      "sha256": "71142d52208c4431833d4754f5269fb41a8b133d7b98fbcbcf5cbaa028e1630c",
+      "size": 59857,
+      "source": "hal/hal_intf.c"
+    },
+    {
+      "compile_record": "hal/.hal_mcc.o.cmd",
+      "compile_record_identity": {
+        "sha256": "0e1a169c44a864b62beed9cfa5a9136d8492c21e233912fc15615d59f34c3cf9",
+        "size": 4596
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "hal/hal_mcc.o",
+      "object_identity": {
+        "sha256": "2e6b2af3f67343a09395041140ec610f8a78aa78f52defc5e8d4d63ffd2124f0",
+        "size": 1044
+      },
+      "sha256": "c7eb491b3eb03e9510c604b48159df544f7ed04d402bf8078a52ef6fec88d42e",
+      "size": 128294,
+      "source": "hal/hal_mcc.c"
+    },
+    {
+      "compile_record": "hal/.hal_mp.o.cmd",
+      "compile_record_identity": {
+        "sha256": "65e9e3781621f53ec9f82eee0c86a651c6cfd630700fa861b71f3aab6e9f0e2c",
+        "size": 78991
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "hal/hal_mp.o",
+      "object_identity": {
+        "sha256": "98210549718e417ce6468a76e5bad6cc9973c410cb563cb7cee92b7db49989cd",
+        "size": 1044
+      },
+      "sha256": "27da4d34efe972359eeb549ad8c2efd70fdb2954b92b58a7037b691e5f344aa6",
+      "size": 96655,
+      "source": "hal/hal_mp.c"
+    },
+    {
+      "compile_record": "hal/.hal_phy.o.cmd",
+      "compile_record_identity": {
+        "sha256": "7e041389984d0c1911955c21187b81d167f88752e0943373bf09d3c6300ea3b9",
+        "size": 78912
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "hal/hal_phy.o",
+      "object_identity": {
+        "sha256": "eb303be5fd891bc58fa2daa663d6852bf8477aef9e6f0e3690023fbcf6c68a26",
+        "size": 1216
+      },
+      "sha256": "473c93dcde3442164672d374b74e5664de190ca6fae6ccce348cd64b16410006",
+      "size": 6367,
+      "source": "hal/hal_phy.c"
+    },
+    {
+      "compile_record": "hal/led/.hal_led.o.cmd",
+      "compile_record_identity": {
+        "sha256": "3708d0e7aac13a1133e3287c9d427d206986f8bc4307911711401212a7465a82",
+        "size": 91677
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "hal/led/hal_led.o",
+      "object_identity": {
+        "sha256": "ac1c40241bc86f8a0297a2cadc98f6abd6be8d99bedd426834668bb79f133916",
+        "size": 1044
+      },
+      "sha256": "5d323a507c45165c4269c29dd20ac6a3fb17fe14dc2e67c88bb0c1717625a9ef",
+      "size": 6535,
+      "source": "hal/led/hal_led.c"
+    },
+    {
+      "compile_record": "hal/led/.hal_usb_led.o.cmd",
+      "compile_record_identity": {
+        "sha256": "42b92bf44fc0b016b9ecde35336cd281b31152dd232e336cc2af0108982cf25e",
+        "size": 91721
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "hal/led/hal_usb_led.o",
+      "object_identity": {
+        "sha256": "5df1673e251ab204226cc917ef3c51914336d3859f9313937e6387d440c69fd8",
+        "size": 1048
+      },
+      "sha256": "9c25b014968e082e94a1695f23b559df610160bbef2008e1807b010b80258f30",
+      "size": 112449,
+      "source": "hal/led/hal_usb_led.c"
+    },
+    {
+      "compile_record": "hal/phydm/halrf/.halphyrf_ce.o.cmd",
+      "compile_record_identity": {
+        "sha256": "329b33395fce6bf67088615f202f1002b08d86012ae8ef02687549cf1d886311",
+        "size": 91490
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11,
+          14
+        ]
+      },
+      "object": "hal/phydm/halrf/halphyrf_ce.o",
+      "object_identity": {
+        "sha256": "c4983b6fcaa5c03a78373b232ac03df85d0f8fbb8118b4ce92b9410466fb6ac5",
+        "size": 15720
+      },
+      "sha256": "b7862a1f1cf76ab7479a8de50e597dadd7a278d5ebb1494c4859adb7af30d064",
+      "size": 42492,
+      "source": "hal/phydm/halrf/halphyrf_ce.c"
+    },
+    {
+      "compile_record": "hal/phydm/halrf/.halrf.o.cmd",
+      "compile_record_identity": {
+        "sha256": "3e5ea802459a4c24db39d6d7ed519be9323b185e9acb63ef9baf416bec5cf39c",
+        "size": 91424
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11,
+          14
+        ]
+      },
+      "object": "hal/phydm/halrf/halrf.o",
+      "object_identity": {
+        "sha256": "f98deb4887a210397ed4de8e8397a98c302464ddb7231eeea8004ebc8e58b5c6",
+        "size": 32996
+      },
+      "sha256": "56b1b5e9b6b55d3f3e17b7b0f737e9af77b0bd4e8c99a8ed0fe9782b6a2b642e",
+      "size": 96910,
+      "source": "hal/phydm/halrf/halrf.c"
+    },
+    {
+      "compile_record": "hal/phydm/halrf/.halrf_debug.o.cmd",
+      "compile_record_identity": {
+        "sha256": "4e2841af5a92797cd623a93fcc66df1ef97d328f6d4f3942d64b7ac5db44a23a",
+        "size": 91490
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11,
+          14
+        ]
+      },
+      "object": "hal/phydm/halrf/halrf_debug.o",
+      "object_identity": {
+        "sha256": "b976451d8bbbd2a89a359c7728786a6d784d1f191540544b967164382772646e",
+        "size": 11168
+      },
+      "sha256": "51a14fe78907fbdc323c11b5b125f9feade36e17f854b973b3bb4954e2c052c2",
+      "size": 10568,
+      "source": "hal/phydm/halrf/halrf_debug.c"
+    },
+    {
+      "compile_record": "hal/phydm/halrf/.halrf_kfree.o.cmd",
+      "compile_record_identity": {
+        "sha256": "81e235f09cfd3ed092e394f55d12d28e113ae02a9e6ff0d42562bf0f380eda0c",
+        "size": 91490
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11,
+          14
+        ]
+      },
+      "object": "hal/phydm/halrf/halrf_kfree.o",
+      "object_identity": {
+        "sha256": "d5afe81f0aa4cb78948b673f293008055e3d3ba689fadf6dc763e6349652193a",
+        "size": 67568
+      },
+      "sha256": "a1b80067a9d634ffe1d72b76c45eacfdd95c91cebfb6254d78f0edc0b376c859",
+      "size": 127296,
+      "source": "hal/phydm/halrf/halrf_kfree.c"
+    },
+    {
+      "compile_record": "hal/phydm/halrf/.halrf_powertracking.o.cmd",
+      "compile_record_identity": {
+        "sha256": "9646202fe94312a857222788e5fe6dcd140fcb46db99c895d4a505dff2bb3c6e",
+        "size": 91578
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11,
+          14
+        ]
+      },
+      "object": "hal/phydm/halrf/halrf_powertracking.o",
+      "object_identity": {
+        "sha256": "0f0aa1d6cc19018776d2d14e45412f74a9473879790544018358d8aae3276005",
+        "size": 2416
+      },
+      "sha256": "c42a7524aa1711ddebabe9a43083a6e48b0409ad1c50df7f648fb24987a0d5f0",
+      "size": 5830,
+      "source": "hal/phydm/halrf/halrf_powertracking.c"
+    },
+    {
+      "compile_record": "hal/phydm/halrf/.halrf_powertracking_ce.o.cmd",
+      "compile_record_identity": {
+        "sha256": "cdf42eef99f255c22102c0e30f86d693bd6e05ee6a38c18795273a5119219573",
+        "size": 91611
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11,
+          14
+        ]
+      },
+      "object": "hal/phydm/halrf/halrf_powertracking_ce.o",
+      "object_identity": {
+        "sha256": "ceda9c080d6ae8ec6266f10a3eee22976e8804d9f1acb72d935c9cc78d02d069",
+        "size": 8128
+      },
+      "sha256": "90e3ca93357ef90f9797beca00d8581590910b201737356db841ba2b67995051",
+      "size": 33582,
+      "source": "hal/phydm/halrf/halrf_powertracking_ce.c"
+    },
+    {
+      "compile_record": "hal/phydm/halrf/.halrf_psd.o.cmd",
+      "compile_record_identity": {
+        "sha256": "e3ec590762acb29c077a6b1ccd555f9886a2f5811d4163cadfcf0417e7c6f172",
+        "size": 91468
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "hal/phydm/halrf/halrf_psd.o",
+      "object_identity": {
+        "sha256": "1221c3ba74507ffea0d3e313d481f8049972927c97376f55aee9e5a68cf45324",
+        "size": 5980
+      },
+      "sha256": "c671ca0f93d6bfb51bb0f476fae1aaa66829ed15347d8b16aa907d5a6b5018ce",
+      "size": 12661,
+      "source": "hal/phydm/halrf/halrf_psd.c"
+    },
+    {
+      "compile_record": "hal/phydm/halrf/rtl8188f/.halrf_8188f.o.cmd",
+      "compile_record_identity": {
+        "sha256": "6177e37a142a906b95d07c745c2a261e40d01eee85799d34033766cb956d620b",
+        "size": 92651
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "hal/phydm/halrf/rtl8188f/halrf_8188f.o",
+      "object_identity": {
+        "sha256": "aeeab233a1e7d1de510901928652d88c81eb61f3fb7802681b1dbd8a1f576222",
+        "size": 31764
+      },
+      "sha256": "ee6c2fa5784d3ac389d066b2116b8462c3f95323b3f0a3b8d6c9fa02b9cdf7e6",
+      "size": 88718,
+      "source": "hal/phydm/halrf/rtl8188f/halrf_8188f.c"
+    },
+    {
+      "compile_record": "hal/phydm/.phydm.o.cmd",
+      "compile_record_identity": {
+        "sha256": "657484e9ca75ff235f28c4c23b9050a71e8514fdd4068ea1fa0a63b2949064e1",
+        "size": 91588
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11,
+          14
+        ]
+      },
+      "object": "hal/phydm/phydm.o",
+      "object_identity": {
+        "sha256": "264333aaadcb220ca8e61a0d37e95f947d4fabccd08b8aeef90b98275b6d303a",
+        "size": 35120
+      },
+      "sha256": "5bb740514259611928c3cad9943c9b98087453f96a593d0620e31371b1999c29",
+      "size": 93911,
+      "source": "hal/phydm/phydm.c"
+    },
+    {
+      "compile_record": "hal/phydm/.phydm_adaptivity.o.cmd",
+      "compile_record_identity": {
+        "sha256": "f0009a7c3c33f65421d2ef86c19c98ffd5b14d02b1b909f1036fdaefc75b883c",
+        "size": 91485
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11,
+          14
+        ]
+      },
+      "object": "hal/phydm/phydm_adaptivity.o",
+      "object_identity": {
+        "sha256": "4cd8f8bee93220161e1633375872605ccfc504efac0d797bde4415cfe577c5a6",
+        "size": 11788
+      },
+      "sha256": "a93334da4e02e9e96cd9a0bfcf6785046fcbcfc53bf22f0cd4fc5cf6411d46ce",
+      "size": 24812,
+      "source": "hal/phydm/phydm_adaptivity.c"
+    },
+    {
+      "compile_record": "hal/phydm/.phydm_adc_sampling.o.cmd",
+      "compile_record_identity": {
+        "sha256": "1a3480ea456fde3c4edccd03c6ffec4a3d773b1a9d41ca6016de2e2d2a9694be",
+        "size": 91507
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11,
+          14
+        ]
+      },
+      "object": "hal/phydm/phydm_adc_sampling.o",
+      "object_identity": {
+        "sha256": "18dfb253b724f1d1fc13a87fbcfe92b1e4fff3c08521a4b4aa9accfe13dbda1b",
+        "size": 1056
+      },
+      "sha256": "d60e306eda5f4328bd9c6da74e33dd1a3570a6bbc0762d3d57a314f986677997",
+      "size": 48690,
+      "source": "hal/phydm/phydm_adc_sampling.c"
+    },
+    {
+      "compile_record": "hal/phydm/.phydm_antdect.o.cmd",
+      "compile_record_identity": {
+        "sha256": "9b00ceb5e4c5391204ddfbd64831fd29827ca9bce1c6aef15fdcc5e9c6299dab",
+        "size": 91452
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11,
+          14
+        ]
+      },
+      "object": "hal/phydm/phydm_antdect.o",
+      "object_identity": {
+        "sha256": "d3dd477ba5a86d513fd6b0cae75a27e0551d2d6d6659f7468f6687764e7cc648",
+        "size": 1052
+      },
+      "sha256": "678ac64aab6d56b1245838990967f5b001e5a14f846e0bb6494a901991d3676c",
+      "size": 33938,
+      "source": "hal/phydm/phydm_antdect.c"
+    },
+    {
+      "compile_record": "hal/phydm/.phydm_antdiv.o.cmd",
+      "compile_record_identity": {
+        "sha256": "56db6273fd4c5ed659820f66d97e8818bc1667c72efacd41f68865095ed6f198",
+        "size": 92417
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11,
+          14
+        ]
+      },
+      "object": "hal/phydm/phydm_antdiv.o",
+      "object_identity": {
+        "sha256": "2ab498e274fff0c9bc7f5054b11eec0dffa0cf5070bde72be502a86ba3f80c16",
+        "size": 1048
+      },
+      "sha256": "5772c343fabd6150f032e8457b0f29d1ddcdaf5da3a56a3835d0c9ff61f1acc6",
+      "size": 200821,
+      "source": "hal/phydm/phydm_antdiv.c"
+    },
+    {
+      "compile_record": "hal/phydm/.phydm_api.o.cmd",
+      "compile_record_identity": {
+        "sha256": "75e8fa472da867dc45b8522c52c8415df5fa6a15851b62149c392c5fbd067539",
+        "size": 91468
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11,
+          14
+        ]
+      },
+      "object": "hal/phydm/phydm_api.o",
+      "object_identity": {
+        "sha256": "d6d630b159b6f56d34141fc88f76a4ba428be2ac5feb35443ce988a2c0e9de72",
+        "size": 18212
+      },
+      "sha256": "0a6dcd875a93cb4503fa924b20980580e81cd265b3ebab4d638d3e62e3453668",
+      "size": 102288,
+      "source": "hal/phydm/phydm_api.c"
+    },
+    {
+      "compile_record": "hal/phydm/.phydm_auto_dbg.o.cmd",
+      "compile_record_identity": {
+        "sha256": "1b52edf34c2b15e8ed75f3bda42af6bb0e8bca08f16caf5600f9469e56f615c8",
+        "size": 91463
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11,
+          14
+        ]
+      },
+      "object": "hal/phydm/phydm_auto_dbg.o",
+      "object_identity": {
+        "sha256": "dd04e3acf041dc264a7075d23fba0f5a6c80e902e1aa225e9a827cfd4e236db5",
+        "size": 9740
+      },
+      "sha256": "f84e12a16979ef64111dc9b1bee4cd663631845b18cc2beea15a3bc3f2a89df7",
+      "size": 22112,
+      "source": "hal/phydm/phydm_auto_dbg.c"
+    },
+    {
+      "compile_record": "hal/phydm/.phydm_beamforming.o.cmd",
+      "compile_record_identity": {
+        "sha256": "5ee7f12a1a3aeade37c20c934ec21ebdfbf1b51cd898fccdc487cede3253a17c",
+        "size": 91496
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11,
+          14
+        ]
+      },
+      "object": "hal/phydm/phydm_beamforming.o",
+      "object_identity": {
+        "sha256": "5b0df4e856afbab5f81510652aac5df763fcf59557f40b9ff47a000d700128de",
+        "size": 1056
+      },
+      "sha256": "7cb5c568654767386b6c83bb1e2592ec705aa408edefbc5e49cb7a8942ecb4fa",
+      "size": 63743,
+      "source": "hal/phydm/phydm_beamforming.c"
+    },
+    {
+      "compile_record": "hal/phydm/.phydm_cck_pd.o.cmd",
+      "compile_record_identity": {
+        "sha256": "6816491c67f33943f4a31b4c1bca161fca8ebdecd3f4dc4b5ca82fbd6292ce38",
+        "size": 91441
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11,
+          14
+        ]
+      },
+      "object": "hal/phydm/phydm_cck_pd.o",
+      "object_identity": {
+        "sha256": "99c13712a82120415a6abf6424769de76064e811499851def5f0f8869924fa8e",
+        "size": 6356
+      },
+      "sha256": "13f8a1ab41afda2b90e353d386054b8d7fd9a9f958c43c94fd8bc577366c44a3",
+      "size": 40032,
+      "source": "hal/phydm/phydm_cck_pd.c"
+    },
+    {
+      "compile_record": "hal/phydm/.phydm_cck_rx_pathdiv.o.cmd",
+      "compile_record_identity": {
+        "sha256": "f4dd3a1d2415f02ac3814f643fcab9e637429ce890283012ead544ddb2f49455",
+        "size": 91529
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11,
+          14
+        ]
+      },
+      "object": "hal/phydm/phydm_cck_rx_pathdiv.o",
+      "object_identity": {
+        "sha256": "90f69db9117a2530149621d56b8917105764f8403b34c8f4003d6d2c0a8e0f0a",
+        "size": 1056
+      },
+      "sha256": "b1443cf653debe9804cebb6d1a52489c4feeb8647e29b1cd425547b692727a83",
+      "size": 4986,
+      "source": "hal/phydm/phydm_cck_rx_pathdiv.c"
+    },
+    {
+      "compile_record": "hal/phydm/.phydm_ccx.o.cmd",
+      "compile_record_identity": {
+        "sha256": "a54954020d284b491f2ddfa0c7e567cf03f9047e3ba655cbeac5a6c7eebb732d",
+        "size": 91408
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11,
+          14
+        ]
+      },
+      "object": "hal/phydm/phydm_ccx.o",
+      "object_identity": {
+        "sha256": "8a05a7fbaebce754f8558b19cd9335659d6bffcc69b0b5d3050ff4b7da9f71f2",
+        "size": 33680
+      },
+      "sha256": "902e4d5c9f4e3215fee0cbc09620828737aa7647d2c3bd56386b9349a4fe2a76",
+      "size": 75670,
+      "source": "hal/phydm/phydm_ccx.c"
+    },
+    {
+      "compile_record": "hal/phydm/.phydm_cfotracking.o.cmd",
+      "compile_record_identity": {
+        "sha256": "aceb1c56e62c32cce2b5cea0e3418490de4bff0e1a7ddcdd69fcc6a2d1aa1e83",
+        "size": 91496
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11,
+          14
+        ]
+      },
+      "object": "hal/phydm/phydm_cfotracking.o",
+      "object_identity": {
+        "sha256": "037e1c9e40ad3bcea2ba2ecae19a07f90afed525ec5a778a2397e0376f20776d",
+        "size": 8812
+      },
+      "sha256": "b0609ff2eb8c50833bf571c7ebcf56ff2fbd8d50c2cee900cbee8dff7c04391a",
+      "size": 19016,
+      "source": "hal/phydm/phydm_cfotracking.c"
+    },
+    {
+      "compile_record": "hal/phydm/.phydm_debug.o.cmd",
+      "compile_record_identity": {
+        "sha256": "3cae38dfbf05162f7c93d2502f0b609560491b8a5bee1e9d154688f5e905d42f",
+        "size": 91781
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11,
+          14
+        ]
+      },
+      "object": "hal/phydm/phydm_debug.o",
+      "object_identity": {
+        "sha256": "72bf7f90a3e93954e0e83391b4303dd91ca3106d817cf6ffa7155f78d233dfe0",
+        "size": 56508
+      },
+      "sha256": "81ad83cadd24778d5068356e906dccd974d65c201ebcfbe920d9c886c9b617dc",
+      "size": 184678,
+      "source": "hal/phydm/phydm_debug.c"
+    },
+    {
+      "compile_record": "hal/phydm/.phydm_dfs.o.cmd",
+      "compile_record_identity": {
+        "sha256": "131fd448e009c40831dccb4308630ccc43c936a4d511fa052ba8fd3129ea8d8b",
+        "size": 91408
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11,
+          14
+        ]
+      },
+      "object": "hal/phydm/phydm_dfs.o",
+      "object_identity": {
+        "sha256": "ff5645fdd76c58183840fe805cb6cc525ee9d7645c42457596a633ab5bec3a34",
+        "size": 1292
+      },
+      "sha256": "c759c6dfa3b0af9ca63b4714a7c67fdcaeeec7f18fbdbf66eb1a4c8157550a7c",
+      "size": 73211,
+      "source": "hal/phydm/phydm_dfs.c"
+    },
+    {
+      "compile_record": "hal/phydm/.phydm_dig.o.cmd",
+      "compile_record_identity": {
+        "sha256": "1ef3e45c30059bf1d887874492c25dfed11fc8504e5a4e55acd7bb42fd76a32e",
+        "size": 91408
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11,
+          14
+        ]
+      },
+      "object": "hal/phydm/phydm_dig.o",
+      "object_identity": {
+        "sha256": "6633399c0908951241f8f14ee29c36f0ccced769e763b147549db9dc563d75a5",
+        "size": 26976
+      },
+      "sha256": "deb73129f6e5ea5c1808261f109afe5ee6d5626c04abd6858e7c153f30ee8289",
+      "size": 104208,
+      "source": "hal/phydm/phydm_dig.c"
+    },
+    {
+      "compile_record": "hal/phydm/.phydm_direct_bf.o.cmd",
+      "compile_record_identity": {
+        "sha256": "6e952681e4c7ef125d2d1b62fdd081536cee00b434124a664a24c6104cf66590",
+        "size": 91474
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11,
+          14
+        ]
+      },
+      "object": "hal/phydm/phydm_direct_bf.o",
+      "object_identity": {
+        "sha256": "c9a0af6e491bb4d289244573aa91e9b591707db1e136b019a888b4ebef1cd3a9",
+        "size": 1052
+      },
+      "sha256": "45e0de626d4996ff752ec297097b6af4213697fa7239c966aad9c4ad167c5fe8",
+      "size": 11785,
+      "source": "hal/phydm/phydm_direct_bf.c"
+    },
+    {
+      "compile_record": "hal/phydm/.phydm_dynamictxpower.o.cmd",
+      "compile_record_identity": {
+        "sha256": "8b44fc507e7da0f63931fa42cc9715cbeb536d5fb3470196bfdd8f14511533d1",
+        "size": 91529
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11,
+          14
+        ]
+      },
+      "object": "hal/phydm/phydm_dynamictxpower.o",
+      "object_identity": {
+        "sha256": "04b9cdbfaed360abd03e0e81f3a210ffbd53df4284b7ee4747f39818c09a9cce",
+        "size": 1056
+      },
+      "sha256": "e0cf0d335b1d9019ca0e85e86ef31666abff516caf84d26d7ce9c369af0d38ce",
+      "size": 21710,
+      "source": "hal/phydm/phydm_dynamictxpower.c"
+    },
+    {
+      "compile_record": "hal/phydm/.phydm_hwconfig.o.cmd",
+      "compile_record_identity": {
+        "sha256": "21d2ac9dbabbdc41e82cd84661fa49629d9d4abd6314c1ecca45892170ed155a",
+        "size": 91463
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11,
+          14
+        ]
+      },
+      "object": "hal/phydm/phydm_hwconfig.o",
+      "object_identity": {
+        "sha256": "15f6b374bacbe4e6a4afb3ec35580fc5025597efd7aa1e655322861dd44bf21a",
+        "size": 5764
+      },
+      "sha256": "88c4a5bab9377d1581a3480fd109292a784d4694748e18e2fef5903e8737ff54",
+      "size": 52600,
+      "source": "hal/phydm/phydm_hwconfig.c"
+    },
+    {
+      "compile_record": "hal/phydm/.phydm_interface.o.cmd",
+      "compile_record_identity": {
+        "sha256": "7fb09315f9b7381f6e0630841df5b868b24b79e36db58defaac07fd717a8f9ba",
+        "size": 91474
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11,
+          14
+        ]
+      },
+      "object": "hal/phydm/phydm_interface.o",
+      "object_identity": {
+        "sha256": "3111b525580394f27fb5d8f7d56705bad2d0d29a1fb2f949de100008e9e16e7b",
+        "size": 11104
+      },
+      "sha256": "951b1ff6c15c2d73722ba0b0824beb383299a256094b251b1f646ba8bb7cfbf6",
+      "size": 43374,
+      "source": "hal/phydm/phydm_interface.c"
+    },
+    {
+      "compile_record": "hal/phydm/.phydm_lna_sat.o.cmd",
+      "compile_record_identity": {
+        "sha256": "3e202b84be81d50e31225acfd64ba0ecbd60f7162f172d36176aacaab1c0867b",
+        "size": 91452
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11,
+          14
+        ]
+      },
+      "object": "hal/phydm/phydm_lna_sat.o",
+      "object_identity": {
+        "sha256": "39364fc23a471feac3a5017e8d7e93b54cfcd9a8d443fcf2969ea2598d760341",
+        "size": 1052
+      },
+      "sha256": "adcaa4533d437160352584fb0e18fe19662d7f47eeb48a868b11ab6b8374dc46",
+      "size": 38949,
+      "source": "hal/phydm/phydm_lna_sat.c"
+    },
+    {
+      "compile_record": "hal/phydm/.phydm_math_lib.o.cmd",
+      "compile_record_identity": {
+        "sha256": "d0d7119dbb2c02ede80c5794849c7509d5614eaeac649bf8bb25a24bf40a5769",
+        "size": 91463
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11,
+          14
+        ]
+      },
+      "object": "hal/phydm/phydm_math_lib.o",
+      "object_identity": {
+        "sha256": "93b42ce880c4b5e5d5573e819f11704b44b32134e39908d99c47ebbb9ccd1d32",
+        "size": 4000
+      },
+      "sha256": "f2f46ecf67d2d16cbb385f7b5485981463affa889a6526284a2bb3ea211a67b6",
+      "size": 6284,
+      "source": "hal/phydm/phydm_math_lib.c"
+    },
+    {
+      "compile_record": "hal/phydm/.phydm_mp.o.cmd",
+      "compile_record_identity": {
+        "sha256": "54e06938ce57fe50f5504eb41d4ef51fa772ec3b4c987756c9e23114d3cd9eba",
+        "size": 91397
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11,
+          14
+        ]
+      },
+      "object": "hal/phydm/phydm_mp.o",
+      "object_identity": {
+        "sha256": "108d22406c604983f794700066bf8d3f13f7cc423bba9a735f31e5b7f6190494",
+        "size": 1044
+      },
+      "sha256": "ee85ed3b25472fcf9c34b7327d0fa425ddf1359f4e204ca84e44ede784949931",
+      "size": 8298,
+      "source": "hal/phydm/phydm_mp.c"
+    },
+    {
+      "compile_record": "hal/phydm/.phydm_noisemonitor.o.cmd",
+      "compile_record_identity": {
+        "sha256": "4f0b89c5a1ae9ff26c8a24615b6c6067e92c3b85bc0de23555d95a696b59987f",
+        "size": 91507
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11,
+          14
+        ]
+      },
+      "object": "hal/phydm/phydm_noisemonitor.o",
+      "object_identity": {
+        "sha256": "b93a60e71a803a5cf979d1ececb0c541d71dfec059be4f8a862a091fddb94e01",
+        "size": 4260
+      },
+      "sha256": "6568733899cc7665b9f935a500a333c3e100c21e19c092663e0816893c9c7e88",
+      "size": 13967,
+      "source": "hal/phydm/phydm_noisemonitor.c"
+    },
+    {
+      "compile_record": "hal/phydm/.phydm_pathdiv.o.cmd",
+      "compile_record_identity": {
+        "sha256": "dc32a13b160af962c6d142fe2fafd7403fd2b7dc136d5789709950f7f24f892b",
+        "size": 91499
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11,
+          14
+        ]
+      },
+      "object": "hal/phydm/phydm_pathdiv.o",
+      "object_identity": {
+        "sha256": "2985f1d82c5d6ed9084a6053d4ca5a7f66ec2b3881d707fec6055311e905177c",
+        "size": 1052
+      },
+      "sha256": "7d398b6cd6f56e07506eddc4b62bdb1534828c85a70c917577c376af5c4e68d3",
+      "size": 32376,
+      "source": "hal/phydm/phydm_pathdiv.c"
+    },
+    {
+      "compile_record": "hal/phydm/.phydm_phystatus.o.cmd",
+      "compile_record_identity": {
+        "sha256": "004d13a5899b595296bf47173f43b32cfc9c1ba52f4194ea0f4cc49c45fdde97",
+        "size": 91474
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11,
+          14
+        ]
+      },
+      "object": "hal/phydm/phydm_phystatus.o",
+      "object_identity": {
+        "sha256": "2e674af402d40112930120112a96d09f8b302d1b82aac578b555d8c34816865c",
+        "size": 10688
+      },
+      "sha256": "4bde10a7e456a9164fd98c16e0f407206012e53748a2416e827735cb24a1f00a",
+      "size": 90953,
+      "source": "hal/phydm/phydm_phystatus.c"
+    },
+    {
+      "compile_record": "hal/phydm/.phydm_pmac_tx_setting.o.cmd",
+      "compile_record_identity": {
+        "sha256": "82709ba966441a8c26d3f2e533ec5632423b6beac6447c4fb66d8a1c64c35633",
+        "size": 91540
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11,
+          14
+        ]
+      },
+      "object": "hal/phydm/phydm_pmac_tx_setting.o",
+      "object_identity": {
+        "sha256": "b8478d245c1902a43c75d9a1ab22de06557178398e6f41aa32499f1f373c651e",
+        "size": 1060
+      },
+      "sha256": "ac77fce7f8aef5921f7dbedd9ec89253138e55c2b0c46fd40d3d387fc2aaa2fb",
+      "size": 15009,
+      "source": "hal/phydm/phydm_pmac_tx_setting.c"
+    },
+    {
+      "compile_record": "hal/phydm/.phydm_pow_train.o.cmd",
+      "compile_record_identity": {
+        "sha256": "510ca4cacab2f63308619d4ba89fe2f46ab193b6d96bf91f79522de5af68be1f",
+        "size": 91474
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11,
+          14
+        ]
+      },
+      "object": "hal/phydm/phydm_pow_train.o",
+      "object_identity": {
+        "sha256": "c42ef44db4596ff8e31da67c30d1fff31b0aa4881e2680ed2633d0355ebda0f4",
+        "size": 1052
+      },
+      "sha256": "3553dbac96511cf6d7a63721e50b3d3ed0997a32dfdd4229534c1f69349c36a2",
+      "size": 5136,
+      "source": "hal/phydm/phydm_pow_train.c"
+    },
+    {
+      "compile_record": "hal/phydm/.phydm_primary_cca.o.cmd",
+      "compile_record_identity": {
+        "sha256": "e5a05f73f8a22e84ac5000e991f18f50dafb38704b530bd3039db530855e71e0",
+        "size": 91496
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11,
+          14
+        ]
+      },
+      "object": "hal/phydm/phydm_primary_cca.o",
+      "object_identity": {
+        "sha256": "95f3958632ff0c59573e33efd6ce0dac9fbb98e8c8b20eea7c8b9fafc690d02e",
+        "size": 1056
+      },
+      "sha256": "29175f2f7d7783b4706249cd8f8f7a9098c18c00a1fc53cf795f87c4382594f8",
+      "size": 4856,
+      "source": "hal/phydm/phydm_primary_cca.c"
+    },
+    {
+      "compile_record": "hal/phydm/.phydm_psd.o.cmd",
+      "compile_record_identity": {
+        "sha256": "ee672d1e50047fe0cdbb45ede3039a529e9e0d1d1e81e8eaea451f73ecf92578",
+        "size": 91408
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11,
+          14
+        ]
+      },
+      "object": "hal/phydm/phydm_psd.o",
+      "object_identity": {
+        "sha256": "ea2af49d00efe52796ab9c256c9a6aa7ebe534eef6f549f33a44aafdb4fbf995",
+        "size": 7572
+      },
+      "sha256": "74b8e970a234237a5d05a8b4e5981956eefb59ee84f043ed638366749776dbb5",
+      "size": 15116,
+      "source": "hal/phydm/phydm_psd.c"
+    },
+    {
+      "compile_record": "hal/phydm/.phydm_rainfo.o.cmd",
+      "compile_record_identity": {
+        "sha256": "3f5767a2863ccaa612fae24a7cbdd736d09280141338bc933360555b38aeb653",
+        "size": 91539
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11,
+          14
+        ]
+      },
+      "object": "hal/phydm/phydm_rainfo.o",
+      "object_identity": {
+        "sha256": "0099dc853a44fa2f8715bc7fc511d2bb0aae0f0f16011a06fe0434565a1f6b73",
+        "size": 37820
+      },
+      "sha256": "179dc39506bb14c0efbd95d5dd8238bf7990a8849ed94fe71e394c7340c332aa",
+      "size": 66659,
+      "source": "hal/phydm/phydm_rainfo.c"
+    },
+    {
+      "compile_record": "hal/phydm/.phydm_rssi_monitor.o.cmd",
+      "compile_record_identity": {
+        "sha256": "382e43a0373efc9e07f9aabd2ca15757197b1667ea54b02c1397fb150a06b05f",
+        "size": 91507
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11,
+          14
+        ]
+      },
+      "object": "hal/phydm/phydm_rssi_monitor.o",
+      "object_identity": {
+        "sha256": "a214bdb08fa088c3329b3b21b8acf2ec4a1a282930acde244bec7b28b955c016",
+        "size": 4184
+      },
+      "sha256": "1bb4b30dd30a8c97dbc4da570dddfabc773991b39c0f1f63d3b0fd0376382899",
+      "size": 5059,
+      "source": "hal/phydm/phydm_rssi_monitor.c"
+    },
+    {
+      "compile_record": "hal/phydm/.phydm_smt_ant.o.cmd",
+      "compile_record_identity": {
+        "sha256": "6c761df354667b603158b244ed0fd50615637572af234fbc9fca506cb08f3136",
+        "size": 91497
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11,
+          14
+        ]
+      },
+      "object": "hal/phydm/phydm_smt_ant.o",
+      "object_identity": {
+        "sha256": "a08e062063753ae674711c797571099c323004688df30f71959607dfd94dfd90",
+        "size": 1052
+      },
+      "sha256": "c1aa29bc598483ff1b89725b7f7fec7dd0718f12682c387b9251aff189f8f5e2",
+      "size": 74551,
+      "source": "hal/phydm/phydm_smt_ant.c"
+    },
+    {
+      "compile_record": "hal/phydm/.phydm_soml.o.cmd",
+      "compile_record_identity": {
+        "sha256": "f59132351b0afc975e9c4ceec56117557cab9ecb8f8f42707606de7b0ba3d965",
+        "size": 91419
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11,
+          14
+        ]
+      },
+      "object": "hal/phydm/phydm_soml.o",
+      "object_identity": {
+        "sha256": "365b3de65cb3d6f6b7938cee7f11dbf0f980476c80fefdda6f11dd2ffcd9dd01",
+        "size": 1192
+      },
+      "sha256": "976f3f501ae33fe129c28d3aa6090824d5a9ba8106e6667ba5030348ab28b60d",
+      "size": 48201,
+      "source": "hal/phydm/phydm_soml.c"
+    },
+    {
+      "compile_record": "hal/phydm/rtl8188f/.halhwimg8188f_bb.o.cmd",
+      "compile_record_identity": {
+        "sha256": "4a1013a900df9a4109018e66eb3b33a152b9cc134a1c4c34246a041b1382eb11",
+        "size": 92226
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "hal/phydm/rtl8188f/halhwimg8188f_bb.o",
+      "object_identity": {
+        "sha256": "887a2d7e33ab9874d9a084237ac57ce66bbdd6de598b61b4cb8ad239edf21428",
+        "size": 8516
+      },
+      "sha256": "a556aa58fbae3f365d721dd499967b1a820ed140b432f04ebb4230c39acc1fe8",
+      "size": 14802,
+      "source": "hal/phydm/rtl8188f/halhwimg8188f_bb.c"
+    },
+    {
+      "compile_record": "hal/phydm/rtl8188f/.halhwimg8188f_mac.o.cmd",
+      "compile_record_identity": {
+        "sha256": "19d576814812d5df48b49ea2190d00087d8d0063fcea1510b1529e655d3c169c",
+        "size": 92198
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "hal/phydm/rtl8188f/halhwimg8188f_mac.o",
+      "object_identity": {
+        "sha256": "c324166176714bc01b47f8071e812cba49c9162deec85e16a7f479c28104ed99",
+        "size": 4896
+      },
+      "sha256": "957f3dddc5bcf06545092babb67d201b38d0a1a61b2cb8b83888a595824a3ae3",
+      "size": 7592,
+      "source": "hal/phydm/rtl8188f/halhwimg8188f_mac.c"
+    },
+    {
+      "compile_record": "hal/phydm/rtl8188f/.halhwimg8188f_rf.o.cmd",
+      "compile_record_identity": {
+        "sha256": "e477e53e9547e6e1ba64741e89cb8119b49eb67c6ce9d71ddbd9c8774dec0299",
+        "size": 92226
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "hal/phydm/rtl8188f/halhwimg8188f_rf.o",
+      "object_identity": {
+        "sha256": "3f630049526dda35a5f8af3d9f9a45720a7cc0a76856714774dbcfc32ccb058b",
+        "size": 30296
+      },
+      "sha256": "ad26fb876d61da5f383c414d8ed53ff430ce5753f430af2df9b191d4da74cd59",
+      "size": 39705,
+      "source": "hal/phydm/rtl8188f/halhwimg8188f_rf.c"
+    },
+    {
+      "compile_record": "hal/phydm/rtl8188f/.phydm_regconfig8188f.o.cmd",
+      "compile_record_identity": {
+        "sha256": "66e74670a7b4c4ad53d2b00450d14940d4776f46930b3f50ea62e7ef88650aa7",
+        "size": 92231
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "hal/phydm/rtl8188f/phydm_regconfig8188f.o",
+      "object_identity": {
+        "sha256": "f5b0dd2dbc39771ffcc75f0adcba24d0e9f78922649668df3e3c28cb4cab5556",
+        "size": 5964
+      },
+      "sha256": "4543511f6227c8d82afab37e2df4e43c37c8ffe077de06d23f92dfbe0d88afcf",
+      "size": 5506,
+      "source": "hal/phydm/rtl8188f/phydm_regconfig8188f.c"
+    },
+    {
+      "compile_record": "hal/phydm/rtl8188f/.phydm_rtl8188f.o.cmd",
+      "compile_record_identity": {
+        "sha256": "edf2e0874e63b47795c05a0b5f5f81db068e4f67d4f81eb7f5b41424cc754dad",
+        "size": 92165
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "hal/phydm/rtl8188f/phydm_rtl8188f.o",
+      "object_identity": {
+        "sha256": "a7012d1386519cc228da877b14db82b0ec948addb869fd4509264f476bfac23e",
+        "size": 1316
+      },
+      "sha256": "6e170ef3cfdce2e4f0e3e8a47227ed8dab70871bd80fc5201a2eb6258838aae9",
+      "size": 1348,
+      "source": "hal/phydm/rtl8188f/phydm_rtl8188f.c"
+    },
+    {
+      "compile_record": "hal/phydm/txbf/.halcomtxbf.o.cmd",
+      "compile_record_identity": {
+        "sha256": "a17c7fdb47e801a24c1efcb12b96ff0d33d4435330d3d8beaed55b0e6aedf7dc",
+        "size": 91877
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "hal/phydm/txbf/halcomtxbf.o",
+      "object_identity": {
+        "sha256": "b7979e5c3da9179cb5d35a41977426b09aa924942305fee6c1ce899094164bd4",
+        "size": 1048
+      },
+      "sha256": "37f7141d2e85babc534ca0dade7fd958c50ae27f2c1b80da202d494507a1c9a2",
+      "size": 14472,
+      "source": "hal/phydm/txbf/halcomtxbf.c"
+    },
+    {
+      "compile_record": "hal/phydm/txbf/.haltxbfinterface.o.cmd",
+      "compile_record_identity": {
+        "sha256": "c2fd6b0d744786fc35476e83754ccb89cc8f699d4a2edd3cf8959e4f810796da",
+        "size": 91943
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "hal/phydm/txbf/haltxbfinterface.o",
+      "object_identity": {
+        "sha256": "f003f107e91d95afc29686933302560b326f58f8bf883697f517df04709b8210",
+        "size": 1052
+      },
+      "sha256": "5176bb51ec11bda7c8a4dbcb816eaf5859563325bca34a268e3782a04aef1170",
+      "size": 42144,
+      "source": "hal/phydm/txbf/haltxbfinterface.c"
+    },
+    {
+      "compile_record": "hal/phydm/txbf/.phydm_hal_txbf_api.o.cmd",
+      "compile_record_identity": {
+        "sha256": "34f76df5f22b2be2d1f9e8d4bed0d79d5ad15963c9c2314e940f0eba53693ea9",
+        "size": 91557
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "hal/phydm/txbf/phydm_hal_txbf_api.o",
+      "object_identity": {
+        "sha256": "681a11cb192fb501ab9309a7cf117b2718e28a6ae96e40dd40a5dd1293800ba7",
+        "size": 2264
+      },
+      "sha256": "2df930ef3a7d1013133386d63f56e8c1c99736bc991d706fed7c8d934bf1c4fa",
+      "size": 23184,
+      "source": "hal/phydm/txbf/phydm_hal_txbf_api.c"
+    },
+    {
+      "compile_record": "hal/rtl8188f/.Hal8188FPwrSeq.o.cmd",
+      "compile_record_identity": {
+        "sha256": "8cd40395fd2a0908cb1a9faec9421c94e43de9b1bda3e4d785e636c3539a676c",
+        "size": 79317
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "hal/rtl8188f/Hal8188FPwrSeq.o",
+      "object_identity": {
+        "sha256": "6a0ac64db3f2adcba4947b2e8b8d537681b17992d3b7f3dba825b7e946fa3b85",
+        "size": 3460
+      },
+      "sha256": "03b0bb537474faf6386fbd348a64fdf61db288a1eecd27e2c69c3b7eae08de98",
+      "size": 3167,
+      "source": "hal/rtl8188f/Hal8188FPwrSeq.c"
+    },
+    {
+      "compile_record": "hal/rtl8188f/.hal8188f_fw.o.cmd",
+      "compile_record_identity": {
+        "sha256": "c2551558ff14c7d40204fd34423ca70d85adc1ab56b0c2285e02224ca7934b1f",
+        "size": 79046
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "hal/rtl8188f/hal8188f_fw.o",
+      "object_identity": {
+        "sha256": "c5242e1d0af5e200a82aafefd0ddec2722857eac921a226bd75ade96d130e4e6",
+        "size": 21980
+      },
+      "sha256": "9c7304d15562a00b09477b76a8bd8e5fa846f83aed33ba10d1688f12155665f1",
+      "size": 372308,
+      "source": "hal/rtl8188f/hal8188f_fw.c"
+    },
+    {
+      "compile_record": "hal/rtl8188f/.rtl8188f_cmd.o.cmd",
+      "compile_record_identity": {
+        "sha256": "48236cf1900298f27e7bcef1ba02e6cd4a46d064f4905b6239e5f4991b988303",
+        "size": 91782
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "hal/rtl8188f/rtl8188f_cmd.o",
+      "object_identity": {
+        "sha256": "5e12aa552e73e5b668b27148fdcbeea3ec747712622812e4381777ec4bc264db",
+        "size": 6836
+      },
+      "sha256": "6a715ad19b870e74030649a2f7de7f19a5ae7b47f4df6cdd70df137f0a6a9730",
+      "size": 16743,
+      "source": "hal/rtl8188f/rtl8188f_cmd.c"
+    },
+    {
+      "compile_record": "hal/rtl8188f/.rtl8188f_dm.o.cmd",
+      "compile_record_identity": {
+        "sha256": "c41c112b35464a51c2d748e8646486ee1b600b4f7afddb46de26b4adaf6d7465",
+        "size": 91872
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "hal/rtl8188f/rtl8188f_dm.o",
+      "object_identity": {
+        "sha256": "e751ff8e83c37f37987dfc0931ceeb2f77cc2865e2a6d5a1644ecd153ede12f8",
+        "size": 2720
+      },
+      "sha256": "77aac96700a787472bf7916a34c0c579402fe1392ef162287fac32e83dede6a5",
+      "size": 8630,
+      "source": "hal/rtl8188f/rtl8188f_dm.c"
+    },
+    {
+      "compile_record": "hal/rtl8188f/.rtl8188f_hal_init.o.cmd",
+      "compile_record_identity": {
+        "sha256": "578fe781097f1d2402274e35d4cdba23f1d4e5fbb9a66c7f01d88c1b65ab2aa6",
+        "size": 92157
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "hal/rtl8188f/rtl8188f_hal_init.o",
+      "object_identity": {
+        "sha256": "fbc57edca8ba4a136367cfb49b76f146555637c994366738ef150fa343ec0fcb",
+        "size": 64408
+      },
+      "sha256": "bd9d7760663fc953252bb95494bfcf176f77af26d40a35c07ac22c638d8c0b8a",
+      "size": 164062,
+      "source": "hal/rtl8188f/rtl8188f_hal_init.c"
+    },
+    {
+      "compile_record": "hal/rtl8188f/.rtl8188f_phycfg.o.cmd",
+      "compile_record_identity": {
+        "sha256": "e269d6d5d3bee57a9230588b5a5aa33e17e0fdb9e04f97263fc3d163cc613950",
+        "size": 91868
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "hal/rtl8188f/rtl8188f_phycfg.o",
+      "object_identity": {
+        "sha256": "61829ac70cb89a4aae7b877b7f80f740492300a13e316436b9c6e670302342f3",
+        "size": 12168
+      },
+      "sha256": "78cd680c758f6c11602fbf2bd9aac13cb89cbb674cb3346eea6af7ca641f2f3c",
+      "size": 38214,
+      "source": "hal/rtl8188f/rtl8188f_phycfg.c"
+    },
+    {
+      "compile_record": "hal/rtl8188f/.rtl8188f_rf6052.o.cmd",
+      "compile_record_identity": {
+        "sha256": "5ee05a85e04b844c81ab7e4cf10e382674962aa7b7b8b0f8828db6ac3dfc0c51",
+        "size": 91815
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "hal/rtl8188f/rtl8188f_rf6052.o",
+      "object_identity": {
+        "sha256": "6c47b538da44c38be2c1daaa0dc2ce707b015fe739bc9ab194d56ec526617bfa",
+        "size": 3476
+      },
+      "sha256": "62a7079aa2dac131848b58bb6eb531f7d1defd291dec8e8c2973ddbebb9ca329",
+      "size": 8335,
+      "source": "hal/rtl8188f/rtl8188f_rf6052.c"
+    },
+    {
+      "compile_record": "hal/rtl8188f/.rtl8188f_rxdesc.o.cmd",
+      "compile_record_identity": {
+        "sha256": "d55b9704fe8d8b8de77892e290e13ec4782708d730a21f9a0e73929acddacaa1",
+        "size": 91815
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "hal/rtl8188f/rtl8188f_rxdesc.o",
+      "object_identity": {
+        "sha256": "881bae71050044122765caf6718151e61f1ed4ae0ad36bd79eb87bec3f830531",
+        "size": 1672
+      },
+      "sha256": "bb94ad264fedf29942c793cbae42b71c354530fb427af08278c1222ff8dc81d7",
+      "size": 2524,
+      "source": "hal/rtl8188f/rtl8188f_rxdesc.c"
+    },
+    {
+      "compile_record": "hal/rtl8188f/.rtl8188f_sreset.o.cmd",
+      "compile_record_identity": {
+        "sha256": "8b63d1c05e1043a875ee5602de2ecc1a1fde8712c952cf02333fa2cbf1263f74",
+        "size": 91815
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "hal/rtl8188f/rtl8188f_sreset.o",
+      "object_identity": {
+        "sha256": "600b5417dbfa5e181d01dabae5ad1b712481ad95a2a036e9ef4359b114db0513",
+        "size": 1052
+      },
+      "sha256": "4e2ab215a011a47e658c0983850b6a431e4636b802d5ed9b072209fd51ee9269",
+      "size": 3346,
+      "source": "hal/rtl8188f/rtl8188f_sreset.c"
+    },
+    {
+      "compile_record": "hal/rtl8188f/usb/.rtl8188fu_led.o.cmd",
+      "compile_record_identity": {
+        "sha256": "d29fefd1b29c19db36a1169071057d3bf40727c63acb0d1a2a5850b2b1e4cd0a",
+        "size": 91833
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "hal/rtl8188f/usb/rtl8188fu_led.o",
+      "object_identity": {
+        "sha256": "5b78c1acb8c72299d41a7b9fb1d67df49d0012d260c9c974dc1545aac150c3b1",
+        "size": 1052
+      },
+      "sha256": "7c4f7693a25fa5ce257c3cd0bcda59c0094e78a16b4e6e23c93a1d261937f5b8",
+      "size": 2830,
+      "source": "hal/rtl8188f/usb/rtl8188fu_led.c"
+    },
+    {
+      "compile_record": "hal/rtl8188f/usb/.rtl8188fu_recv.o.cmd",
+      "compile_record_identity": {
+        "sha256": "983e22cf912db7d917afa4fbf987774ba0bac4a1d56ad970ccca195822886779",
+        "size": 91844
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "hal/rtl8188f/usb/rtl8188fu_recv.o",
+      "object_identity": {
+        "sha256": "979689ed7a4c20378a28ebd72e32022b5c160002f264e6d643d42afba4b7b960",
+        "size": 1436
+      },
+      "sha256": "20982c51373e8f1ee7b1fb0d8b60589b8afc11085862f2c6781bb933cdbacb93",
+      "size": 938,
+      "source": "hal/rtl8188f/usb/rtl8188fu_recv.c"
+    },
+    {
+      "compile_record": "hal/rtl8188f/usb/.rtl8188fu_xmit.o.cmd",
+      "compile_record_identity": {
+        "sha256": "755035769a9f7ba4f127aaae1c6ba0f7406a0d8b0ed561d390033a0f19c98c92",
+        "size": 91844
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "hal/rtl8188f/usb/rtl8188fu_xmit.o",
+      "object_identity": {
+        "sha256": "031b5e23dea943a5086197a533bf1ce59152a4f08d61c264cb05d510259948a4",
+        "size": 9640
+      },
+      "sha256": "5d587f79be184c392077dd940b9ed7a7047ef7b0e9f5ce2583c20e8969d1ae64",
+      "size": 23616,
+      "source": "hal/rtl8188f/usb/rtl8188fu_xmit.c"
+    },
+    {
+      "compile_record": "hal/rtl8188f/usb/.usb_halinit.o.cmd",
+      "compile_record_identity": {
+        "sha256": "1cd4f0c5e594709cf7af7ddb44003b766bbf4c814c62932fcf2d1bf8a5a1a741",
+        "size": 91865
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "hal/rtl8188f/usb/usb_halinit.o",
+      "object_identity": {
+        "sha256": "8add5de9d7e5765201d170095ecda8930ac736cf68216d6aa47a3ef72a03308e",
+        "size": 17888
+      },
+      "sha256": "c78f89810b6d5b13cb1a17142686d7b52510b5532e8ef0b50d648edf3ac0b0b6",
+      "size": 61285,
+      "source": "hal/rtl8188f/usb/usb_halinit.c"
+    },
+    {
+      "compile_record": "hal/rtl8188f/usb/.usb_ops.o.cmd",
+      "compile_record_identity": {
+        "sha256": "8516336f1e288899d3f78436c4394334b08f3e342496f57a690f3e96a5313443",
+        "size": 91823
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "hal/rtl8188f/usb/usb_ops.o",
+      "object_identity": {
+        "sha256": "cbaecd7202e9f5638391a5b508f26b51863babe4d2db5b74628fa3b4ba60df82",
+        "size": 4512
+      },
+      "sha256": "ea2cd731ad7e22ff9c5c1f743a2274a8710fe0091cbba12e19d63c4093dd5d67",
+      "size": 7368,
+      "source": "hal/rtl8188f/usb/usb_ops.c"
+    },
+    {
+      "compile_record": "os_dep/linux/.ioctl_cfg80211.o.cmd",
+      "compile_record_identity": {
+        "sha256": "0ef0482d557549cda0d96c207a8986340b606f4f7c7f8114d6aded1ecddf5290",
+        "size": 91978
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "os_dep/linux/ioctl_cfg80211.o",
+      "object_identity": {
+        "sha256": "20045320146734cb9f6d134b248ea18daadc960afb244cdd2058bef2d48de244",
+        "size": 110160
+      },
+      "sha256": "21aaac9f88abf5f5a1386c5272fe17b7a9134132ffb38fe2d26dc64e3faa993f",
+      "size": 324531,
+      "source": "os_dep/linux/ioctl_cfg80211.c"
+    },
+    {
+      "compile_record": "os_dep/linux/.ioctl_linux.o.cmd",
+      "compile_record_identity": {
+        "sha256": "9c2d1073dadb3975159b5ce7272efa944a9073025347be88697bf00e72ab2f5a",
+        "size": 92820
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "os_dep/linux/ioctl_linux.o",
+      "object_identity": {
+        "sha256": "6c3323b7cd0f7f61d331c521c701c6c72801755d8ce4cb64dae1775a6e7d8737",
+        "size": 106996
+      },
+      "sha256": "a031a78c16331eec90c035fe3f47bd31525b17cfb2e1329ee967e8c396b9fa05",
+      "size": 375046,
+      "source": "os_dep/linux/ioctl_linux.c"
+    },
+    {
+      "compile_record": "os_dep/linux/.mlme_linux.o.cmd",
+      "compile_record_identity": {
+        "sha256": "e456d9ca4cad4d8765c01c5ff99fdcc417ff1814ebde9050e00d12479822f07f",
+        "size": 79035
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "os_dep/linux/mlme_linux.o",
+      "object_identity": {
+        "sha256": "bcb2c99f8dfd3a3e84adc0ce09a486c52648dce4d2878c75c627a40ef4c4dd5f",
+        "size": 5344
+      },
+      "sha256": "7d5eaf131b8ad264d5b6f84eff1fcd715975002d01a8f59cc645743b87751a7b",
+      "size": 11621,
+      "source": "os_dep/linux/mlme_linux.c"
+    },
+    {
+      "compile_record": "os_dep/linux/.nlrtw.o.cmd",
+      "compile_record_identity": {
+        "sha256": "31beb3ddac6c78c573add3d135694b166baa1f996301ea51624da4ba7dae1e03",
+        "size": 79096
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "os_dep/linux/nlrtw.o",
+      "object_identity": {
+        "sha256": "fa29e1004733fed17206f01e29397d0fa972a5416e7450ec641e004c45dc9283",
+        "size": 1044
+      },
+      "sha256": "5237099c85fbc6cf129852ae27ed809068cdfaa41a8d4557532a40d2cf8acd94",
+      "size": 5653,
+      "source": "os_dep/linux/nlrtw.c"
+    },
+    {
+      "compile_record": "os_dep/linux/.os_intfs.o.cmd",
+      "compile_record_identity": {
+        "sha256": "37374bdf38e065b266842a2cd8955116894f938a46e0edf8b7e6a4ad5c947db4",
+        "size": 92593
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "os_dep/linux/os_intfs.o",
+      "object_identity": {
+        "sha256": "4424417eb0fdeb17d235506fe44f4f129f79289810efb93f8275f1812ceae5c4",
+        "size": 88916
+      },
+      "sha256": "786c48df87244d8837f8c9785208ddf4325e9ea42cb820ac6150919fc7e124d4",
+      "size": 166419,
+      "source": "os_dep/linux/os_intfs.c"
+    },
+    {
+      "compile_record": "os_dep/linux/.recv_linux.o.cmd",
+      "compile_record_identity": {
+        "sha256": "750955ec28b8b72e919f59ac2d7ef6f65814dfff7c4af4b190dae3553c9db138",
+        "size": 79173
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "os_dep/linux/recv_linux.o",
+      "object_identity": {
+        "sha256": "887b8bec8c794aadcfe254e153622d5f9a838b83245d1a35e4ff24f4b016965b",
+        "size": 8520
+      },
+      "sha256": "9121d620f883bd020147b220882fd10a146453586c3c5f0ac1b637330a1afbd9",
+      "size": 19864,
+      "source": "os_dep/linux/recv_linux.c"
+    },
+    {
+      "compile_record": "os_dep/linux/.rtw_android.o.cmd",
+      "compile_record_identity": {
+        "sha256": "e779358de7fd0c7b1cf0857aecb979c13f3a9926825447c6438ca594c4a78f27",
+        "size": 79094
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "os_dep/linux/rtw_android.o",
+      "object_identity": {
+        "sha256": "71032e11050492aa6049aff6475835ef456b6cd3c695c46050cbca20bc1f0fa1",
+        "size": 10212
+      },
+      "sha256": "59a84f577a61a81de7725e5a309a781ea4223d419b39ea50cbeb24f14dd5c203",
+      "size": 36065,
+      "source": "os_dep/linux/rtw_android.c"
+    },
+    {
+      "compile_record": "os_dep/linux/.rtw_cfgvendor.o.cmd",
+      "compile_record_identity": {
+        "sha256": "f1695a458cbac838237ecbcb16b7085d4ab11a6e3ed5b5c6d5c1da62194a7d84",
+        "size": 79167
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "os_dep/linux/rtw_cfgvendor.o",
+      "object_identity": {
+        "sha256": "c18735925938c08037780f2ff7a2b05e3ee11169d4e8f971904957449be60dda",
+        "size": 1052
+      },
+      "sha256": "2c7202bdaba901325fb135462cea0e38a16c82a8fa415cea21f1529f29e6223e",
+      "size": 62351,
+      "source": "os_dep/linux/rtw_cfgvendor.c"
+    },
+    {
+      "compile_record": "os_dep/linux/.rtw_proc.o.cmd",
+      "compile_record_identity": {
+        "sha256": "bf1d85e238979702114105bc1c21354131ec3bf8a1474403cba4cd45c7a924c8",
+        "size": 91930
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "os_dep/linux/rtw_proc.o",
+      "object_identity": {
+        "sha256": "68a269f30a3df1c8b8ee9647c76b7c1a431e50f31ee8fb873b1d83675bddf76b",
+        "size": 83188
+      },
+      "sha256": "3ce20f827860e063f4ff6f30546377cb31e15f882e580f79e4149aaa211c1a30",
+      "size": 156030,
+      "source": "os_dep/linux/rtw_proc.c"
+    },
+    {
+      "compile_record": "os_dep/linux/.rtw_rhashtable.o.cmd",
+      "compile_record_identity": {
+        "sha256": "7814548624245c8a9e2a9fdf9ba5311b5a4f24f2ad10b06cfe5e9d3b19c7f973",
+        "size": 79079
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "os_dep/linux/rtw_rhashtable.o",
+      "object_identity": {
+        "sha256": "98c56dbdbcd590e0ffb36d113f96a8015347500e7f71d9a3ae547bf995ac58a6",
+        "size": 1052
+      },
+      "sha256": "d161e21fdd66057f760f9248f409c83b351d9b2852a2fcb1e6865024b4767f36",
+      "size": 2296,
+      "source": "os_dep/linux/rtw_rhashtable.c"
+    },
+    {
+      "compile_record": "os_dep/linux/.usb_intf.o.cmd",
+      "compile_record_identity": {
+        "sha256": "a6ce6f8ff414063516126884362c5383d3140118af736f3953ddd4b2f8989b58",
+        "size": 91910
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "os_dep/linux/usb_intf.o",
+      "object_identity": {
+        "sha256": "3911b4c62672b3fefb2a6fca1623db9bf51aae4101db33cd8ea906edabf953a6",
+        "size": 17556
+      },
+      "sha256": "2ef24b1e1b28f4977132e89cb30cb323fa6838adb2903b4d8246f3279990e85d",
+      "size": 44580,
+      "source": "os_dep/linux/usb_intf.c"
+    },
+    {
+      "compile_record": "os_dep/linux/.usb_ops_linux.o.cmd",
+      "compile_record_identity": {
+        "sha256": "72b1849a2d126e4da470a3893087465e73766b2f8a077d49338307524f3320de",
+        "size": 91793
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "os_dep/linux/usb_ops_linux.o",
+      "object_identity": {
+        "sha256": "1b722b99b2e6f30d3a55b448d3f978fed7b2b0e9a8c3276c6e796f4a4557e31d",
+        "size": 13208
+      },
+      "sha256": "81fa41ea50bfe88dffb196d87cb1320fd597a3b5bec6fd2b2baccc28bed80c78",
+      "size": 29599,
+      "source": "os_dep/linux/usb_ops_linux.c"
+    },
+    {
+      "compile_record": "os_dep/linux/.wifi_regd.o.cmd",
+      "compile_record_identity": {
+        "sha256": "dc13e30019a53f362bc19cc19f0b0c3ff8af2cd2474bfa157cb9e3eda999270e",
+        "size": 79024
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "os_dep/linux/wifi_regd.o",
+      "object_identity": {
+        "sha256": "f2290e8d29446001230a346b04037ce7e3337aed76792451e4e978f346eca198",
+        "size": 3192
+      },
+      "sha256": "78d446625af96e3a203bde2554213b25040db7122799be58199e5269d4956ee4",
+      "size": 3700,
+      "source": "os_dep/linux/wifi_regd.c"
+    },
+    {
+      "compile_record": "os_dep/linux/.xmit_linux.o.cmd",
+      "compile_record_identity": {
+        "sha256": "9aed062a8f9eb6a321c720e436bb6219ed46038927072f5ba662acc2fed1cffe",
+        "size": 79035
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "os_dep/linux/xmit_linux.o",
+      "object_identity": {
+        "sha256": "041d1e793124383265533077bbc4bdf29ba9840d70db1fba388697ed42e86038",
+        "size": 6292
+      },
+      "sha256": "2c92ade1b23fe32617f1309d6f06a5959d3bad11a9be1dca91d78a29f0e14158",
+      "size": 13624,
+      "source": "os_dep/linux/xmit_linux.c"
+    },
+    {
+      "compile_record": "os_dep/.osdep_service.o.cmd",
+      "compile_record_identity": {
+        "sha256": "a3d37872cd6695b1c5c7c4cd93ebef151b9301fd7317686eabc66d885ac687ba",
+        "size": 79057
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "os_dep/osdep_service.o",
+      "object_identity": {
+        "sha256": "f8f6d65543474d0fdaf26d7413038c4dafbdf1f7c21449042a5cbca0b62e9087",
+        "size": 34392
+      },
+      "sha256": "bdf3614f93cabd9e803480b32b2ffc958fae75ba68ea266acbf7e84feb8bb10e",
+      "size": 66052,
+      "source": "os_dep/osdep_service.c"
+    },
+    {
+      "compile_record": "platform/.platform_ops.o.cmd",
+      "compile_record_identity": {
+        "sha256": "a69f6af85ff9c8f39073d4b876bafbce1c69b7d44ab6a2ec85895b10922ad469",
+        "size": 4336
+      },
+      "header_marker_lines": {
+        "Copyright": [
+          3
+        ],
+        "GNU General Public License": [
+          6,
+          11
+        ]
+      },
+      "object": "platform/platform_ops.o",
+      "object_identity": {
+        "sha256": "83c547b26b7dbb7d4e0387650a647f7f7ca4d3e8cd403ef0ebe403d9e23f77a0",
+        "size": 1268
+      },
+      "sha256": "d5b924bc0d3f77a2e5f8cdbe4c63f3367a4fcb936f9fd263d589dbb0b37d8b09",
+      "size": 897,
+      "source": "platform/platform_ops.c"
+    }
+  ]
+}

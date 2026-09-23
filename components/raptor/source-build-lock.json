@@ -1,0 +1,138 @@
+{
+  "schema_version": 1,
+  "sources": {
+    "raptor": {
+      "url": "https://github.com/gtxaspec/raptor.git",
+      "base": "17b36386f980a24c7c90adb7c9b46f31b41c3b24",
+      "base_tree": "9525370fc9f1a20f0743efe75a8426ca35dc8d11",
+      "tree": "0f05599901aeb93e6d1ab65f46abb04c9a65884a",
+      "patches": [
+        {
+          "path": "patches/raptor-full-source/raptor.patch",
+          "sha256": "0f1094f0e86efd402ad30a423839ab260b469ca5640058fa1a2c485230729a16"
+        }
+      ],
+      "license": "LICENSE",
+      "license_sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+    },
+    "raptor-hal": {
+      "url": "https://github.com/gtxaspec/raptor-hal.git",
+      "base": "7e62abede02b41ecfb097303b3103b1a5d8740a4",
+      "base_tree": "64d336c70649297e8b8854e73c47542a5fb8fdaa",
+      "tree": "532498d18835a4e84f7b938bc339457ba40c2b59",
+      "patches": [
+        {
+          "path": "patches/raptor-full-source/raptor-hal.patch",
+          "sha256": "1a0c4684ac04291a2afdcf0f52dc9f2288806686da623be886a80feea62c4117"
+        }
+      ],
+      "license": "LICENSE",
+      "license_sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+    },
+    "raptor-ipc": {
+      "url": "https://github.com/gtxaspec/raptor-ipc.git",
+      "base": "ce78064748416037bf8e3a5e1000c0ef497b35ed",
+      "base_tree": "3be9b5bad45bfa5247cdc5da1d0b8b35923661e6",
+      "tree": "67274ab44406926d61ae37b353218dac630ef72d",
+      "patches": [
+        {
+          "path": "patches/raptor-full-source/raptor-ipc.patch",
+          "sha256": "8ec2d6b8fae3c24fafb051ec254c4c8cd8ff94f132056dccbcb91fa60b7abd69"
+        }
+      ],
+      "license": "LICENSE",
+      "license_sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+    },
+    "raptor-common": {
+      "url": "https://github.com/gtxaspec/raptor-common.git",
+      "base": "75d83e8bd2c6d2a2c8ef2b8a7040d74b84236d04",
+      "base_tree": "82d8b92869edaf2744b83ad10cc5ba5586712b65",
+      "tree": "9c0da09898641fe6d42c72c317a13f2bd56bda34",
+      "patches": [
+        {
+          "path": "patches/raptor-full-source/raptor-common.patch",
+          "sha256": "de023fe3392de156f1ad7e282680e7dd01f3c7e231e60a662f3bb655cb437b91"
+        }
+      ],
+      "license": "LICENSE",
+      "license_sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+    },
+    "compy": {
+      "url": "https://github.com/gtxaspec/compy.git",
+      "base": "0c53f0f48042e96781c74cf0359020dc5312857f",
+      "base_tree": "a70712bc91ad8041ca52acb22ae22a998c8d56e2",
+      "tree": "b7d88f71ed9d3b0019efd82a19832a01a8b8c837",
+      "patches": [
+        {
+          "path": "patches/raptor-full-source/compy.patch",
+          "sha256": "a24df57eb764e43d4bce8a1c8ad89107a7bbbb4495fba8a90b53a0e4b83327f2"
+        }
+      ],
+      "license": "LICENSE",
+      "license_sha256": "da50d92a25d6e849b82699c31a2d7bcb0427b7eff44ba607e597ab22301f9412"
+    },
+    "slice99": {
+      "url": "https://github.com/Hirrolot/slice99.git",
+      "base": "54122292e51a87403a1cdd5ff4e43fd25c3e0761",
+      "base_tree": "322393f8302ecc1f2fd24f0c520dfc66bfcb7f65",
+      "tree": "322393f8302ecc1f2fd24f0c520dfc66bfcb7f65",
+      "patches": [],
+      "license": "LICENSE",
+      "license_sha256": "3c714ad5cb186fa36af4d83004cbc6af0223779dfe21d99f40edd65c972e0e00"
+    },
+    "datatype99": {
+      "url": "https://github.com/Hirrolot/datatype99.git",
+      "base": "e24fc6a8baadc82a99708829a38aeba027bbcdd9",
+      "base_tree": "2da46e791f94ec1c3d414694a2813ff9c9478ab0",
+      "tree": "2da46e791f94ec1c3d414694a2813ff9c9478ab0",
+      "patches": [],
+      "license": "LICENSE",
+      "license_sha256": "3c714ad5cb186fa36af4d83004cbc6af0223779dfe21d99f40edd65c972e0e00"
+    },
+    "interface99": {
+      "url": "https://github.com/Hirrolot/interface99.git",
+      "base": "723bc751f13ef221e6adf285015737387010518b",
+      "base_tree": "897dc1b167b422965d3cc34505c6d9272b998359",
+      "tree": "897dc1b167b422965d3cc34505c6d9272b998359",
+      "patches": [],
+      "license": "LICENSE",
+      "license_sha256": "8433fcfb3d0879288d62743cd7d26a6453bdf137a82ee34f47e763f81f9079de"
+    },
+    "metalang99": {
+      "url": "https://github.com/Hirrolot/metalang99.git",
+      "base": "5337c43d869a1985eb3aef4e316b728b7a9ac916",
+      "base_tree": "fefc5a3989dd8631e850dedd2dab88f181593b1b",
+      "tree": "fefc5a3989dd8631e850dedd2dab88f181593b1b",
+      "patches": [],
+      "license": "LICENSE",
+      "license_sha256": "3c714ad5cb186fa36af4d83004cbc6af0223779dfe21d99f40edd65c972e0e00"
+    },
+    "mbedtls": {
+      "url": "https://github.com/Mbed-TLS/mbedtls.git",
+      "base": "0bebf8b8c7f07abe3571ded48a11aa907a1ffb20",
+      "base_tree": "bf18187c533d0f9c5cb5bf9220b5828c38e86fcb",
+      "tree": "bf18187c533d0f9c5cb5bf9220b5828c38e86fcb",
+      "patches": [],
+      "license": "LICENSE",
+      "license_sha256": "9b405ef4c89342f5eae1dd828882f931747f71001cfba7d114801039b52ad09b"
+    },
+    "mbedtls-framework": {
+      "url": "https://github.com/Mbed-TLS/mbedtls-framework.git",
+      "base": "dff9da04438d712f7647fd995bc90fadd0c0e2ce",
+      "base_tree": "b3302e98b7c3c6d68c9e8e83b8175bb2078f2bcc",
+      "tree": "b3302e98b7c3c6d68c9e8e83b8175bb2078f2bcc",
+      "patches": [],
+      "license": "LICENSE",
+      "license_sha256": "11402351e38392230bb8934ba1095c0c0049a296c0f8821f76e4672dff54b490"
+    },
+    "libschrift": {
+      "url": "https://github.com/tomolt/libschrift.git",
+      "base": "8e533fd07acc2f8ae4cffe7f95d2c3392773e2b5",
+      "base_tree": "aa3848103f8c45abdd84de1874427140a455cae3",
+      "tree": "aa3848103f8c45abdd84de1874427140a455cae3",
+      "patches": [],
+      "license": "LICENSE",
+      "license_sha256": "13c322598cd5f3615a0e8b2b30cca28f8734435ff6214075f318f2bbe45ec4c3"
+    }
+  }
+}

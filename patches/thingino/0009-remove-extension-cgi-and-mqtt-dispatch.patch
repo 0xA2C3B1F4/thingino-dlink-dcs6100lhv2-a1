@@ -1,0 +1,73 @@
+diff --git a/package/thingino-ha/files/config-ha.js b/package/thingino-ha/files/config-ha.js
+index 0dfd774d..96c5f0fe 100644
+--- a/package/thingino-ha/files/config-ha.js
++++ b/package/thingino-ha/files/config-ha.js
+@@ -79,7 +79,7 @@
+       toggleBusy(true, 'Loading Home Assistant settings...');
+     }
+     try {
+-      const response = await fetch('/x/json-config-ha.cgi', {
++      const response = await fetch('/api/v1/config/ha', {
+         headers: { 'Accept': 'application/json' }
+       });
+       if (!response.ok) throw new Error('Failed to load Home Assistant settings');
+@@ -124,7 +124,7 @@
+   async function saveConfig(payload) {
+     toggleBusy(true, 'Saving Home Assistant settings...');
+     try {
+-      const response = await fetch('/x/json-config-ha.cgi', {
++      const response = await fetch('/api/v1/config/ha', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify(payload)
+@@ -136,7 +136,7 @@
+         throw new Error(msg);
+       }
+       showAlert('', '');
+-      showOverlayMessage('Home Assistant settings saved.', 'success');
++      showOverlayMessage('Home Assistant settings saved. Reboot after changing the enabled state.', 'success');
+       await loadConfig({ preserveBusy: true });
+     } catch (err) {
+       showAlert('danger', err.message || 'Failed to save Home Assistant settings.');
+diff --git a/package/thingino-ha/thingino-ha.mk b/package/thingino-ha/thingino-ha.mk
+index 1f383ad0..f6fa3aaa 100644
+--- a/package/thingino-ha/thingino-ha.mk
++++ b/package/thingino-ha/thingino-ha.mk
+@@ -30,8 +30,7 @@ define THINGINO_HA_INSTALL_TARGET_CMDS
+ 		$(TARGET_DIR)/var/www/config-ha.html
+   $(INSTALL) -D -m 0644 $(@D)/config-ha.js \
+ 		$(TARGET_DIR)/var/www/a/config-ha.js
+-  $(INSTALL) -D -m 0755 $(@D)/json-config-ha.cgi \
+-		$(TARGET_DIR)/var/www/x/json-config-ha.cgi
++	rm -f $(TARGET_DIR)/var/www/x/json-config-ha.cgi
+ 
+ 	# Auto-enable doorbell entity on doorbell-equipped cameras
+ 	$(if $(BR2_PACKAGE_WYZE_ACCESSORY_DOORBELL_CTRL),
+diff --git a/package/thingino-mosquitto-20x/thingino-mosquitto-20x.mk b/package/thingino-mosquitto-20x/thingino-mosquitto-20x.mk
+index 9d48ff70..f2a5b969 100644
+--- a/package/thingino-mosquitto-20x/thingino-mosquitto-20x.mk
++++ b/package/thingino-mosquitto-20x/thingino-mosquitto-20x.mk
+@@ -102,18 +102,10 @@ ifeq ($(BR2_PACKAGE_THINGINO_WEBUI),y)
+ THINGINO_MOSQUITTO_20X_DEPENDENCIES += thingino-webui
+ 
+ define THINGINO_MOSQUITTO_20X_INSTALL_WEBUI
+-	$(INSTALL) -d $(TARGET_DIR)/var/www/a
+-	$(INSTALL) -d $(TARGET_DIR)/var/www/x
+-	$(INSTALL) -d $(TARGET_DIR)/var/www/a/plugins
+-	$(INSTALL) -D -m 0644 $(THINGINO_MOSQUITTO_20X_PKGDIR)/files/www/tool-mqtt-sub.html \
+-		$(TARGET_DIR)/var/www/tool-mqtt-sub.html
+-	$(INSTALL) -D -m 0644 $(THINGINO_MOSQUITTO_20X_PKGDIR)/files/www/a/tool-mqtt-sub.js \
+-		$(TARGET_DIR)/var/www/a/tool-mqtt-sub.js
+-	$(INSTALL) -D -m 0755 $(THINGINO_MOSQUITTO_20X_PKGDIR)/files/www/x/json-config-mqtt-sub.cgi \
+-		$(TARGET_DIR)/var/www/x/json-config-mqtt-sub.cgi
+-	$(INSTALL) -D -m 0755 $(THINGINO_MOSQUITTO_20X_PKGDIR)/files/www/x/mqtt-sub-restart.cgi \
+-		$(TARGET_DIR)/var/www/x/mqtt-sub-restart.cgi
+-	$(INSTALL) -D -m 0644 $(THINGINO_MOSQUITTO_20X_PKGDIR)/files/mqtt-sub.webui.json \
++	rm -f $(TARGET_DIR)/var/www/tool-mqtt-sub.html \
++		$(TARGET_DIR)/var/www/a/tool-mqtt-sub.js \
++		$(TARGET_DIR)/var/www/x/json-config-mqtt-sub.cgi \
++		$(TARGET_DIR)/var/www/x/mqtt-sub-restart.cgi \
+ 		$(TARGET_DIR)/var/www/a/plugins/mqtt-sub.webui.json
+ endef
+ THINGINO_MOSQUITTO_20X_POST_INSTALL_TARGET_HOOKS += THINGINO_MOSQUITTO_20X_INSTALL_WEBUI
+

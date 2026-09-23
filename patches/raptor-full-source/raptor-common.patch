@@ -1,0 +1,1020 @@
+diff --git a/Makefile b/Makefile
+index 778f344fad9fdb767c847eccdd123d825f7d663c..92f63c98c31fb2c106f21fbef1d6a396c18125e0 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1,6 +1,7 @@
+ CC      ?= gcc
+ AR      ?= ar
+ CFLAGS  := -Wall -Wextra -Werror -std=c11 -D_GNU_SOURCE -Os -fPIC
++CFLAGS  += -pthread
+ CFLAGS  += -ffunction-sections -fdata-sections
+ CFLAGS  += -fno-asynchronous-unwind-tables -fmerge-all-constants -fno-ident
+ CFLAGS  += -Iinclude -Ithird_party/monocypher
+@@ -13,7 +14,7 @@ LIB_A   := librss_common.a
+ all: $(LIB_SO) $(LIB_A)
+ 
+ $(LIB_SO): $(OBJS)
+-	$(CC) -shared -Wl,-soname,librss_common.so -Wl,-Bsymbolic -Wl,--gc-sections -o $@ $^
++	$(CC) -shared -Wl,-soname,librss_common.so -Wl,-Bsymbolic -Wl,--gc-sections -o $@ $^ -pthread
+ 
+ $(LIB_A): $(OBJS)
+ 	$(AR) rcs $@ $^
+diff --git a/include/rss_common.h b/include/rss_common.h
+index 16d0de57065dabc8313b32c6fe86f2bd5e949f5d..c072f4bfc7e6dc7e98e74ebd7373450cc7eb705e 100644
+--- a/include/rss_common.h
++++ b/include/rss_common.h
+@@ -16,6 +16,7 @@
+ #include <stdio.h>
+ #include <string.h>
+ #include <signal.h>
++#include <time.h>
+ 
+ #include "cJSON.h"
+ 
+@@ -130,6 +131,9 @@ void rss_config_set_int(rss_config_t *cfg, const char *section, const char *key,
+ /* Set a boolean value in the running config. */
+ void rss_config_set_bool(rss_config_t *cfg, const char *section, const char *key, bool value);
+ 
++/* Read the shared privacy policy without inserting a dirty/default value. */
++int rss_config_privacy(rss_config_t *cfg, bool *enabled);
++
+ /* Save running config to disk (atomic write). Returns 0 on success. */
+ int rss_config_save(rss_config_t *cfg, const char *path);
+ 
+@@ -197,6 +201,8 @@ bool rss_ntp_synced(void);
+ 
+ /* Format timestamp as ISO 8601 string (YYYY-MM-DD HH:MM:SS) into buf.
+  * buf must be at least 20 bytes. Returns buf. */
++size_t rss_format_localtime(char *buf, size_t size, const char *format, const time_t *time);
++int rss_timezone_command(const char *json, rss_config_t *cfg, char *response, int size);
+ char *rss_format_timestamp(char *buf, int buf_size);
+ 
+ /* Format timestamp with custom format string (strftime-compatible) */
+@@ -275,6 +281,9 @@ extern const char *rss_build_platform __attribute__((weak));
+  * the command was not recognized (caller should handle it).
+  * ================================================================ */
+ 
++/* Reload a section from disk, independently of the daemon's running cache. */
++int rss_config_readback_section(const char *path, const char *section, char *buf, int size);
++
+ int rss_ctrl_handle_common(const char *cmd_json, char *resp_buf, int resp_buf_size,
+                            rss_config_t *cfg, const char *config_path);
+ 
+diff --git a/include/rss_sei.h b/include/rss_sei.h
+index d060b3aae9f86cdc00b51ef18102157511a55542..aa5d61dd0dc066fb965f1e702825d9a7ac2bfaa4 100644
+--- a/include/rss_sei.h
++++ b/include/rss_sei.h
+@@ -7,8 +7,9 @@
+  * microsecond timestamp as four 2-byte groups with a 0xFF guard byte
+  * after each of the first three (ST 0604.6 §7.4 Table 2).
+  *
+- * The guard bytes make start-code emulation impossible by
+- * construction, so the NAL needs no emulation-prevention pass.
++ * The timestamp guard bytes make start-code emulation impossible by
++ * construction, so rss_sei_build_timestamp needs no emulation-prevention
++ * pass. The general user-data helper applies emulation prevention.
+  */
+ 
+ #ifndef RSS_SEI_H
+@@ -40,6 +41,16 @@ extern "C" {
+ /* Largest possible output: H.265 NAL (33 bytes) + 4-byte prefix */
+ #define RSS_SEI_TS_MAX 37
+ 
++/*
++ * Build a user_data_unregistered SEI NAL unit. The 16-byte identifier
++ * distinguishes the caller's payload from other unregistered user data.
++ * Emulation-prevention bytes are inserted as required.
++ *
++ * Returns total bytes written, or -EINVAL / -E2BIG / -ENOSPC.
++ */
++int rss_sei_build_user_data(uint8_t *dst, size_t cap, int codec, int prefix,
++                            const uint8_t uuid[16], const uint8_t *data, size_t data_len);
++
+ /*
+  * Build a Precision Time Stamp SEI NAL unit.
+  *
+diff --git a/src/rss_config.c b/src/rss_config.c
+index 5aa3c9b7fe75310ba2f1057f9df764db6027aa08..36e6f0724e610f5ad30c31fe932f56a07fe47531 100644
+--- a/src/rss_config.c
++++ b/src/rss_config.c
+@@ -16,6 +16,7 @@
+ #include <fcntl.h>
+ #include <unistd.h>
+ #include <sys/file.h>
++#include <sys/stat.h>
+ 
+ /* ------------------------------------------------------------------ */
+ /* Internal data structures                                            */
+@@ -65,7 +66,7 @@ static rss_config_section_t *find_or_create_section(rss_config_t *cfg, const cha
+     return s;
+ }
+ 
+-static void add_entry_ex(rss_config_section_t *sec, const char *key, const char *value, bool dirty)
++static bool add_entry_ex(rss_config_section_t *sec, const char *key, const char *value, bool dirty)
+ {
+     /* Overwrite if key already exists */
+     rss_config_entry_t *e;
+@@ -74,14 +75,14 @@ static void add_entry_ex(rss_config_section_t *sec, const char *key, const char
+             if (rss_strlcpy(e->value, value, sizeof(e->value)) >= sizeof(e->value))
+                 RSS_WARN("config: value truncated for key '%s' (max %d)", key, MAX_VAL - 1);
+             e->dirty = e->dirty || dirty;
+-            return;
++            return true;
+         }
+     }
+ 
+     e = calloc(1, sizeof(*e));
+     if (!e) {
+         RSS_WARN("config: alloc failed for key '%s'", key);
+-        return;
++        return false;
+     }
+     rss_strlcpy(e->key, key, sizeof(e->key));
+     if (rss_strlcpy(e->value, value, sizeof(e->value)) >= sizeof(e->value))
+@@ -89,6 +90,7 @@ static void add_entry_ex(rss_config_section_t *sec, const char *key, const char
+     e->dirty = dirty;
+     e->next = sec->entries;
+     sec->entries = e;
++    return true;
+ }
+ 
+ static void add_entry(rss_config_section_t *sec, const char *key, const char *value)
+@@ -119,7 +121,7 @@ static void strip_inline_comment(char *s)
+ /* Public API                                                          */
+ /* ------------------------------------------------------------------ */
+ 
+-rss_config_t *rss_config_load(const char *path)
++static rss_config_t *config_load(const char *path, bool strict)
+ {
+     FILE *fp = fopen(path, "r");
+     if (!fp)
+@@ -137,6 +139,10 @@ rss_config_t *rss_config_load(const char *path)
+ 
+     while (fgets(line, (int)sizeof(line), fp)) {
+         lineno++;
++        if (strict && strlen(line) == sizeof(line) - 1 && line[sizeof(line) - 2] != '\n') {
++            errno = EINVAL;
++            goto invalid;
++        }
+         char *s = rss_trim(line);
+ 
+         /* Skip empty lines and full-line comments */
+@@ -147,10 +153,19 @@ rss_config_t *rss_config_load(const char *path)
+         if (*s == '[') {
+             char *end = strchr(s, ']');
+             if (!end) {
++                if (strict) { errno = EINVAL; goto invalid; }
+                 RSS_WARN("%s:%d: malformed section (no ']'): %s", path, lineno, s);
+                 continue;
+             }
++            if (strict) {
++                char *tail = rss_trim(end + 1);
++                if (*tail && *tail != '#' && *tail != ';') { errno = EINVAL; goto invalid; }
++            }
+             *end = '\0';
++            if (strict && strlen(rss_trim(s + 1)) >= sizeof(current_section)) {
++                errno = EINVAL;
++                goto invalid;
++            }
+             if (rss_strlcpy(current_section, rss_trim(s + 1), sizeof(current_section)) >=
+                 sizeof(current_section))
+                 RSS_WARN("%s:%d: section name truncated (max %d)", path, lineno, MAX_SECN - 1);
+@@ -160,6 +175,7 @@ rss_config_t *rss_config_load(const char *path)
+         /* Key = value */
+         char *eq = strchr(s, '=');
+         if (!eq) {
++            if (strict) { errno = EINVAL; goto invalid; }
+             RSS_WARN("%s:%d: malformed line (no '='): %s", path, lineno, s);
+             continue;
+         }
+@@ -172,16 +188,35 @@ rss_config_t *rss_config_load(const char *path)
+         strip_inline_comment(val);
+         val = rss_trim(val);
+ 
++        if (strict && (!*key || strlen(key) >= MAX_KEY || strlen(val) >= MAX_VAL)) {
++            errno = EINVAL;
++            goto invalid;
++        }
+         if (*key == '\0')
+             continue;
+ 
+         rss_config_section_t *sec = find_or_create_section(cfg, current_section);
+-        if (sec)
+-            add_entry(sec, key, val);
++        if (!sec || !add_entry_ex(sec, key, val, false)) {
++            if (strict) { errno = ENOMEM; goto invalid; }
++        }
+     }
+ 
++    if (strict && ferror(fp)) goto invalid;
+     fclose(fp);
+     return cfg;
++
++invalid: {
++    int saved_errno = errno ? errno : EIO;
++    fclose(fp);
++    rss_config_free(cfg);
++    errno = saved_errno;
++    return NULL;
++}
++}
++
++rss_config_t *rss_config_load(const char *path)
++{
++    return config_load(path, false);
+ }
+ 
+ void rss_config_free(rss_config_t *cfg)
+@@ -462,33 +497,52 @@ int rss_config_save(rss_config_t *cfg, const char *path)
+      * flock on a .lock sidecar prevents concurrent load-merge-write
+      * cycles from losing updates via the atomic rename. */
+     char lockpath[512];
+-    snprintf(lockpath, sizeof(lockpath), "%s.lock", path);
+-    int lock_fd = open(lockpath, O_WRONLY | O_CREAT, 0644);
++    int path_length = snprintf(lockpath, sizeof(lockpath), "%s.lock", path);
++    if (path_length < 0 || (size_t)path_length >= sizeof(lockpath))
++        return -1;
++    int lock_fd = open(lockpath, O_WRONLY | O_CREAT | O_NOFOLLOW | O_CLOEXEC, 0600);
+     if (lock_fd < 0)
+-        RSS_WARN("config: failed to acquire save lock (%s), proceeding unserialized",
+-                 strerror(errno));
+-    if (lock_fd >= 0)
+-        flock(lock_fd, LOCK_EX);
++        return -1;
++    struct stat lock_stat;
++    if (fstat(lock_fd, &lock_stat) != 0 || !S_ISREG(lock_stat.st_mode) ||
++        lock_stat.st_nlink != 1 || flock(lock_fd, LOCK_EX | LOCK_NB) != 0) {
++        close(lock_fd);
++        return -1;
++    }
+ 
+     /* Only merge entries modified at runtime (dirty) into the existing
+      * file.  Each daemon shares /etc/raptor.conf but owns different
+      * sections — writing the entire in-memory config would clobber
+      * changes made by other daemons. */
+-    int ret;
+-    rss_config_t *disk = rss_config_load(path);
++    int ret = -1;
++    struct stat file_stat;
++    bool absent = false;
++    if (lstat(path, &file_stat) != 0) {
++        if (errno != ENOENT) goto unlock;
++        absent = true;
++    } else if (!S_ISREG(file_stat.st_mode)) {
++        goto unlock;
++    }
++    rss_config_t *disk = absent ? NULL : config_load(path, true);
++    if (!absent && !disk) goto unlock;
+     if (disk) {
+         rss_config_section_t *s;
+         for (s = cfg->sections; s; s = s->next) {
+             rss_config_entry_t *e;
+             for (e = s->entries; e; e = e->next) {
+-                if (e->dirty)
+-                    rss_config_set_str(disk, s->name, e->key, e->value);
++                if (e->dirty) {
++                    rss_config_section_t *target = find_or_create_section(disk, s->name);
++                    if (!target || !add_entry_ex(target, e->key, e->value, true)) {
++                        rss_config_free(disk);
++                        goto unlock;
++                    }
++                }
+             }
+         }
+         ret = config_write(disk, path);
+         rss_config_free(disk);
+     } else {
+-        /* No existing file — write everything */
++        /* Only a confirmed absent file may be initialized from the cache. */
+         ret = config_write(cfg, path);
+     }
+ 
+@@ -502,9 +556,57 @@ int rss_config_save(rss_config_t *cfg, const char *path)
+         }
+     }
+ 
++unlock:
+     if (lock_fd >= 0) {
+         flock(lock_fd, LOCK_UN);
+         close(lock_fd);
+     }
+     return ret;
+ }
++
++static void config_readback_cb(const char *key, const char *value, void *userdata)
++{
++    cJSON_AddStringToObject(userdata, key, value);
++}
++
++int rss_config_readback_section(const char *path, const char *section, char *buf, int size)
++{
++    if (!path || !section || !*section)
++        return rss_ctrl_resp_error(buf, size, "need section");
++    rss_config_t *disk = config_load(path, true);
++    if (!disk)
++        return rss_ctrl_resp_error(buf, size, "config readback failed");
++    cJSON *resp = cJSON_CreateObject();
++    if (!resp) {
++        rss_config_free(disk);
++        return rss_ctrl_resp_error(buf, size, "json alloc failed");
++    }
++    cJSON_AddStringToObject(resp, "status", "ok");
++    cJSON_AddStringToObject(resp, "section", section);
++    cJSON *keys = cJSON_AddObjectToObject(resp, "keys");
++    if (!keys) {
++        cJSON_Delete(resp);
++        rss_config_free(disk);
++        return rss_ctrl_resp_error(buf, size, "json alloc failed");
++    }
++    rss_config_foreach(disk, section, config_readback_cb, keys);
++    rss_config_free(disk);
++    return rss_ctrl_resp_json(buf, size, resp);
++}
++
++
++int rss_config_privacy(rss_config_t *cfg, bool *enabled)
++{
++    if (!cfg || !enabled)
++        return -1;
++    const char *value = rss_config_get_str(cfg, "privacy", "enabled", NULL);
++    if (!value || strcmp(value, "false") == 0) {
++        *enabled = false;
++        return 0;
++    }
++    if (strcmp(value, "true") == 0) {
++        *enabled = true;
++        return 0;
++    }
++    return -1;
++}
+diff --git a/src/rss_ctrl_cmds.c b/src/rss_ctrl_cmds.c
+index 6fe56186f0e912572e8de10e4048ec5125324aec..5cebbffcef81efd67b4edaadeb767a81b376f467 100644
+--- a/src/rss_ctrl_cmds.c
++++ b/src/rss_ctrl_cmds.c
+@@ -25,6 +25,9 @@ static void section_dump_cb(const char *key, const char *value, void *userdata)
+ int rss_ctrl_handle_common(const char *cmd_json, char *resp_buf, int resp_buf_size,
+                            rss_config_t *cfg, const char *config_path)
+ {
++    int timezone_result = rss_timezone_command(cmd_json, cfg, resp_buf, resp_buf_size);
++    if (timezone_result >= 0)
++        return timezone_result;
+     cJSON *root = cJSON_Parse(cmd_json);
+     if (!root)
+         return rss_ctrl_resp_error(resp_buf, resp_buf_size, "malformed JSON");
+@@ -36,6 +39,15 @@ int rss_ctrl_handle_common(const char *cmd_json, char *resp_buf, int resp_buf_si
+     }
+     const char *cmd = cmd_obj->valuestring;
+ 
++    if (strcmp(cmd, "config-read-section") == 0) {
++        cJSON *section = cJSON_GetObjectItemCaseSensitive(root, "section");
++        int len = cJSON_IsString(section) && section->valuestring
++            ? rss_config_readback_section(config_path, section->valuestring, resp_buf, resp_buf_size)
++            : rss_ctrl_resp_error(resp_buf, resp_buf_size, "need section");
++        cJSON_Delete(root);
++        return len;
++    }
++
+     if (strcmp(cmd, "config-get-section") == 0) {
+         int len;
+         cJSON *sec_obj = cJSON_GetObjectItemCaseSensitive(root, "section");
+diff --git a/src/rss_log.c b/src/rss_log.c
+index 907a4cfe89e7dc712446c7af678bdbd51274ed9e..d55fd8a4a5c34161129d971e636f5e4a8658f98c 100644
+--- a/src/rss_log.c
++++ b/src/rss_log.c
+@@ -111,12 +111,12 @@ void rss_vlog(rss_log_level_t level, const char *file, int line, const char *fmt
+      * harder to correlate with external events. */
+     struct timespec ts;
+     clock_gettime(CLOCK_REALTIME, &ts);
+-    struct tm tm;
+-    localtime_r(&ts.tv_sec, &tm);
++    char clock[9];
++    rss_format_localtime(clock, sizeof(clock), "%H:%M:%S", &ts.tv_sec);
+ 
+     char tsbuf[16];
+     int ms = (int)(ts.tv_nsec / 1000000);
+-    snprintf(tsbuf, sizeof(tsbuf), "%02d:%02d:%02d.%03d", tm.tm_hour, tm.tm_min, tm.tm_sec, ms);
++    snprintf(tsbuf, sizeof(tsbuf), "%s.%03d", clock, ms);
+ 
+     FILE *out = (s_target == RSS_LOG_TARGET_FILE && s_fp) ? s_fp : stderr;
+ 
+diff --git a/src/rss_sei.c b/src/rss_sei.c
+index 372d63535ed99032e45af59048cc8c8ccca7519f..843d2f514ad3d1d6d67216c0f061d311ceeeca4a 100644
+--- a/src/rss_sei.c
++++ b/src/rss_sei.c
+@@ -14,6 +14,7 @@
+ #include "rss_sei.h"
+ 
+ #include <errno.h>
++#include <limits.h>
+ #include <string.h>
+ 
+ /* ST 0604.6 §7.1 Table 1 — H.264 Precision Time Stamp identifier,
+@@ -28,6 +29,102 @@ static const uint8_t misp_uuid_h265[16] = {0xa8, 0x68, 0x7d, 0xd4, 0xd7, 0x59, 0
+ #define SEI_PAYLOAD_TYPE_UDU 5 /* user_data_unregistered */
+ #define SEI_PAYLOAD_SIZE 28    /* 16 uuid + 1 status + 11 modified ts */
+ 
++typedef struct {
++    uint8_t *dst;
++    size_t cap;
++    size_t len;
++    unsigned zeros;
++} sei_rbsp_writer_t;
++
++static int sei_rbsp_byte(sei_rbsp_writer_t *writer, uint8_t byte)
++{
++    if (writer->zeros == 2 && byte <= 0x03) {
++        if (writer->len == writer->cap)
++            return -ENOSPC;
++        if (writer->dst)
++            writer->dst[writer->len] = 0x03;
++        writer->len++;
++        writer->zeros = 0;
++    }
++    if (writer->len == writer->cap)
++        return -ENOSPC;
++    if (writer->dst)
++        writer->dst[writer->len] = byte;
++    writer->len++;
++    writer->zeros = byte == 0 ? writer->zeros + 1 : 0;
++    return 0;
++}
++
++static int sei_user_data_rbsp(sei_rbsp_writer_t *writer, const uint8_t uuid[16],
++                              const uint8_t *data, size_t data_len)
++{
++    int ret = sei_rbsp_byte(writer, SEI_PAYLOAD_TYPE_UDU);
++    size_t payload_size = 16 + data_len;
++    for (size_t remaining = payload_size; ret == 0 && remaining >= 0xff; remaining -= 0xff)
++        ret = sei_rbsp_byte(writer, 0xff);
++    if (ret == 0)
++        ret = sei_rbsp_byte(writer, (uint8_t)(payload_size % 0xff));
++    for (size_t i = 0; ret == 0 && i < 16; i++)
++        ret = sei_rbsp_byte(writer, uuid[i]);
++    for (size_t i = 0; ret == 0 && i < data_len; i++)
++        ret = sei_rbsp_byte(writer, data[i]);
++    if (ret == 0)
++        ret = sei_rbsp_byte(writer, 0x80);
++    return ret;
++}
++
++int rss_sei_build_user_data(uint8_t *dst, size_t cap, int codec, int prefix,
++                            const uint8_t uuid[16], const uint8_t *data, size_t data_len)
++{
++    if (!dst || !uuid || (!data && data_len > 0) ||
++        (codec != RSS_SEI_CODEC_H264 && codec != RSS_SEI_CODEC_H265) ||
++        (prefix != RSS_SEI_PREFIX_NONE && prefix != RSS_SEI_PREFIX_ANNEXB &&
++         prefix != RSS_SEI_PREFIX_AVCC))
++        return -EINVAL;
++    if (data_len > (size_t)INT_MAX - 64)
++        return -E2BIG;
++
++    sei_rbsp_writer_t measure = {.dst = NULL, .cap = SIZE_MAX};
++    int ret = sei_user_data_rbsp(&measure, uuid, data, data_len);
++    if (ret < 0)
++        return ret;
++
++    size_t prefix_len = prefix == RSS_SEI_PREFIX_NONE ? 0 : 4;
++    size_t header_len = codec == RSS_SEI_CODEC_H264 ? 1 : 2;
++    size_t total = prefix_len + header_len + measure.len;
++    if (total > (size_t)INT_MAX)
++        return -E2BIG;
++    if (cap < total)
++        return -ENOSPC;
++
++    size_t out = prefix_len;
++    if (codec == RSS_SEI_CODEC_H264) {
++        dst[out++] = 0x06;
++    } else {
++        dst[out++] = 0x4e;
++        dst[out++] = 0x01;
++    }
++    sei_rbsp_writer_t writer = {
++        .dst = dst + out,
++        .cap = cap - out,
++    };
++    ret = sei_user_data_rbsp(&writer, uuid, data, data_len);
++    if (ret < 0)
++        return ret;
++
++    size_t nal_len = header_len + writer.len;
++    if (prefix == RSS_SEI_PREFIX_ANNEXB) {
++        dst[0] = dst[1] = dst[2] = 0;
++        dst[3] = 1;
++    } else if (prefix == RSS_SEI_PREFIX_AVCC) {
++        dst[0] = (uint8_t)(nal_len >> 24);
++        dst[1] = (uint8_t)(nal_len >> 16);
++        dst[2] = (uint8_t)(nal_len >> 8);
++        dst[3] = (uint8_t)nal_len;
++    }
++    return (int)total;
++}
++
+ int rss_sei_build_timestamp(uint8_t *dst, size_t cap, int codec, int prefix, uint64_t utc_us,
+                             uint8_t status)
+ {
+@@ -129,10 +226,10 @@ int rss_sei_parse_timestamp(const uint8_t *nal, size_t len, int codec, uint64_t
+     }
+ 
+     /* Walk SEI messages in the NAL (a NAL may carry several).
+-     * Note: the RBSP is parsed unescaped. NALs built by rss_sei never
+-     * contain emulation-prevention bytes; foreign SEI messages that do
+-     * would shift the walk and read as absent, never as a false match
+-     * (the identifier comparison still applies). */
++     * Note: the RBSP is parsed unescaped. NALs built by the timestamp
++     * helper never contain emulation-prevention bytes; foreign SEI
++     * messages that do would shift the walk and read as absent, never
++     * as a false match (the identifier comparison still applies). */
+     const uint8_t *p = nal + hdr_len;
+     const uint8_t *end = nal + len;
+ 
+diff --git a/src/rss_util.c b/src/rss_util.c
+index d785f9f603cac52ba44ac92ebccb23555ab466ff..7908c7aab1f881be891ca47f997dce896abb762f 100644
+--- a/src/rss_util.c
++++ b/src/rss_util.c
+@@ -18,11 +18,159 @@
+ #include <fcntl.h>
+ #include <errno.h>
+ #include <sys/stat.h>
++#include <pthread.h>
+ 
+ /* ================================================================
+  * Timestamps
+  * ================================================================ */
+ 
++
++#ifndef RSS_TIMEZONE_FILE
++#define RSS_TIMEZONE_FILE "/etc/TZ"
++#endif
++#ifndef RSS_TIMEZONE_RUN_DIR
++#define RSS_TIMEZONE_RUN_DIR RSS_RUN_DIR
++#endif
++
++/* Serialize Raptor's local-time conversion/formatting and TZ changes. Keep
++ * formatting under the lock too: struct tm can contain a libc-owned zone name. */
++static pthread_mutex_t timezone_lock = PTHREAD_MUTEX_INITIALIZER;
++
++size_t rss_format_localtime(char *buf, size_t size, const char *format, const time_t *value)
++{
++    if (!buf || !size || !format || !value)
++        return 0;
++    pthread_mutex_lock(&timezone_lock);
++    struct tm local;
++    size_t length = localtime_r(value, &local) ? strftime(buf, size, format, &local) : 0;
++    if (!length)
++        buf[0] = '\0';
++    pthread_mutex_unlock(&timezone_lock);
++    return length;
++}
++
++static bool timezone_rule(const char *rule)
++{
++    size_t length = rule ? strlen(rule) : 0;
++    if (!length || length > 256)
++        return false;
++    for (size_t i = 0; i < length; ++i) {
++        if ((unsigned char)rule[i] < 0x20 || (unsigned char)rule[i] > 0x7e)
++            return false;
++    }
++    return true;
++}
++
++static bool read_timezone(char value[258])
++{
++    int fd = open(RSS_TIMEZONE_FILE, O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK);
++    if (fd < 0)
++        return false;
++    struct stat info;
++    bool valid = fstat(fd, &info) == 0 && S_ISREG(info.st_mode) && info.st_size > 0 && info.st_size <= 257;
++    ssize_t length = valid ? read(fd, value, 258) : -1;
++    if (close(fd) != 0)
++        valid = false;
++    if (!valid || length != info.st_size || length < 1 || length > 257)
++        return false;
++    if (value[length - 1] == '\n')
++        --length;
++    value[length] = '\0';
++    return strlen(value) == (size_t)length && timezone_rule(value);
++}
++
++static cJSON *timezone_participants(rss_config_t *cfg)
++{
++    static const struct { const char *daemon; const char *section; bool enabled; } services[] = {
++        {"rvd", NULL, true}, {"rsd", "rtsp", true}, {"rhd", "http", true},
++        {"rad", "audio", true}, {"ric", "ircut", true}, {"rod", "osd", true},
++        {"rmr", "recording", false}, {"rmr0", "recording0", false},
++        {"rmr1", "recording1", false}, {"rwd", "webrtc", false}
++    };
++    cJSON *result = cJSON_CreateObject();
++    for (size_t i = 0; i < sizeof(services) / sizeof(services[0]); ++i) {
++        char path[128];
++        snprintf(path, sizeof(path), RSS_TIMEZONE_RUN_DIR "/%s.sock", services[i].daemon);
++        struct stat info;
++        int exists = lstat(path, &info);
++        if ((exists == 0 && !S_ISSOCK(info.st_mode)) || (exists != 0 && errno != ENOENT)) {
++            cJSON_Delete(result);
++            return NULL;
++        }
++        bool default_required = !services[i].section ||
++            rss_config_get_bool(cfg, services[i].section, "enabled", services[i].enabled);
++        /* Owner lifetime is not the same as a feature's enabled state.
++         * A configured owner stays required when its socket disappears.
++         * A present socket cannot be hidden by a false configuration entry. */
++        bool enabled = exists == 0 || !services[i].section ||
++            rss_config_get_bool(cfg, "timezone", services[i].daemon, default_required);
++        cJSON_AddBoolToObject(result, services[i].daemon, enabled);
++    }
++    return result;
++}
++
++int rss_timezone_command(const char *json, rss_config_t *cfg, char *response, int size)
++{
++    cJSON *root = cJSON_ParseWithOpts(json, NULL, true);
++    const cJSON *cmd = cJSON_GetObjectItemCaseSensitive(root, "cmd");
++    if (!cJSON_IsString(cmd) || (strcmp(cmd->valuestring, "timezone-status") != 0 &&
++        strcmp(cmd->valuestring, "timezone-reload") != 0)) {
++        cJSON_Delete(root);
++        return -1;
++    }
++    bool reload = strcmp(cmd->valuestring, "timezone-reload") == 0;
++    const cJSON *expected = cJSON_GetObjectItemCaseSensitive(root, "expected_rule");
++    if (cJSON_GetArraySize(root) != (reload ? 2 : 1) ||
++        (reload && (!cJSON_IsString(expected) || !timezone_rule(expected->valuestring)))) {
++        cJSON_Delete(root);
++        return rss_ctrl_resp_error(response, size, "invalid timezone command");
++    }
++    if (reload) {
++        char file_rule[258];
++        pthread_mutex_lock(&timezone_lock);
++        bool ok = read_timezone(file_rule) && strcmp(file_rule, expected->valuestring) == 0;
++        const char *current = getenv("TZ");
++        if (ok && (!current || strcmp(current, file_rule) != 0))
++            ok = setenv("TZ", file_rule, 1) == 0;
++        if (ok)
++            tzset();
++        pthread_mutex_unlock(&timezone_lock);
++        if (!ok) {
++            cJSON_Delete(root);
++            return rss_ctrl_resp_error(response, size, "timezone file/reload failed");
++        }
++    }
++    cJSON_Delete(root);
++    cJSON *participants = timezone_participants(cfg);
++    if (!participants)
++        return rss_ctrl_resp_error(response, size, "timezone participant inventory unavailable");
++    root = cJSON_CreateObject();
++    cJSON_AddStringToObject(root, "status", "ok");
++    cJSON_AddStringToObject(root, "persistence", "checked-timezone");
++    cJSON_AddItemToObject(root, "required", participants);
++    pthread_mutex_lock(&timezone_lock);
++    const char *rule = getenv("TZ");
++    struct tm local;
++    const time_t january = 1768478400;
++    const time_t july = 1784116800;
++    char first[320], second[320];
++    bool available = timezone_rule(rule) && localtime_r(&january, &local) &&
++        strftime(first, sizeof(first), "%Y-%m-%dT%H:%M:%S%z %Z", &local) &&
++        localtime_r(&july, &local) && strftime(second, sizeof(second), "%Y-%m-%dT%H:%M:%S%z %Z", &local);
++    cJSON_AddBoolToObject(root, "available", available);
++    if (available) {
++        cJSON_AddStringToObject(root, "rule", rule);
++        cJSON_AddStringToObject(root, "january", first);
++        cJSON_AddStringToObject(root, "july", second);
++    } else {
++        cJSON_AddNullToObject(root, "rule");
++        cJSON_AddNullToObject(root, "january");
++        cJSON_AddNullToObject(root, "july");
++    }
++    pthread_mutex_unlock(&timezone_lock);
++    return rss_ctrl_resp_json(response, size, root);
++}
++
+ int64_t rss_timestamp_us(void)
+ {
+     struct timespec ts;
+@@ -57,9 +205,7 @@ char *rss_format_timestamp_fmt(char *buf, int buf_size, const char *fmt)
+     struct timespec ts;
+     clock_gettime(CLOCK_REALTIME, &ts);
+ 
+-    struct tm tm;
+-    localtime_r(&ts.tv_sec, &tm);
+-    strftime(buf, (size_t)buf_size, fmt, &tm);
++    rss_format_localtime(buf, (size_t)buf_size, fmt, &ts.tv_sec);
+     return buf;
+ }
+ 
+diff --git a/tests/native_clock_decl.h b/tests/native_clock_decl.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..a24960d260b7c6e3a4698d38cea65232bd048852
+--- /dev/null
++++ b/tests/native_clock_decl.h
+@@ -0,0 +1,5 @@
++#ifdef __APPLE__
++#include <sys/timex.h>
++/* The unused Linux time-status function is discarded by the native linker. */
++int adjtimex(struct timex *);
++#endif
+diff --git a/tests/test-timezone-inventory.sh b/tests/test-timezone-inventory.sh
+new file mode 100644
+index 0000000000000000000000000000000000000000..8d4c8c3e6e972ee6a946fb2f3d6f03677f1c2cfd
+--- /dev/null
++++ b/tests/test-timezone-inventory.sh
+@@ -0,0 +1,22 @@
++#!/bin/sh
++# Run against the packaged full-stack profile, without a camera or SDK.
++set -eu
++: "${TMPDIR:?Set TMPDIR to a writable scratch directory}"
++test "$#" -eq 1
++profile=$1
++test -f "$profile"
++root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
++scratch=$(mktemp -d "$TMPDIR/raptor-timezone.XXXXXX")
++trap 'rm -r -- "$scratch"' EXIT HUP INT TERM
++case "$(uname -s)" in
++    Darwin) link_sections=-Wl,-dead_strip ;;
++    *) link_sections=-Wl,--gc-sections ;;
++esac
++"${CC:-cc}" -std=c11 -D_GNU_SOURCE -Wall -Wextra -Werror -pthread \
++    -ffunction-sections -fdata-sections "$link_sections" \
++    -include "$root/tests/native_clock_decl.h" \
++    -I"$root/include" -DRSS_TIMEZONE_RUN_DIR="\"$scratch\"" \
++    "$root/tests/test_timezone_inventory.c" "$root/src/rss_util.c" \
++    "$root/src/rss_config.c" "$root/src/rss_log.c" "$root/src/cJSON.c" \
++    -lm -o "$scratch/test-timezone-inventory"
++"$scratch/test-timezone-inventory" "$profile"
+diff --git a/tests/test_config_failures.c b/tests/test_config_failures.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..cbada8cac5a1d3ce36a92a4cc7fd565a3f6e9703
+--- /dev/null
++++ b/tests/test_config_failures.c
+@@ -0,0 +1,91 @@
++#include <assert.h>
++#include <stdbool.h>
++#include <errno.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <unistd.h>
++
++static int fail_after = -1;
++static bool fail_read;
++static FILE *test_fopen(const char *path, const char *mode)
++{
++    if (fail_read && strcmp(mode, "r") == 0) { errno = EIO; return NULL; }
++    return fopen(path, mode);
++}
++static void *test_calloc(size_t count, size_t size)
++{
++    if (fail_after == 0) { errno = ENOMEM; return NULL; }
++    if (fail_after > 0) --fail_after;
++    return calloc(count, size);
++}
++#define calloc test_calloc
++#define fopen test_fopen
++#include "../src/rss_config.c"
++#undef calloc
++#undef fopen
++
++static void write_file(const char *path, const char *contents)
++{
++    FILE *file = fopen(path, "w");
++    assert(file && fputs(contents, file) >= 0 && fclose(file) == 0);
++}
++static void unchanged(const char *path, const char *contents)
++{
++    FILE *file = fopen(path, "r");
++    char data[256] = {0};
++    assert(file);
++    size_t n = fread(data, 1, sizeof(data) - 1, file);
++    assert(n == strlen(contents) && strcmp(data, contents) == 0);
++    fclose(file);
++}
++int main(int argc, char **argv)
++{
++    assert(argc == 2);
++    const char *path = argv[1];
++    const char *initial = "[audio]\nvolume = 70\n[rtsp]\nport = 9554\n";
++    write_file(path, initial);
++    rss_config_t *cfg = rss_config_load(path);
++    assert(cfg);
++    rss_config_set_int(cfg, "audio", "gain", 20);
++    /* Fail every load and merge allocation in turn. None may write a partial cache. */
++    for (int i = 0; i < 6; ++i) {
++        fail_after = i;
++        assert(rss_config_save(cfg, path) != 0);
++        fail_after = -1;
++        unchanged(path, initial);
++        assert(cfg->sections->next->entries->dirty);
++    }
++    fail_read = true;
++    assert(rss_config_save(cfg, path) != 0);
++    fail_read = false;
++    unchanged(path, initial);
++    /* Existing but unreadable-as-config input must not be replaced. */
++    const char *invalid = "[audio]\nvolume = 70\nmalformed configuration line\n[rtsp]\nport = 9554\n";
++    write_file(path, invalid);
++    assert(rss_config_save(cfg, path) != 0);
++    unchanged(path, invalid);
++    char response[1024];
++    assert(rss_config_readback_section(path, "audio", response, sizeof(response)) > 0);
++    assert(strstr(response, "\"status\":\"error\""));
++    write_file(path, initial);
++    assert(rss_config_save(cfg, path) == 0);
++    rss_config_t *disk = rss_config_load(path);
++    assert(disk && rss_config_get_int(disk, "audio", "gain", -1) == 20);
++    assert(rss_config_get_int(disk, "rtsp", "port", -1) == 9554);
++    rss_config_free(disk);
++    rss_config_set_int(cfg, "audio", "gain", 10);
++    /* Persistent readback reports disk 20, not the unsaved cache value 10. */
++    assert(rss_config_readback_section(path, "audio", response, sizeof(response)) > 0);
++    cJSON *json = cJSON_Parse(response);
++    cJSON *keys = cJSON_GetObjectItemCaseSensitive(json, "keys");
++    cJSON *gain = cJSON_GetObjectItemCaseSensitive(keys, "gain");
++    assert(cJSON_IsString(gain) && strcmp(gain->valuestring, "20") == 0);
++    cJSON_Delete(json);
++    rss_config_free(cfg);
++    unlink(path);
++    char lockpath[1024];
++    snprintf(lockpath, sizeof(lockpath), "%s.lock", path);
++    unlink(lockpath);
++    return 0;
++}
+diff --git a/tests/test_config_lock.c b/tests/test_config_lock.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..5d1610e9e799c86831fd40c5c07795b8d813a504
+--- /dev/null
++++ b/tests/test_config_lock.c
+@@ -0,0 +1,43 @@
++#include <assert.h>
++#include <fcntl.h>
++#include <stdio.h>
++#include <string.h>
++#include <sys/file.h>
++#include <unistd.h>
++#include "rss_common.h"
++
++int main(int argc, char **argv)
++{
++    assert(argc == 2);
++    const char *path = argv[1];
++    FILE *file = fopen(path, "w");
++    assert(file);
++    assert(fputs("[audio]\nvolume = 70\n[rtsp]\nport = 8554\n", file) >= 0);
++    assert(fclose(file) == 0);
++    rss_config_t *audio = rss_config_load(path);
++    rss_config_t *rtsp = rss_config_load(path);
++    assert(audio && rtsp);
++    rss_config_set_int(audio, "audio", "volume", 60);
++    rss_config_set_int(rtsp, "rtsp", "port", 9554);
++    char lockpath[1024];
++    snprintf(lockpath, sizeof(lockpath), "%s.lock", path);
++    int lock = open(lockpath, O_WRONLY | O_CREAT, 0600);
++    assert(lock >= 0 && flock(lock, LOCK_EX | LOCK_NB) == 0);
++    assert(rss_config_save(audio, path) != 0);
++    rss_config_t *disk = rss_config_load(path);
++    assert(disk && rss_config_get_int(disk, "audio", "volume", -1) == 70);
++    rss_config_free(disk);
++    assert(flock(lock, LOCK_UN) == 0);
++    close(lock);
++    assert(rss_config_save(audio, path) == 0);
++    assert(rss_config_save(rtsp, path) == 0);
++    disk = rss_config_load(path);
++    assert(disk && rss_config_get_int(disk, "audio", "volume", -1) == 60);
++    assert(rss_config_get_int(disk, "rtsp", "port", -1) == 9554);
++    rss_config_free(disk);
++    rss_config_free(audio);
++    rss_config_free(rtsp);
++    unlink(path);
++    unlink(lockpath);
++    return 0;
++}
+diff --git a/tests/test_sei.c b/tests/test_sei.c
+index 94d2d844de4c38d23acf962cabd0cdaf3a470395..fc1eb2bb4fd03bc0ae3f8a5eb6311ee7e094f1c7 100644
+--- a/tests/test_sei.c
++++ b/tests/test_sei.c
+@@ -191,6 +191,33 @@ TEST sei_parse_skips_other_messages(void)
+     PASS();
+ }
+ 
++TEST sei_build_user_data(void)
++{
++    const uint8_t uuid[16] = {0xa1, 0xb2, 0xc3, 0xd4, 0xe5, 0xf6, 0x47, 0x80,
++                              0xab, 0xcd, 0xef, 0x12, 0x34, 0x56, 0x78, 0x90};
++    const uint8_t data[] = {0x00, 0x00, 0x01, 'x'};
++    uint8_t buf[64];
++    int n = rss_sei_build_user_data(buf, sizeof(buf), RSS_SEI_CODEC_H264,
++                                    RSS_SEI_PREFIX_ANNEXB, uuid, data, sizeof(data));
++    ASSERT_EQ(29, n);
++    ASSERT_MEM_EQ("\0\0\0\1\6\5\24", buf, 7);
++    const uint8_t escaped_data[] = {0x00, 0x00, 0x03, 0x01, 'x'};
++    ASSERT_MEM_EQ(escaped_data, buf + 23, sizeof(escaped_data));
++    ASSERT_EQ(0x80, buf[n - 1]);
++
++    n = rss_sei_build_user_data(buf, sizeof(buf), RSS_SEI_CODEC_H265, RSS_SEI_PREFIX_AVCC,
++                                uuid, (const uint8_t *)"abc", 3);
++    ASSERT_EQ(28, n);
++    uint32_t nal_len = ((uint32_t)buf[0] << 24) | ((uint32_t)buf[1] << 16) |
++                       ((uint32_t)buf[2] << 8) | buf[3];
++    ASSERT_EQ(24u, nal_len);
++    ASSERT_EQ(0x4e, buf[4]);
++    ASSERT_EQ(0x01, buf[5]);
++    ASSERT_EQ(-ENOSPC, rss_sei_build_user_data(buf, 8, RSS_SEI_CODEC_H264,
++                                               RSS_SEI_PREFIX_NONE, uuid, data, sizeof(data)));
++    PASS();
++}
++
+ SUITE(sei_suite)
+ {
+     RUN_TEST(sei_build_h264_layout);
+@@ -200,4 +227,5 @@ SUITE(sei_suite)
+     RUN_TEST(sei_no_start_code_emulation);
+     RUN_TEST(sei_parse_rejects);
+     RUN_TEST(sei_parse_skips_other_messages);
++    RUN_TEST(sei_build_user_data);
+ }
+diff --git a/tests/test_timezone_inventory.c b/tests/test_timezone_inventory.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..a117eb9e0f38d3e8e4abb3b0a5d2045f46a3f760
+--- /dev/null
++++ b/tests/test_timezone_inventory.c
+@@ -0,0 +1,81 @@
++#include "rss_common.h"
++#include <assert.h>
++#include <stdlib.h>
++#include <sys/socket.h>
++#include <sys/un.h>
++#include <unistd.h>
++
++static cJSON *status(rss_config_t *config, bool success)
++{
++    char response[4096];
++    assert(rss_timezone_command("{\"cmd\":\"timezone-status\"}", config,
++                                response, sizeof(response)) > 0);
++    cJSON *root = cJSON_Parse(response);
++    assert(root);
++    const cJSON *result = cJSON_GetObjectItemCaseSensitive(root, "status");
++    assert(cJSON_IsString(result));
++    assert((strcmp(result->valuestring, "ok") == 0) == success);
++    return root;
++}
++
++static void inventory(rss_config_t *config, bool legacy_rod)
++{
++    const char *names[] = {"rvd", "rsd", "rhd", "rad", "ric", "rod",
++                           "rmr", "rmr0", "rmr1", "rwd"};
++    cJSON *root = status(config, true);
++    const cJSON *required = cJSON_GetObjectItemCaseSensitive(root, "required");
++    assert(cJSON_GetArraySize(required) == 10);
++    for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); ++i) {
++        const cJSON *value = cJSON_GetObjectItemCaseSensitive(required, names[i]);
++        bool expected = strcmp(names[i], "rmr") != 0 &&
++                        (strcmp(names[i], "rod") != 0 || legacy_rod);
++        assert(cJSON_IsBool(value));
++        assert(cJSON_IsTrue(value) == expected);
++    }
++    cJSON_Delete(root);
++}
++
++int main(int argc, char **argv)
++{
++    assert(argc == 2);
++    rss_config_t *config = rss_config_load(argv[1]);
++    assert(config);
++    /* The real full-stack profile requires idle audio, both recorders and
++     * WebRTC even without sockets. Integrated OSD does not require ROD. */
++    assert(!rss_config_get_bool(config, "audio", "enabled", true));
++    assert(!rss_config_get_bool(config, "recording", "enabled", true));
++    inventory(config, false);
++
++    struct sockaddr_un address = {.sun_family = AF_UNIX};
++    assert(snprintf(address.sun_path, sizeof(address.sun_path),
++                    RSS_TIMEZONE_RUN_DIR "/rod.sock") < (int)sizeof(address.sun_path));
++    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
++    assert(fd >= 0);
++    assert(bind(fd, (const struct sockaddr *)&address, sizeof(address)) == 0);
++    inventory(config, true);
++    assert(close(fd) == 0);
++    assert(unlink(address.sun_path) == 0);
++    inventory(config, false);
++
++    FILE *file = fopen(address.sun_path, "w");
++    assert(file && fclose(file) == 0);
++    cJSON_Delete(status(config, false));
++    assert(unlink(address.sun_path) == 0);
++
++    /* Legacy profiles keep their feature-based defaults. RVD cannot be
++     * excluded by an override, because it supplies the inventory itself. */
++    rss_config_set_bool(config, "timezone", "rvd", false);
++    inventory(config, false);
++    rss_config_t *legacy = rss_config_load("/dev/null");
++    assert(legacy);
++    cJSON *root = status(legacy, true);
++    const cJSON *required = cJSON_GetObjectItemCaseSensitive(root, "required");
++    assert(cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(required, "rod")));
++    assert(cJSON_IsFalse(cJSON_GetObjectItemCaseSensitive(required, "rmr0")));
++    assert(cJSON_IsFalse(cJSON_GetObjectItemCaseSensitive(required, "rmr1")));
++    cJSON_Delete(root);
++    rss_config_free(legacy);
++    rss_config_free(config);
++    puts("timezone owner inventory: pass");
++    return 0;
++}

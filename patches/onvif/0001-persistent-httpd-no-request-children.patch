@@ -1,0 +1,1833 @@
+diff --git a/Makefile b/Makefile
+index f1376b40c90275ce51eee28e573d09eecebeb4d7..9c8e7c572e135e3a825a24d1e17c9594f00597e0 100644
+--- a/Makefile
++++ b/Makefile
+@@ -19,7 +19,15 @@ OBJECTS_O	 = $(SRC_DIR)/onvif_simple_server.o \
+ 		   $(SRC_DIR)/mxml_wrapper.o \
+ 		   $(SRC_DIR)/xml_logger.o \
+ 		   $(SRC_DIR)/audio_output_enabled.o \
+-		   $(SRC_DIR)/prudynt_bridge.o
++		   $(SRC_DIR)/control_imaging_bridge.o \
++		   $(SRC_DIR)/onvif_control_token.o
++
++OBJECTS_H	 = $(filter-out $(SRC_DIR)/onvif_simple_server.o,$(OBJECTS_O)) \
++		   $(SRC_DIR)/onvif_httpd.o \
++		   $(SRC_DIR)/onvif_digest.o \
++		   $(SRC_DIR)/onvif_digest_mbedtls.o \
++		   $(SRC_DIR)/onvif_snapshot_io.o \
++		   $(SRC_DIR)/onvif_snapshot_http.o
+ 
+ OBJECTS_N	 = $(SRC_DIR)/onvif_notify_server.o \
+ 		   $(SRC_DIR)/conf.o \
+@@ -107,7 +115,7 @@ ifeq ($(STRIP), )
+     STRIP=echo
+ endif
+ 
+-all: onvif_simple_server onvif_notify_server wsd_simple_server
++all: onvif_simple_server onvif_httpd onvif_notify_server wsd_simple_server
+ 
+ # Debug build with AddressSanitizer and debugging symbols
+ debug: CFLAGS_DEBUG = -g -O0 -fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer -DDEBUG
+@@ -130,6 +138,11 @@ onvif_simple_server: $(OBJECTS_O)
+ 	$(CC) $(OBJECTS_O) $(LIBS_O) -fPIC -Os -o $@
+ 	$(STRIP) $@
+ 
++onvif_httpd: $(OBJECTS_H)
++	$(CC) $(OBJECTS_H) $(LIBS_O) -fPIC -Os \
++		-Wl,--wrap=system,--wrap=popen,--wrap=pclose -o $@
++	$(STRIP) $@
++
+ onvif_notify_server: $(OBJECTS_N)
+ 	$(CC) $(OBJECTS_N) $(LIBS_N) -fPIC -Os -o $@
+ 	$(STRIP) $@
+@@ -162,9 +175,11 @@ wsd_simple_server_debug: $(OBJECTS_W_DEBUG)
+ 
+ clean:
+ 	rm -f onvif_simple_server onvif_simple_server_debug
++	rm -f onvif_httpd
+ 	rm -f onvif_notify_server onvif_notify_server_debug
+ 	rm -f wsd_simple_server wsd_simple_server_debug
+ 	rm -f $(OBJECTS_O) $(OBJECTS_O_DEBUG)
++	rm -f $(OBJECTS_H)
+ 	rm -f $(OBJECTS_N) $(OBJECTS_N_DEBUG)
+ 	rm -f $(OBJECTS_W) $(OBJECTS_W_DEBUG)
+ 	$(MAKE) -C libtomcrypt clean
+diff --git a/src/control_imaging_bridge.c b/src/control_imaging_bridge.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..697a6c50490bd32137e73e1e490536a714d20cdd
+--- /dev/null
++++ b/src/control_imaging_bridge.c
+@@ -0,0 +1,451 @@
++#include "control_imaging_bridge.h"
++#include "onvif_control_token.h"
++
++#include "log.h"
++
++#include <arpa/inet.h>
++#include <errno.h>
++#include <fcntl.h>
++#include <stdbool.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <sys/socket.h>
++#include <sys/time.h>
++#include <unistd.h>
++
++#ifndef CONTROL_CONFIG_PATH
++#define CONTROL_CONFIG_PATH "/etc/thingino.json"
++#endif
++#ifndef CONTROL_ADDRESS
++#define CONTROL_ADDRESS INADDR_LOOPBACK
++#endif
++#ifndef CONTROL_PORT
++#define CONTROL_PORT 1998
++#endif
++
++#define CONFIG_LIMIT (64 * 1024)
++#define RESPONSE_LIMIT (32 * (1024))
++#define IO_TIMEOUT_SECONDS 2
++
++static int write_all(int fd, const void *buffer, size_t length)
++{
++    const unsigned char *input = buffer;
++    size_t used = 0;
++
++    while (used < length) {
++        ssize_t count = write(fd, input + used, length - used);
++        if (count > 0) {
++            used += (size_t)count;
++            continue;
++        }
++        if (count < 0 && errno == EINTR)
++            continue;
++        return -1;
++    }
++    return 0;
++}
++
++static bool extract_control_token(char token[65])
++{
++    return onvif_control_token(CONTROL_CONFIG_PATH, token);
++}
++
++static int control_request_path(const char *method, const char *path, const char *body,
++                           char response[RESPONSE_LIMIT + 1])
++{
++    struct sockaddr_in address = {
++        .sin_family = AF_INET,
++        .sin_port = htons(CONTROL_PORT),
++        .sin_addr.s_addr = htonl(CONTROL_ADDRESS),
++    };
++    struct timeval timeout = {.tv_sec = IO_TIMEOUT_SECONDS, .tv_usec = 0};
++    char token[65];
++    char request[1024];
++    size_t body_length = body ? strlen(body) : 0;
++    size_t used = 0;
++    int request_length;
++    int fd;
++
++    if (!extract_control_token(token))
++        return -1;
++    request_length = snprintf(request, sizeof(request),
++        "%s %s HTTP/1.1\r\nHost: 127.0.0.1:%d\r\n"
++        "Authorization: Bearer %s\r\nContent-Type: application/json\r\n"
++        "Content-Length: %zu\r\nConnection: close\r\n\r\n%s",
++        method, path, CONTROL_PORT, token, body_length, body ? body : "");
++    memset(token, 0, sizeof(token));
++    if (request_length < 0 || (size_t)request_length >= sizeof(request))
++        return -1;
++    fd = socket(AF_INET, SOCK_STREAM, 0);
++    if (fd < 0)
++        return -1;
++    if (fcntl(fd, F_SETFD, FD_CLOEXEC)) {
++        close(fd);
++        return -1;
++    }
++    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
++    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
++    if (connect(fd, (struct sockaddr *)&address, sizeof(address)) ||
++        write_all(fd, request, (size_t)request_length)) {
++        close(fd);
++        return -1;
++    }
++    memset(request, 0, sizeof(request));
++    while (used < RESPONSE_LIMIT) {
++        ssize_t count = read(fd, response + used, RESPONSE_LIMIT - used);
++        if (count > 0) {
++            used += (size_t)count;
++            continue;
++        }
++        if (count < 0 && errno == EINTR)
++            continue;
++        if (count < 0) {
++            close(fd);
++            return -1;
++        }
++        break;
++    }
++    close(fd);
++    if (!used || used == RESPONSE_LIMIT)
++        return -1;
++    response[used] = '\0';
++    if (strncmp(response, "HTTP/1.1 200 ", 13))
++        return -1;
++    char *body_start = strstr(response, "\r\n\r\n");
++    if (!body_start)
++        return -1;
++    body_start += 4;
++    memmove(response, body_start, used - (size_t)(body_start - response) + 1);
++    return 0;
++}
++
++static int control_request(const char *method, const char *body,
++                           char response[RESPONSE_LIMIT + 1])
++{
++    return control_request_path(method, "/api/v1/imaging", body, response);
++}
++
++static const char *skip_space(const char *cursor, const char *end)
++{
++    while (cursor < end && (*cursor == ' ' || *cursor == '\t' ||
++           *cursor == '\r' || *cursor == '\n'))
++        cursor++;
++    return cursor;
++}
++
++static int named_value(const char *object, const char *object_end,
++                       const char *name, const char **value)
++{
++    const char *cursor;
++    size_t name_length;
++    int depth = 0;
++
++    if (!object || object >= object_end || *object != '{')
++        return -1;
++    name_length = strlen(name);
++    for (cursor = object; cursor < object_end; cursor++) {
++        if (*cursor == '{') {
++            depth++;
++            continue;
++        }
++        if (*cursor == '}') {
++            depth--;
++            continue;
++        }
++        if (*cursor != '"')
++            continue;
++        const char *start = ++cursor;
++        bool escaped = false;
++        while (cursor < object_end) {
++            if (escaped)
++                escaped = false;
++            else if (*cursor == '\\')
++                escaped = true;
++            else if (*cursor == '"')
++                break;
++            cursor++;
++        }
++        if (cursor >= object_end)
++            return -1;
++        if (depth == 1 && !escaped && (size_t)(cursor - start) == name_length &&
++            !memcmp(start, name, name_length)) {
++            const char *after = skip_space(cursor + 1, object_end);
++            if (after >= object_end || *after != ':')
++                return -1;
++            *value = skip_space(after + 1, object_end);
++            return *value < object_end ? 0 : -1;
++        }
++    }
++    return -1;
++}
++
++static int named_object(const char *object, const char *object_end,
++                        const char *name, const char **start, const char **end)
++{
++    const char *cursor;
++    int depth = 0;
++    bool quoted = false;
++    bool escaped = false;
++
++    if (named_value(object, object_end, name, &cursor) || *cursor != '{')
++        return -1;
++    *start = cursor;
++    for (; cursor < object_end; cursor++) {
++        if (quoted) {
++            if (escaped)
++                escaped = false;
++            else if (*cursor == '\\')
++                escaped = true;
++            else if (*cursor == '"')
++                quoted = false;
++            continue;
++        }
++        if (*cursor == '"')
++            quoted = true;
++        else if (*cursor == '{')
++            depth++;
++        else if (*cursor == '}' && --depth == 0) {
++            *end = cursor + 1;
++            return 0;
++        }
++    }
++    return -1;
++}
++
++static int named_bool(const char *object, const char *end, const char *name,
++                      bool *result)
++{
++    const char *value;
++    if (named_value(object, end, name, &value))
++        return -1;
++    const char *tail;
++    if ((size_t)(end - value) >= 4 && !memcmp(value, "true", 4) &&
++        (tail = skip_space(value + 4, end)) < end && strchr(",}", *tail)) {
++        *result = true;
++        return 0;
++    }
++    if ((size_t)(end - value) >= 5 && !memcmp(value, "false", 5) &&
++        (tail = skip_space(value + 5, end)) < end && strchr(",}", *tail)) {
++        *result = false;
++        return 0;
++    }
++    return -1;
++}
++
++static int named_string(const char *object, const char *end, const char *name,
++                        const char *expected)
++{
++    const char *value;
++    size_t length = strlen(expected);
++    if (named_value(object, end, name, &value) || value >= end || *value != '"' ||
++        (size_t)(end - value) < length + 2 || memcmp(value + 1, expected, length) ||
++        value[length + 1] != '"')
++        return -1;
++    const char *tail = skip_space(value + length + 2, end);
++    if (tail >= end || !strchr(",}", *tail))
++        return -1;
++    return 0;
++}
++
++static int named_number(const char *object, const char *end, const char *name,
++                        float *result)
++{
++    const char *value;
++    char *tail;
++    double parsed;
++
++    if (named_value(object, end, name, &value))
++        return -1;
++    errno = 0;
++    parsed = strtod(value, &tail);
++    if (errno || tail == value || tail > end || parsed != parsed ||
++        parsed < 0.0 || parsed > 255.0)
++        return -1;
++    tail = (char *)skip_space(tail, end);
++    if (tail < end && *tail != ',' && *tail != '}')
++        return -1;
++    *result = (float)parsed;
++    return 0;
++}
++
++static control_imaging_field_t *lookup_field(control_imaging_state_t *state,
++                                             const char *name)
++{
++    if (!strcmp(name, "brightness"))
++        return &state->brightness;
++    if (!strcmp(name, "contrast"))
++        return &state->contrast;
++    if (!strcmp(name, "saturation"))
++        return &state->saturation;
++    if (!strcmp(name, "sharpness"))
++        return &state->sharpness;
++    return NULL;
++}
++
++static int parse_state(const char *json, control_imaging_state_t *state)
++{
++    const char *json_end = json + strlen(json);
++    const char *root = skip_space(json, json_end);
++    const char *message;
++    const char *message_end;
++    const char *fields;
++    const char *fields_end;
++
++    float code;
++    memset(state, 0, sizeof(*state));
++    if (root >= json_end || *root != '{' ||
++        named_number(root, json_end, "code", &code) || code != 200.0f ||
++        named_string(root, json_end, "result", "success") ||
++        named_object(root, json_end, "message", &message, &message_end) ||
++        named_object(message, message_end, "fields", &fields, &fields_end))
++        return -1;
++    const char *const names[] = {"brightness", "contrast", "saturation", "sharpness"};
++    for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
++        const char *field;
++        const char *field_end;
++        bool supported;
++        bool available;
++        control_imaging_field_t *target = lookup_field(state, names[i]);
++        if (named_object(fields, fields_end, names[i], &field, &field_end) ||
++            named_bool(field, field_end, "supported", &supported) ||
++            named_bool(field, field_end, "available", &available))
++            return -1;
++        if (available && !supported)
++            return -1;
++        if (!supported || !available)
++            continue;
++        if (named_number(field, field_end, "min", &target->min) ||
++            named_number(field, field_end, "max", &target->max) ||
++            named_number(field, field_end, "value", &target->value) ||
++            target->max <= target->min || target->value < target->min ||
++            target->value > target->max ||
++            target->min != (float)(unsigned int)target->min ||
++            target->max != (float)(unsigned int)target->max ||
++            target->value != (float)(unsigned int)target->value)
++            return -1;
++        target->present = 1;
++    }
++    return 0;
++}
++
++int control_rtsp_uri(unsigned int stream, const char *address, char *uri, size_t size)
++{
++    char response[RESPONSE_LIMIT + 1];
++    char endpoint[65];
++    struct in_addr checked_address;
++    const char *root, *end, *rtsp, *rtsp_end, *streams, *streams_end;
++    const char *channel, *channel_end, *value, *tail;
++    unsigned int port = 0;
++    size_t length = 0;
++    bool available, enabled;
++    if (uri && size) uri[0] = '\0';
++    if (!uri || !size || stream > 1 || !address ||
++        inet_pton(AF_INET, address, &checked_address) != 1 ||
++        control_request_path("GET", "/api/v1/runtime/media", NULL, response))
++        return -1;
++    end = response + strlen(response);
++    root = skip_space(response, end);
++    if (named_object(root, end, "rtsp", &rtsp, &rtsp_end) ||
++        named_value(rtsp, rtsp_end, "port", &value)) return -1;
++    tail = value;
++    while (tail < rtsp_end && *tail >= '0' && *tail <= '9') {
++        if (port > 6553) return -1;
++        port = port * 10 + (unsigned int)(*tail++ - '0');
++    }
++    if (tail == value || !port || port > 65535) return -1;
++    tail = skip_space(tail, rtsp_end);
++    if (tail >= rtsp_end || !strchr(",}", *tail) ||
++        named_object(root, end, "streams", &streams, &streams_end) ||
++        named_object(streams, streams_end, stream ? "ch1" : "ch0", &channel, &channel_end) ||
++        named_bool(channel, channel_end, "available", &available) || !available ||
++        named_bool(channel, channel_end, "enabled", &enabled) || !enabled ||
++        named_value(channel, channel_end, "rtsp_endpoint", &value) || *value++ != '"')
++        return -1;
++    while (value < channel_end && *value != '"') {
++        unsigned char c = (unsigned char)*value++;
++        if (length == sizeof(endpoint) - 1 ||
++            !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
++              (c >= '0' && c <= '9') || c == '_' || c == '-' || c == '.')) return -1;
++        endpoint[length++] = (char)c;
++    }
++    if (!length || value >= channel_end || *value++ != '"') return -1;
++    tail = skip_space(value, channel_end);
++    if (tail >= channel_end || !strchr(",}", *tail)) return -1;
++    endpoint[length] = '\0';
++    if (!strcmp(endpoint, ".") || !strcmp(endpoint, "..")) return -1;
++    int count = snprintf(uri, size, "rtsp://%s:%u/%s", address, port, endpoint);
++    if (count < 0 || (size_t)count >= size) { uri[0] = '\0'; return -1; }
++    return 0;
++}
++
++int control_snapshot_uri(unsigned stream, const char *address, char *uri, size_t size)
++{
++    struct in_addr parsed;
++    if (!uri || !size) return -1;
++    uri[0] = '\0';
++    if (stream > 1 || !address || inet_pton(AF_INET, address, &parsed) != 1) return -1;
++    int count = snprintf(uri, size, "https://%s/onvif/image%s.cgi", address, stream ? "1" : "");
++    if (count < 0 || (size_t)count >= size) { uri[0] = '\0'; return -1; }
++    return 0;
++}
++
++int control_load_imaging_state(control_imaging_state_t *state)
++{
++    char response[RESPONSE_LIMIT + 1];
++    if (!state || control_request("GET", NULL, response) || parse_state(response, state)) {
++        log_error("control imaging bridge: unable to read checked imaging state");
++        return -1;
++    }
++    return 0;
++}
++
++int control_apply_imaging_changes(const control_imaging_command_t *commands,
++                                  size_t command_count)
++{
++    control_imaging_state_t before;
++    control_imaging_state_t after;
++    char body[256];
++    char response[RESPONSE_LIMIT + 1];
++    size_t used = 1;
++
++    if (!commands || !command_count || command_count > 4 ||
++        control_load_imaging_state(&before))
++        return -1;
++    body[0] = '{';
++    for (size_t i = 0; i < command_count; i++) {
++        control_imaging_field_t *field = lookup_field(&before, commands[i].key);
++        float normalized = commands[i].normalized_value;
++        unsigned int actual;
++        int count;
++        if (!field || !field->present || normalized != normalized ||
++            normalized < 0.0f || normalized > 1.0f)
++            return -1;
++        actual = (unsigned int)(field->min + normalized * (field->max - field->min) + 0.5f);
++        count = snprintf(body + used, sizeof(body) - used, "%s\"%s\":%u",
++                         i ? "," : "", commands[i].key, actual);
++        if (count < 0 || (size_t)count >= sizeof(body) - used)
++            return -1;
++        used += (size_t)count;
++    }
++    if (used + 2 > sizeof(body))
++        return -1;
++    body[used++] = '}';
++    body[used] = '\0';
++    if (control_request("POST", body, response) || parse_state(response, &after) ||
++        control_load_imaging_state(&after))
++        return -1;
++    for (size_t i = 0; i < command_count; i++) {
++        control_imaging_field_t *field = lookup_field(&after, commands[i].key);
++        unsigned int expected = (unsigned int)(
++            lookup_field(&before, commands[i].key)->min + commands[i].normalized_value *
++            (lookup_field(&before, commands[i].key)->max -
++             lookup_field(&before, commands[i].key)->min) + 0.5f);
++        control_imaging_field_t *prior = lookup_field(&before, commands[i].key);
++        if (!field || !field->present || !prior ||
++            field->min != prior->min || field->max != prior->max ||
++            field->value != (float)expected)
++            return -1;
++    }
++    return 0;
++}
+diff --git a/src/control_imaging_bridge.h b/src/control_imaging_bridge.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..e817fd753ed558d73bc03cc923edc9ddd8057b50
+--- /dev/null
++++ b/src/control_imaging_bridge.h
+@@ -0,0 +1,28 @@
++#pragma once
++
++#include <stddef.h>
++
++typedef struct {
++    int present;
++    float value;
++    float min;
++    float max;
++} control_imaging_field_t;
++
++typedef struct {
++    control_imaging_field_t brightness;
++    control_imaging_field_t contrast;
++    control_imaging_field_t saturation;
++    control_imaging_field_t sharpness;
++} control_imaging_state_t;
++
++typedef struct {
++    const char *key;
++    float normalized_value;
++} control_imaging_command_t;
++
++int control_load_imaging_state(control_imaging_state_t *state);
++int control_rtsp_uri(unsigned int stream, const char *address, char *uri, size_t size);
++int control_snapshot_uri(unsigned stream, const char *address, char *uri, size_t size);
++int control_apply_imaging_changes(const control_imaging_command_t *commands,
++                                  size_t command_count);
+diff --git a/src/imaging_service.c b/src/imaging_service.c
+index e7c06d7c2caa19efcf47c03a7dcb4af85a776c63..4a17b7adc58ac0d3ee6e8295e34b2b10f2fddd73 100644
+--- a/src/imaging_service.c
++++ b/src/imaging_service.c
+@@ -20,7 +20,7 @@
+ #include "log.h"
+ #include "mxml_wrapper.h"
+ #include "onvif_simple_server.h"
+-#include "prudynt_bridge.h"
++#include "control_imaging_bridge.h"
+ #include "utils.h"
+ 
+ #include <errno.h>
+@@ -206,7 +206,28 @@ static const char *find_child_value(mxml_node_t *node, const char *tag)
+     return NULL;
+ }
+ 
+-static void apply_prudynt_float(imaging_float_value_t *target, const prudynt_field_state_t *source)
++/* TESTABLE_ELEMENT_LOOKUP_BEGIN */
++static mxml_node_t *find_child_element(mxml_node_t *node, const char *tag)
++{
++    if (!node || !tag)
++        return NULL;
++    if (mxmlGetType(node) == MXML_TYPE_ELEMENT) {
++        const char *name = mxmlGetElement(node);
++        const char *colon = name ? strchr(name, ':') : NULL;
++        if (name && !strcmp(colon ? colon + 1 : name, tag))
++            return node;
++    }
++    for (mxml_node_t *child = mxmlGetFirstChild(node); child;
++         child = mxmlGetNextSibling(child)) {
++        mxml_node_t *match = find_child_element(child, tag);
++        if (match)
++            return match;
++    }
++    return NULL;
++}
++/* TESTABLE_ELEMENT_LOOKUP_END */
++
++static void apply_control_float(imaging_float_value_t *target, const control_imaging_field_t *source)
+ {
+     if (!target || !source || !source->present)
+         return;
+@@ -219,27 +240,34 @@ static void apply_prudynt_float(imaging_float_value_t *target, const prudynt_fie
+     target->max = source->max;
+ }
+ 
+-static void apply_prudynt_mode_level(imaging_mode_level_t *target, const prudynt_field_state_t *source)
++static void merge_control_state(imaging_entry_t *entry, const control_imaging_state_t *state)
+ {
+-    if (!target || !source || !source->present)
++    if (!entry || !state)
+         return;
+-    target->present = 1;
+-    apply_prudynt_float(&target->level, source);
++    apply_control_float(&entry->brightness, &state->brightness);
++    apply_control_float(&entry->color_saturation, &state->saturation);
++    apply_control_float(&entry->contrast, &state->contrast);
++    apply_control_float(&entry->sharpness, &state->sharpness);
+ }
+ 
+-static void merge_prudynt_state(imaging_entry_t *entry, const prudynt_imaging_state_t *state)
++static void remove_unavailable_control_fields(imaging_entry_t *entry)
+ {
+-    if (!entry || !state)
++    if (!entry)
+         return;
+-    apply_prudynt_float(&entry->brightness, &state->brightness);
+-    apply_prudynt_float(&entry->color_saturation, &state->saturation);
+-    apply_prudynt_float(&entry->contrast, &state->contrast);
+-    apply_prudynt_float(&entry->sharpness, &state->sharpness);
+-    apply_prudynt_float(&entry->noise_reduction, &state->noise_reduction);
+-    apply_prudynt_mode_level(&entry->backlight, &state->backlight);
+-    apply_prudynt_mode_level(&entry->wide_dynamic_range, &state->wide_dynamic_range);
+-    apply_prudynt_mode_level(&entry->tone_compensation, &state->tone);
+-    apply_prudynt_mode_level(&entry->defogging, &state->defog);
++    memset(&entry->brightness, 0, sizeof(entry->brightness));
++    memset(&entry->color_saturation, 0, sizeof(entry->color_saturation));
++    memset(&entry->contrast, 0, sizeof(entry->contrast));
++    memset(&entry->sharpness, 0, sizeof(entry->sharpness));
++    memset(&entry->exposure, 0, sizeof(entry->exposure));
++    memset(&entry->focus, 0, sizeof(entry->focus));
++    memset(&entry->noise_reduction, 0, sizeof(entry->noise_reduction));
++    memset(&entry->backlight, 0, sizeof(entry->backlight));
++    memset(&entry->wide_dynamic_range, 0, sizeof(entry->wide_dynamic_range));
++    memset(&entry->white_balance, 0, sizeof(entry->white_balance));
++    memset(&entry->ircut_auto_adjustment, 0, sizeof(entry->ircut_auto_adjustment));
++    memset(&entry->image_stabilization, 0, sizeof(entry->image_stabilization));
++    memset(&entry->tone_compensation, 0, sizeof(entry->tone_compensation));
++    memset(&entry->defogging, 0, sizeof(entry->defogging));
+ }
+ 
+ static int parse_imaging_value(const char *text, float *out_value, int *out_is_normalized)
+@@ -252,32 +280,28 @@ static int parse_imaging_value(const char *text, float *out_value, int *out_is_n
+ 
+     char *end = NULL;
+     double value = strtod(text, &end);
+-    if (text == end)
++    if (text == end || value != value)
+         return 0;
+ 
+     if (end && *end == '%') {
+         value /= 100.0;
++        end++;
+         if (out_is_normalized)
+             *out_is_normalized = 1;
+     } else if (value >= 0.0 && value <= 1.0) {
+         if (out_is_normalized)
+             *out_is_normalized = 1;
+     }
++    while (*end == ' ' || *end == '\t' || *end == '\r' || *end == '\n')
++        end++;
++    if (*end)
++        return 0;
+ 
+     *out_value = (float) value;
+     return 1;
+ }
+ 
+-static float clamp01f(float value)
+-{
+-    if (value < 0.0f)
+-        return 0.0f;
+-    if (value > 1.0f)
+-        return 1.0f;
+-    return value;
+-}
+-
+-static const prudynt_field_state_t *lookup_state_field(const prudynt_imaging_state_t *state, const char *key)
++static const control_imaging_field_t *lookup_state_field(const control_imaging_state_t *state, const char *key)
+ {
+     if (!state || !key)
+         return NULL;
+@@ -290,55 +314,28 @@ static const prudynt_field_state_t *lookup_state_field(const prudynt_imaging_sta
+         return &state->saturation;
+     if (strcmp(key, "sharpness") == 0)
+         return &state->sharpness;
+-    if (strcmp(key, "backlight") == 0)
+-        return &state->backlight;
+-    if (strcmp(key, "wide_dynamic_range") == 0)
+-        return &state->wide_dynamic_range;
+-    if (strcmp(key, "tone") == 0)
+-        return &state->tone;
+-    if (strcmp(key, "defog") == 0)
+-        return &state->defog;
+-    if (strcmp(key, "noise_reduction") == 0)
+-        return &state->noise_reduction;
+-
+     return NULL;
+ }
+ 
+-static void fallback_range_for_key(const char *key, float *out_min, float *out_max)
++static int normalize_with_state(const char *key, float value,
++                                int value_is_normalized,
++                                const control_imaging_state_t *state,
++                                float *normalized)
+ {
+-    if (!out_min || !out_max)
+-        return;
+-
+-    *out_min = 0.0f;
+-
+-    if (key && strcmp(key, "backlight") == 0) {
+-        *out_max = 10.0f;
+-        return;
+-    }
+-
+-    *out_max = 255.0f;
+-}
+-
+-static float normalize_with_state(const char *key, float value, int value_is_normalized, const prudynt_imaging_state_t *state)
+-{
+-    if (value_is_normalized)
+-        return clamp01f(value);
+-
+-    const prudynt_field_state_t *field = lookup_state_field(state, key);
+-    if (field && field->present && field->max > field->min) {
+-        float span = field->max - field->min;
+-        if (span > 0.0f)
+-            return clamp01f((value - field->min) / span);
++    const control_imaging_field_t *field = lookup_state_field(state, key);
++    if (!normalized || !field || !field->present || field->max <= field->min)
++        return 0;
++    if (value_is_normalized) {
++        if (value < 0.0f || value > 1.0f)
++            return 0;
++        *normalized = value;
++        return 1;
+     }
++    if (value < field->min || value > field->max)
++        return 0;
+ 
+-    float fallback_min = 0.0f;
+-    float fallback_max = 1.0f;
+-    fallback_range_for_key(key, &fallback_min, &fallback_max);
+-    float span = fallback_max - fallback_min;
+-    if (span <= 0.0f)
+-        return clamp01f(value);
+-
+-    return clamp01f((value - fallback_min) / span);
++    *normalized = (value - field->min) / (field->max - field->min);
++    return 1;
+ }
+ 
+ typedef struct {
+@@ -1133,11 +1130,16 @@ int imaging_get_imaging_settings()
+     }
+ 
+     imaging_entry_t runtime_entry = *entry;
+-    prudynt_imaging_state_t runtime_state;
+-    if (prudynt_load_imaging_state(&runtime_state) == 0) {
+-        merge_prudynt_state(&runtime_entry, &runtime_state);
+-        entry = &runtime_entry;
++    control_imaging_state_t runtime_state;
++    if (control_load_imaging_state(&runtime_state) != 0) {
++        send_fault("imaging_service", "Receiver", "ter:Action", "ter:NoSource",
++                   "Imaging state unavailable",
++                   "Control did not return checked imaging state");
++        return -1;
+     }
++    remove_unavailable_control_fields(&runtime_entry);
++    merge_control_state(&runtime_entry, &runtime_state);
++    entry = &runtime_entry;
+ 
+     char settings_xml[IMAGING_XML_BUFFER];
+     build_imaging_settings_xml(entry, settings_xml, sizeof(settings_xml));
+@@ -1166,11 +1168,16 @@ int imaging_get_options()
+     }
+ 
+     imaging_entry_t runtime_entry = *entry;
+-    prudynt_imaging_state_t runtime_state;
+-    if (prudynt_load_imaging_state(&runtime_state) == 0) {
+-        merge_prudynt_state(&runtime_entry, &runtime_state);
+-        entry = &runtime_entry;
++    control_imaging_state_t runtime_state;
++    if (control_load_imaging_state(&runtime_state) != 0) {
++        send_fault("imaging_service", "Receiver", "ter:Action", "ter:NoSource",
++                   "Imaging options unavailable",
++                   "Control did not return checked imaging ranges");
++        return -1;
+     }
++    remove_unavailable_control_fields(&runtime_entry);
++    merge_control_state(&runtime_entry, &runtime_state);
++    entry = &runtime_entry;
+ 
+     char options_xml[IMAGING_XML_BUFFER];
+     build_imaging_options_xml(entry, options_xml, sizeof(options_xml));
+@@ -1198,10 +1205,13 @@ int imaging_set_imaging_settings()
+         return -1;
+     }
+ 
+-    prudynt_imaging_state_t runtime_state;
+-    prudynt_imaging_state_t *state_ptr = NULL;
+-    if (prudynt_load_imaging_state(&runtime_state) == 0)
+-        state_ptr = &runtime_state;
++    control_imaging_state_t runtime_state;
++    if (control_load_imaging_state(&runtime_state) != 0) {
++        send_fault("imaging_service", "Receiver", "ter:Action", "ter:NoSource",
++                   "Imaging state unavailable",
++                   "Control did not return checked imaging state");
++        return -1;
++    }
+ 
+     mxml_node_t *settings_node = get_element_ptr(NULL, "ImagingSettings", "Body");
+     if (settings_node == NULL) {
+@@ -1209,6 +1219,20 @@ int imaging_set_imaging_settings()
+         return -1;
+     }
+ 
++    static const char *const unsupported_tags[] = {
++        "NoiseReduction", "BacklightCompensation", "WideDynamicRange",
++        "ToneCompensation", "Defogging", "Exposure", "Focus", "WhiteBalance",
++        "IrCutFilterAutoAdjustment", "ImageStabilization",
++    };
++    for (size_t i = 0; i < sizeof(unsupported_tags) / sizeof(unsupported_tags[0]); i++) {
++        if (find_child_element(settings_node, unsupported_tags[i])) {
++            send_fault("imaging_service", "Sender", "ter:InvalidArgVal",
++                       "ter:ConfigModify", "Unsupported imaging parameter",
++                       "The selected media backend does not expose this control");
++            return -1;
++        }
++    }
++
+     const char *ircut = find_ircut_value(settings_node);
+     if (ircut != NULL) {
+         ircut_mode_t requested = ircut_mode_from_string(ircut);
+@@ -1254,60 +1278,47 @@ int imaging_set_imaging_settings()
+     static const struct {
+         const char *tag;
+         const char *key;
+-    } prudynt_map[] = {
++    } control_map[] = {
+         {"Brightness", "brightness"},
+         {"ColorSaturation", "saturation"},
+         {"Contrast", "contrast"},
+         {"Sharpness", "sharpness"},
+-        {"NoiseReduction", "noise_reduction"},
+     };
+ 
+-    prudynt_command_t commands[sizeof(prudynt_map) / sizeof(prudynt_map[0])];
++    control_imaging_command_t commands[sizeof(control_map) / sizeof(control_map[0])];
+     size_t command_count = 0;
+-    for (size_t i = 0; i < sizeof(prudynt_map) / sizeof(prudynt_map[0]); ++i) {
+-        const char *value = find_child_value(settings_node, prudynt_map[i].tag);
++    for (size_t i = 0; i < sizeof(control_map) / sizeof(control_map[0]); ++i) {
++        const char *value = find_child_value(settings_node, control_map[i].tag);
+         if (!value)
+             continue;
+         float parsed_value;
+         int is_normalized = 0;
+-        if (!parse_imaging_value(value, &parsed_value, &is_normalized))
+-            continue;
+-        commands[command_count].key = prudynt_map[i].key;
+-        commands[command_count].value = normalize_with_state(prudynt_map[i].key, parsed_value, is_normalized, state_ptr);
+-        command_count++;
+-    }
+-
+-    static const struct {
+-        const char *container_tag;
+-        const char *key;
+-    } prudynt_mode_level_map[] = {
+-        {"BacklightCompensation", "backlight"},
+-        {"WideDynamicRange", "wide_dynamic_range"},
+-        {"ToneCompensation", "tone"},
+-        {"Defogging", "defog"},
+-    };
+-
+-    for (size_t i = 0; i < sizeof(prudynt_mode_level_map) / sizeof(prudynt_mode_level_map[0]); ++i) {
+-        const char *level = find_mode_level_value(settings_node, prudynt_mode_level_map[i].container_tag);
+-        if (!level)
+-            continue;
+-        float parsed_value;
+-        int is_normalized = 0;
+-        if (!parse_imaging_value(level, &parsed_value, &is_normalized))
+-            continue;
+-        commands[command_count].key = prudynt_mode_level_map[i].key;
+-        commands[command_count].value = normalize_with_state(prudynt_mode_level_map[i].key, parsed_value, is_normalized, state_ptr);
++        if (!parse_imaging_value(value, &parsed_value, &is_normalized)) {
++            send_fault("imaging_service", "Sender", "ter:InvalidArgVal",
++                       "ter:ConfigModify", "Invalid imaging value",
++                       "Imaging values must be numeric");
++            return -1;
++        }
++        commands[command_count].key = control_map[i].key;
++        if (!normalize_with_state(control_map[i].key, parsed_value,
++                                  is_normalized, &runtime_state,
++                                  &commands[command_count].normalized_value)) {
++            send_fault("imaging_service", "Sender", "ter:InvalidArgVal",
++                       "ter:ConfigModify", "Imaging value outside range",
++                       "The value is unavailable or outside the live Control range");
++            return -1;
++        }
+         command_count++;
+     }
+ 
+     if (command_count > 0) {
+-        if (prudynt_apply_imaging_changes(commands, command_count, 1500) != 0) {
++        if (control_apply_imaging_changes(commands, command_count) != 0) {
+             send_fault("imaging_service",
+                        "Receiver",
+                        "ter:Action",
+                        "ter:ConfigModify",
+                        "Failed to apply imaging parameters",
+-                       "Streamer rejected one or more imaging values");
++                       "Control rejected or could not read back an imaging value");
+             return -1;
+         }
+     }
+diff --git a/src/onvif_httpd.c b/src/onvif_httpd.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..5352bd9e7833297faafa131c8dbd6961433bee38
+--- /dev/null
++++ b/src/onvif_httpd.c
+@@ -0,0 +1,541 @@
++#define _GNU_SOURCE
++
++#include <arpa/inet.h>
++#include <errno.h>
++#include <fcntl.h>
++#include <setjmp.h>
++#include <signal.h>
++#include <stdbool.h>
++#include <stdint.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <strings.h>
++#include <sys/socket.h>
++#include <sys/stat.h>
++#include <sys/time.h>
++#include <sys/types.h>
++#include <time.h>
++#include <unistd.h>
++#include "onvif_snapshot_http.h"
++#include "onvif_control_token.h"
++#include "onvif_snapshot_io.h"
++
++#define ONVIF_LISTEN_PORT 1999
++#define CONTROL_PORT 1998
++#define HEADER_LIMIT 8192
++#define BODY_LIMIT (16 * 1024)
++#define RESPONSE_LIMIT (256 * 1024)
++#define CONFIG_LIMIT (64 * 1024)
++#define IO_TIMEOUT_SECONDS 4
++#define RESOURCE_DIRECTORY "/usr/share/onvif"
++
++static jmp_buf request_exit_point;
++static volatile sig_atomic_t request_active;
++static int64_t request_deadline;
++static bool extract_control_token(char token[65]);
++
++static void onvif_request_exit(int status)
++{
++    if (request_active)
++        longjmp(request_exit_point, status + 1);
++    _exit(status);
++}
++
++/* Reuse the reviewed CGI request implementation in one persistent process.
++ * Its process exits are contained to the current request by longjmp. */
++#define main onvif_cgi_main
++#define exit onvif_request_exit
++#include "onvif_simple_server.c"
++#undef exit
++#undef main
++
++static int read_all(int fd, void *buffer, size_t length)
++{
++    unsigned char *output = buffer;
++    size_t used = 0;
++
++    while (used < length) {
++        ssize_t count = onvif_io_read(fd, output + used, length - used, request_deadline);
++        if (count > 0) {
++            used += (size_t) count;
++            continue;
++        }
++        if (count < 0 && errno == EINTR)
++            continue;
++        return -1;
++    }
++    return 0;
++}
++
++static int write_all(int fd, const void *buffer, size_t length)
++{
++    return onvif_io_write(fd, buffer, length, request_deadline);
++}
++
++static ssize_t find_header_end(const unsigned char *buffer, size_t length)
++{
++    size_t index;
++
++    for (index = 0; index + 3 < length; index++) {
++        if (!memcmp(buffer + index, "\r\n\r\n", 4))
++            return (ssize_t) index;
++    }
++    return -1;
++}
++
++static bool safe_service(const char *path, char *service, size_t length)
++{
++    static const char *const names[] = {
++        "device_service", "deviceio_service", "events_service",
++        "imaging_service", "media_service", "media2_service", "ptz_service"
++    };
++    const char *name;
++    size_t index;
++
++    if (strncmp(path, "/onvif/", 7))
++        return false;
++    name = path + 7;
++    if (strchr(name, '?') || strchr(name, '/') || strlen(name) >= length)
++        return false;
++    for (index = 0; index < sizeof(names) / sizeof(names[0]); index++) {
++        if (!strcmp(name, names[index])) {
++            strcpy(service, name);
++            return true;
++        }
++    }
++    return false;
++}
++
++static int parse_content_length(char *headers, size_t *content_length,
++                                char *service, size_t service_length,
++                                char *remote, size_t remote_length)
++{
++    char *line;
++    char *save = NULL;
++    bool length_seen = false;
++
++    line = strtok_r(headers, "\r\n", &save);
++    if (!line)
++        return -1;
++    {
++        char method[8], path[128], version[16], extra;
++        if (sscanf(line, "%7s %127s %15s %c", method, path, version, &extra) != 3 ||
++            strcmp(method, "POST") ||
++            (strcmp(version, "HTTP/1.1") && strcmp(version, "HTTP/1.0")) ||
++            !safe_service(path, service, service_length))
++            return -1;
++    }
++
++    remote[0] = '\0';
++    while ((line = strtok_r(NULL, "\r\n", &save)) != NULL) {
++        char *value = strchr(line, ':');
++        if (!value)
++            return -1;
++        *value++ = '\0';
++        while (*value == ' ' || *value == '\t')
++            value++;
++        if (!strcasecmp(line, "Content-Length")) {
++            char *end;
++            unsigned long parsed;
++            if (length_seen || !*value)
++                return -1;
++            errno = 0;
++            parsed = strtoul(value, &end, 10);
++            if (errno || *end || parsed > BODY_LIMIT)
++                return -1;
++            *content_length = (size_t) parsed;
++            length_seen = true;
++        } else if (!strcasecmp(line, "Transfer-Encoding")) {
++            return -1;
++        } else if (!strcasecmp(line, "X-Thingino-Remote-Addr")) {
++            struct in_addr ipv4;
++            struct in6_addr ipv6;
++            if (strlen(value) >= remote_length ||
++                (inet_pton(AF_INET, value, &ipv4) != 1 &&
++                 inet_pton(AF_INET6, value, &ipv6) != 1))
++                return -1;
++            strcpy(remote, value);
++        }
++    }
++    return length_seen ? 0 : -1;
++}
++
++static int status_reason(int status, const char **reason)
++{
++    switch (status) {
++    case 200: *reason = "OK"; return 0;
++    case 400: *reason = "Bad Request"; return 0;
++    case 401: *reason = "Unauthorized"; return 0;
++    case 500: *reason = "Internal Server Error"; return 0;
++    default: return -1;
++    }
++}
++
++static int relay_cgi_response(int fd, char *response, size_t length)
++{
++    char *separator;
++    char *line;
++    char *save = NULL;
++    char content_type[128] = "application/soap+xml";
++    char authenticate[256] = "";
++    int status = 200;
++    const char *reason;
++    size_t body_length;
++    char headers[768];
++    int header_length;
++
++    if (length >= RESPONSE_LIMIT)
++        return -1;
++    response[length] = '\0';
++    separator = strstr(response, "\r\n\r\n");
++    if (!separator)
++        return -1;
++    *separator = '\0';
++    body_length = length - (size_t) (separator + 4 - response);
++
++    line = strtok_r(response, "\r\n", &save);
++    while (line) {
++        char *value = strchr(line, ':');
++        if (!value)
++            return -1;
++        *value++ = '\0';
++        while (*value == ' ' || *value == '\t')
++            value++;
++        if (!strcasecmp(line, "Status")) {
++            char *end;
++            long parsed = strtol(value, &end, 10);
++            if (end != value + 3 || (parsed != 200 && parsed != 400 &&
++                parsed != 401 && parsed != 500))
++                return -1;
++            status = (int) parsed;
++        } else if (!strcasecmp(line, "Content-Type")) {
++            if (strlen(value) >= sizeof(content_type) || strpbrk(value, "\r\n"))
++                return -1;
++            strcpy(content_type, value);
++        } else if (!strcasecmp(line, "WWW-Authenticate")) {
++            if (strlen(value) >= sizeof(authenticate) || strpbrk(value, "\r\n"))
++                return -1;
++            strcpy(authenticate, value);
++        } else if (strcasecmp(line, "Content-Length") &&
++                   strcasecmp(line, "Connection")) {
++            return -1;
++        }
++        line = strtok_r(NULL, "\r\n", &save);
++    }
++    if (status_reason(status, &reason))
++        return -1;
++    header_length = snprintf(headers, sizeof(headers),
++        "HTTP/1.1 %d %s\r\nContent-Type: %s\r\nContent-Length: %zu\r\n"
++        "Connection: close\r\n%s%s%s\r\n",
++        status, reason, content_type, body_length,
++        authenticate[0] ? "WWW-Authenticate: " : "",
++        authenticate[0] ? authenticate : "",
++        authenticate[0] ? "\r\n" : "");
++    if (header_length < 0 || (size_t) header_length >= sizeof(headers))
++        return -1;
++    if (write_all(fd, headers, (size_t) header_length))
++        return -1;
++    return write_all(fd, separator + 4, body_length);
++}
++
++static void send_simple_response(int fd, int status, const char *reason,
++                                 const char *body)
++{
++    char header[256];
++    size_t body_length = strlen(body);
++    int count = snprintf(header, sizeof(header),
++        "HTTP/1.1 %d %s\r\nContent-Type: text/plain\r\n"
++        "Content-Length: %zu\r\nConnection: close\r\n\r\n",
++        status, reason, body_length);
++    if (count > 0 && (size_t) count < sizeof(header)) {
++        (void) write_all(fd, header, (size_t) count);
++        (void) write_all(fd, body, body_length);
++    }
++}
++
++static int process_request(int fd)
++{
++    static unsigned char request[HEADER_LIMIT + 4 + BODY_LIMIT];
++    static char response[RESPONSE_LIMIT + 1];
++    size_t used = 0;
++    size_t content_length = 0;
++    ssize_t header_offset = -1;
++    char service[32];
++    char remote[INET6_ADDRSTRLEN];
++    FILE *input = NULL;
++    FILE *output = NULL;
++    FILE *saved_stdin = stdin;
++    FILE *saved_stdout = stdout;
++    size_t body_offset;
++    size_t response_length;
++    long response_position;
++    char length_text[24];
++    char uri[64];
++    char *arguments[3];
++    int jump_status;
++    int result = -1;
++    bool invoked = false;
++
++    request_deadline = onvif_io_deadline(3500);
++    if (request_deadline < 0) return -1;
++
++    while (header_offset < 0) {
++        ssize_t count;
++        if (used >= HEADER_LIMIT)
++            goto bad_request;
++        count = onvif_io_read(fd, request + used, HEADER_LIMIT - used, request_deadline);
++        if (count > 0) {
++            used += (size_t) count;
++            header_offset = find_header_end(request, used);
++            continue;
++        }
++        if (count < 0 && errno == EINTR)
++            continue;
++        goto bad_request;
++    }
++    body_offset = (size_t) header_offset + 4;
++    if (memchr(request, 0, (size_t)header_offset)) goto bad_request;
++    request[header_offset] = '\0';
++    if (!strncmp((char *)request, "GET ", 4)) {
++        /* Match the CGI argv[0] directory lookup after our resource chdir. */
++        char local_config[] = "./onvif.json";
++        char default_config[] = DEFAULT_JSON_CONF_FILE;
++        char *config = access(local_config, F_OK) == 0 ? local_config : default_config;
++        memset(&service_ctx, 0, sizeof(service_ctx));
++        invoked = true;
++        int loaded = process_json_conf_file(config);
++        result = onvif_snapshot_http(fd, (char *)request, (size_t)header_offset,
++            used - body_offset, loaded < 0 ? NULL : service_ctx.username,
++            loaded < 0 ? NULL : service_ctx.password, onvif_digest_md5,
++            extract_control_token, request_deadline);
++        goto cleanup;
++    }
++    if (parse_content_length((char *) request, &content_length, service,
++                             sizeof(service), remote, sizeof(remote)))
++        goto bad_request;
++    if (used - body_offset > content_length)
++        goto bad_request;
++    if (read_all(fd, request + used, content_length - (used - body_offset)))
++        goto bad_request;
++
++    input = fmemopen(request + body_offset, content_length ? content_length : 1,
++                     "r");
++    output = fmemopen(response, RESPONSE_LIMIT, "w");
++    if (!input || !output)
++        goto cleanup;
++    stdin = input;
++    stdout = output;
++    snprintf(length_text, sizeof(length_text), "%zu", content_length);
++    snprintf(uri, sizeof(uri), "/onvif/%s", service);
++    setenv("REQUEST_METHOD", "POST", 1);
++    setenv("CONTENT_LENGTH", length_text, 1);
++    setenv("CONTENT_TYPE", "application/soap+xml", 1);
++    setenv("REQUEST_URI", uri, 1);
++    setenv("SCRIPT_NAME", uri, 1);
++    setenv("REMOTE_ADDR", remote[0] ? remote : "127.0.0.1", 1);
++    arguments[0] = (char *) "onvif-httpd";
++    arguments[1] = service;
++    arguments[2] = NULL;
++    optind = 1;
++    opterr = 0;
++    request_active = 1;
++    invoked = true;
++    jump_status = setjmp(request_exit_point);
++    if (!jump_status)
++        (void) onvif_cgi_main(2, arguments);
++    request_active = 0;
++    fflush(output);
++    response_position = ftell(output);
++    if (response_position < 0 || (size_t) response_position >= RESPONSE_LIMIT)
++        goto cleanup;
++    response_length = (size_t) response_position;
++    stdin = saved_stdin;
++    stdout = saved_stdout;
++    fclose(input);
++    input = NULL;
++    fclose(output);
++    output = NULL;
++    result = relay_cgi_response(fd, response, response_length);
++    goto cleanup;
++
++bad_request:
++    send_simple_response(fd, 400, "Bad Request", "invalid ONVIF request\n");
++cleanup:
++    request_active = 0;
++    stdin = saved_stdin;
++    stdout = saved_stdout;
++    if (input)
++        fclose(input);
++    if (output)
++        fclose(output);
++    if (invoked) {
++        free_conf_file();
++        memset(&service_ctx, 0, sizeof(service_ctx));
++    }
++    for (volatile unsigned char *p = request; p < request + sizeof(request); p++)
++        *p = 0;
++    return result;
++}
++
++static bool extract_control_token(char token[65])
++{
++    return onvif_control_token("/etc/thingino.json", token);
++}
++
++static int control_daynight(const char *mode)
++{
++    struct sockaddr_in address = {
++        .sin_family = AF_INET,
++        .sin_port = htons(CONTROL_PORT),
++        .sin_addr.s_addr = htonl(INADDR_LOOPBACK),
++    };
++    struct timeval timeout = {.tv_sec = 2, .tv_usec = 0};
++    char token[65];
++    char body[32];
++    char request[512];
++    char response[64];
++    int fd;
++    int body_length;
++    int request_length;
++    ssize_t count;
++
++    if (!extract_control_token(token))
++        return -1;
++    body_length = snprintf(body, sizeof(body), "{\"mode\":\"%s\"}", mode);
++    if (body_length < 0 || (size_t) body_length >= sizeof(body))
++        return -1;
++    request_length = snprintf(request, sizeof(request),
++        "POST /api/v1/actions/daynight HTTP/1.1\r\nHost: 127.0.0.1:%d\r\n"
++        "Authorization: Bearer %s\r\nContent-Type: application/json\r\n"
++        "Content-Length: %d\r\nConnection: close\r\n\r\n%s",
++        CONTROL_PORT, token, body_length, body);
++    memset(token, 0, sizeof(token));
++    if (request_length < 0 || (size_t) request_length >= sizeof(request))
++        return -1;
++    fd = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
++    if (fd < 0)
++        return -1;
++    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
++    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
++    if (connect(fd, (struct sockaddr *) &address, sizeof(address)) ||
++        write_all(fd, request, (size_t) request_length)) {
++        close(fd);
++        return -1;
++    }
++    memset(request, 0, sizeof(request));
++    count = read(fd, response, sizeof(response) - 1);
++    close(fd);
++    if (count <= 0)
++        return -1;
++    response[count] = '\0';
++    return !strncmp(response, "HTTP/1.1 200 ", 13) ? 0 : -1;
++}
++
++static int set_utc_from_command(const char *command)
++{
++    int year, month, day, hour, minute, second, consumed = 0;
++    struct tm value;
++    time_t timestamp;
++    struct timespec target;
++
++    if (sscanf(command,
++        "date -s \"%4d-%2d-%2d %2d:%2d:%2d\" > /dev/null 2>&1%n",
++        &year, &month, &day, &hour, &minute, &second, &consumed) != 6 ||
++        command[consumed] != '\0')
++        return -1;
++    memset(&value, 0, sizeof(value));
++    value.tm_year = year - 1900;
++    value.tm_mon = month - 1;
++    value.tm_mday = day;
++    value.tm_hour = hour;
++    value.tm_min = minute;
++    value.tm_sec = second;
++    timestamp = timegm(&value);
++    if (timestamp == (time_t) -1)
++        return -1;
++    target.tv_sec = timestamp;
++    target.tv_nsec = 0;
++    return clock_settime(CLOCK_REALTIME, &target);
++}
++
++/* This daemon deliberately interposes the upstream command hooks. The D-Link
++ * profile routes supported IR-cut actions to Rust and performs the two other
++ * supported operations natively. Unknown command templates fail closed. */
++int __wrap_system(const char *command)
++{
++    if (!command) {
++        errno = ENOSYS;
++        return 0;
++    }
++    if (!strcmp(command, "/sbin/ircut auto"))
++        return control_daynight("auto");
++    if (!strcmp(command, "/sbin/ircut on") || !strcmp(command, "ircut on"))
++        return control_daynight("day");
++    if (!strcmp(command, "/sbin/ircut off") || !strcmp(command, "ircut off"))
++        return control_daynight("night");
++    if (!strcmp(command, "hwclock -w > /dev/null 2>&1"))
++        return 0;
++    if (!strcmp(command,
++        "kill -USR2 $(cat /var/run/streaming.pid 2>/dev/null) > /dev/null 2>&1")) {
++        errno = ENOSYS;
++        return -1;
++    }
++    if (!strncmp(command, "date -s \"", 9))
++        return set_utc_from_command(command);
++    errno = ENOSYS;
++    return -1;
++}
++
++FILE *__wrap_popen(const char *command, const char *type)
++{
++    (void) command;
++    (void) type;
++    errno = ENOSYS;
++    return NULL;
++}
++
++int __wrap_pclose(FILE *stream)
++{
++    (void) stream;
++    errno = EINVAL;
++    return -1;
++}
++
++int main(void)
++{
++    struct sockaddr_in address = {
++        .sin_family = AF_INET,
++        .sin_port = htons(ONVIF_LISTEN_PORT),
++        .sin_addr.s_addr = htonl(INADDR_LOOPBACK),
++    };
++    int listener;
++    int option = 1;
++
++    signal(SIGPIPE, SIG_IGN);
++    if (chdir(RESOURCE_DIRECTORY))
++        return EXIT_FAILURE;
++    listener = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
++    if (listener < 0)
++        return EXIT_FAILURE;
++    setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
++    if (bind(listener, (struct sockaddr *) &address, sizeof(address)) ||
++        listen(listener, 8)) {
++        close(listener);
++        return EXIT_FAILURE;
++    }
++    for (;;) {
++        struct timeval timeout = {.tv_sec = IO_TIMEOUT_SECONDS, .tv_usec = 0};
++        int client = accept4(listener, NULL, NULL, SOCK_CLOEXEC);
++        if (client < 0) {
++            if (errno == EINTR)
++                continue;
++            close(listener);
++            return EXIT_FAILURE;
++        }
++        setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
++        setsockopt(client, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
++        (void) process_request(client);
++        close(client);
++    }
++}
+diff --git a/src/media2_service.c b/src/media2_service.c
+--- a/src/media2_service.c
++++ b/src/media2_service.c
+@@ -16,6 +16,7 @@
+ 
+ #include "media2_service.h"
+ 
++#include "control_imaging_bridge.h"
+ #include "conf.h"
+ #include "fault.h"
+ #include "log.h"
+@@ -1703,7 +1704,11 @@
+         }
+ 
+-        // Construct snapshot URL with token authentication
+-        construct_uri_with_token(line, MAX_LEN, service_ctx.profiles[0].snapurl, address);
++        /* Stable HTTPS resource; HTTP Digest credentials never enter the URI. */
++        if (control_snapshot_uri(0, address, line, sizeof(line))) {
++            send_fault("media2_service", "Receiver", "ter:Action", "ter:IncompleteConfiguration",
++                       "Media unavailable", "Snapshot address is unavailable");
++            return -5;
++        }
+ 
+         // Escape html chars
+         html_escape(line, MAX_LEN);
+@@ -1727,7 +1732,11 @@
+         }
+ 
+-        // Construct snapshot URL with token authentication
+-        construct_uri_with_token(line, MAX_LEN, service_ctx.profiles[1].snapurl, address);
++        /* Stable HTTPS resource; HTTP Digest credentials never enter the URI. */
++        if (control_snapshot_uri(1, address, line, sizeof(line))) {
++            send_fault("media2_service", "Receiver", "ter:Action", "ter:IncompleteConfiguration",
++                       "Media unavailable", "Snapshot address is unavailable");
++            return -5;
++        }
+ 
+         // Escape html chars
+         html_escape(line, MAX_LEN);
+@@ -1773,7 +1782,11 @@
+         }
+ 
+         // Construct RTSP URL
+-        construct_uri(line, MAX_LEN, service_ctx.profiles[0].url, address);
++        if (control_rtsp_uri(0, address, line, sizeof(line))) {
++            send_fault("media2_service", "Receiver", "ter:Action", "ter:IncompleteConfiguration",
++                       "Media unavailable", "Live RTSP endpoint is unavailable");
++            return -5;
++        }
+ 
+         // Escape html chars
+         html_escape(line, MAX_LEN);
+@@ -1796,7 +1809,11 @@
+         }
+ 
+         // Construct RTSP URL
+-        construct_uri(line, MAX_LEN, service_ctx.profiles[1].url, address);
++        if (control_rtsp_uri(1, address, line, sizeof(line))) {
++            send_fault("media2_service", "Receiver", "ter:Action", "ter:IncompleteConfiguration",
++                       "Media unavailable", "Live RTSP endpoint is unavailable");
++            return -5;
++        }
+ 
+         // Escape html chars
+         html_escape(line, MAX_LEN);
+diff --git a/src/media_service.c b/src/media_service.c
+--- a/src/media_service.c
++++ b/src/media_service.c
+@@ -16,6 +16,7 @@
+ 
+ #include "media_service.h"
+ 
++#include "control_imaging_bridge.h"
+ #include "conf.h"
+ #include "fault.h"
+ #include "log.h"
+@@ -1040,7 +1041,11 @@
+         }
+ 
+-        // Construct snapshot URL with token authentication
+-        construct_uri_with_token(line, MAX_LEN, service_ctx.profiles[0].snapurl, address);
++        /* Stable HTTPS resource; HTTP Digest credentials never enter the URI. */
++        if (control_snapshot_uri(0, address, line, sizeof(line))) {
++            send_fault("media_service", "Receiver", "ter:Action", "ter:IncompleteConfiguration",
++                       "Media unavailable", "Snapshot address is unavailable");
++            return -5;
++        }
+ 
+         // Escape html chars
+         html_escape(line, MAX_LEN);
+@@ -1064,7 +1069,11 @@
+         }
+ 
+-        // Construct snapshot URL with token authentication
+-        construct_uri_with_token(line, MAX_LEN, service_ctx.profiles[1].snapurl, address);
++        /* Stable HTTPS resource; HTTP Digest credentials never enter the URI. */
++        if (control_snapshot_uri(1, address, line, sizeof(line))) {
++            send_fault("media_service", "Receiver", "ter:Action", "ter:IncompleteConfiguration",
++                       "Media unavailable", "Snapshot address is unavailable");
++            return -5;
++        }
+ 
+         // Escape html chars
+         html_escape(line, MAX_LEN);
+@@ -1110,7 +1119,11 @@
+         }
+ 
+         // Construct RTSP URL
+-        construct_uri(line, MAX_LEN, service_ctx.profiles[0].url, address);
++        if (control_rtsp_uri(0, address, line, sizeof(line))) {
++            send_fault("media_service", "Receiver", "ter:Action", "ter:IncompleteConfiguration",
++                       "Media unavailable", "Live RTSP endpoint is unavailable");
++            return -5;
++        }
+ 
+         // Escape html chars
+         html_escape(line, MAX_LEN);
+@@ -1133,7 +1146,11 @@
+         }
+ 
+         // Construct RTSP URL
+-        construct_uri(line, MAX_LEN, service_ctx.profiles[1].url, address);
++        if (control_rtsp_uri(1, address, line, sizeof(line))) {
++            send_fault("media_service", "Receiver", "ter:Action", "ter:IncompleteConfiguration",
++                       "Media unavailable", "Live RTSP endpoint is unavailable");
++            return -5;
++        }
+ 
+         // Escape html chars
+         html_escape(line, MAX_LEN);
+diff --git a/src/prudynt_bridge.c b/src/prudynt_bridge.c
+deleted file mode 100644
+index 2722c9fb25f926328e2ff3011f9726ebff7c1e5d..0000000000000000000000000000000000000000
+--- a/src/prudynt_bridge.c
++++ /dev/null
+@@ -1,201 +0,0 @@
+-#include "prudynt_bridge.h"
+-
+-#include "log.h"
+-
+-#include <errno.h>
+-#include <fcntl.h>
+-#include <json_config.h>
+-#include <math.h>
+-#include <stdio.h>
+-#include <stdlib.h>
+-#include <string.h>
+-#include <unistd.h>
+-
+-#define PRUDYNT_STATE_PATH "/run/prudynt/imaging.json"
+-#define PRUDYNT_FIFO_PATH "/run/prudynt/imagingctl"
+-#define PRUDYNT_WAIT_INTERVAL_MS 100
+-#define PRUDYNT_DEFAULT_TIMEOUT_MS 1200
+-#define PRUDYNT_APPLY_TOLERANCE 0.02f
+-
+-static void reset_state(prudynt_imaging_state_t *state)
+-{
+-    if (state)
+-        memset(state, 0, sizeof(*state));
+-}
+-
+-static void parse_field(JsonValue *fields, const char *name, prudynt_field_state_t *out)
+-{
+-    if (!fields || !name || !out)
+-        return;
+-
+-    JsonValue *node = get_object_item(fields, name);
+-    if (!node || node->type != JSON_OBJECT)
+-        return;
+-
+-    JsonValue *value = get_object_item(node, "value");
+-    JsonValue *min = get_object_item(node, "min");
+-    JsonValue *max = get_object_item(node, "max");
+-    if (!value || !min || !max)
+-        return;
+-    if (value->type != JSON_NUMBER || min->type != JSON_NUMBER || max->type != JSON_NUMBER)
+-        return;
+-
+-    double raw_min = min->value.number.real;
+-    double raw_max = max->value.number.real;
+-    if (raw_max <= raw_min)
+-        return;
+-
+-    double raw_value = value->value.number.real;
+-
+-    out->present = 1;
+-    out->value = (float) raw_value;
+-    out->min = (float) raw_min;
+-    out->max = (float) raw_max;
+-}
+-
+-static float field_normalized_value(const prudynt_field_state_t *field)
+-{
+-    if (!field || !field->present)
+-        return -1.0f;
+-
+-    float span = field->max - field->min;
+-    if (span <= 0.0f)
+-        return -1.0f;
+-
+-    return (field->value - field->min) / span;
+-}
+-
+-int prudynt_load_imaging_state(prudynt_imaging_state_t *state)
+-{
+-    if (!state)
+-        return -1;
+-
+-    reset_state(state);
+-
+-    JsonValue *doc = load_config(PRUDYNT_STATE_PATH);
+-    if (!doc)
+-        return -1;
+-
+-    JsonValue *fields = get_object_item(doc, "fields");
+-    if (fields && fields->type == JSON_OBJECT) {
+-        parse_field(fields, "brightness", &state->brightness);
+-        parse_field(fields, "contrast", &state->contrast);
+-        parse_field(fields, "saturation", &state->saturation);
+-        parse_field(fields, "sharpness", &state->sharpness);
+-        parse_field(fields, "backlight", &state->backlight);
+-        parse_field(fields, "wide_dynamic_range", &state->wide_dynamic_range);
+-        parse_field(fields, "tone", &state->tone);
+-        parse_field(fields, "defog", &state->defog);
+-        parse_field(fields, "noise_reduction", &state->noise_reduction);
+-    }
+-
+-    free_json_value(doc);
+-
+-    if (!state->brightness.present && !state->contrast.present && !state->saturation.present && !state->sharpness.present && !state->backlight.present
+-        && !state->wide_dynamic_range.present && !state->tone.present && !state->defog.present && !state->noise_reduction.present)
+-        return -1;
+-
+-    return 0;
+-}
+-
+-static prudynt_field_state_t *lookup_field(prudynt_imaging_state_t *state, const char *key)
+-{
+-    if (!state || !key)
+-        return NULL;
+-
+-    if (strcmp(key, "brightness") == 0)
+-        return &state->brightness;
+-    if (strcmp(key, "contrast") == 0)
+-        return &state->contrast;
+-    if (strcmp(key, "saturation") == 0)
+-        return &state->saturation;
+-    if (strcmp(key, "sharpness") == 0)
+-        return &state->sharpness;
+-    if (strcmp(key, "backlight") == 0)
+-        return &state->backlight;
+-    if (strcmp(key, "wide_dynamic_range") == 0)
+-        return &state->wide_dynamic_range;
+-    if (strcmp(key, "tone") == 0)
+-        return &state->tone;
+-    if (strcmp(key, "defog") == 0)
+-        return &state->defog;
+-    if (strcmp(key, "noise_reduction") == 0)
+-        return &state->noise_reduction;
+-
+-    return NULL;
+-}
+-
+-static int write_fifo_command(const char *payload, size_t len)
+-{
+-    int fd = open(PRUDYNT_FIFO_PATH, O_WRONLY | O_NONBLOCK);
+-    if (fd < 0) {
+-        log_error("prudynt_bridge: unable to open %s: %s", PRUDYNT_FIFO_PATH, strerror(errno));
+-        return -1;
+-    }
+-
+-    ssize_t rc = write(fd, payload, len);
+-    close(fd);
+-    if (rc != (ssize_t) len) {
+-        log_error("prudynt_bridge: short write to %s", PRUDYNT_FIFO_PATH);
+-        return -1;
+-    }
+-    return 0;
+-}
+-
+-int prudynt_apply_imaging_changes(const prudynt_command_t *commands, size_t command_count, int timeout_ms)
+-{
+-    if (!commands || command_count == 0)
+-        return 0;
+-
+-    char buffer[256];
+-    int written = snprintf(buffer, sizeof(buffer), "SET");
+-    if (written < 0 || written >= (int) sizeof(buffer))
+-        return -1;
+-
+-    for (size_t i = 0; i < command_count; ++i) {
+-        float clamped = commands[i].value;
+-        if (clamped < 0.0f)
+-            clamped = 0.0f;
+-        else if (clamped > 1.0f)
+-            clamped = 1.0f;
+-        int rc = snprintf(buffer + written, sizeof(buffer) - (size_t) written, " %s=%.4f", commands[i].key, clamped);
+-        if (rc < 0)
+-            return -1;
+-        written += rc;
+-        if (written >= (int) sizeof(buffer))
+-            return -1;
+-    }
+-    if (written + 1 >= (int) sizeof(buffer))
+-        return -1;
+-    buffer[written++] = '\n';
+-
+-    if (write_fifo_command(buffer, (size_t) written) != 0)
+-        return -1;
+-
+-    int wait_limit = timeout_ms > 0 ? timeout_ms : PRUDYNT_DEFAULT_TIMEOUT_MS;
+-    int elapsed = 0;
+-
+-    while (elapsed <= wait_limit) {
+-        prudynt_imaging_state_t state;
+-        if (prudynt_load_imaging_state(&state) == 0) {
+-            int satisfied = 1;
+-            for (size_t i = 0; i < command_count && satisfied; ++i) {
+-                float clamped = commands[i].value;
+-                if (clamped < 0.0f)
+-                    clamped = 0.0f;
+-                else if (clamped > 1.0f)
+-                    clamped = 1.0f;
+-                prudynt_field_state_t *field = lookup_field(&state, commands[i].key);
+-                float normalized = field_normalized_value(field);
+-                if (normalized < 0.0f || fabsf(normalized - clamped) > PRUDYNT_APPLY_TOLERANCE)
+-                    satisfied = 0;
+-            }
+-            if (satisfied)
+-                return 0;
+-        }
+-        usleep(PRUDYNT_WAIT_INTERVAL_MS * 1000);
+-        elapsed += PRUDYNT_WAIT_INTERVAL_MS;
+-    }
+-
+-    return -1;
+-}
+diff --git a/src/prudynt_bridge.h b/src/prudynt_bridge.h
+deleted file mode 100644
+index 14155716e0d9c74d96b09863564918df6b4abe89..0000000000000000000000000000000000000000
+--- a/src/prudynt_bridge.h
++++ /dev/null
+@@ -1,30 +0,0 @@
+-#pragma once
+-
+-#include <stddef.h>
+-
+-typedef struct {
+-    int present;
+-    float value; // Raw value as reported by prudynt (e.g. 0-255 scale)
+-    float min;
+-    float max;
+-} prudynt_field_state_t;
+-
+-typedef struct {
+-    prudynt_field_state_t brightness;
+-    prudynt_field_state_t contrast;
+-    prudynt_field_state_t saturation;
+-    prudynt_field_state_t sharpness;
+-    prudynt_field_state_t backlight;
+-    prudynt_field_state_t wide_dynamic_range;
+-    prudynt_field_state_t tone;
+-    prudynt_field_state_t defog;
+-    prudynt_field_state_t noise_reduction;
+-} prudynt_imaging_state_t;
+-
+-typedef struct {
+-    const char *key;
+-    float value;
+-} prudynt_command_t;
+-
+-int prudynt_load_imaging_state(prudynt_imaging_state_t *state);
+-int prudynt_apply_imaging_changes(const prudynt_command_t *commands, size_t command_count, int timeout_ms);
