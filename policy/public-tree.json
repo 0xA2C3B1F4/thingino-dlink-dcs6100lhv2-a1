@@ -409,6 +409,7 @@
     "scripts/container_fetch_thingino_toolchain_downloads.sh",
     "scripts/inventory_rtl_dependencies.py",
     "scripts/inventory_rtl_linked_sources.py",
+    "scripts/package_buildroot_source.py",
     "scripts/platform/__init__.py",
     "scripts/platform/linux_media_preflight.py",
     "scripts/platform/macos_media_preflight.py",

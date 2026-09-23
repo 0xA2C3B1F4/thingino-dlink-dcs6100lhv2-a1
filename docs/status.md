@@ -107,7 +107,9 @@ verification and independent selected-partition readback passed. The readback
 does not cover all flash, mutable data or physical mtd2. In Chromium 147, Main
 and Substream each played audible WebRTC audio after one Listen click, without
 Reload or a second click; the browser UI showed active audio counters. The
-operator separately reported audible audio on both streams in Safari. These
+operator separately reported audible audio on both streams in Safari. RTSP Main
+and Substream also passed Digest authentication on this installed candidate;
+each delivered a complete H.264 IDR frame with checked SPS dimensions. These
 bounded observations do not close the remaining physical acceptance matrix,
 long-duration checks, licensing or binary-distribution gates.
 

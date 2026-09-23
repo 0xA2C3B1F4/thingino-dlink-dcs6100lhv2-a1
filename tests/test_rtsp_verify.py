@@ -33,6 +33,28 @@ class FakeSocket:
         pass
 
 
+def fake_rtsp_exchange(sps: bytes) -> tuple[FakeSocket, FakeSocket]:
+    challenge = FakeSocket(
+        b'RTSP/1.0 401 Unauthorized\r\n'
+        b'WWW-Authenticate: Digest realm="Raptor", nonce="test-nonce"\r\n\r\n'
+    )
+    sdp = b'm=video 0 RTP/AVP 96\r\na=rtpmap:96 H264/90000\r\na=control:track1\r\n'
+    response = b'RTSP/1.0 200 OK\r\n\r\n'
+    sps_rtp = bytes.fromhex("806000010000000100000001") + sps
+    idr_rtp = bytes.fromhex("80e0000200000002000000016501")
+    frames = b''.join(
+        b'$\x00' + len(frame).to_bytes(2, 'big') + frame
+        for frame in (sps_rtp, idr_rtp)
+    )
+    stream = FakeSocket(
+        response
+        + b'RTSP/1.0 200 OK\r\nContent-Length: ' + str(len(sdp)).encode() + b'\r\n\r\n' + sdp
+        + b'RTSP/1.0 200 OK\r\nSession: test-session\r\n\r\n'
+        + response + frames
+    )
+    return challenge, stream
+
+
 class RtspVerificationTests(unittest.TestCase):
     def test_digest_auth_matches_rfc_2617_vector(self) -> None:
         with patch.object(rtsp_verify.secrets, "token_hex", return_value="0a4f113b"):
@@ -84,26 +106,11 @@ class RtspVerificationTests(unittest.TestCase):
                     rtsp_verify._rtsp_authorization(challenge, "viewer", b"password")
 
     def test_full_rtp_acceptance_uses_observed_digest_challenge(self) -> None:
-        challenge = FakeSocket(
-            b'RTSP/1.0 401 Unauthorized\r\n'
-            b'WWW-Authenticate: Digest realm="Raptor", nonce="test-nonce"\r\n\r\n'
-        )
-        sdp = b'm=video 0 RTP/AVP 96\r\na=rtpmap:96 H264/90000\r\na=control:track1\r\n'
-        response = b'RTSP/1.0 200 OK\r\n\r\n'
         sps = bytes.fromhex("67640028acd940780227e5c044000003000400000300083c60c658")
-        sps_rtp = bytes.fromhex("806000010000000100000001") + sps
-        idr_rtp = bytes.fromhex("80e0000200000002000000016501")
-        frames = b''.join(b'$\x00' + len(frame).to_bytes(2, 'big') + frame for frame in (sps_rtp, idr_rtp))
-        stream = FakeSocket(
-            response
-            + b'RTSP/1.0 200 OK\r\nContent-Length: ' + str(len(sdp)).encode() + b'\r\n\r\n' + sdp
-            + b'RTSP/1.0 200 OK\r\nSession: test-session\r\n\r\n'
-            + response + frames
-        )
+        challenge, stream = fake_rtsp_exchange(sps)
         with patch.object(rtsp_verify.socket, "create_connection", side_effect=[challenge, stream]):
             result = rtsp_verify.verify_rtsp_h264_1080p(
                 host="192.0.2.2", username="root", password=b"test-password",
-                stream_path="/stream0",
             )
         self.assertTrue(result["authentication_enforced"])
         self.assertEqual(result["rtsp_authentication"], "digest-hash-locked-closure-credential")
@@ -112,7 +119,51 @@ class RtspVerificationTests(unittest.TestCase):
         self.assertNotIn(b"Authorization:", challenge.sent)
         self.assertEqual(stream.sent.count(b"Authorization: Digest "), 4)
         self.assertNotIn(b"Basic", stream.sent)
-        self.assertIn(b'DESCRIBE rtsp://192.0.2.2:554/stream0 RTSP/1.0', stream.sent)
+        self.assertIn(b'DESCRIBE rtsp://192.0.2.2:554/ch0 RTSP/1.0', stream.sent)
+
+    def test_explicit_dimensions_accept_both_raptor_streams(self) -> None:
+        streams = (
+            ("/stream0", 1920, 1080,
+             "67640028acd940780227e5c044000003000400000300083c60c658"),
+            # SPS generated with ffmpeg/libx264 at 640x360, then checked by the parser.
+            ("/stream1", 640, 360,
+             "6742c016da0280bfe5c044000003000400000300083c58ba80"),
+        )
+        for path, width, height, sps_hex in streams:
+            with self.subTest(path=path):
+                challenge, stream = fake_rtsp_exchange(bytes.fromhex(sps_hex))
+                with patch.object(rtsp_verify.socket, "create_connection", side_effect=[challenge, stream]):
+                    result = rtsp_verify.verify_rtsp_h264_dimensions(
+                        host="192.0.2.2", username="root", password=b"test-password",
+                        stream_path=path, expected_width=width, expected_height=height,
+                    )
+                self.assertEqual((result["width"], result["height"]), (width, height))
+                self.assertEqual(result["rtsp_authentication"], "digest-hash-locked-closure-credential")
+                self.assertEqual(result["rtp_timestamps"], 2)
+                self.assertTrue(result["complete_idr_received"])
+                self.assertNotIn(b"Authorization:", challenge.sent)
+                self.assertIn(f"DESCRIBE rtsp://192.0.2.2:554{path} RTSP/1.0".encode(), stream.sent)
+
+    def test_explicit_dimensions_reject_wrong_substream_size(self) -> None:
+        substream_sps = bytes.fromhex("6742c016da0280bfe5c044000003000400000300083c58ba80")
+        challenge, stream = fake_rtsp_exchange(substream_sps)
+        with patch.object(rtsp_verify.socket, "create_connection", side_effect=[challenge, stream]):
+            with self.assertRaisesRegex(RtspVerificationError, "not 1920x1080"):
+                rtsp_verify.verify_rtsp_h264_dimensions(
+                    host="192.0.2.2", username="root", password=b"test-password",
+                    stream_path="/stream1", expected_width=1920, expected_height=1080,
+                )
+
+    def test_invalid_expected_dimensions_never_open_a_connection(self) -> None:
+        with patch.object(rtsp_verify.socket, "create_connection") as connect:
+            for width, height in ((0, 360), (640, 0), (8193, 360), (True, 360), (640, 360.0)):
+                with self.subTest(width=width, height=height):
+                    with self.assertRaisesRegex(RtspVerificationError, "expected dimensions"):
+                        rtsp_verify.verify_rtsp_h264_dimensions(
+                            host="192.0.2.2", username="root", password=b"test-password",
+                            stream_path="/stream1", expected_width=width, expected_height=height,
+                        )
+            connect.assert_not_called()
 
     def test_invalid_stream_path_never_opens_a_connection(self) -> None:
         with patch.object(rtsp_verify.socket, "create_connection") as connect:

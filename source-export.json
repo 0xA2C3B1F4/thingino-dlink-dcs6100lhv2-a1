@@ -722,7 +722,7 @@
       "source": "production/docs/release-evidence/2026-09-19-fresh-install-reproducibility.md"
     },
     "docs/status.md": {
-      "sha256": "45e70affa0fce9b81bf71ec8d7d5c085efa2cc3bfc3bc166779e8592846ae1ae",
+      "sha256": "633ae3d25373b7b8dff5780bf002d4c16624ff1e46ae19055c7a2c402cc49783",
       "source": "production/docs/status.md"
     },
     "docs/testing.md": {
@@ -1098,7 +1098,7 @@
       "source": "installer/rtsp_protocol.py"
     },
     "installer/rtsp_verify.py": {
-      "sha256": "0d970482f83c5790b342e23383e73ee2b818d73ef9eda0f561be5e165e7a80b8",
+      "sha256": "03109d85ff2c15bc6c5023e6f42f01a9b75b231e943e6b40aa51be895a4b8593",
       "source": "installer/rtsp_verify.py"
     },
     "installer/runtime_candidate.py": {
@@ -1629,6 +1629,10 @@
       "sha256": "96e92bb35085302694db6ada6eedf610bf84d4878819d0c602375bc17eafd0ac",
       "source": "scripts/inventory_rtl_linked_sources.py"
     },
+    "scripts/package_buildroot_source.py": {
+      "sha256": "56d93af637bfd0b2f4ba8df022b9a5b32c7e1ffd6bb01aa160fbfc3719fe60dc",
+      "source": "scripts/package_buildroot_source.py"
+    },
     "scripts/platform/__init__.py": {
       "sha256": "3c29ef6a52f8a60234297f356870b475013937c197246910cbbe2e103f48ff7f",
       "source": "scripts/platform/__init__.py"
@@ -2010,7 +2014,7 @@
       "source": "tests/test_release_gates.py"
     },
     "tests/test_rtsp_verify.py": {
-      "sha256": "c1d291bfdedbbf36a3cb3e8bb7b860a73e57bd56d78cc2a6965a7b3422c2658e",
+      "sha256": "8eaeb8e11b812095d34aa363b01395cb55f34a3d0ff449a01fefa2f5dce7593f",
       "source": "tests/test_rtsp_verify.py"
     },
     "tests/test_runtime_candidate.py": {
@@ -2114,7 +2118,7 @@
       "source": "tests/test_windows_media_preflight.py"
     },
     "third_party/LICENSE_REVIEW.md": {
-      "sha256": "cfb7a2c730bfe1f7be17a1a1ef089cf55224308008ad23b5bda0fdfd319c82a7",
+      "sha256": "5c1b5b088eb2e4818983ea832621ef7487cf253f9d260d51e3b6354a948e6259",
       "source": "third_party/LICENSE_REVIEW.md"
     },
     "third_party/NOTICE.md": {
@@ -2527,6 +2531,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "8317ddfbf07ba10520c78004ece6a2e9c41d1938",
+  "source_commit": "25bbeaf496aee5ef5c0cb4f832618ba7e89f292f",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }

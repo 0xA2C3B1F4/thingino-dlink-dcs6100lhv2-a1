@@ -176,6 +176,18 @@ def verify_rtsp_h264_1080p(
     *, host: str, username: str, password: bytes, timeout: float = 20.0,
     stream_path: str = "/ch0",
 ) -> dict[str, object]:
+    return verify_rtsp_h264_dimensions(
+        host=host, username=username, password=password, timeout=timeout,
+        stream_path=stream_path, expected_width=1920, expected_height=1080,
+    )
+
+
+def verify_rtsp_h264_dimensions(
+    *, host: str, username: str, password: bytes,
+    expected_width: int, expected_height: int, timeout: float = 20.0,
+    stream_path: str = "/ch0",
+) -> dict[str, object]:
+    """Verify one authenticated H.264 stream against caller-supplied dimensions."""
     try:
         username_raw = username.encode("utf-8")
     except UnicodeEncodeError as exc:
@@ -203,6 +215,11 @@ def verify_rtsp_h264_1080p(
         raise RtspVerificationError("RTSP timeout is outside policy")
     if re.fullmatch(r"/[A-Za-z0-9_.-]{1,64}", stream_path) is None:
         raise RtspVerificationError("RTSP stream path is invalid")
+    if any(
+        isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 8192
+        for value in (expected_width, expected_height)
+    ):
+        raise RtspVerificationError("RTSP expected dimensions are invalid")
     url = f"rtsp://{host}:554{stream_path}"
 
     try:
@@ -316,8 +333,10 @@ def verify_rtsp_h264_1080p(
         if sps is None or not complete_idr or len(timestamps) < 2:
             raise RtspVerificationError("RTSP did not deliver a decodable H.264 picture")
         width, height = h264_sps_dimensions(sps)
-        if (width, height) != (1920, 1080):
-            raise RtspVerificationError("RTSP H.264 stream is not 1920x1080")
+        if (width, height) != (expected_width, expected_height):
+            raise RtspVerificationError(
+                f"RTSP H.264 stream is not {expected_width}x{expected_height}"
+            )
     except OSError as exc:
         raise RtspVerificationError("RTSP exchange failed") from exc
     finally:

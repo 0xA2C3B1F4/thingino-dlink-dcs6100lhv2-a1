@@ -253,7 +253,7 @@ metadata does not necessarily mean missing license declarations in the source.
 
 | Warning | Observed material and remaining work |
 | --- | --- |
-| Buildroot source | The collector does not save Buildroot itself or its additional Libtool patches. The pinned prepared build-system sources must accompany the package collection. |
+| Buildroot source | The collector omits Buildroot and its Libtool patches. A private `a091c826` supplement contains the pinned Buildroot Git archive, four exact overrides, final config and receipts. Its reconstructed tree matched all 20,000 prepared entries by bytes, modes and symlink targets; two runs produced the same archive, SHA-256 `cf5ba3b25a50898ba3b44917a91deb236a33200089985757a027a254b9d3abb8`. It has not been published. |
 | External toolchain | The manifest labels the external SDK `unknown` and saves no license files. Its actual compiler, libc and related source/notices need a separate delivery. |
 | `ingenic-diag-tools` | `gpio-diag` is installed. The retained source declares AGPL-3.0-or-later and includes the complete license. Both the original source notice and license text are now supplied here. |
 | `ingenic-lib` | This profile explicitly uses camera-local inputs with `REDISTRIBUTE = NO`. Their omission from the collected source archives is intentional, not an open-source license-text substitution to make. Firmware redistribution remains unapproved. |
@@ -268,6 +268,10 @@ must not be classified by their filenames alone as the originally acquired
 vendor copies; final-root composition deliberately preserves source-built
 support libraries. The actual vendor files retained in the image remain subject
 to the separate distribution restriction.
+
+The private Buildroot supplement covers build-system source preparation only.
+External toolchain source and notices, other firmware components and package
+sources, per-file rights review, and complete source delivery remain open.
 
 For `ingenic-diag-tools`, the retained six-file source archive has SHA-256
 `483394340e74015f2a55761c838f6597df56b4b224803d9f46c888c8e1331ebe`.
