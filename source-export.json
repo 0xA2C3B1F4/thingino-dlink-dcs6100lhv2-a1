@@ -722,7 +722,7 @@
       "source": "production/docs/release-evidence/2026-09-19-fresh-install-reproducibility.md"
     },
     "docs/status.md": {
-      "sha256": "b2f19ee335a1f717878e493390d17f95423fe9d6d15299deff28ee46a5df746e",
+      "sha256": "45e70affa0fce9b81bf71ec8d7d5c085efa2cc3bfc3bc166779e8592846ae1ae",
       "source": "production/docs/status.md"
     },
     "docs/testing.md": {
@@ -2034,7 +2034,7 @@
       "source": "tests/test_source_checkout.py"
     },
     "tests/test_source_delivery_inventory.py": {
-      "sha256": "289a4f4226c565646c344a217e04d83ad6839d5e93b793c1d0c3179dcb1cb509",
+      "sha256": "59f99ba8d23f892aa3e4e99994a67f69d0b594c247865f1f60161a4f813460e0",
       "source": "tests/test_source_delivery_inventory.py"
     },
     "tests/test_source_prepare.py": {
@@ -2114,11 +2114,11 @@
       "source": "tests/test_windows_media_preflight.py"
     },
     "third_party/LICENSE_REVIEW.md": {
-      "sha256": "1d18b5c402dbc0204aab2f63006feef89d3f51c4bbe8f51a0ef26c1362b486c3",
+      "sha256": "cfb7a2c730bfe1f7be17a1a1ef089cf55224308008ad23b5bda0fdfd319c82a7",
       "source": "third_party/LICENSE_REVIEW.md"
     },
     "third_party/NOTICE.md": {
-      "sha256": "5ab92f83de3adce9604434e391e6b4ad11dc4d555d279998132083498cc25a8d",
+      "sha256": "2cd5d3a6921cec9db0b24f2aeb0102046e659c85172bae80012a1ce55f90c294",
       "source": "third_party/NOTICE.md"
     },
     "third_party/licenses/RTL8188FU-GPL-2.0-only.txt": {
@@ -2136,6 +2136,14 @@
     "third_party/licenses/Rust-1.95.0-MIT.txt": {
       "sha256": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
       "source": "third_party/licenses/Rust-1.95.0-MIT.txt"
+    },
+    "third_party/licenses/jz-diag-tools-AGPL-3.0.txt": {
+      "sha256": "8486a10c4393cee1c25392769ddd3b2d6c242d6ec7928e1414efff7dfb2f07ef",
+      "source": "third_party/licenses/jz-diag-tools-AGPL-3.0.txt"
+    },
+    "third_party/licenses/jz-diag-tools-source-notice.txt": {
+      "sha256": "7824dff674b1ff99a28c66c8041b735fcb603a732b14fd7f2ac369dd71b71f40",
+      "source": "third_party/licenses/jz-diag-tools-source-notice.txt"
     },
     "third_party/licenses/raptor-common-Monocypher-LICENCE.txt": {
       "sha256": "5f8360e4c06ddcc584bdb4b210c6af824c4bb301e6a9a521869b6d90795ca4b3",
@@ -2519,6 +2527,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "630383f6770bbe08cfca50eafb9737065b11707a",
+  "source_commit": "8317ddfbf07ba10520c78004ece6a2e9c41d1938",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }

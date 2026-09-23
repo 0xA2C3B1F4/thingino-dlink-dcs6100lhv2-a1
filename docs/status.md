@@ -102,9 +102,14 @@ system is 6,369,280 bytes with SHA-256
 `663b2052c68d802c0a5ff26ca6579dd251c3e75541bf9f7f0563979d8661bcc8`;
 the universal bundle SHA-256 is
 `57593fa34b7ed40985eb3c3c4b8bec71f932251391d7aa7663f3a49f541b7dd0`.
-Exact-firmware runtime acceptance remains pending. The Safari observation does
-not transfer to that new firmware, and these host checks do not close licensing
-or binary-distribution gates.
+This `a091c826` firmware is installed on the first camera. Canonical management
+verification and independent selected-partition readback passed. The readback
+does not cover all flash, mutable data or physical mtd2. In Chromium 147, Main
+and Substream each played audible WebRTC audio after one Listen click, without
+Reload or a second click; the browser UI showed active audio counters. The
+operator separately reported audible audio on both streams in Safari. These
+bounded observations do not close the remaining physical acceptance matrix,
+long-duration checks, licensing or binary-distribution gates.
 
 These are same-image bounded observations. They do not transfer results from an
 older candidate, establish every control or setting, prove persistence, or close

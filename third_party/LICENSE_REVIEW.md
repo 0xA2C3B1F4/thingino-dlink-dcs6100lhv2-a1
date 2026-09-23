@@ -244,6 +244,47 @@ omissions in its [legal-info guidance](https://buildroot.org/downloads/manual/ma
 review the actual delivered material rather than treating the exit code as
 legal approval.
 
+## Remaining base-collection warnings
+
+The completed collection for source `a091c826479a206b62f82821e38429273345554c`
+retains eight warnings. A bounded review compared its package recipes and
+retained archives with the final system image on 2026-09-22. Missing recipe
+metadata does not necessarily mean missing license declarations in the source.
+
+| Warning | Observed material and remaining work |
+| --- | --- |
+| Buildroot source | The collector does not save Buildroot itself or its additional Libtool patches. The pinned prepared build-system sources must accompany the package collection. |
+| External toolchain | The manifest labels the external SDK `unknown` and saves no license files. Its actual compiler, libc and related source/notices need a separate delivery. |
+| `ingenic-diag-tools` | `gpio-diag` is installed. The retained source declares AGPL-3.0-or-later and includes the complete license. Both the original source notice and license text are now supplied here. |
+| `ingenic-lib` | This profile explicitly uses camera-local inputs with `REDISTRIBUTE = NO`. Their omission from the collected source archives is intentional, not an open-source license-text substitution to make. Firmware redistribution remains unapproved. |
+| `ingenic-pwm` | `pwm` and its control script are installed. The four-file pinned utility archive and recipe contain no located license declaration. This remains an unresolved component-specific rights question; another package's MIT license must not be assigned to it. |
+| `ingenic-system-libs-neo` | The configuration selects both replacement libraries and the image contains `libalog.so` and `libsysutils.so`. The recipe, source SPDX markers and README identify MIT. Its archive lacks a standalone license text. Preserve the existing declarations and complete that text/notice delivery. |
+| `thingino-button` | The executable is installed. Its README identifies the project as MIT, despite the recipe's `unknown` result. The archive has no standalone license text; that is a text-delivery gap, not a reason to assume there is no declaration. |
+| `thingino-libubox` | `libubox.so`, `libblobmsg_json.so` and `jshn` are installed. The recipe declares ISC and BSD-3-Clause. The archive contains source files with notices but no standalone license file; review and retain the applicable original per-file notices. |
+
+This table is a scoped warning review, not an exhaustive linked-file inventory
+or a corresponding-source acceptance decision. The two replacement libraries
+must not be classified by their filenames alone as the originally acquired
+vendor copies; final-root composition deliberately preserves source-built
+support libraries. The actual vendor files retained in the image remain subject
+to the separate distribution restriction.
+
+For `ingenic-diag-tools`, the retained six-file source archive has SHA-256
+`483394340e74015f2a55761c838f6597df56b4b224803d9f46c888c8e1331ebe`.
+Its `LICENSE` was copied byte for byte to
+[`jz-diag-tools-AGPL-3.0.txt`](licenses/jz-diag-tools-AGPL-3.0.txt), 34,523 bytes,
+SHA-256 `8486a10c4393cee1c25392769ddd3b2d6c242d6ec7928e1414efff7dfb2f07ef`.
+The complete opening comment of `jz_gpio.c` is retained as
+[`jz-diag-tools-source-notice.txt`](licenses/jz-diag-tools-source-notice.txt),
+SHA-256 `7824dff674b1ff99a28c66c8041b735fcb603a732b14fd7f2ac369dd71b71f40`.
+The full C source has SHA-256
+`cdaa6a0651b86a1cd70446b5e79ea3a15e8b318d62fb0e367eb502dce74475d2`.
+The final image's `usr/bin/gpio-diag` is 9,936 bytes with SHA-256
+`180a8f480b0277e91b38df4add97d0d10568b58e4f6a825e9dc8c4ff1dc7748c`.
+Its source archive is already present in the private base collection. This
+supplement adds the omitted notice texts to the source repository without
+changing that collection's manifest, warning history, firmware or release gates.
+
 ## Evidence sources
 
 - [Pinned RTL8188FU repository](https://github.com/gtxaspec/rtl8188ftv-wifi/tree/6e3c1c2d244f5056d2a7ade3dbcf9daa3876fc06)

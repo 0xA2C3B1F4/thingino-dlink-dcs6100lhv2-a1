@@ -32,6 +32,8 @@ class SourceDeliveryInventoryTests(unittest.TestCase):
 
     def test_embedded_notice_payloads_retain_exact_upstream_text_identities(self) -> None:
         expected = {
+            "jz-diag-tools-AGPL-3.0.txt": "8486a10c4393cee1c25392769ddd3b2d6c242d6ec7928e1414efff7dfb2f07ef",
+            "jz-diag-tools-source-notice.txt": "7824dff674b1ff99a28c66c8041b735fcb603a732b14fd7f2ac369dd71b71f40",
             "raptor-common-cJSON-header.txt": "3384d75264549cd04a5c00538a15871785f3f6ba60a779781df747d591655892",
             "raptor-common-Monocypher-LICENCE.txt": "5f8360e4c06ddcc584bdb4b210c6af824c4bb301e6a9a521869b6d90795ca4b3",
         }
@@ -44,6 +46,10 @@ class SourceDeliveryInventoryTests(unittest.TestCase):
         mono = (ROOT / "third_party/licenses/raptor-common-Monocypher-LICENCE.txt").read_text()
         self.assertIn("Licence 1 (2-clause BSD)", mono)
         self.assertIn("Licence 2 (CC-0)", mono)
+        diag = (ROOT / "third_party/licenses/jz-diag-tools-source-notice.txt").read_text()
+        self.assertIn("Copyright (C) 2022 Reimu NotMoe", diag)
+        self.assertIn("either version 3 of the", diag)
+        self.assertIn("License, or (at your option) any later version", diag)
 
     def test_sound_text_and_recorded_inventory_preserve_scope(self) -> None:
         # This checks the checked-in record, not the private firmware image.

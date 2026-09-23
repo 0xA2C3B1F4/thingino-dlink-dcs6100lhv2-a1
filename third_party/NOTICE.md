@@ -18,6 +18,17 @@ It does not cover other audio assets or authorize binary redistribution.
 
 ## Exact pinned-source observations
 
+The selected `ingenic-diag-tools` package installs `gpio-diag`. Its pinned
+`jz_gpio.c` identifies Reimu NotMoe, Copyright 2022, and offers
+AGPL-3.0-or-later. The source repository carries its unmodified
+[copyright and license notice](licenses/jz-diag-tools-source-notice.txt) and
+[complete AGPL version 3 text](licenses/jz-diag-tools-AGPL-3.0.txt).
+These come from `gtxaspec/jz-diag-tools` commit
+`f06342a9596e4cf670256c40a7a5babc14024ec5`, not from the package recipe's
+missing license metadata. The original source's or-later option is preserved.
+See the [collection review](LICENSE_REVIEW.md) for hashes and the remaining
+source-delivery scope. These texts are not installed into the existing firmware.
+
 The WebUI navigation icons under `webui/public/icons/` are unmodified Feather
 Icons 4.29.2 SVGs from <https://github.com/feathericons/feather/tree/v4.29.2/icons>.
 They are Copyright (c) 2013-2023 Cole Bemis, distributed under the MIT license.
