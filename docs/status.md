@@ -1,6 +1,6 @@
 # Release status
 
-Historical runtime baseline validated: 2026-09-06. Documentation updated: 2026-09-23.
+Historical runtime baseline validated: 2026-09-06. Documentation updated: 2026-09-24.
 
 This repository provides source and host tools. There is no supported firmware
 download yet. The validated platform is DCS-6100LHV2 A1 with Apple Silicon macOS.
@@ -13,7 +13,8 @@ same-camera verification remain release requirements.
 
 The tables below describe named evidence, not blanket acceptance of later source
 changes. The full-Raptor source path has passed host composition checks. The
-latest built candidate has host-only evidence; its full physical acceptance
+latest built candidate has passed a bounded first-camera installation,
+selected readback and Chromium playback checks. Its full physical acceptance
 matrix remains open.
 
 Source `aff74396532c133805e7f08549fc7bf6ba80d60b` corrects Control's
@@ -21,19 +22,29 @@ MJPEG retry-query allowlist. Two clean complete-firmware builds and an
 independent rehash of 16 artifact pairs passed. The new signed universal bundle
 is 7,958,609 bytes, SHA-256
 `d97e3b8857cbfe167411fefb90fb3015476bbbd425824ec0871ecb5855ff3cc1`.
-It has not been installed or browser-tested on a camera. See the
-[MJPEG correction build evidence](release-evidence/2026-09-23-raptor-mjpeg-correction-build.md).
+The first camera reached final Thingino boot after a supported universal SD
+handoff. Management and media verification plus selected-partition readback
+passed. The first stock-updater card boot had no captured UART success line;
+mutable data and exact physical mtd2 comparison were excluded. In Chromium,
+Main stream and Substream each reached Live WebRTC and played operator-confirmed
+audible audio immediately after the microphone was turned On and Listen was
+pressed once, without Reload. Direct MJPEG routes rendered images on both
+streams before and after a browser-tab Reload. With only WHIP requests blocked
+in a separate Preview tab, Main and Substream reached Live MJPEG, and Preview's
+own Reload returned to Live MJPEG on each stream. The blocked-WHIP test covers
+the fallback path that failed on the preceding candidate; it does not establish
+behavior under every network failure or MJPEG frame quality.
 
-On 2026-09-23, the same candidate was staged on the first camera's identified
-SD card through the supported universal installer. The prior stock-mtd3
-checkpoint was copied and verified in private recovery storage before staging.
-All six newly staged files passed independent SD readback; the host wrote no
-camera NOR. A passive 900-second UART observation then received zero bytes and
-no stock-updater success marker. The camera's physical state is not yet known,
-so the first boot, SD handoff, Stage 1 and installed-candidate acceptance remain
-unverified. Do not infer completion from card staging or LED behavior.
+After a separate operator-reported power cycle with the SD card installed, the
+camera reached final Thingino boot, local network readiness, uhttpd startup and
+an HTTPS 200 response. After signing in again, the operator heard immediate
+WebRTC audio in Chromium 147 on Main and Substream, each after one Listen click
+without Reload. This bounded cold-boot check had no new selected-partition
+readback and did not establish clock correctness. See the
+[build evidence](release-evidence/2026-09-23-raptor-mjpeg-correction-build.md)
+and [installation evidence](release-evidence/2026-09-24-raptor-mjpeg-correction-install.md).
 
-The latest installed, now rejected candidate is source
+The preceding installed, rejected candidate was source
 `22989b85e327b090116cf7884a2e616055e24454c`. Its two clean `initialize`
 builds used no Raptor component cache and produced 16 byte-identical
 complete-firmware artifact pairs. An independent pass rehashed all 32 files
@@ -54,7 +65,9 @@ state timeouts. A real Chromium MJPEG fallback reached Live on Main stream,
 but Preview Reload then received HTTP 401 for its bounded `q=51` retry URL and
 went Offline. The installed candidate's MJPEG browser check failed and its
 content-addressed candidate decision is rejected. The Control allowlist
-mismatch has a host-built correction but no new camera acceptance yet.
+mismatch has a correction installed on the first camera. The bounded Chromium
+fallback and Reload sequence now passes on those bytes.
+
 Slow-client, disconnect and
 long-duration resource acceptance remain open. See the
 [September 23 candidate evidence](release-evidence/2026-09-23-raptor-a1-candidate.md)
