@@ -183,7 +183,7 @@ This binds the recorded 150 translation units and 767 existing dependencies to
 the a091 build. It does not resolve the rights and delivery questions above.
 
 The same two inventory commands were run on both clean build workspaces for
-the current `22989b85e327b090116cf7884a2e616055e24454c` firmware candidate.
+the earlier `22989b85e327b090116cf7884a2e616055e24454c` firmware candidate.
 The workspaces were mounted read-only without journal replay, using the pinned
 builder image `sha256:8abae43028bd1155572c76e268b9b8c5dce4686efe70ff68c0b7c5f9b93b361e`.
 Their full-image SHA-256 values remained unchanged after inspection:
@@ -191,10 +191,10 @@ Their full-image SHA-256 values remained unchanged after inspection:
 for build A and `9738e233e25b73ffe04eb66533ffb940331cb0302e62b2a29f4abe5fff2ab621`
 for build B. Both produced exactly the committed inventory hashes above,
 including 150 translation units, 767 existing dependencies and the installed
-module hash. This binds those recorded inputs to the current candidate, but
+module hash. This binds those recorded inputs to that candidate, but
 does not close the per-file rights or corresponding-source delivery gate.
 
-The current candidate's offline Buildroot collection also retained the pinned
+That candidate's offline Buildroot collection also retained the pinned
 driver source archive, SHA-256
 `9705879189d704c274618d550dd19d3f297953f2b8eb4f22fc936345c33b09ba`,
 and the two ordered package patches, SHA-256
@@ -225,6 +225,24 @@ recorded below: 327 exported files, with all 326 listed hashes independently
 checked. Its receipt says `legal_review_approved: false` and
 `publication_authorized: false`. A complete corresponding-source package,
 rights review and the firmware gate remain open.
+
+For installed source `867d1182aa2f3586ce35d6709f51463faff010bb`, both
+clean ext4 build workspaces were mounted `ro,noload` under the pinned offline
+builder image. Each regenerated linked-source inventory matched the committed
+150-unit JSON byte for byte, SHA-256
+`1658bfa4fcc4c627b80194815bdb4b34f592e4305b374463812e2db584e0d145`.
+Each regenerated dependency inventory likewise matched the committed JSON,
+SHA-256 `967927371061ce0bdb6443e73cadd7063f8a3f54509e6fe2f33c6ae9fa9d16bc`,
+including 767 existing dependencies and 983 absent optional config headers.
+The installed `8188fu.ko` hash remained
+`2ac80b9f1d3b08080cb55ed8011379fc8872caa73502269cb3d0591b9ff2735f`.
+Full workspace hashes were unchanged before and after inspection: build A
+`4f87e6360c85a3d6ad55df6e6b7f8407c0a6d1806e7cef7fb4fa18b0b9f97c52`
+and build B
+`0d2324a8e20cce5fb3413971b1ff11e79ba5374e2e0d9cf71a8b95bb837f0066`.
+This binds the recorded driver inputs to the installed candidate. It does not
+complete the kernel or toolchain source delivery, per-file rights review, or
+firmware redistribution authorization.
 
 ### Remaining driver notice questions
 
