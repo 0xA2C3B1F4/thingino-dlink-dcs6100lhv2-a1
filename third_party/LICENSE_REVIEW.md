@@ -25,6 +25,16 @@ delivery package. The `raptor-corresponding-source` firmware gate stays blocked
 until the exact binary closure, notices, and corresponding-source delivery are
 recorded.
 
+The pinned `ingenic-headers` README at commit
+`f573958ebe2a851a6ba0493288b47bc0122daf36` has SHA-256
+`236883ff1d99ad12ad83c64e70a3a332859e330a2c9b510035d80e50f7ab523e`.
+It describes the headers as collected from public sources and warns that
+licensing restrictions may apply. `headers-input.json` therefore records
+`license_status: unspecified` and does not authorize redistribution. Public
+availability and development use do not by themselves settle the rights to
+deliver these headers as corresponding source. The relevant file-level terms
+and provenance still need review.
+
 ### Private source archive tooling
 
 `scripts/raptor_private_source_archive.py` packages the 13 locally reconstructed
@@ -400,6 +410,15 @@ metadata does not necessarily mean missing license declarations in the source.
 | `thingino-button` | The executable is installed. Its README identifies the project as MIT, despite the recipe's `unknown` result. The archive has no standalone license text; that is a text-delivery gap, not a reason to assume there is no declaration. |
 | `thingino-libubox` | `libubox.so`, `libblobmsg_json.so` and `jshn` are installed. The recipe declares ISC and BSD-3-Clause but names no `LICENSE_FILES`, so the collector saves no license text. The pinned archive has `debian/copyright` and source-level notices. Review the actual compiled files and retain their applicable notices, including terms not captured by the recipe's two labels. |
 
+The pinned `ingenic-system-libs-neo` commit
+`3e1189021e4f273b701b5d8bb8a07b19699333d6` has 17 regular files.
+All 14 C and header files contain `SPDX-License-Identifier: MIT`, and its
+README identifies MIT. A full-tree text search found no copyright-holder
+line or full permission text; there is no standalone license file. This is a
+missing text/attribution-delivery question, not the same as the unspecified
+`ingenic-headers` grant. Do not invent a copyright holder or borrow one from
+another package when preparing notices.
+
 On 2026-09-23, the [upstream `ingenic-pwm` repository](https://github.com/gtxaspec/ingenic-pwm)
 still had the exact pinned commit `8d45ebdb97600c7559f5b7eac8e42a9d8c38426b`
 at `master`. Its four-file tree showed no license file, and the
@@ -474,6 +493,8 @@ changing that collection's manifest, warning history, firmware or release gates.
 
 ## Evidence sources
 
+- [Pinned Ingenic headers README](https://github.com/gtxaspec/ingenic-headers/blob/f573958ebe2a851a6ba0493288b47bc0122daf36/README.md)
+- [Pinned Ingenic replacement-libraries repository](https://github.com/gtxaspec/ingenic-system-libs-neo/tree/3e1189021e4f273b701b5d8bb8a07b19699333d6)
 - [Pinned RTL8188FU repository](https://github.com/gtxaspec/rtl8188ftv-wifi/tree/6e3c1c2d244f5056d2a7ade3dbcf9daa3876fc06)
 - [GNU GPL version 2](https://www.gnu.org/licenses/old-licenses/gpl-2.0.txt)
 - [hostap license](https://w1.fi/cgit/hostap/plain/README)
