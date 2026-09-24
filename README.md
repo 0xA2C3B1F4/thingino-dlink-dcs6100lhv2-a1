@@ -44,9 +44,11 @@ services. It supports one WebRTC client at a time; the selected profile is
 15 fps, with WebRTC audio reception enabled when camera capture is enabled.
 Microphone and camera speaker are initially disabled. The installer acquires locked public sources, compiles against the
 fresh support image's libraries and SDK, then composes the Raptor-owned runtime.
-No separately prepared Raptor archive is required. Source `aff74396` passed two
-clean complete-firmware builds and bounded first-camera installation and browser
-checks. Full release acceptance remains open.
+No separately prepared Raptor archive is required. Source `867d1182` passed two
+clean byte-identical complete-firmware builds, installation and selected
+readback on the first camera, and bounded Chromium audio checks after a cold
+boot. This is not acceptance on a second camera or approval to distribute
+firmware. See the [exact candidate evidence](docs/release-evidence/2026-09-24-raptor-867d1182-install.md).
 See [Raptor source build](components/raptor/README.md).
 
 The support image uses catalog-locked stock `libimp`, TX-ISP and OS02G10

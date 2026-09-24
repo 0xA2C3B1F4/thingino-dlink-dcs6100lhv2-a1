@@ -408,6 +408,17 @@ reported `license: null`. This is a bounded search for a grant, not a legal
 determination or evidence that another project's MIT declaration applies.
 The component-specific rights question remains open.
 
+For the installed `867d1182` candidate, the exact final SquashFS image has
+SHA-256 `498c68d706df40c2590f467818137980e87897e94dc062587f0d32b02b205325`.
+A byte-oriented search of all 481 regular files in its extracted root found
+`pwm` or `pwm-ctrl` only in `/usr/sbin/pwm`, `/usr/sbin/pwm-ctrl`, the two
+separate kernel PWM modules, and `modules.alias`. No other installed file
+contained a literal reference to either command. This bounds a possible
+future experiment to omit the userland utility, but cannot rule out dynamic
+invocation or establish that omitting it preserves camera behavior. The
+installed candidate still contains the utility, so this observation does not
+close its rights question or authorize firmware redistribution.
+
 This table is a scoped warning review, not an exhaustive linked-file inventory
 or a corresponding-source acceptance decision. The two replacement libraries
 must not be classified by their filenames alone as the originally acquired

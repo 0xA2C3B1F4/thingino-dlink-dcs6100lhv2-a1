@@ -34,7 +34,7 @@
       "source": "Makefile"
     },
     "README.md": {
-      "sha256": "2c680d5feaeaeb0a27e321d32f1cce1fafa0548f494ba673741645a1afafc419",
+      "sha256": "2d5eba1792ff95cf4d08bf8a582e62cedc4c29a84750d1caa3ea16dc58b83224",
       "source": "production/README.md"
     },
     "SECURITY.md": {
@@ -1490,7 +1490,7 @@
       "source": "patches/uhttpd/0019-bound-whip-sdp-body.patch"
     },
     "policy/release-gates.json": {
-      "sha256": "8ef369fe39a902d4e603c809ca863a67eca10b75394605641da4c0a1a130dc99",
+      "sha256": "7b650327bd0a5e2f470265f9fa35b4a86a9279a726de9693f201e682c08baa59",
       "source": "policy/release-gates.json"
     },
     "profiles/dlink-dcs6100lhv2-a1/artifact-limits.json": {
@@ -2138,7 +2138,7 @@
       "source": "tests/test_windows_media_preflight.py"
     },
     "third_party/LICENSE_REVIEW.md": {
-      "sha256": "f25c0132b77c1e9080a977e4c0c4563c1b83e3a8aac96b163b584ef2405b7873",
+      "sha256": "636ea1f95f4910ce25a01b420f6bb7dced333d384c0983da49eae7a385587769",
       "source": "third_party/LICENSE_REVIEW.md"
     },
     "third_party/NOTICE.md": {
@@ -2551,6 +2551,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "cb6437bb313101cdce29724ece435983c5775833",
+  "source_commit": "826be9cedc6f14e478b7eb8d476021e138bf8054",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }

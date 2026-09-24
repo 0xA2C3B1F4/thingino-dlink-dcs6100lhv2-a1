@@ -44,19 +44,19 @@
           "id": "reproducible-firmware",
           "status": "closed",
           "requirement": "Two clean builds from documented public and owner-acquired inputs are byte-identical.",
-          "evidence": ["docs/build.md", "docs/release-evidence/2026-09-17-raptor-audio-reproducibility.json", "docs/release-evidence/2026-09-17-raptor-audio-reproducibility.md", "docs/release-evidence/2026-09-18-raptor-mic-acknowledgement.md", "docs/testing.md"]
+          "evidence": ["docs/build.md", "docs/release-evidence/2026-09-24-raptor-867d1182-install.md", "docs/testing.md"]
         },
         {
           "id": "content-addressed-candidate",
           "status": "blocked",
           "requirement": "The exact firmware candidate passes management, media, browser, and resource acceptance.",
-          "evidence": ["docs/testing.md"]
+          "evidence": ["docs/release-evidence/2026-09-24-raptor-867d1182-install.md", "docs/testing.md"]
         },
         {
           "id": "local-clock-and-session-acceptance",
           "status": "blocked",
           "requirement": "On the exact installed candidate, physical acceptance proves that a persisted numeric LAN NTP server corrects the camera clock after a cold boot without a default route or DNS, and that an authenticated session remains usable across a legitimate clock correction while normal logout and expiry still work.",
-          "evidence": ["docs/features.md", "docs/testing.md"]
+          "evidence": ["docs/features.md", "docs/release-evidence/2026-09-24-raptor-867d1182-install.md", "docs/testing.md"]
         },
         {
           "id": "physical-failure-recovery",
