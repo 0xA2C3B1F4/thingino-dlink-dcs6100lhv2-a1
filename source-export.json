@@ -730,7 +730,7 @@
       "source": "production/docs/release-evidence/2026-09-23-raptor-mjpeg-correction-build.md"
     },
     "docs/release-evidence/2026-09-24-raptor-867d1182-install.md": {
-      "sha256": "c0107798780121d1db35708c3d55978ef46eb19419d83d54f2d9f840ac152e1f",
+      "sha256": "62f8eba7d107dd5e381ea27ec4d0dee2a84bdb02c2462bbf9b9844292a7e2525",
       "source": "production/docs/release-evidence/2026-09-24-raptor-867d1182-install.md"
     },
     "docs/release-evidence/2026-09-24-raptor-mjpeg-correction-install.md": {
@@ -2138,7 +2138,7 @@
       "source": "tests/test_windows_media_preflight.py"
     },
     "third_party/LICENSE_REVIEW.md": {
-      "sha256": "f60b3f7d48645103786fa094364abf89dc9a3adff12843a419385d6748e8026e",
+      "sha256": "f25c0132b77c1e9080a977e4c0c4563c1b83e3a8aac96b163b584ef2405b7873",
       "source": "third_party/LICENSE_REVIEW.md"
     },
     "third_party/NOTICE.md": {
@@ -2551,6 +2551,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "95f7c7a1ee94367a0d8f89fb4d2c903dafe33421",
+  "source_commit": "cb6437bb313101cdce29724ece435983c5775833",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }

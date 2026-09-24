@@ -63,6 +63,19 @@ record. This identifies the Raptor source trees used for this component build.
 The private archive omits other firmware sources. This comparison does not
 approve notices, corresponding-source delivery or binary redistribution.
 
+For the later installed source `867d1182aa2f3586ce35d6709f51463faff010bb`,
+the completed-run validator produced byte-identical technical closure
+sidecars in two independent invocations. The candidate closure has SHA-256
+`18dd2e39be32c8bbe6ef28416e4d2ec571de38f16ecb9ebf4fb4552012fea16b`;
+its notice manifest has SHA-256
+`220b8eecb2bc8cf6a34566c1bb1ab5acdd1ac17a568a1de9554b2c1d4c43904f`.
+The manifest binds Raptor source-lock SHA-256
+`bff85f6d1dd168b9152770f688d9e0a354a9e95d3557a59446ed2cda6f40e769`,
+which matches the checked-in 13-entry source-delivery inventory. Both sidecars
+still mark legal review `not-assessed` and redistribution
+`not-authorized-by-this-repository`. They establish technical identity only,
+not a complete firmware corresponding-source delivery or a rights decision.
+
 ## RTL8188FU
 
 Pinned commit `6e3c1c2d244f5056d2a7ade3dbcf9daa3876fc06` has no top-level
