@@ -487,6 +487,24 @@ and binds these to the locked SDK SHA-256
 This resolves where the exact toolchain build inputs are held, not which notices
 must accompany a firmware release or whether distribution is authorized.
 
+For installed source `867d1182aa2f3586ce35d6709f51463faff010bb`, the
+Buildroot `.config` was read without journal replay from each clean build's
+read-only ext4 workspace. Both files were 143,498 bytes and matched byte for
+byte, SHA-256 `5ed397f53c6c97c51c535c4264402b6409295d5b2f27059f902ba9b5b5ec94f5`.
+Using those two independently read configs, the pinned Thingino and Buildroot
+checkouts, the exact preparation and run receipts, and
+`scripts/package_buildroot_source.py`, two offline private source supplements
+were produced. Each reconstructed Buildroot tree matched all 20,000 entries
+of this run's prepared tree. The two 10-member archives were byte-identical,
+7,122,835 bytes with SHA-256
+`af7bf292dcb165947ca1bde9cb01cdcbecbf4781cb2089a9664516c77efffa6e`.
+An independent archive read confirmed the embedded config and preparation
+receipt hashes. The archive contains the pinned Buildroot Git tree, four
+ordered overrides, config and receipts; it remains private. Its receipt marks
+`legal_review_approved: false` and `publication_authorized: false`. This
+ties one build-system source supplement to the installed candidate, not the
+full firmware source closure, notice review or redistribution rights.
+
 For the current candidate, the pinned `thingino-libubox` source archive has
 SHA-256 `78254b8a4f2b38ca9e7d7aae0b8d5faa2f2cb88ae13ff886577e5aaea401c146`.
 Its `debian/copyright` contains an ISC grant and has SHA-256

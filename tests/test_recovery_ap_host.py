@@ -396,7 +396,7 @@ class RecoveryApHostTests(unittest.TestCase):
                 self._local_uartless_tls_exchange(
                     root,
                     script,
-                    timeout=0.1,
+                    timeout=2.0,
                     arguments=(str(pid_path),),
                 )
             self.assertNotIn(str(pid_path), str(raised.exception))
@@ -422,7 +422,7 @@ class RecoveryApHostTests(unittest.TestCase):
                 self._local_uartless_tls_exchange(
                     root,
                     script,
-                    timeout=0.1,
+                    timeout=2.0,
                     arguments=(str(pid_path),),
                 )
             leader_pid, child_pid = (

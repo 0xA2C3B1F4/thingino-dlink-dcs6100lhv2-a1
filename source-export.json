@@ -2006,7 +2006,7 @@
       "source": "tests/test_recovery.py"
     },
     "tests/test_recovery_ap_host.py": {
-      "sha256": "eb0211fd5d55bfe0b495407d3ac8da521edabdb7af43534323a2d0c771360aa5",
+      "sha256": "c31f7a1a30f176c24f558e52d2acd657ffaf9e45a9712f4b6b910e2ae85aa3b4",
       "source": "tests/test_recovery_ap_host.py"
     },
     "tests/test_recovery_ap_kernel.py": {
@@ -2138,7 +2138,7 @@
       "source": "tests/test_windows_media_preflight.py"
     },
     "third_party/LICENSE_REVIEW.md": {
-      "sha256": "319d370326fa666b0f44fe4c3a218eafbf74be7b6508c373a81eb6bacb1c94e2",
+      "sha256": "6eb411db38bad4ec139ee2ddbe27ac66335e769e123bc9a0dccc70bb5d7ed837",
       "source": "third_party/LICENSE_REVIEW.md"
     },
     "third_party/NOTICE.md": {
@@ -2551,6 +2551,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "85cc7e7098d3f7d2dd62b41c7afdffba857c5ac6",
+  "source_commit": "02ddf1c97456ce31bf5e4154821068ad4f17a149",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }
