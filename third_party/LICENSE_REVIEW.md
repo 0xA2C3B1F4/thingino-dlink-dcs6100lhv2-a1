@@ -54,14 +54,14 @@ including their modes and contents, against the retained canonical source tars.
 That comparison passed. These are source-package integrity results, not license
 clearance, binary-to-source correspondence or physical camera acceptance.
 
-For the new `aff74396532c133805e7f08549fc7bf6ba80d60b` candidate, build A
-and build B produced byte-identical full-Raptor component archives, SHA-256
+For source `aff74396532c133805e7f08549fc7bf6ba80d60b`, build A and build B
+produced byte-identical full-Raptor component archives, SHA-256
 `49789f25426fed7fb867a846c21467fecd6b26886d3e141d37cc877db4d0e1bf`.
-The 13 final source-tree IDs in that component's `component.json` matched
-the retained private archive's `manifest.json` exactly. This binds the
-previously verified Raptor source trees to the new component build. The archive
-still excludes the complete firmware source closure, and this comparison does
-not approve notices, source delivery or binary redistribution.
+All 13 final source-tree IDs in each component's `component.json` match the
+retained private source archive's `manifest.json` and the candidate closure
+record. This identifies the Raptor source trees used for this component build.
+The private archive omits other firmware sources. This comparison does not
+approve notices, corresponding-source delivery or binary redistribution.
 
 ## RTL8188FU
 
@@ -173,9 +173,11 @@ Both whole-image hashes were unchanged after inspection. Each run produced
 byte-identical inventories matching the committed JSON hashes above, including
 the same 150 translation units, 767 existing header dependencies and installed
 module hash. This binds those recorded RTL8188FU inputs to the new host-built
-candidate. A separate Buildroot `legal-info` collection for these bytes is
-recorded below. It is not a complete corresponding-source package; rights
-review and the firmware gate remain open.
+candidate. A bounded Buildroot `legal-info` collection for this candidate is
+recorded below: 327 exported files, with all 326 listed hashes independently
+checked. Its receipt says `legal_review_approved: false` and
+`publication_authorized: false`. A complete corresponding-source package,
+rights review and the firmware gate remain open.
 
 ### Remaining driver notice questions
 

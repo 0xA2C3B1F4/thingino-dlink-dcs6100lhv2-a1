@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status_date": "2026-09-18",
+  "status_date": "2026-09-24",
   "scopes": [
     {
       "id": "source-publication",
@@ -51,6 +51,12 @@
           "status": "blocked",
           "requirement": "The exact firmware candidate passes management, media, browser, and resource acceptance.",
           "evidence": ["docs/testing.md"]
+        },
+        {
+          "id": "local-clock-and-session-acceptance",
+          "status": "blocked",
+          "requirement": "On the exact installed candidate, physical acceptance proves that a persisted numeric LAN NTP server corrects the camera clock after a cold boot without a default route or DNS, and that an authenticated session remains usable across a legitimate clock correction while normal logout and expiry still work.",
+          "evidence": ["docs/features.md", "docs/testing.md"]
         },
         {
           "id": "physical-failure-recovery",

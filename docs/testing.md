@@ -117,6 +117,27 @@ Credential changes, settings initialization and SD formatting require explicit
 authorization for that test. If permission or a physical step is missing,
 leave the affected acceptance row open. Do not infer it from a host fixture.
 
+### Local clock and session acceptance
+
+On the exact installed candidate, record its digest, camera identity, boot
+condition, LAN NTP address, and an independently synchronized UTC reference.
+Keep the default local-only network profile without a default route or DNS.
+Set a numeric NTP address on the camera's subnet and save it. With an
+authenticated browser session already open, use Sync time now to correct the
+clock. Record camera and reference UTC immediately after the correction, and
+verify that the existing session can still read an authenticated endpoint
+without a spurious expiry or repeated login. Confirm that logout and ordinary
+session expiry still work after the correction.
+
+Cold boot with the saved NTP setting. Record the camera clock before sync and
+verify that it reaches within 10 seconds of the UTC reference within five
+minutes of LAN readiness, without manual Sync time now, Internet access, or a
+new NTP setting. Read back the saved NTP address and timezone after reboot.
+If the clock remains at build time, only a manual sync works, or the session
+fails across a valid correction, leave the firmware clock gate blocked. Record
+the time readings, elapsed wait, browser behavior, and any failure separately;
+a running NTP process or a correct timezone is not a pass.
+
 The release also needs two byte-identical clean builds, removable-media
 readback, physical interruption and recovery tests, and the licensing closure
 listed in [status.md](status.md).

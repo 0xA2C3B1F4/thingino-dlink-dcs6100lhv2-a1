@@ -1,6 +1,6 @@
 # Release status
 
-Historical runtime baseline validated: 2026-09-06. Documentation updated: 2026-09-23.
+Historical runtime baseline validated: 2026-09-06. Documentation updated: 2026-09-24.
 
 This repository provides source and host tools. There is no supported firmware
 download yet. The validated platform is DCS-6100LHV2 A1 with Apple Silicon macOS.
@@ -13,27 +13,76 @@ same-camera verification remain release requirements.
 
 The tables below describe named evidence, not blanket acceptance of later source
 changes. The full-Raptor source path has passed host composition checks. The
-latest built candidate has host-only evidence; its full physical acceptance
-matrix remains open.
+latest installed candidate, source `867d1182aa2f3586ce35d6709f51463faff010bb`,
+passed two clean, byte-identical complete-firmware builds without component-cache
+reuse. Its signed `thingino-universal.tgb` has SHA-256
+`17e7f3fdaa78b26a49f3dd5c5776d409c525d72a217ea1a2ac496ca7d875c1c4`.
+On the first A1 camera, passive UART captured the stock updater's exact
+success line. Stage 1 committed the recovery checkpoint and stock userdata
+backup, wrote and verified provisioning data, wrote the final system and
+kernel tail, verified the preactivation kernel and activation write, then
+passivated the install files and unmounted the SD card before final reboot.
+The boot reached `thingino_verified_switch_root`. Supported `universal verify`
+and separate `universal verify-readback` passed. The selected readback covered
+logical partitions 0, 1, 3, 5 and 6, excluding mutable data and exact
+physical mtd2 comparison. On these bytes, a numeric LAN NTP server saved
+through Chromium persisted with the timezone. One manual UI sync aligned host
+and camera UTC, and the Time page Reload stayed authenticated after the clock
+step. After a cold power cycle with the card installed, UART showed Stage 1
+boot, verified switch-root, LAN and HTTPS without an installer write phase.
+The camera still showed August 6 at the first post-network sample, then
+corrected automatically by the next sample 57 seconds later, without a
+post-boot manual sync. A first login after the previous boot showed
+`Failed to fetch` and recovered on browser Reload; its cause is unknown.
 
-Source `aff74396532c133805e7f08549fc7bf6ba80d60b` corrects Control's
-MJPEG retry-query allowlist. Two clean complete-firmware builds and an
-independent rehash of 16 artifact pairs passed. The new signed universal bundle
-is 7,958,609 bytes, SHA-256
+In Chromium Preview after that cold boot, Main stream reached Live WebRTC. The
+operator switched the microphone Off-to-On and pressed Listen once. Browser
+receive counters increased, and the operator heard audio immediately without
+Reload. Substream also reached Live WebRTC. With the microphone still On from
+the Main stream check, one Listen press played operator-confirmed audio
+immediately. In a separate Substream check, the microphone started Off. The
+operator switched it On and pressed Listen once; Chromium showed
+`Audio playing` and the operator heard audio immediately without Reload or a
+second press. Listen and the microphone were then switched Off, both confirmed
+in the UI.
+
+After these checks, Chromium's `Log out` showed `You have been signed out` and
+the login form. Reload kept the login form visible. This establishes the
+observed browser logout flow, not server-side token revocation. Natural session
+expiry after clock correction remains untested, so the local clock and session
+acceptance ledger gate stays blocked. The full physical acceptance matrix
+remains open. See the
+[September 24 installation evidence](release-evidence/2026-09-24-raptor-867d1182-install.md).
+
+The prior installed candidate, source
+`aff74396532c133805e7f08549fc7bf6ba80d60b`, corrects Control's MJPEG
+retry-query allowlist. Two clean complete-firmware builds and an independent
+rehash of 16 artifact pairs passed. That signed universal bundle is 7,958,609
+bytes, SHA-256
 `d97e3b8857cbfe167411fefb90fb3015476bbbd425824ec0871ecb5855ff3cc1`.
-It has not been installed or browser-tested on a camera. See the
-[MJPEG correction build evidence](release-evidence/2026-09-23-raptor-mjpeg-correction-build.md).
+The first camera reached final Thingino boot after a supported universal SD
+handoff. Management and media verification plus selected-partition readback
+passed. The first stock-updater card boot had no captured UART success line;
+mutable data and exact physical mtd2 comparison were excluded. In Chromium,
+Main stream and Substream each reached Live WebRTC and played operator-confirmed
+audible audio immediately after the microphone was turned On and Listen was
+pressed once, without Reload. Direct MJPEG routes rendered images on both
+streams before and after a browser-tab Reload. With only WHIP requests blocked
+in a separate Preview tab, Main and Substream reached Live MJPEG, and Preview's
+own Reload returned to Live MJPEG on each stream. The blocked-WHIP test covers
+the fallback path that failed on the preceding candidate; it does not establish
+behavior under every network failure or MJPEG frame quality.
 
-On 2026-09-23, the same candidate was staged on the first camera's identified
-SD card through the supported universal installer. The prior stock-mtd3
-checkpoint was copied and verified in private recovery storage before staging.
-All six newly staged files passed independent SD readback; the host wrote no
-camera NOR. A passive 900-second UART observation then received zero bytes and
-no stock-updater success marker. The camera's physical state is not yet known,
-so the first boot, SD handoff, Stage 1 and installed-candidate acceptance remain
-unverified. Do not infer completion from card staging or LED behavior.
+After a separate operator-reported power cycle with the SD card installed, the
+camera reached final Thingino boot, local network readiness, uhttpd startup and
+an HTTPS 200 response. After signing in again, the operator heard immediate
+WebRTC audio in Chromium 147 on Main and Substream, each after one Listen click
+without Reload. This bounded cold-boot check had no new selected-partition
+readback and did not establish clock correctness. See the
+[build evidence](release-evidence/2026-09-23-raptor-mjpeg-correction-build.md)
+and [installation evidence](release-evidence/2026-09-24-raptor-mjpeg-correction-install.md).
 
-The latest installed, now rejected candidate is source
+The preceding installed, rejected candidate was source
 `22989b85e327b090116cf7884a2e616055e24454c`. Its two clean `initialize`
 builds used no Raptor component cache and produced 16 byte-identical
 complete-firmware artifact pairs. An independent pass rehashed all 32 files
@@ -54,19 +103,21 @@ state timeouts. A real Chromium MJPEG fallback reached Live on Main stream,
 but Preview Reload then received HTTP 401 for its bounded `q=51` retry URL and
 went Offline. The installed candidate's MJPEG browser check failed and its
 content-addressed candidate decision is rejected. The Control allowlist
-mismatch has a host-built correction but no new camera acceptance yet.
+mismatch was corrected on the later `aff74396` installation. Its bounded Chromium
+fallback and Reload sequence passed on those bytes.
+
 Slow-client, disconnect and
 long-duration resource acceptance remain open. See the
 [September 23 candidate evidence](release-evidence/2026-09-23-raptor-a1-candidate.md)
 for the observed stages, hashes and limits. The firmware-release ledger remains
-2 of 9 closed; full candidate acceptance, recovery, wider provisioning, a
-second camera, host platforms/CI, RTL8188FU rights and Raptor legal/source
-review remain open.
+2 of 10 closed; full candidate and local clock/session acceptance, recovery,
+wider provisioning, a second camera, host platforms/CI, RTL8188FU rights and
+Raptor legal/source review remain open.
 
 An offline Buildroot legal-info collection from the `22989b85` build-A
 workspace completed and exported 327 files. All 326 listed file hashes passed
 an independent readback; the original build workspace remained byte-identical.
-The same offline collector also completed on a copy of the new `aff74396`
+The same offline collector also completed on a copy of the `aff74396`
 build-A workspace. Its 327-file export passed independent readback, and its
 original build image remained unchanged. Saved source and license files match
 the earlier collection; only Buildroot version metadata and its checksum index
@@ -412,6 +463,8 @@ requirements include:
 
 - Raptor corresponding-source review and RTL8188FU license-file provenance;
 - the complete candidate acceptance checklist;
+- natural session expiry after the observed clock correction on the exact
+  installed candidate;
 - physical interrupted-write, corrupt-data, reset, reinstall and final-layout
   recovery tests, including original-partition capture requirements;
 - wider provisioning acceptance, including power interruption and slow cards;
@@ -423,6 +476,7 @@ The default full-Raptor profile also requires its corresponding-source and
 notice review before distribution. See the [third-party notices](../third_party/NOTICE.md)
 and [license review](../third_party/LICENSE_REVIEW.md).
 
-`make release-status` reports the ledger. `make release-ready-source` checks the
+`make release-status` reports 3 of 3 source-publication gates closed and 2 of
+10 firmware-distribution gates closed. `make release-ready-source` checks the
 source-publication scope. `make release-ready-public-firmware` remains nonzero
 while firmware gates are blocked.

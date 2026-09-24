@@ -1,5 +1,5 @@
 {
-  "export_policy_sha256": "87032021c009388d23197cdac5b3332ab9d52a203f694f8dbd68b3acac6d3021",
+  "export_policy_sha256": "cbc742ddc473283486f54dad69beed454585f1c7b5645c774355d43fbb714e07",
   "files": {
     ".editorconfig": {
       "sha256": "77d71c2bd466915cf8363f0929ef8a1f6a25b92a21d01c6ae5c6c7f5c307fd8a",
@@ -34,7 +34,7 @@
       "source": "Makefile"
     },
     "README.md": {
-      "sha256": "7ce3742638db373523139f87c64a01570a87851075df6136df4d8fc5705cf392",
+      "sha256": "2c680d5feaeaeb0a27e321d32f1cce1fafa0548f494ba673741645a1afafc419",
       "source": "production/README.md"
     },
     "SECURITY.md": {
@@ -294,7 +294,7 @@
       "source": "components/thingino-control/src/camera/config/network.rs"
     },
     "components/thingino-control/src/camera/config/time.rs": {
-      "sha256": "350ee301389025e13efb7ba212bda177b0d7809cbcfbd61745e27e38ca3babcd",
+      "sha256": "c1a7e6fbc5a5d1928d12a24e9bb9a9fbb727c893624d57b367969a73be5a48fb",
       "source": "components/thingino-control/src/camera/config/time.rs"
     },
     "components/thingino-control/src/camera/diagnostics.rs": {
@@ -729,12 +729,20 @@
       "sha256": "3425bb36934441fcc14de134aa939b67cbd93cac3a53de66661d6a748d1d4958",
       "source": "production/docs/release-evidence/2026-09-23-raptor-mjpeg-correction-build.md"
     },
+    "docs/release-evidence/2026-09-24-raptor-867d1182-install.md": {
+      "sha256": "c0107798780121d1db35708c3d55978ef46eb19419d83d54f2d9f840ac152e1f",
+      "source": "production/docs/release-evidence/2026-09-24-raptor-867d1182-install.md"
+    },
+    "docs/release-evidence/2026-09-24-raptor-mjpeg-correction-install.md": {
+      "sha256": "7562f73492ee4da941053ef8d6ffa2ec50e0f54b976359df1c72b3dff14dfa1d",
+      "source": "production/docs/release-evidence/2026-09-24-raptor-mjpeg-correction-install.md"
+    },
     "docs/status.md": {
-      "sha256": "506c458190a0e2fc2012e1d375df6ad6444f22b3812371f3e3b1cf479a83ae47",
+      "sha256": "cf0e0320d8c219a989f798a8964adcffebe25597a51a9e583619272b825c5848",
       "source": "production/docs/status.md"
     },
     "docs/testing.md": {
-      "sha256": "7616d5cda973af9d64e86ffec27735e5df8e3726afe9f27ec11e930a1a7191a8",
+      "sha256": "72dbdf81b43291b3715ba76d95f9f7a25b407908f649038f5bee60f46c74d62e",
       "source": "production/docs/testing.md"
     },
     "installer/__init__.py": {
@@ -1482,7 +1490,7 @@
       "source": "patches/uhttpd/0019-bound-whip-sdp-body.patch"
     },
     "policy/release-gates.json": {
-      "sha256": "de61602909d97e4e7b94e9a8073a7062269c6312bfc46066833079f1d477abb4",
+      "sha256": "8ef369fe39a902d4e603c809ca863a67eca10b75394605641da4c0a1a130dc99",
       "source": "policy/release-gates.json"
     },
     "profiles/dlink-dcs6100lhv2-a1/artifact-limits.json": {
@@ -1518,7 +1526,7 @@
       "source": "profiles/dlink-dcs6100lhv2-a1/recovery-ap-kernel.fragment"
     },
     "profiles/dlink-dcs6100lhv2-a1/source-profile.json": {
-      "sha256": "17762e7b6b11e865dd7994d580444cd02d858ac035cefe7f2b83b202468f5765",
+      "sha256": "1f5cb08da9e08b1410542d7e8cf228963869665b2fbeb82ab83f02c61244192e",
       "source": "profiles/dlink-dcs6100lhv2-a1/source-profile.json"
     },
     "profiles/dlink-dcs6100lhv2-a1/stock-restore-kernel.fragment": {
@@ -2022,7 +2030,7 @@
       "source": "tests/test_release_closure.py"
     },
     "tests/test_release_gates.py": {
-      "sha256": "48970e97315fa8517961ca9bd288706f089bb96303aa7b04dd862b340253cec8",
+      "sha256": "bf86a176a698691d99f190d0c37f2f0833b3fa58201be9873f2fa5a5e9c88654",
       "source": "tests/test_release_gates.py"
     },
     "tests/test_rtsp_verify.py": {
@@ -2130,7 +2138,7 @@
       "source": "tests/test_windows_media_preflight.py"
     },
     "third_party/LICENSE_REVIEW.md": {
-      "sha256": "8ab39128d30d6fc3ce0c09f30b14f2732ddb04153ee32029329ab2f9fa9cd86a",
+      "sha256": "f60b3f7d48645103786fa094364abf89dc9a3adff12843a419385d6748e8026e",
       "source": "third_party/LICENSE_REVIEW.md"
     },
     "third_party/NOTICE.md": {
@@ -2543,6 +2551,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "db1f0aadc6bec8ee5eb896703bf505e384237554",
+  "source_commit": "95f7c7a1ee94367a0d8f89fb4d2c903dafe33421",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }
