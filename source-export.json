@@ -738,7 +738,7 @@
       "source": "production/docs/release-evidence/2026-09-24-raptor-mjpeg-correction-install.md"
     },
     "docs/status.md": {
-      "sha256": "cf0e0320d8c219a989f798a8964adcffebe25597a51a9e583619272b825c5848",
+      "sha256": "b673d7e2a90be219c6e9da305287223a447113cdd870f3f707dd83897095e2de",
       "source": "production/docs/status.md"
     },
     "docs/testing.md": {
@@ -2138,7 +2138,7 @@
       "source": "tests/test_windows_media_preflight.py"
     },
     "third_party/LICENSE_REVIEW.md": {
-      "sha256": "10d7b649252adc61a61645437d6ec4144cb1cd5811d4b432200c7d7b2508f61c",
+      "sha256": "2c5c25b61cedb94b0a2fd9ac273ed043a09577a892b63adf4f693d8ea0e891ef",
       "source": "third_party/LICENSE_REVIEW.md"
     },
     "third_party/NOTICE.md": {
@@ -2551,6 +2551,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "880ff96f7d8fc76a572800fe8f458defa38dace6",
+  "source_commit": "5bb4712faf7193a8a2e393fae8d17716275c39f4",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }

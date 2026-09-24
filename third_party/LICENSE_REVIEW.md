@@ -455,6 +455,22 @@ the eight base warning categories reviewed below. This is exact-candidate
 source collection, not full corresponding-source delivery, a per-file rights
 decision, or approval to distribute a firmware image.
 
+The target manifest has 33 package rows and the export has 32 matching
+package directories. The one omitted target is `ingenic-lib`, whose recipe
+marks its camera-local vendor inputs non-redistributable. The host manifest
+has 46 rows and 45 matching directories; the omitted host entry is Buildroot,
+covered separately by the private exact-candidate source supplement below.
+This directory count is not a source-completeness count: one of the saved
+target entries is a prebuilt external toolchain SDK archive, which does not
+by itself establish the toolchain's corresponding source. The manifests have
+SHA-256
+`54d21b058df16f147ecc73159ef602818ddc54dc1ded7d8c0a8cb27495615748`
+and `99b8754d690d4b3b4284e92801414ab24399e2018456f7a96dc3c4608b5242cd`
+respectively. The 13-source Raptor archive and other local firmware sources
+are outside these Buildroot manifest counts. The public tree pins the
+`ingenic-headers` upstream URL and commit but contains no copy of those
+headers.
+
 ## Remaining base-collection warnings
 
 The completed collection for source `a091c826479a206b62f82821e38429273345554c`

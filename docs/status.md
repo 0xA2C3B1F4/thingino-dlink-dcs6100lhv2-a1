@@ -121,12 +121,18 @@ The same offline collector also completed on a copy of the `aff74396`
 build-A workspace. Its 327-file export passed independent readback, and its
 original build image remained unchanged. Saved source and license files match
 the earlier collection; only Buildroot version metadata and its checksum index
-differ. Both are technical collections, not legal approval or complete
-corresponding-source packages. The same eight base warning categories remain,
-including the external toolchain and camera-vendor binary restrictions. See the
-[installed candidate](../third_party/LICENSE_REVIEW.md#installed-rejected-candidate-collection)
-and [corrected candidate](../third_party/LICENSE_REVIEW.md#host-built-mjpeg-correction-collection)
-license records.
+differ. The collector also completed on an offline copy of the latest installed
+`867d1182` build-A workspace. Its 327-file export passed independent readback,
+and the original build image remained unchanged. The latest target manifest has
+33 rows with one intentionally omitted camera-local vendor package; its host
+manifest has 46 rows with Buildroot omitted from the export and retained in a
+separate private supplement. The saved external toolchain entry is a prebuilt
+SDK archive and does not by itself establish corresponding source. These are
+technical collections, not legal approval or complete corresponding-source
+packages. The same eight base warning categories remain, including the
+toolchain and vendor binary restrictions. See the
+[latest installed candidate](../third_party/LICENSE_REVIEW.md#installed-raptor-candidate-collection)
+and [earlier collections](../third_party/LICENSE_REVIEW.md#buildroot-legal-info-collection).
 
 At the `385ba106` checkpoint, the first camera ran an image with bounded,
 payload-free diagnostics for the files and storage-SD paths. It reported
