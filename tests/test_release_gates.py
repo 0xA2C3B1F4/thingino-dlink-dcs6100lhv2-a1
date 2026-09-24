@@ -37,6 +37,10 @@ class ReleaseGateTests(unittest.TestCase):
             "raptor-corresponding-source",
             summaries["firmware-release"]["blocked"],
         )
+        self.assertIn(
+            "local-clock-and-session-acceptance",
+            summaries["firmware-release"]["blocked"],
+        )
         self.assertNotIn(
             "prudynt-license-grant",
             summaries["firmware-release"]["blocked"],

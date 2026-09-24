@@ -72,9 +72,9 @@ Slow-client, disconnect and
 long-duration resource acceptance remain open. See the
 [September 23 candidate evidence](release-evidence/2026-09-23-raptor-a1-candidate.md)
 for the observed stages, hashes and limits. The firmware-release ledger remains
-2 of 9 closed; full candidate acceptance, recovery, wider provisioning, a
-second camera, host platforms/CI, RTL8188FU rights and Raptor legal/source
-review remain open.
+2 of 10 closed; full candidate and local clock/session acceptance, recovery,
+wider provisioning, a second camera, host platforms/CI, RTL8188FU rights and
+Raptor legal/source review remain open.
 
 An offline Buildroot legal-info collection from the `22989b85` build-A
 workspace completed and exported 327 files. All 326 listed file hashes passed
@@ -425,6 +425,8 @@ requirements include:
 
 - Raptor corresponding-source review and RTL8188FU license-file provenance;
 - the complete candidate acceptance checklist;
+- local-only clock synchronization and session behavior across a valid clock
+  correction on the exact installed candidate;
 - physical interrupted-write, corrupt-data, reset, reinstall and final-layout
   recovery tests, including original-partition capture requirements;
 - wider provisioning acceptance, including power interruption and slow cards;
