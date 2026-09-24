@@ -35,6 +35,30 @@ availability and development use do not by themselves settle the rights to
 deliver these headers as corresponding source. The relevant file-level terms
 and provenance still need review.
 
+The exported source repository contains the pinned URL and commit in
+`headers-input.json`, not the Ingenic header files. The local build fetches
+those files from upstream. The missing header grant is therefore not, by
+itself, a reason to keep this text-only source repository private. Shipping a
+prebuilt firmware image or a source-delivery archive that includes the headers
+is a separate question and needs its own rights review.
+
+The installed `867d1182` build sets `PLATFORM=T31` and
+`DLINK_OS02G10_IMP_1_1_4=1`. Its pinned `raptor-hal/Makefile` selects
+`T31/1.1.6/en` for the normal HAL objects and `T31/1.1.4/zh` for
+`hal_ivs.o`. The run's `ingenic-headers.tar` has SHA-256
+`65e1b4c73a5cd59e66f31a34e380ca313e99f9c249b105603883e6af1de6c590`;
+direct audio and IVS headers matched the pinned cache by bytes. The two
+include roots contain 39 regular headers. A full-text search found an Ingenic
+Semiconductor copyright line in 37; only the two
+`imp_dmic.h` versions lacked one. None of the 39 contained an SPDX identifier
+or the searched GPL, BSD, MIT or permission-grant text. The HAL source directly
+includes IMP headers from both roots. This is a review of the selected header
+directories, not a compiler-generated dependency list or a legal conclusion
+about every header. It identifies Ingenic as the named copyright holder for
+the files with notices and leaves the right to redistribute the header source
+unresolved. A third-party repository's top-level license cannot silently
+relicense those files.
+
 ### Private source archive tooling
 
 `scripts/raptor_private_source_archive.py` packages the 13 locally reconstructed
