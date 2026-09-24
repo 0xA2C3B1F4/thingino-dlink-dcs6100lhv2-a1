@@ -434,6 +434,27 @@ The same eight base warning categories below remain. The receipt says
 collection, not a complete corresponding-source package or permission to
 distribute firmware. The RTL8188FU and Raptor rights gates remain open.
 
+### Installed Raptor candidate collection
+
+For installed source `867d1182aa2f3586ce35d6709f51463faff010bb`, the
+offline collector ran against an APFS copy of the clean build-A workspace.
+It checked the original and copy against SHA-256
+`4f87e6360c85a3d6ad55df6e6b7f8407c0a6d1806e7cef7fb4fa18b0b9f97c52`
+before the run, and the original had the same hash afterwards. The exported
+legal-info tree has 327 files totaling 547,326,204 bytes and tree SHA-256
+`144bec17fb013dd79b948ae2d6c759958099c4378c789150005598bebdfae99c`.
+An independent host `shasum -c` pass accepted all 326 indexed files. Its
+`buildroot.config` has SHA-256
+`5ed397f53c6c97c51c535c4264402b6409295d5b2f27059f902ba9b5b5ec94f5`,
+matching the separately recovered Buildroot config for both clean builds.
+The collection receipt has SHA-256
+`7dca6d79fe1f2ee48b1a79daf5dc7c0d0017e8f4774712c33bfe65346d54d158`.
+It records `complete: true`, `legal_review_approved: false`, and
+`publication_authorized: false`. The log retains 18 warning lines, including
+the eight base warning categories reviewed below. This is exact-candidate
+source collection, not full corresponding-source delivery, a per-file rights
+decision, or approval to distribute a firmware image.
+
 ## Remaining base-collection warnings
 
 The completed collection for source `a091c826479a206b62f82821e38429273345554c`
