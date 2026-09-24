@@ -1,4 +1,6 @@
 use super::super::*;
+use std::io::Read;
+use std::net::SocketAddr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const TIMEZONE_CATALOG_LIMIT: u64 = 32 * 1024;
@@ -90,6 +92,76 @@ fn current_epoch() -> u64 {
         .duration_since(UNIX_EPOCH)
         .map(|value| value.as_secs())
         .unwrap_or_default()
+}
+
+fn parse_ntp_response(response: &[u8], request_transmit: &[u8; 8]) -> Result<i64, BackendError> {
+    if response.len() < 48
+        || response[0] >> 6 == 3
+        || !matches!((response[0] >> 3) & 7, 3 | 4)
+        || response[0] & 7 != 4
+        || !(1..=15).contains(&response[1])
+        || response[24..32] != request_transmit[..]
+        || response[40..48] == [0; 8]
+    {
+        return Err(BackendError::Protocol);
+    }
+    let ntp_seconds = u32::from_be_bytes(response[40..44].try_into().unwrap());
+    i64::from(ntp_seconds)
+        .checked_sub(2_208_988_800)
+        .filter(|value| *value > 1_600_000_000)
+        .ok_or(BackendError::Protocol)
+}
+
+fn ntp_exchange(address: SocketAddr, deadline: Instant) -> Result<i64, BackendError> {
+    let socket = UdpSocket::bind(if address.is_ipv4() {
+        "0.0.0.0:0"
+    } else {
+        "[::]:0"
+    })
+    .map_err(|_| BackendError::Connection)?;
+    socket
+        .connect(address)
+        .map_err(|_| BackendError::Connection)?;
+
+    let mut request = [0_u8; 48];
+    request[0] = 0x23;
+    let mut request_transmit = [0_u8; 8];
+    File::open("/dev/urandom")
+        .and_then(|mut source| source.read_exact(&mut request_transmit))
+        .map_err(|_| BackendError::Unavailable)?;
+    if request_transmit == [0; 8] {
+        return Err(BackendError::Unavailable);
+    }
+    request[40..48].copy_from_slice(&request_transmit);
+
+    let budget = deadline
+        .checked_duration_since(Instant::now())
+        .ok_or(BackendError::Timeout)?;
+    socket
+        .set_write_timeout(Some(budget))
+        .map_err(|_| BackendError::Connection)?;
+    socket
+        .send(&request)
+        .map_err(|_| BackendError::Connection)?;
+
+    let budget = deadline
+        .checked_duration_since(Instant::now())
+        .ok_or(BackendError::Timeout)?;
+    socket
+        .set_read_timeout(Some(budget))
+        .map_err(|_| BackendError::Connection)?;
+    let mut response = [0_u8; 512];
+    let count = socket.recv(&mut response).map_err(|error| {
+        if matches!(
+            error.kind(),
+            io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock
+        ) {
+            BackendError::Timeout
+        } else {
+            BackendError::Connection
+        }
+    })?;
+    parse_ntp_response(&response[..count], &request_transmit)
 }
 
 impl HostBackend {
@@ -305,45 +377,7 @@ impl HostBackend {
             .map_err(|_| BackendError::Connection)?
             .next()
             .ok_or(BackendError::Connection)?;
-        let socket = UdpSocket::bind(if address.is_ipv4() {
-            "0.0.0.0:0"
-        } else {
-            "[::]:0"
-        })
-        .map_err(|_| BackendError::Connection)?;
-        let budget = deadline
-            .checked_duration_since(Instant::now())
-            .ok_or(BackendError::Timeout)?;
-        socket
-            .set_read_timeout(Some(budget))
-            .map_err(|_| BackendError::Connection)?;
-        socket
-            .set_write_timeout(Some(budget))
-            .map_err(|_| BackendError::Connection)?;
-        let mut request = [0_u8; 48];
-        request[0] = 0x23;
-        socket
-            .send_to(&request, address)
-            .map_err(|_| BackendError::Connection)?;
-        let mut response = [0_u8; 48];
-        let count = socket.recv(&mut response).map_err(|error| {
-            if matches!(
-                error.kind(),
-                io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock
-            ) {
-                BackendError::Timeout
-            } else {
-                BackendError::Connection
-            }
-        })?;
-        if count < 48 || response[0] >> 6 == 3 || response[1] == 0 {
-            return Err(BackendError::Protocol);
-        }
-        let ntp_seconds = u32::from_be_bytes(response[40..44].try_into().unwrap());
-        let unix_seconds = i64::from(ntp_seconds)
-            .checked_sub(2_208_988_800)
-            .filter(|value| *value > 1_600_000_000)
-            .ok_or(BackendError::Protocol)?;
+        let unix_seconds = ntp_exchange(address, deadline)?;
         let value = Timespec {
             seconds: unix_seconds,
             nanoseconds: 0,
@@ -440,6 +474,110 @@ mod tests {
     #[test]
     fn current_unix_time_is_reasonable() {
         assert!(current_epoch() > 1_600_000_000);
+    }
+
+    fn ntp_reply(request_transmit: &[u8; 8], unix_seconds: u32) -> [u8; 48] {
+        let mut response = [0_u8; 48];
+        response[0] = 0x24; // NTPv4 server, leap indicator clear.
+        response[1] = 1;
+        response[24..32].copy_from_slice(request_transmit);
+        response[40..44].copy_from_slice(&(unix_seconds + 2_208_988_800).to_be_bytes());
+        response
+    }
+
+    #[test]
+    fn ntp_parser_accepts_matching_v3_and_v4_server_replies() {
+        let nonce = [1, 2, 3, 4, 5, 6, 7, 8];
+        let mut response = ntp_reply(&nonce, 1_700_000_000);
+        assert_eq!(
+            parse_ntp_response(&response, &nonce).unwrap(),
+            1_700_000_000
+        );
+        response[0] = 0x1c; // NTPv3 server.
+        assert_eq!(
+            parse_ntp_response(&response, &nonce).unwrap(),
+            1_700_000_000
+        );
+    }
+
+    #[test]
+    fn ntp_parser_rejects_unmatched_or_unusable_replies() {
+        let nonce = [1, 2, 3, 4, 5, 6, 7, 8];
+        let valid = ntp_reply(&nonce, 1_700_000_000);
+        assert!(matches!(
+            parse_ntp_response(&valid[..47], &nonce),
+            Err(BackendError::Protocol)
+        ));
+        for altered in [
+            (0, 0xe4), // Unsynchronized leap indicator.
+            (0, 0x14), // NTPv2.
+            (0, 0x23), // Client mode.
+            (1, 0),    // Kiss-of-death or unspecified stratum.
+            (1, 16),   // Unsynchronized stratum.
+            (1, 255),  // Invalid stratum.
+            (24, 0),   // Originate does not echo our request.
+            (40, 0),   // Transmit time outside the supported range.
+        ] {
+            let mut response = valid;
+            response[altered.0] = altered.1;
+            assert!(matches!(
+                parse_ntp_response(&response, &nonce),
+                Err(BackendError::Protocol)
+            ));
+        }
+        let mut response = valid;
+        response[24..32].fill(0);
+        assert!(matches!(
+            parse_ntp_response(&response, &nonce),
+            Err(BackendError::Protocol)
+        ));
+        let mut response = valid;
+        response[40..48].fill(0);
+        assert!(matches!(
+            parse_ntp_response(&response, &nonce),
+            Err(BackendError::Protocol)
+        ));
+    }
+
+    #[test]
+    fn ntp_exchange_ignores_other_udp_peers() {
+        let server = UdpSocket::bind("127.0.0.1:0").unwrap();
+        server
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .unwrap();
+        let server_address = server.local_addr().unwrap();
+        let peer = std::thread::spawn(move || {
+            let mut request = [0_u8; 48];
+            let (count, client_address) = server.recv_from(&mut request).unwrap();
+            assert_eq!(count, 48);
+            let nonce: [u8; 8] = request[40..48].try_into().unwrap();
+            assert_ne!(nonce, [0; 8]);
+            let outsider = UdpSocket::bind("127.0.0.1:0").unwrap();
+            outsider
+                .send_to(&ntp_reply(&nonce, 1_700_000_001), client_address)
+                .unwrap();
+            std::thread::sleep(Duration::from_millis(20));
+            server
+                .send_to(&ntp_reply(&nonce, 1_700_000_000), client_address)
+                .unwrap();
+        });
+        assert_eq!(
+            ntp_exchange(server_address, Instant::now() + Duration::from_secs(2)).unwrap(),
+            1_700_000_000
+        );
+        peer.join().unwrap();
+    }
+
+    #[test]
+    fn ntp_exchange_times_out_when_server_is_silent() {
+        let server = UdpSocket::bind("127.0.0.1:0").unwrap();
+        assert!(matches!(
+            ntp_exchange(
+                server.local_addr().unwrap(),
+                Instant::now() + Duration::from_millis(200)
+            ),
+            Err(BackendError::Timeout)
+        ));
     }
 
     #[test]
