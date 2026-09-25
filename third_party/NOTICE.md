@@ -18,6 +18,16 @@ It does not cover other audio assets or authorize binary redistribution.
 
 ## Exact pinned-source observations
 
+The pinned `thingino-libubox` source notices are retained in
+[libubox source notices](licenses/libubox-source-notices.txt). This collection
+copies `debian/copyright` and the opening copyright and permission comments
+from 43 root-level C and header files at commit
+`1fe93d2fefb213ec987763e7e94ce5eaa757bfc3`. It preserves the file-specific
+terms, including the AVL BSD notices, the base64 ISC and IBM notices, and
+the MD5 public-domain statement with fallback terms. It is a conservative
+source collection; the exact linked subset and corresponding-source delivery
+still require review. These texts do not change the installed firmware.
+
 The selected `ingenic-diag-tools` package installs `gpio-diag`. Its pinned
 `jz_gpio.c` identifies Reimu NotMoe, Copyright 2022, and offers
 AGPL-3.0-or-later. The source repository carries its unmodified

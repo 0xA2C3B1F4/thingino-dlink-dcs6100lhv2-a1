@@ -487,7 +487,7 @@ metadata does not necessarily mean missing license declarations in the source.
 | `ingenic-pwm` | `pwm` and its control script are installed. The four-file pinned utility archive and recipe contain no located license declaration. This remains an unresolved component-specific rights question; another package's MIT license must not be assigned to it. |
 | `ingenic-system-libs-neo` | The configuration selects both replacement libraries and the image contains `libalog.so` and `libsysutils.so`. The recipe, source SPDX markers and README identify MIT. Its archive lacks a standalone license text. Preserve the existing declarations and complete that text/notice delivery. |
 | `thingino-button` | The executable is installed. Its README identifies the project as MIT, despite the recipe's `unknown` result. The archive has no standalone license text; that is a text-delivery gap, not a reason to assume there is no declaration. |
-| `thingino-libubox` | `libubox.so`, `libblobmsg_json.so` and `jshn` are installed. The recipe declares ISC and BSD-3-Clause but names no `LICENSE_FILES`, so the collector saves no license text. The pinned archive has `debian/copyright` and source-level notices. Review the actual compiled files and retain their applicable notices, including terms not captured by the recipe's two labels. |
+| `thingino-libubox` | `libubox.so`, `libblobmsg_json.so` and `jshn` are installed. The recipe declares ISC and BSD-3-Clause but names no `LICENSE_FILES`, so the collector saves no license text. This repository now supplies `debian/copyright` and 43 root-level source notices from the pinned archive, including terms beyond the recipe's two labels. The exact linked-file and corresponding-source review remains open. |
 
 The pinned `ingenic-system-libs-neo` commit
 `3e1189021e4f273b701b5d8bb8a07b19699333d6` has 17 regular files.
@@ -571,6 +571,19 @@ and `a9cb115e58a1f1a249fa13653223439e8add19f4a23d0e1bb701f233c87c98a6`.
 `base64.c` carries ISC, Internet Software Consortium and IBM notices;
 `md5.c` carries its author's public-domain statement with fallback terms.
 These are source observations, not a completed linked-file or rights review.
+
+On September 25, the source repository added
+[`libubox-source-notices.txt`](licenses/libubox-source-notices.txt), copied
+from that verified archive. Its 44 sections retain `debian/copyright` and
+the consecutive opening comments containing copyright or permission text
+from 43 root-level `.c` and `.h` files. Each section records the complete
+source file's SHA-256. The collection includes the AVL BSD notices and the
+base64 and MD5 terms described above, rather than assigning the package-wide
+ISC label to every file. Its 50,122 bytes have SHA-256
+`17aaeb022253e9fd8a87b9962403e99548457ad81e5412c06f761ea351e4b035`.
+This supplies the source notice texts separately from Buildroot's unchanged
+collection. It does not identify the exact linked subset, include external
+dependency notices, or complete firmware corresponding-source delivery.
 
 For `ingenic-diag-tools`, the retained six-file source archive has SHA-256
 `483394340e74015f2a55761c838f6597df56b4b224803d9f46c888c8e1331ebe`.

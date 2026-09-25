@@ -2138,11 +2138,11 @@
       "source": "tests/test_windows_media_preflight.py"
     },
     "third_party/LICENSE_REVIEW.md": {
-      "sha256": "2c5c25b61cedb94b0a2fd9ac273ed043a09577a892b63adf4f693d8ea0e891ef",
+      "sha256": "8c3e1c39518558ee1c669df69725a17ee5b96afeffc8735a80b24b30e00a29b8",
       "source": "third_party/LICENSE_REVIEW.md"
     },
     "third_party/NOTICE.md": {
-      "sha256": "646ed82335e7ade6e14a06e6579d6d5f9306922804306b01706a363f3e8c543e",
+      "sha256": "e697b7a08f0c60beda07b4acbb9c8cb0bb31e174c2bc865d30366ae1ec7af618",
       "source": "third_party/NOTICE.md"
     },
     "third_party/licenses/RTL8188FU-GPL-2.0-only.txt": {
@@ -2168,6 +2168,10 @@
     "third_party/licenses/jz-diag-tools-source-notice.txt": {
       "sha256": "7824dff674b1ff99a28c66c8041b735fcb603a732b14fd7f2ac369dd71b71f40",
       "source": "third_party/licenses/jz-diag-tools-source-notice.txt"
+    },
+    "third_party/licenses/libubox-source-notices.txt": {
+      "sha256": "17aaeb022253e9fd8a87b9962403e99548457ad81e5412c06f761ea351e4b035",
+      "source": "third_party/licenses/libubox-source-notices.txt"
     },
     "third_party/licenses/raptor-common-Monocypher-LICENCE.txt": {
       "sha256": "5f8360e4c06ddcc584bdb4b210c6af824c4bb301e6a9a521869b6d90795ca4b3",
@@ -2551,6 +2555,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "5bb4712faf7193a8a2e393fae8d17716275c39f4",
+  "source_commit": "8deb0184afdfa5ca9a86dfdca4678ddfc94a48a7",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }
