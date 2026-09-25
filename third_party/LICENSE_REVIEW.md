@@ -485,8 +485,8 @@ metadata does not necessarily mean missing license declarations in the source.
 | `ingenic-diag-tools` | `gpio-diag` is installed. The retained source declares AGPL-3.0-or-later and includes the complete license. Both the original source notice and license text are now supplied here. |
 | `ingenic-lib` | This profile explicitly uses camera-local inputs with `REDISTRIBUTE = NO`. Their omission from the collected source archives is intentional, not an open-source license-text substitution to make. Firmware redistribution remains unapproved. |
 | `ingenic-pwm` | `pwm` and its control script are installed. The four-file pinned utility archive and recipe contain no located license declaration. This remains an unresolved component-specific rights question; another package's MIT license must not be assigned to it. |
-| `ingenic-system-libs-neo` | The configuration selects both replacement libraries and the image contains `libalog.so` and `libsysutils.so`. The recipe, source SPDX markers and README identify MIT. Its archive lacks a standalone license text. Preserve the existing declarations and complete that text/notice delivery. |
-| `thingino-button` | The executable is installed. Its README identifies the project as MIT, despite the recipe's `unknown` result. The archive has no standalone license text; that is a text-delivery gap, not a reason to assume there is no declaration. |
+| `ingenic-system-libs-neo` | The configuration selects both replacement libraries and the image contains `libalog.so` and `libsysutils.so`. The recipe, source SPDX markers and README identify MIT. This repository supplies the original declaration and standard MIT permission and warranty text in `licenses/thingino-declared-MIT.txt`. The pinned archive has no copyright-holder notice; attribution remains unresolved. |
+| `thingino-button` | The executable is installed. Its README identifies the project as MIT, despite the recipe's `unknown` result. This repository supplies that declaration and the standard MIT text in `licenses/thingino-declared-MIT.txt`. The pinned archive has no copyright-holder notice; attribution remains unresolved. |
 | `thingino-libubox` | `libubox.so`, `libblobmsg_json.so` and `jshn` are installed. The recipe declares ISC and BSD-3-Clause but names no `LICENSE_FILES`, so the collector saves no license text. This repository now supplies `debian/copyright` and 43 root-level source notices from the pinned archive, including terms beyond the recipe's two labels. The exact linked-file and corresponding-source review remains open. |
 
 The pinned `ingenic-system-libs-neo` commit
@@ -497,6 +497,15 @@ line or full permission text; there is no standalone license file. This is a
 missing text/attribution-delivery question, not the same as the unspecified
 `ingenic-headers` grant. Do not invent a copyright holder or borrow one from
 another package when preparing notices.
+
+The September 25 text supplement retains both packages' exact README license
+declarations, source identities and README hashes. A scan of all 17 regular
+files in the replacement-library archive and all four in the button archive
+found no copyright-holder notice. The replacement library's 14 C and header
+files all contain `SPDX-License-Identifier: MIT`. The supplement supplies
+the standard MIT permission and warranty text with its SPDX reference;
+it does not fill in a copyright holder or close attribution review. The
+Buildroot collection and its historical warnings remain unchanged.
 
 On 2026-09-23, the [upstream `ingenic-pwm` repository](https://github.com/gtxaspec/ingenic-pwm)
 still had the exact pinned commit `8d45ebdb97600c7559f5b7eac8e42a9d8c38426b`

@@ -1,0 +1,55 @@
+MIT declarations and license text for two pinned Thingino dependencies
+
+ingenic-system-libs-neo
+Source: https://github.com/gtxaspec/ingenic-system-libs-neo
+Commit: 3e1189021e4f273b701b5d8bb8a07b19699333d6
+Source archive SHA-256: 8ef861d8dce1867e0b8b2fb271135371d4947f2372f68df8f9afd8622caf557b
+README.md SHA-256: 8f139f45bc71f38a3ab091b7f1c3e1c3923d8ccc76ac279bc442177f717f0a79
+
+Original README declaration:
+
+## License
+
+MIT
+
+All 14 C and header files in this pinned archive also contain the declaration
+SPDX-License-Identifier: MIT.
+
+thingino-button
+Source: https://github.com/gtxaspec/thingino-button
+Commit: aa1b572fefdd20063f4c0a1752237a02d35f2f84
+Source archive SHA-256: aa61386f600275c3d0adcdf407949470ea8174ed2a17b7187bb8eebfbe0b69de
+README.md SHA-256: 1230844b936eb3563f8826a3908accaba1497292341a9efc81a57236cda0ca1d
+
+Original README declaration:
+
+## License
+
+This project is licensed under the MIT License.
+
+Neither pinned archive contains a copyright-holder notice or a standalone
+license file. No holder or year has been invented or borrowed from another
+project here. The declarations above are upstream evidence; the standard MIT
+permission and warranty text below supplements their abbreviated declarations.
+This supplement does not resolve missing attribution or approve distribution
+of other firmware components.
+
+MIT license text reference: https://spdx.org/licenses/MIT.html
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

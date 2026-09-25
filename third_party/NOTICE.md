@@ -18,6 +18,14 @@ It does not cover other audio assets or authorize binary redistribution.
 
 ## Exact pinned-source observations
 
+The pinned `ingenic-system-libs-neo` and `thingino-button` READMEs declare MIT
+but omit a standalone license file. The repository supplies their original
+declarations and the standard permission and warranty text in
+[Thingino dependency MIT notices](licenses/thingino-declared-MIT.txt), with
+source archive and README hashes. The pinned archives contain no named
+copyright-holder notice. This supplement preserves that limitation and does
+not assign another project's holder or year to these components.
+
 The pinned `thingino-libubox` source notices are retained in
 [libubox source notices](licenses/libubox-source-notices.txt). This collection
 copies `debian/copyright` and the opening copyright and permission comments

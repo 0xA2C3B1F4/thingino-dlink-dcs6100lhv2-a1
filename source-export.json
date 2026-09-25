@@ -2138,11 +2138,11 @@
       "source": "tests/test_windows_media_preflight.py"
     },
     "third_party/LICENSE_REVIEW.md": {
-      "sha256": "8c3e1c39518558ee1c669df69725a17ee5b96afeffc8735a80b24b30e00a29b8",
+      "sha256": "f576c5f91c6e68b78bba3b68782d9801efbd8896150f32bf98912b382e67ef22",
       "source": "third_party/LICENSE_REVIEW.md"
     },
     "third_party/NOTICE.md": {
-      "sha256": "e697b7a08f0c60beda07b4acbb9c8cb0bb31e174c2bc865d30366ae1ec7af618",
+      "sha256": "dcb394ae101521a4c6602156a3e7067df979801b32e1ac39c173170fd03c77e0",
       "source": "third_party/NOTICE.md"
     },
     "third_party/licenses/RTL8188FU-GPL-2.0-only.txt": {
@@ -2180,6 +2180,10 @@
     "third_party/licenses/raptor-common-cJSON-header.txt": {
       "sha256": "3384d75264549cd04a5c00538a15871785f3f6ba60a779781df747d591655892",
       "source": "third_party/licenses/raptor-common-cJSON-header.txt"
+    },
+    "third_party/licenses/thingino-declared-MIT.txt": {
+      "sha256": "0d601a40e26fa2e1cf1dc8385d5cde196543f52f7379d77bd41d2dd1f9b1e0d1",
+      "source": "third_party/licenses/thingino-declared-MIT.txt"
     },
     "third_party/licenses/thingino-sounds-CC0-1.0.txt": {
       "sha256": "a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499",
@@ -2555,6 +2559,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "8deb0184afdfa5ca9a86dfdca4678ddfc94a48a7",
+  "source_commit": "d25b70e2f625d5d848b2a8325e712e3de6685a0e",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }
