@@ -31,6 +31,18 @@ def squashfs(label):
 
 
 class FullRootTests(unittest.TestCase):
+    def test_required_main_stream_has_explicit_enabled_saved_state(self):
+        config = configparser.ConfigParser()
+        config.read(ROOT / "components/raptor/raptor-media.conf")
+        self.assertTrue(config.getboolean("stream0", "enabled"))
+
+    def test_fresh_antiflicker_default_is_explicit_for_saved_readback(self):
+        config = configparser.ConfigParser()
+        config.read(ROOT / "components/raptor/raptor-media.conf")
+        # RVD's absent-key default is 2; Control independently reads the saved
+        # sensor key and must not infer successful persistence from live state.
+        self.assertEqual(config.getint("sensor", "antiflicker"), 2)
+
     def test_default_stream_rings_have_explicit_retention_budget(self):
         config = configparser.ConfigParser()
         config.read(ROOT / "components/raptor/raptor-media.conf")
@@ -195,6 +207,10 @@ class FullRootTests(unittest.TestCase):
         self.assertEqual(packed_onvif, {**source_onvif, "adv_enable_media2": True})
         for relative in CONFIGS:
             self.assertTrue((self.packed / relative).is_file())
+        packed_media = configparser.ConfigParser()
+        packed_media.read(self.packed / "etc/raptor-media.conf")
+        self.assertEqual(packed_media.getint("sensor", "antiflicker"), 2)
+        self.assertTrue(packed_media.getboolean("stream0", "enabled"))
         for relative in (
             "usr/sbin/dlink-media-verify",
             "usr/sbin/dlink-runtime-snapshot",
