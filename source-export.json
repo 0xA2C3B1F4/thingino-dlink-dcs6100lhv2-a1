@@ -1,5 +1,5 @@
 {
-  "export_policy_sha256": "cbc742ddc473283486f54dad69beed454585f1c7b5645c774355d43fbb714e07",
+  "export_policy_sha256": "c6f9d1fe420c0ea194247b9190826a17d2571fc9a0d8c363fab82135fe372d14",
   "files": {
     ".editorconfig": {
       "sha256": "77d71c2bd466915cf8363f0929ef8a1f6a25b92a21d01c6ae5c6c7f5c307fd8a",
@@ -70,7 +70,7 @@
       "source": "components/raptor/raptor-audio.conf"
     },
     "components/raptor/raptor-media.conf": {
-      "sha256": "03600fad56f256f60515e8279c799b5009020a335d29ab2649ec4f01f583feaf",
+      "sha256": "82c4843e62acfc8349a394b199c478ddfe675f3959ca8870e0f5a3e305e06ef1",
       "source": "components/raptor/raptor-media.conf"
     },
     "components/raptor/raptor-webrtc.conf": {
@@ -730,12 +730,16 @@
       "source": "production/docs/release-evidence/2026-09-23-raptor-mjpeg-correction-build.md"
     },
     "docs/release-evidence/2026-09-24-raptor-867d1182-install.md": {
-      "sha256": "62f8eba7d107dd5e381ea27ec4d0dee2a84bdb02c2462bbf9b9844292a7e2525",
+      "sha256": "a03f7340d25e3a7ba59cb2d8885f5a8350c5343f8ff5c2b48e51e699c625ce39",
       "source": "production/docs/release-evidence/2026-09-24-raptor-867d1182-install.md"
     },
     "docs/release-evidence/2026-09-24-raptor-mjpeg-correction-install.md": {
       "sha256": "7562f73492ee4da941053ef8d6ffa2ec50e0f54b976359df1c72b3dff14dfa1d",
       "source": "production/docs/release-evidence/2026-09-24-raptor-mjpeg-correction-install.md"
+    },
+    "docs/release-evidence/2026-09-26-raptor-645fec1c-build.md": {
+      "sha256": "c99814c0477678e9bf569fa9f776ef15663c84a0d981d22c5c2e48163fdcc1dd",
+      "source": "production/docs/release-evidence/2026-09-26-raptor-645fec1c-build.md"
     },
     "docs/status.md": {
       "sha256": "b673d7e2a90be219c6e9da305287223a447113cdd870f3f707dd83897095e2de",
@@ -1986,7 +1990,7 @@
       "source": "tests/test_raptor_full_pipeline.py"
     },
     "tests/test_raptor_full_root.py": {
-      "sha256": "961eaa3de61479246a4bd720d8b72e778819d69077061c12e9a4d0c5b2771a05",
+      "sha256": "ef47b0f2815e4a8575396c70caeedb09ee4db48f19d4f8f0ecd3c1215868dcc6",
       "source": "tests/test_raptor_full_root.py"
     },
     "tests/test_raptor_full_source_manifest.py": {
@@ -2559,6 +2563,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "d25b70e2f625d5d848b2a8325e712e3de6685a0e",
+  "source_commit": "c075467061baedd6e7d9cfcfdcc72545c93a23f2",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }

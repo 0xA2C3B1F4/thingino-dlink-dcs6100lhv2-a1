@@ -31,6 +31,20 @@ def squashfs(label):
 
 
 class FullRootTests(unittest.TestCase):
+    def test_fresh_stream_encoding_defaults_have_explicit_saved_state(self):
+        config = configparser.ConfigParser()
+        config.read(ROOT / "components/raptor/raptor-media.conf")
+        # Match load_stream_config's existing RVD defaults without inferring
+        # persisted state from an active encoder observation in Control.
+        for stream, bitrate in (("stream0", 1500000), ("stream1", 400000)):
+            with self.subTest(stream=stream):
+                self.assertEqual(config.get(stream, "rc_mode"), "cbr")
+                self.assertEqual(config.getint(stream, "profile"), 2)
+                self.assertEqual(config.getint(stream, "bitrate"), bitrate)
+                # CBR does not require FIXQP's explicit startup QP. Retain
+                # the encoder's unset sentinel rather than forcing a QP.
+                self.assertNotIn("init_qp", config[stream])
+
     def test_required_main_stream_has_explicit_enabled_saved_state(self):
         config = configparser.ConfigParser()
         config.read(ROOT / "components/raptor/raptor-media.conf")
@@ -211,6 +225,9 @@ class FullRootTests(unittest.TestCase):
         packed_media.read(self.packed / "etc/raptor-media.conf")
         self.assertEqual(packed_media.getint("sensor", "antiflicker"), 2)
         self.assertTrue(packed_media.getboolean("stream0", "enabled"))
+        for stream in ("stream0", "stream1"):
+            self.assertEqual(packed_media.get(stream, "rc_mode"), "cbr")
+            self.assertEqual(packed_media.getint(stream, "profile"), 2)
         for relative in (
             "usr/sbin/dlink-media-verify",
             "usr/sbin/dlink-runtime-snapshot",
