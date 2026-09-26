@@ -152,3 +152,36 @@ changing firmware or saving settings.
 These observations establish the fresh-default fixes on the new installed
 bytes. The candidate is not yet accepted: its remaining browser, device,
 field-matrix and release/legal requirements are still open.
+
+### Bounded live media observations on the follow-up candidate
+
+On September 26 between 14:33 and 14:41 UTC, the installed candidate also
+passed authenticated snapshots and MJPEG transport checks on both streams.
+Snapshot JPEGs fully decoded as 1920x1080 and 640x360. Each MJPEG response
+provided three distinct, fully decoded JPEG frames with the correct dimensions;
+multipart boundaries and content lengths were checked. HTTPS used hostname
+validation and the camera certificate obtained through pinned SSH. Test
+sessions logged out with 204. Images were processed in memory, not published.
+
+The repository's bounded RTSP verifier confirmed unauthenticated 401 responses,
+Digest-authenticated OPTIONS/DESCRIBE/SETUP/PLAY, H.264 SPS dimensions,
+complete IDR pictures and advancing RTP timestamps over interleaved TCP for
+both streams. An initial test invocation used the legacy `viewer` username;
+the current Raptor provisioning source specifies `root`. The corrected test
+passed without changing credentials or weakening authentication. These are
+video transport observations, not RTSP audio or endurance claims.
+
+ONVIF Media1 and Media2 GetProfiles, GetStreamUri and GetSnapshotUri returned
+both expected profiles and matching stream/snapshot routes. The two ONVIF
+snapshot routes separately enforced HTTP Digest and returned fully decoded
+JPEGs at the expected dimensions. SOAP requests used the camera's clock for
+WSSE, without modifying it; this does not establish clock synchronization.
+These observations do not establish discovery or event behavior.
+
+The two snapshot, two MJPEG and RTSP checks are recorded in this candidate's
+ledger. The real Chromium test reached the new installation's certificate
+warning after a stale tab displayed `Failed to fetch`; browser acceptance
+awaits the user's certificate handling and login. No browser warning was
+bypassed, and the direct protocol checks do not substitute for WebRTC/audio
+or rendered browser acceptance. No camera settings were saved during these
+bounded media reads.
