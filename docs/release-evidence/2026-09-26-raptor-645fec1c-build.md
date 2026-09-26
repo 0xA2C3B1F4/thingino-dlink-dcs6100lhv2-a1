@@ -93,4 +93,34 @@ selection contract; this correction does not change it.
 
 These additional source corrections are not included in the installed
 `645fec1c` bundle. Its installation and readback evidence remains valid for
-that bundle only; the source follow-up has not yet been built or installed.
+that bundle only.
+
+## Follow-up build with explicit stream encoding defaults
+
+Source `46fe7be5fa061630de620738e96965da4d8663f1` was subsequently built in
+`build-20260926T061621701161Z-46fe7be5fa06` through the same supported
+initialize-mode, two-clean-build workflow. Both base containers exited 0
+without OOM. The complete-firmware comparison reports two byte-identical
+builds, no component cache, no differences and accepted inspections. Its
+`reproducibility.json` SHA-256 is
+`b5e317c4e8d8863d5392c26f2f82d853364b5592b9e92d7bcb6e95f7b47a93b0`.
+
+The new signed bundle is 7,958,609 bytes with SHA-256
+`f891e0b010de1007bf432b69976226b7d2c6d01872e35cf0fafa85577ef83d06`.
+The final system SquashFS is 6,373,376 bytes with SHA-256
+`a5c0bf7ea4b19adda5c478f5d65f746de55c8489a25a8aa27379a3da6223ce54`.
+The separate `inspect-install-set` check and `scripts/release_closure.py`
+both passed. The latter used the retained model public key and establishes
+technical provenance, not redistribution permission.
+
+Reading `etc/raptor-media.conf` from the final system with the run's pinned
+`unsquashfs` confirmed both streams have `profile = 2` and `rc_mode = cbr`.
+The earlier `antiflicker = 2` and main-stream `enabled = true` fixes remain.
+The Raptor component archive digest is unchanged from the build above.
+
+The new schema-2 Raptor candidate ID is
+`82860c27f42e2a65314504cc242f52a187ee73761997e0687290ec82afbf0a44`.
+It is not accepted: installation, fresh settings reads and the device matrix
+for these exact artifacts remain pending. No camera or SD writes were made
+by these build and package checks. Earlier firmware's browser/audio results
+are not claimed as acceptance of this new bundle.
