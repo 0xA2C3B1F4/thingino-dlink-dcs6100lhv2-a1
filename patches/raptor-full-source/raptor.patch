@@ -16401,10 +16401,10 @@ index 4e199f6696edacacdf0c11b5cebbf8ed6701a619..9cc1a54026f32cba81668bd7f5f65320
  }
 diff --git a/rvd/rvd_readback.c b/rvd/rvd_readback.c
 new file mode 100644
-index 0000000000000000000000000000000000000000..a0ac529950cf49a6b2755989ec94a5ba088ce774
+index 0000000000000000000000000000000000000000..71313c3d8e58f0d490cf97d8a6f18472d6146988
 --- /dev/null
 +++ b/rvd/rvd_readback.c
-@@ -0,0 +1,1954 @@
+@@ -0,0 +1,1992 @@
 +#include "rvd.h"
 +#include <errno.h>
 +#include <string.h>
@@ -16511,7 +16511,7 @@ index 0000000000000000000000000000000000000000..a0ac529950cf49a6b2755989ec94a5ba
 +    "sharpness", "backlight_comp", "drc_strength", "highlight_depress", "defog_strength",
 +    "sinter", "hue", "dpc_strength", "ae_comp", "hflip", "vflip", "antiflicker"};
 +static const int image_maximum[IMAGE_FIELD_COUNT] = {
-+    255, 255, 255, 255, 10, 255, 255, 255, 255, 255, 255, 255, 1, 1, 2};
++    255, 255, 255, 255, 10, 255, 10, 255, 255, 255, 255, 255, 1, 1, 2};
 +static const int image_defaults[IMAGE_FIELD_COUNT] = {
 +    128, 128, 128, 128, 0, 128, 0, 128, 128, 128, 128, 128, 0, 0, 2};
 +
@@ -16780,9 +16780,11 @@ index 0000000000000000000000000000000000000000..a0ac529950cf49a6b2755989ec94a5ba
 +    return rss_config_get_bool(st->cfg, section, "enabled", true) ? 1 : 0;
 +}
 +
-+static int apply_image_values(rvd_state_t *st, const int values[IMAGE_FIELD_COUNT], unsigned mask)
++static int apply_image_values(rvd_state_t *st, const int requested[IMAGE_FIELD_COUNT], unsigned mask)
 +{
 +    if (!st || !st->ops || !st->cfg) return RSS_ERR_INVAL;
++    int values[IMAGE_FIELD_COUNT];
++    memcpy(values, requested, sizeof(values));
 +    int (*set[])(void *, int) = {st->ops->isp_set_brightness, st->ops->isp_set_contrast,
 +        st->ops->isp_set_saturation, st->ops->isp_set_sharpness,
 +        st->ops->isp_set_backlight_comp, st->ops->isp_set_drc_strength,
@@ -16796,6 +16798,26 @@ index 0000000000000000000000000000000000000000..a0ac529950cf49a6b2755989ec94a5ba
 +        st->ops->isp_get_sinter_strength, st->ops->isp_get_hue, st->ops->isp_get_dpc_strength};
 +    uint8_t before[IMAGE_FIELD_COUNT] = {0};
 +    bool setter_config[IMAGE_FIELD_COUNT] = {false};
++    /* T31 backlight compensation and highlight suppression share ISP state.
++     * Keep an omitted companion, reject conflicting requests, then verify and
++     * cache both final values. Never manufacture a saved companion default. */
++    const unsigned pair_mask = (1u << 4) | (1u << 6);
++    bool pair = (mask & pair_mask) != 0;
++    if (pair) {
++        for (int i = 4; i <= 6; i += 2) {
++            uint8_t current = 0;
++            if (!set[i] || !get[i]) return RSS_ERR_NOTSUP;
++            int ret = get[i](st->hal_ctx, &current);
++            if (ret != RSS_OK) {
++                RSS_ERROR("image %s: preflight getter failed: %d", image_names[i], ret);
++                return ret;
++            }
++            if (current > image_maximum[i]) return RSS_ERR;
++            if (!(mask & (1u << i))) values[i] = current;
++        }
++        if (values[4] > 0 && values[6] > 0) return RSS_ERR_INVAL;
++        mask |= pair_mask;
++    }
 +    /* Preflight the entire request before any setter or cache mutation. */
 +    for (int i = 0; i < IMAGE_FIELD_COUNT; ++i) {
 +        if (!(mask & (1u << i))) continue;
@@ -16811,7 +16833,10 @@ index 0000000000000000000000000000000000000000..a0ac529950cf49a6b2755989ec94a5ba
 +            return ret;
 +        }
 +    }
-+    for (int i = 0; i < IMAGE_FIELD_COUNT; ++i) {
++    for (int slot = 0; slot < IMAGE_FIELD_COUNT; ++slot) {
++        /* Disable the losing control before enabling the winning control. */
++        int i = pair && values[4] > 0 && slot == 4 ? 6 :
++            pair && values[4] > 0 && slot == 6 ? 4 : slot;
 +        if (!(mask & (1u << i))) continue;
 +        if (setter_config[i] || before[i] != values[i]) {
 +            if (setter_config[i])
@@ -16837,6 +16862,7 @@ index 0000000000000000000000000000000000000000..a0ac529950cf49a6b2755989ec94a5ba
 +                return RSS_ERR;
 +            }
 +        }
++        if (pair && (i == 4 || i == 6)) continue;
 +        const char *section = image_config_section(i);
 +        rss_config_set_int(st->cfg, section, image_config_names[i], values[i]);
 +        char expected[4];
@@ -16848,6 +16874,18 @@ index 0000000000000000000000000000000000000000..a0ac529950cf49a6b2755989ec94a5ba
 +        if (setter_config[i]) {
 +            st->sinter_config_acknowledged = true;
 +            st->sinter_config_value = values[i];
++        }
++    }
++    if (pair) {
++        for (int i = 4; i <= 6; i += 2) {
++            uint8_t observed = 0;
++            if (get[i](st->hal_ctx, &observed) != RSS_OK || observed != values[i])
++                return RSS_ERR;
++        }
++        for (int i = 4; i <= 6; i += 2) {
++            rss_config_set_int(st->cfg, "image", image_config_names[i], values[i]);
++            if (rss_config_get_int(st->cfg, "image", image_config_names[i], -1) != values[i])
++                return RSS_ERR;
 +        }
 +    }
 +    return RSS_OK;
@@ -21758,10 +21796,10 @@ index 0000000000000000000000000000000000000000..81822a2f58d4e93df2fb52ef2f7e87e6
 +}
 diff --git a/tests/test_image_persistence.c b/tests/test_image_persistence.c
 new file mode 100644
-index 0000000000000000000000000000000000000000..8324d8e65523eeeabe37280261935d4da8f1943b
+index 0000000000000000000000000000000000000000..bbd11b63554b18fb818e16840873698735ddb066
 --- /dev/null
 +++ b/tests/test_image_persistence.c
-@@ -0,0 +1,560 @@
+@@ -0,0 +1,599 @@
 +#include "rvd.h"
 +#include <assert.h>
 +#include <stdio.h>
@@ -21769,6 +21807,7 @@ index 0000000000000000000000000000000000000000..8324d8e65523eeeabe37280261935d4d
 +
 +static int hardware[15] = {128, 128, 128, 128, 0, 128, 0, 128, 128, 128, 128, 128, 0, 0, 2};
 +static int setters, getters, fail_set, fail_get, mismatch;
++static bool coupled_final_fault;
 +static bool sinter_get_notsup, sinter_get_error, sinter_fail_after_set;
 +static rss_wb_config_t wb_hardware = {
 +    .mode = RSS_WB_AUTO, .r_gain = 128, .g_gain = 0, .b_gain = 128};
@@ -21781,6 +21820,9 @@ index 0000000000000000000000000000000000000000..8324d8e65523eeeabe37280261935d4d
 +    if (fail_set) \
 +        return RSS_ERR; \
 +    hardware[index] = value; \
++    if ((index) == 4) hardware[6] = 0; \
++    if ((index) == 6) hardware[4] = 0; \
++    if (coupled_final_fault && (index) == 6) hardware[4] = 1; \
 +    return RSS_OK; \
 +} \
 +static int get_##name(void *ctx, uint8_t *value) \
@@ -22061,9 +22103,11 @@ index 0000000000000000000000000000000000000000..8324d8e65523eeeabe37280261935d4d
 +        "{\"mode\":1,\"rgain\":300,\"bgain\":400}}}", false);
 +    wb_mismatch = 0;
 +    assert(rss_config_get_int(cfg, "image", "core_wb_mode", -1) == 2);
++    command(&st, "{\"cmd\":\"set-imaging\",\"values\":{\"tone\":11}}", false);
++    assert(setters == 0);
 +    const char *change = "{\"cmd\":\"set-imaging\",\"values\":{\"brightness\":140,"
-+        "\"contrast\":145,\"backlight\":4,\"wide_dynamic_range\":150,"
-+        "\"tone\":20,\"defog\":130,\"noise_reduction\":110,\"hue\":135,\"dpc_strength\":90,"
++        "\"contrast\":145,\"backlight\":0,\"wide_dynamic_range\":150,"
++        "\"tone\":10,\"defog\":130,\"noise_reduction\":110,\"hue\":135,\"dpc_strength\":90,"
 +        "\"exposure_compensation\":145,\"hflip\":1,\"vflip\":1,\"anti_flicker\":1}}";
 +    ops.isp_get_hvflip = NULL;
 +    command(&st, change, false);
@@ -22128,9 +22172,9 @@ index 0000000000000000000000000000000000000000..8324d8e65523eeeabe37280261935d4d
 +    assert(cfg);
 +    st.cfg = cfg;
 +    assert(rss_config_get_int(cfg, "image", "contrast", -1) == 145);
-+    assert(rss_config_get_int(cfg, "image", "backlight_comp", -1) == 4);
++    assert(rss_config_get_int(cfg, "image", "backlight_comp", -1) == 0);
 +    assert(rss_config_get_int(cfg, "image", "drc_strength", -1) == 150);
-+    assert(rss_config_get_int(cfg, "image", "highlight_depress", -1) == 20);
++    assert(rss_config_get_int(cfg, "image", "highlight_depress", -1) == 10);
 +    assert(rss_config_get_int(cfg, "image", "defog_strength", -1) == 130);
 +    assert(rss_config_get_int(cfg, "image", "sinter", -1) == 110);
 +    assert(rss_config_get_int(cfg, "image", "hue", -1) == 135);
@@ -22144,8 +22188,8 @@ index 0000000000000000000000000000000000000000..8324d8e65523eeeabe37280261935d4d
 +    wb_hardware = (rss_wb_config_t){.mode = RSS_WB_AUTO, .r_gain = 0, .b_gain = 0};
 +    assert(rvd_restore_imaging(&st) == RSS_OK);
 +    assert(hardware[0] == 140 && hardware[1] == 145 &&
-+           hardware[2] == 128 && hardware[3] == 128 && hardware[4] == 4 &&
-+           hardware[5] == 150 && hardware[6] == 20 && hardware[7] == 130 &&
++           hardware[2] == 128 && hardware[3] == 128 && hardware[4] == 0 &&
++           hardware[5] == 150 && hardware[6] == 10 && hardware[7] == 130 &&
 +           hardware[8] == 110 && hardware[9] == 135 && hardware[10] == 90 &&
 +           hardware[11] == 145 && hardware[12] == 1 && hardware[13] == 1 &&
 +           hardware[14] == 1);
@@ -22158,7 +22202,7 @@ index 0000000000000000000000000000000000000000..8324d8e65523eeeabe37280261935d4d
 +    rss_config_set_int(cfg, "image", "sharpness", 128);
 +    rss_config_set_int(cfg, "image", "backlight_comp", 11);
 +    assert(rvd_restore_imaging(&st) != RSS_OK && setters == before);
-+    rss_config_set_int(cfg, "image", "backlight_comp", 4);
++    rss_config_set_int(cfg, "image", "backlight_comp", 0);
 +    fail_get = 1;
 +    assert(rvd_restore_imaging(&st) != RSS_OK && setters == before);
 +    fail_get = 0;
@@ -22283,7 +22327,7 @@ index 0000000000000000000000000000000000000000..8324d8e65523eeeabe37280261935d4d
 +    cJSON_Delete(status);
 +    ops.isp_set_sinter_strength = NULL;
 +    before = setters;
-+    rss_config_set_int(cfg, "image", "backlight_comp", 4);
++    rss_config_set_int(cfg, "image", "backlight_comp", 0);
 +    assert(rvd_restore_imaging(&st) == RSS_ERR_NOTSUP && setters == before);
 +    rss_config_free(cfg);
 +    puts("Imaging strict apply, cache repair, disk save and startup restore passed");
@@ -22320,6 +22364,39 @@ index 0000000000000000000000000000000000000000..8324d8e65523eeeabe37280261935d4d
 +    assert(rss_config_get_int(cfg, "image", "defog_strength", -1) == 128);
 +    rss_config_free(cfg);
 +    puts("Unconfigured optional ISP controls retain sensor defaults");
++
++    cfg = rss_config_load(argv[1]);
++    assert(cfg);
++    st.cfg = cfg;
++    hardware[4] = 0;
++    hardware[6] = 2;
++    ops.isp_set_backlight_comp = set_backlight;
++    ops.isp_get_backlight_comp = get_backlight;
++    ops.isp_set_highlight_depress = set_highlight;
++    ops.isp_get_highlight_depress = get_highlight;
++    before = setters;
++    command(&st, "{\"cmd\":\"set-imaging\",\"values\":{\"backlight\":1,\"tone\":2}}", false);
++    command(&st, "{\"cmd\":\"set-imaging\",\"values\":{\"backlight\":1}}", false);
++    assert(setters == before && hardware[6] == 2);
++    command(&st, "{\"cmd\":\"set-imaging\",\"values\":{\"backlight\":1,\"tone\":0}}", true);
++    assert(hardware[4] == 1 && hardware[6] == 0);
++    assert(rss_config_get_int(cfg, "image", "backlight_comp", -1) == 1);
++    assert(rss_config_get_int(cfg, "image", "highlight_depress", -1) == 0);
++    coupled_final_fault = true;
++    command(&st, "{\"cmd\":\"set-imaging\",\"values\":{\"backlight\":0,\"tone\":2}}", false);
++    assert(rss_config_get_int(cfg, "image", "backlight_comp", -1) == 1);
++    assert(rss_config_get_int(cfg, "image", "highlight_depress", -1) == 0);
++    coupled_final_fault = false;
++    hardware[4] = 1;
++    hardware[6] = 0;
++    command(&st, "{\"cmd\":\"set-imaging\",\"values\":{\"backlight\":0,\"tone\":2}}", true);
++    assert(hardware[4] == 0 && hardware[6] == 2);
++    assert(rss_config_get_int(cfg, "image", "backlight_comp", -1) == 0);
++    assert(rss_config_get_int(cfg, "image", "highlight_depress", -1) == 2);
++    command(&st, "{\"cmd\":\"set-imaging\",\"values\":{\"backlight\":0}}", true);
++    assert(hardware[4] == 0 && hardware[6] == 2);
++    rss_config_free(cfg);
++    puts("Coupled backlight/highlight switching and final readback passed");
 +    return 0;
 +}
 diff --git a/tests/test_ivs_lifecycle.c b/tests/test_ivs_lifecycle.c

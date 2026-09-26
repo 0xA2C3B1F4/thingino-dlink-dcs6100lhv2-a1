@@ -11,9 +11,9 @@ function runtime(available = true, setterConfig = false, wbMode = 1) {
     contrast: { supported: true, available, value: available ? 141 : null, min: 0, max: 255 },
     saturation: { supported: true, available, value: available ? 142 : null, min: 0, max: 255 },
     sharpness: { supported: true, available, value: available ? 143 : null, min: 0, max: 255 },
-    backlight: { supported: true, available, value: available ? 4 : null, min: 0, max: 10 },
+    backlight: { supported: true, available, value: available ? 0 : null, min: 0, max: 10 },
     wide_dynamic_range: { supported: true, available, value: available ? 150 : null, min: 0, max: 255 },
-    tone: { supported: true, available, value: available ? 20 : null, min: 0, max: 255 },
+    tone: { supported: true, available, value: available ? 10 : null, min: 0, max: 10 },
     defog: { supported: true, available, value: available ? 130 : null, min: 0, max: 255 },
     noise_reduction: { supported: true, available, value: available ? 110 : null, min: 0, max: 255,
       ...(setterConfig ? { verification: "sdk-setter-config", observed_value: null, configured_value: 110 } : {}) },
@@ -45,9 +45,9 @@ test("Raptor image load and unchanged save use only the imaging route", async ()
         contrast: 141,
         saturation: 142,
         sharpness: 143,
-        backlight: 4,
+        backlight: 0,
         wide_dynamic_range: 150,
-        tone: 20,
+        tone: 10,
         defog: 130,
         noise_reduction: 110,
         hue: 135,
@@ -63,9 +63,9 @@ test("Raptor image load and unchanged save use only the imaging route", async ()
   } as unknown as ApiClient;
   const loaded = await imaging.load!(client);
   assert.equal(loaded.image_persistent, true);
-  assert.equal((loaded.image as Record<string, unknown>).backlight_compensation, 4);
+  assert.equal((loaded.image as Record<string, unknown>).backlight_compensation, 0);
   assert.equal((loaded.image as Record<string, unknown>).drc_strength, 150);
-  assert.equal((loaded.image as Record<string, unknown>).highlight_depress, 20);
+  assert.equal((loaded.image as Record<string, unknown>).highlight_depress, 10);
   assert.equal((loaded.image as Record<string, unknown>).defog_strength, 130);
   assert.equal((loaded.image as Record<string, unknown>).sinter_strength, 110);
   assert.equal((loaded.image as Record<string, unknown>).hflip, true);
@@ -77,6 +77,16 @@ test("Raptor image load and unchanged save use only the imaging route", async ()
   assert.equal((loaded.image as Record<string, unknown>).wb_rgain, 300);
   await imaging.save!(client, loaded, loaded);
   assert.deepEqual(calls, ["/api/v1/imaging", "/api/v1/imaging"]);
+});
+
+test("Raptor rejects conflicting backlight and highlight settings before POST", async () => {
+  const client = { json: async () => runtime() } as unknown as ApiClient;
+  const loaded = await imaging.load!(client);
+  const changed = structuredClone(loaded);
+  (changed.image as Record<string, unknown>).backlight_compensation = 1;
+  assert.throws(() => buildImagingRequests(changed, loaded), /cannot both be enabled/);
+  (changed.image as Record<string, unknown>).highlight_depress = 0;
+  assert.equal(buildImagingRequests(changed, loaded).live.backlight, 1);
 });
 
 test("Raptor white balance enables manual gains from the draft mode and rejects ignored preset gain edits", async () => {

@@ -192,9 +192,9 @@ export const imaging: ConfigFormSpec = {
     { ...number("image.contrast", "Contrast"), rangeFrom: "imaging_runtime.fields.contrast" },
     { ...number("image.sharpness", "Sharpness"), rangeFrom: "imaging_runtime.fields.sharpness" },
     { ...number("image.saturation", "Saturation"), rangeFrom: "imaging_runtime.fields.saturation" },
-    { ...number("image.backlight_compensation", "Backlight compensation"), rangeFrom: "imaging_runtime.fields.backlight" },
+    { ...number("image.backlight_compensation", "Backlight compensation"), rangeFrom: "imaging_runtime.fields.backlight", description: "Backlight compensation and highlight tone cannot both be enabled. Set highlight tone to 0 before enabling backlight compensation." },
     { ...number("image.drc_strength", "Dynamic range strength"), rangeFrom: "imaging_runtime.fields.wide_dynamic_range" },
-    { ...number("image.highlight_depress", "Highlight tone"), rangeFrom: "imaging_runtime.fields.tone" },
+    { ...number("image.highlight_depress", "Highlight tone"), rangeFrom: "imaging_runtime.fields.tone", description: "Set backlight compensation to 0 before enabling highlight tone." },
     { ...number("image.defog_strength", "Defog strength"), rangeFrom: "imaging_runtime.fields.defog" },
     { ...number("image.sinter_strength", "Noise reduction"), rangeFrom: "imaging_runtime.fields.noise_reduction" },
     { ...text("image_noise_reduction_status", "Noise reduction status"), readOnly: true },
@@ -268,6 +268,9 @@ export function buildImagingRequests(value: JsonObject, loaded: JsonObject): { l
     if (typeof field === "object" && field !== null && !Array.isArray(field) && field.supported === true && field.available !== false && typeof next === "number") {
       live[runtimeName] = next;
     }
+  }
+  if (typeof live.backlight === "number" && live.backlight > 0 && typeof live.tone === "number" && live.tone > 0) {
+    throw new TypeError("Backlight compensation and highlight tone cannot both be enabled. Set one to 0.");
   }
   const whiteBalance = (loaded.imaging_runtime as { white_balance?: Record<string, unknown> }).white_balance;
   if (loaded.image_white_balance_control === true && whiteBalance?.supported === true && whiteBalance.available === true) {

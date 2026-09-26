@@ -211,3 +211,74 @@ On with confirmed UI readback, then one Listen press enabled playback and
 Chromium reported Audio playing. No Preview Reload was used. Audible output
 has not yet been confirmed by the operator on this candidate. The operator
 asked to complete other work first, so the audio check remains open.
+
+## Imaging setting changes and restoration
+
+On the same installed candidate, the imaging API saved anti-flicker from
+mode 2 to 1 and back to 2. Fresh independent SDK reads and the settings file
+agreed after each save. Brightness, contrast, saturation and sharpness each
+then changed from 128 to 129 and back to 128. Each POST returned HTTP 200,
+fresh SDK reads reported the requested value, and a separate pinned-SSH read
+of the saved file confirmed both the change and restoration. The test session
+logged out with HTTP 204.
+
+The initial image probe stopped before writing because the fresh configuration
+had no image section; its live values came from defaults. Saving anti-flicker
+through RVD's normal config-save path also materialized those unchanged image
+defaults. The four image tests followed only after those saved values were
+available. Effective values were restored, but the file is therefore not
+byte-identical to the fresh-install file. This is bounded GET/POST and
+hardware-readback evidence, not visual-quality, reboot-persistence or complete
+settings-matrix acceptance. No service or camera restart was performed.
+
+A later extended run changed and restored the individual readback values for
+backlight compensation, dynamic range, highlight tone, hue, defective-pixel
+correction, exposure compensation and both flips. Defog remained unavailable;
+noise reduction exposed setter acknowledgement only and was not changed.
+These individual successes do not prove restoration of the whole image state:
+highlight tone was observed at 2 before the batch, but at 0 by the time its
+own test began after backlight and dynamic-range changes. Its own 0-to-1-to-0
+test passed. The cause of the earlier transition remains unresolved, so the
+settings matrix stays open and global restoration is not claimed. Optional
+absent settings retain sensor defaults at startup; the test materialized
+several formerly implicit defaults. No restart has tested those saved values.
+
+The targeted follow-up isolated the transition. With tone set to 2, setting
+backlight to 1 changed live tone to 0. Restoring backlight to 0 left tone at 0.
+After reseeding tone to 2, changing dynamic range from 128 to 129 and back
+left tone at 2. Final independent SDK and disk reads verified backlight 0,
+dynamic range 128 and tone 2. This establishes a backlight-to-tone dependency,
+not whether the reverse direction has the same effect. Save/readback handling
+must account for affected companion settings before full acceptance.
+
+The exact build's T31 1.1.4 SDK header documents highlight suppression strength
+as 0–10. Current RVD and Control declare a tone maximum of 255, and their test
+fixtures include tone 20. That is a source-level range defect requiring a
+regression-tested correction; the live probe used only values 0, 1 and 2.
+
+The subsequent source-only correction limits tone to 0–10 in Control and RVD.
+Focused Control imaging tests passed 21/21, including rejection of 11 before
+IPC and a checked save at 10. The native image-persistence suite passed with
+ASan/UBSan, including rejection of 11 without invoking setters. WebUI imaging
+tests passed 9/9 with corrected fixtures. The locked Raptor patch and tree
+identities were updated. This correction is not installed on the camera;
+backlight/tone companion-setting handling remains unfinished. No new firmware
+build or device acceptance is claimed for the changed source.
+
+The reverse live probe then confirmed that enabling tone also clears
+backlight. Disabling tone leaves both off. The camera was restored to
+backlight 0, dynamic range 128 and tone 2, with independent hardware and saved
+readback. Source now treats backlight and tone as a mutually exclusive pair:
+conflicting positive values are rejected before setters, omitted companions
+are read from current hardware rather than assumed defaults, and switching
+requires an explicit zero for the previously active control. RVD applies the
+disabled control first, verifies both final values before caching the pair,
+and Control verifies both live and saved values. WebUI explains the constraint
+and rejects a conflicting form before sending it.
+
+Focused Control imaging tests passed 22/22 and WebUI imaging tests 10/10.
+The native ASan/UBSan suite now models the SDK's reciprocal clearing, verifies
+switching in both directions and rejects an injected incorrect final companion
+without committing the pair to the configuration cache. These source fixes
+are not yet built into or installed on the camera. Full configuration and
+physical acceptance remain open.

@@ -7,7 +7,7 @@ const IMAGING_FIELDS: [(&str, &str, u64); 15] = [
     ("sharpness", "sharpness", 255),
     ("backlight", "backlight_comp", 10),
     ("wide_dynamic_range", "drc_strength", 255),
-    ("tone", "highlight_depress", 255),
+    ("tone", "highlight_depress", 10),
     ("defog", "defog_strength", 255),
     ("noise_reduction", "sinter", 255),
     ("hue", "hue", 255),
@@ -662,9 +662,49 @@ impl RaptorBackend {
                 return Err(BackendError::Protocol);
             }
         }
+        if fields
+            .get("backlight")
+            .is_some_and(|v| value_u64(v).is_ok_and(|n| n > 0))
+            && fields
+                .get("tone")
+                .is_some_and(|v| value_u64(v).is_ok_and(|n| n > 0))
+        {
+            return Err(BackendError::Protocol);
+        }
         let before = self.imaging_state(deadline, false, None)?;
         let before = crate::json::parse(&before.body).map_err(|_| BackendError::Upstream(502))?;
         let persistent = before.get_path("persistent").and_then(Value::as_bool) == Some(true);
+        let mut normalized = fields.clone();
+        if fields.contains_key("backlight") || fields.contains_key("tone") {
+            for name in ["backlight", "tone"] {
+                if before
+                    .get_path(&format!("message.fields.{name}.available"))
+                    .and_then(Value::as_bool)
+                    != Some(true)
+                {
+                    return Err(BackendError::Unsupported(
+                        "Backlight and highlight readback must both be available",
+                    ));
+                }
+                let value = fields
+                    .get(name)
+                    .cloned()
+                    .or_else(|| {
+                        before
+                            .get_path(&format!("message.fields.{name}.value"))
+                            .cloned()
+                    })
+                    .ok_or(BackendError::Upstream(502))?;
+                normalized.insert(name.to_owned(), value);
+            }
+            if value_u64(&normalized["backlight"])? > 0 && value_u64(&normalized["tone"])? > 0 {
+                return Err(BackendError::Unsupported(
+                    "Backlight compensation and highlight suppression cannot both be enabled; set the other control to zero",
+                ));
+            }
+        }
+        let request = Value::Object(normalized);
+        let fields = request.as_object().ok_or(BackendError::Protocol)?;
         for name in fields.keys() {
             if name == "white_balance" {
                 continue;
@@ -871,7 +911,7 @@ fn validate_ir_outputs(reply: &RaptorReply) -> Result<[(bool, Option<bool>); 2],
 
 #[cfg(test)]
 mod tests {
-    use super::super::tests::{backend, framed, read_request, task_temp};
+    use super::super::tests::{backend, framed, read_request, serve_daemon, task_temp};
     use super::*;
     use std::io::Write;
     use std::os::unix::net::UnixListener;
@@ -1001,7 +1041,7 @@ mod tests {
             .iter()
             .filter(|(name, _, _)| *name != "anti_flicker")
             .map(|(name, _, maximum)| {
-                let default = if *name == "backlight" || *maximum == 1 { 0 } else { 128 };
+                let default = if *maximum <= 10 { 0 } else { 128 };
                 let value = changes
                     .iter()
                     .find(|(changed, _)| changed == name)
@@ -1599,6 +1639,20 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 
+    #[test]
+    fn imaging_partial_backlight_cannot_silently_disable_live_tone() {
+        let root = task_temp("imaging-coupled-partial");
+        let observed = observation_values(&[("backlight", 0), ("tone", 2)], true);
+        let daemon = serve_daemon(&root, "rvd.sock", br#"{"cmd":"get-imaging"}"#, &observed);
+        let result = backend(&root, "127.0.0.1:9".parse().unwrap()).update_imaging(
+            br#"{"backlight":1}"#,
+            Instant::now() + Duration::from_secs(1),
+        );
+        assert!(matches!(result, Err(BackendError::Unsupported(_))));
+        daemon.join().unwrap();
+        fs::remove_dir_all(root).unwrap();
+    }
+
     fn setter_config_observation(value: u32) -> Vec<u8> {
         let observation =
             String::from_utf8(observation_values(&[("noise_reduction", value)], true)).unwrap();
@@ -1616,6 +1670,8 @@ mod tests {
         for body in [
             br#"{"backlight":11}"#.as_slice(),
             br#"{"wide_dynamic_range":256}"#.as_slice(),
+            br#"{"tone":11}"#.as_slice(),
+            br#"{"backlight":1,"tone":1}"#.as_slice(),
             br#"{"tone":1.5}"#.as_slice(),
             br#"{"defog":true}"#.as_slice(),
             br#"{"noise_reduction":-1}"#.as_slice(),
@@ -1802,9 +1858,9 @@ mod tests {
         let listener = UnixListener::bind(root.join("rvd.sock")).unwrap();
         listener.set_nonblocking(true).unwrap();
         let changes = [
-            ("backlight", 4),
+            ("backlight", 0),
             ("wide_dynamic_range", 150),
-            ("tone", 20),
+            ("tone", 10),
             ("defog", 130),
             ("noise_reduction", 110),
             ("hue", 135),
@@ -1813,8 +1869,8 @@ mod tests {
             ("hflip", 1),
             ("vflip", 1),
         ];
-        let body = br#"{"backlight":4,"defog":130,"dpc_strength":90,"exposure_compensation":145,"hflip":1,"hue":135,"noise_reduction":110,"tone":20,"vflip":1,"wide_dynamic_range":150}"#;
-        let command = br#"{"cmd":"set-imaging","values":{"backlight":4,"defog":130,"dpc_strength":90,"exposure_compensation":145,"hflip":1,"hue":135,"noise_reduction":110,"tone":20,"vflip":1,"wide_dynamic_range":150}}"#;
+        let body = br#"{"backlight":0,"defog":130,"dpc_strength":90,"exposure_compensation":145,"hflip":1,"hue":135,"noise_reduction":110,"tone":10,"vflip":1,"wide_dynamic_range":150}"#;
+        let command = br#"{"cmd":"set-imaging","values":{"backlight":0,"defog":130,"dpc_strength":90,"exposure_compensation":145,"hflip":1,"hue":135,"noise_reduction":110,"tone":10,"vflip":1,"wide_dynamic_range":150}}"#;
         let pairs = vec![
             (br#"{"cmd":"get-imaging"}"#.to_vec(), observation_values(&[], true)),
             (command.to_vec(), br#"{"status":"ok"}"#.to_vec()),
@@ -1825,7 +1881,7 @@ mod tests {
             (br#"{"cmd":"config-save"}"#.to_vec(), br#"{"status":"ok"}"#.to_vec()),
             (
                 br#"{"cmd":"config-read-section","section":"image"}"#.to_vec(),
-                br#"{"status":"ok","section":"image","keys":{"backlight_comp":"4","defog_strength":"130","drc_strength":"150","highlight_depress":"20","sinter":"110","hue":"135","dpc_strength":"90","ae_comp":"145","hflip":"1","vflip":"1"}}"#.to_vec(),
+                br#"{"status":"ok","section":"image","keys":{"backlight_comp":"0","defog_strength":"130","drc_strength":"150","highlight_depress":"10","sinter":"110","hue":"135","dpc_strength":"90","ae_comp":"145","hflip":"1","vflip":"1"}}"#.to_vec(),
             ),
         ];
         let daemon = thread::spawn(move || {
