@@ -1,6 +1,6 @@
 # Release status
 
-Historical runtime baseline validated: 2026-09-06. Documentation updated: 2026-09-24.
+Historical runtime baseline validated: 2026-09-06. Documentation updated: 2026-09-26.
 
 This repository provides source and host tools. There is no supported firmware
 download yet. The validated platform is DCS-6100LHV2 A1 with Apple Silicon macOS.
@@ -12,8 +12,31 @@ are outside scope. First-installation, interrupted-installation recovery, and
 same-camera verification remain release requirements.
 
 The tables below describe named evidence, not blanket acceptance of later source
-changes. The full-Raptor source path has passed host composition checks. The
-latest installed candidate, source `867d1182aa2f3586ce35d6709f51463faff010bb`,
+changes. The full-Raptor source path has passed host composition checks.
+
+The latest installed candidate is source
+`46fe7be5fa061630de620738e96965da4d8663f1`. Two clean complete-firmware builds
+were byte-identical without component-cache reuse. Its universal bundle SHA-256
+is `f891e0b010de1007bf432b69976226b7d2c6d01872e35cf0fafa85577ef83d06`.
+The supported two-stage installation completed on the first camera, followed
+by management/media verification and selected-partition readback of logical
+partitions 0, 1, 3, 5 and 6. Mutable data and exact physical mtd2 comparison
+were excluded. Fresh reads before any settings save agreed with the configured
+antiflicker, stream enable, CBR and profile defaults.
+
+Both snapshot and MJPEG paths decoded at their expected dimensions; both RTSP
+streams passed authenticated H.264 reception. Bounded ONVIF Media1/Media2 and
+Digest snapshot checks passed, without establishing discovery or conformance.
+A short concurrent API and interrupted-client check passed, and a logged-out
+test cookie was rejected with HTTP 401. These results do not complete natural
+session expiry, the settings field matrix, physical controls, cold-boot or
+audio acceptance for these bytes. Chromium reached Main stream Live WebRTC
+and reported audio playback after one Listen press; operator confirmation of
+audible output remains pending. Earlier candidates' audio results below are
+historical and are not inherited. See the
+[September 26 build and installation evidence](release-evidence/2026-09-26-raptor-645fec1c-build.md).
+
+The previously installed candidate, source `867d1182aa2f3586ce35d6709f51463faff010bb`,
 passed two clean, byte-identical complete-firmware builds without component-cache
 reuse. Its signed `thingino-universal.tgb` has SHA-256
 `17e7f3fdaa78b26a49f3dd5c5776d409c525d72a217ea1a2ac496ca7d875c1c4`.

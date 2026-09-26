@@ -185,3 +185,29 @@ awaits the user's certificate handling and login. No browser warning was
 bypassed, and the direct protocol checks do not substitute for WebRTC/audio
 or rendered browser acceptance. No camera settings were saved during these
 bounded media reads.
+## Bounded runtime observations on the installed 46fe7be5 candidate
+
+At 14:50 UTC on September 26, a separate authenticated test session issued two
+concurrent imaging GETs while another HTTPS connection held incomplete request
+headers. Both GETs returned HTTP 200 in 0.858 and 0.844 seconds. The incomplete
+connection was then closed. Eight subsequent GETs all returned HTTP 200 in
+0.086–0.181 seconds. No settings were written and no service was restarted.
+The test session logged out with HTTP 204; reusing its cookie then returned
+HTTP 401. Natural expiry and expiry across clock changes remain untested.
+
+Across the roughly five-second observation, the main Control process retained
+16 threads, five file descriptors and one socket; RSS changed from 1944 to
+1852 KiB. RVD retained 28 threads and 30 descriptors; RWD retained three threads
+and 12 descriptors. Their PIDs remained unchanged. Shared memory stayed at
+5736 KiB and established TCP connections at two. The sampled kernel ring had
+no matches for the checked OOM, panic, segfault, Oops or BUG patterns. The
+sampled syslog had no checked RVD/RAD/RWD/Control error, failure or timeout
+matches. Pattern counts do not establish complete ISP/media-log coverage.
+This short run does not establish a soak result, PSS stability or low CPU
+consumption; raw numeric CPU counters are retained with the private evidence.
+
+Chromium reached Main stream Live WebRTC. The microphone changed from Off to
+On with confirmed UI readback, then one Listen press enabled playback and
+Chromium reported Audio playing. No Preview Reload was used. Audible output
+has not yet been confirmed by the operator on this candidate. The operator
+asked to complete other work first, so the audio check remains open.
