@@ -333,3 +333,18 @@ a 50 ms response reserve, and ten seconds in the browser client. The changed
 GOP path has no host timing measurement that proves these budgets sufficient on
 the camera. Measure its complete request and readbacks on the next installed
 candidate; do not claim timing acceptance from the mocked restart tests.
+
+The full Control host gate passed with pinned Rust 1.95.0 in the existing
+Linux ARM64 test container, running unprivileged with networking disabled and
+a memory-backed temporary directory. Both default and explicit Raptor runs
+passed Clippy, 459 library tests with one ignored, 17 binary tests, 23 contract
+tests, release compilation and the bounded host soak. Exit status was zero,
+without OOM. Earlier failures remain recorded: the Mac compiler version was
+not the pinned version; a root/capability-restricted broker did not start;
+and three bounded tests failed with a Mac-backed temporary directory. The
+unchanged tests passed with container-local temporary storage.
+
+The WebUI firmware manifest now binds the rebuilt 369,558-byte bundle, including
+the imaging and GOP UI changes. The pinned esbuild 0.25.9 build, bundle manifest
+verification and production route scan passed. None of these host results
+establish acceptance of a new installed firmware.

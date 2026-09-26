@@ -1,14 +1,14 @@
 {
   "contract": "dlink-static-webui-v1",
-  "total_size": 369024,
+  "total_size": 369558,
   "files": {
     "assets/app.css": {
       "size": 26553,
       "sha256": "a671095afb7863939fb8cd4e38d14a0feccf5c53f15ab4027f10fb72e57809d0"
     },
     "assets/app.js": {
-      "size": 337689,
-      "sha256": "34ea9374fe23e05c76444ee7957e87e9e8d27a0904273c8e26f97c7d086029a3"
+      "size": 338223,
+      "sha256": "7a21928df4783e86e3e02ee91ba01562dcba3af2ce9854dca21bcba001202c4f"
     },
     "icons/grid.svg": {
       "size": 352,
@@ -44,7 +44,7 @@
     },
     "index.html": {
       "size": 603,
-      "sha256": "b5a2f284684d4cbac9f6e44a13c34254eed3e28068e89018519ab6904fad4ba2"
+      "sha256": "29bef2c790a0940137a0bb342a71d238319dcae0fa45957e9f5348f61ed128f5"
     },
     "manifest.webmanifest": {
       "size": 188,
