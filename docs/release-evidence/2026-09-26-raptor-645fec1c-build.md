@@ -282,3 +282,54 @@ switching in both directions and rejects an injected incorrect final companion
 without committing the pair to the configuration cache. These source fixes
 are not yet built into or installed on the camera. Full configuration and
 physical acceptance remain open.
+
+## Stream settings failure on the installed candidate
+
+Main-stream CBR bitrate changed from 1,500,000 to 1,501,000 bit/s and back,
+with successful POSTs, live readback and independent saved-file verification.
+The following GOP change from 15 to 16 failed with HTTP 503. Live GOP became
+31 while saved GOP stayed 15, and bitrate readback was temporarily unavailable.
+A single restore request also returned 503, but fresh reads confirmed live
+and saved GOP 15 and the original CBR bitrate. The probe stopped without
+testing the substream.
+
+A separate bounded timing probe issued the GOP change once and sampled for
+six seconds. GOP remained 31 after the initial transition, so extending only
+the immediate readback delay would not resolve this case. After one restore
+request, GOP 15 and CBR bitrate were stable throughout the follow-up samples;
+independent file reads confirmed restoration. The configuration field matrix
+is failed for the installed candidate. No new firmware build has started.
+
+Read-only inspection of the retained vendor SDK explains the observed 16-to-31
+change. The deferred GOP update divides the requested frame count by the frame
+rate, adds 1.0 when the integer division has a remainder, and converts back to
+frames without first rounding down the quotient. At 15/1 fps this maps 16 to
+31. The alternate GOP-attribute setter writes the same deferred request slot,
+so changing only the SDK setter would not avoid this path. This is static
+evidence for the observed case, not a claim about all frame rates or SDK builds.
+The source now routes a changed GOP through the existing checked encoder-restart
+path. A synchronous override supplies the requested GOP during encoder creation
+without overwriting the old saved configuration. The override is cleared after
+the restart attempt. Full channel and GOP readbacks must agree before the command
+updates its configuration cache. A failed restart or post-restart readback marks
+the stream uncertain and blocks further writes until recovery.
+
+Focused native GOP and restart tests passed with AddressSanitizer and
+UndefinedBehaviorSanitizer. They cover non-second-aligned lengths, paired JPEG
+restart, unchanged requests without a restart, preserved saved configuration,
+injected init/readback failures and blocked retries. These are host results;
+the corrected code is not yet built into or accepted on the camera. Exact GOP
+readback remains required, with no acceptance of the SDK-transformed value.
+
+The WebUI now explains that changing GOP briefly interrupts the encoder preview.
+An unconfirmed GOP result disables the affected stream's codec, profile, frame
+rate, encoding and GOP controls, matching the existing profile-failure handling.
+Its regression test checks draft preservation, no automatic retry and no change
+to the other stream's controls. All 33 targeted media UI tests and TypeScript
+checking passed. The Control GOP tests passed 7/7.
+
+The existing request budgets remain unchanged: three seconds in Control, with
+a 50 ms response reserve, and ten seconds in the browser client. The changed
+GOP path has no host timing measurement that proves these budgets sufficient on
+the camera. Measure its complete request and readbacks on the next installed
+candidate; do not claim timing acceptance from the mocked restart tests.

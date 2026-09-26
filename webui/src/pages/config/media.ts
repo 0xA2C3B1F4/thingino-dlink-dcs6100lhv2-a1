@@ -690,7 +690,9 @@ export const streams: ConfigFormSpec = {
             stream.matches_saved = true;
           }
         } catch (error) {
-          for (const name of Object.keys(operations.gop)) loaded[`${name}_gop_control`] = false;
+          for (const name of Object.keys(operations.gop)) {
+            for (const control of ["codec", "profile", "fps", "encoding", "gop"]) loaded[`${name}_${control}_control`] = false;
+          }
           throw new Error(`Stream GOP result is unknown. Your draft is kept. Reload before an explicit retry. ${error instanceof Error ? error.message : ""}`);
         }
       }
@@ -960,7 +962,7 @@ for (const field of streams.fields) {
   if (setting === "format") field.optionsFrom = `${name}_codecs`;
   if (setting === "profile") field.optionsFrom = `${name}_profiles`;
   if (setting === "format") field.description = "Changing codec restarts this stream and briefly interrupts video. H.265 availability confirms encoder support only; WebRTC, browser and client playback may be unavailable.";
-  if (setting === "gop") field.description = "Application range 1–65535. Raptor saves only after matching encoder and file readback.";
+  if (setting === "gop") field.description = "Application range 1–65535. Changing GOP restarts this encoder and interrupts its preview briefly. Raptor saves only after matching encoder and file readback.";
   if (setting === "gop_mode") {
     field.optionsFrom = `${name}_gop_modes`;
     field.description = "T31 GOP structure. SMARTP is a GOP mode, not SMART rate control. Changes apply after a full camera stack restart; bitstream structure still needs camera verification.";

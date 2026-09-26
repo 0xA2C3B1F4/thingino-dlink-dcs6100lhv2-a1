@@ -78,7 +78,7 @@
       "source": "components/raptor/raptor-webrtc.conf"
     },
     "components/raptor/source-build-lock.json": {
-      "sha256": "936e6cc59c2b4e1bb63e7679cb466d38f2cbc4693fc8e0a18567b10cb8c30acf",
+      "sha256": "8c252323a21e83ee980fc84d0ee154f5739e72c5c69a6b7fe8ff58c084e3464b",
       "source": "components/raptor/source-build-lock.json"
     },
     "components/thingino-control/Cargo.lock": {
@@ -738,7 +738,7 @@
       "source": "production/docs/release-evidence/2026-09-24-raptor-mjpeg-correction-install.md"
     },
     "docs/release-evidence/2026-09-26-raptor-645fec1c-build.md": {
-      "sha256": "48b53da14860fa8259c9aa39d97b24b2a331b06299757ba826fc909a6e2e3125",
+      "sha256": "08e2322631c86e706d4748627eb3593719754bb4c57cee27131e5d81741918c0",
       "source": "production/docs/release-evidence/2026-09-26-raptor-645fec1c-build.md"
     },
     "docs/status.md": {
@@ -1358,7 +1358,7 @@
       "source": "patches/raptor-full-source/raptor-ipc.patch"
     },
     "patches/raptor-full-source/raptor.patch": {
-      "sha256": "2f9ed9569ffa6191ffa5dbffe2267b7527996e2c8dda97189c56094aea6bbe27",
+      "sha256": "15c8d6670b37d611e66a96b81ed5476faa116e6592747412b727801d54885557",
       "source": "patches/raptor-full-source/raptor.patch"
     },
     "patches/thingino/0001-dlink-first-release-baseline.patch": {
@@ -2406,7 +2406,7 @@
       "source": "webui/src/pages/config/hardware.ts"
     },
     "webui/src/pages/config/media.ts": {
-      "sha256": "b8f4db02343db431f22b8b410f199cfee5fdaa8d66a1f5d5649a613e4ca3c3cf",
+      "sha256": "bfe2a0527aceab402fda111376a32a29aa1f48ba18c6357fc2f19131a9a73185",
       "source": "webui/src/pages/config/media.ts"
     },
     "webui/src/pages/config/motion-privacy.ts": {
@@ -2502,7 +2502,7 @@
       "source": "webui/tests/raptor-imaging.test.ts"
     },
     "webui/tests/raptor-media.test.ts": {
-      "sha256": "d9fbedc11ea95136c83548a34b323f26ab3343aa66b205a9a9ae507080114f27",
+      "sha256": "75d365581a31459adbbce17c84c128ed1ec837c483793b4bea353029ce96dd27",
       "source": "webui/tests/raptor-media.test.ts"
     },
     "webui/tests/raptor-motion.test.ts": {
@@ -2563,6 +2563,6 @@
     }
   },
   "schema_version": 1,
-  "source_commit": "fba3cbc9b2e25244c5c4c733229a51df2cc6a6b3",
+  "source_commit": "71065fc081a4e5d0f228a06046a3f8ffe76f9110",
   "source_repository": "thingino-dlink-dcs6100lhv2"
 }

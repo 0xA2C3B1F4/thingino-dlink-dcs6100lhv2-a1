@@ -12373,7 +12373,7 @@ index 3fcaac248ab01f2a1525d5a9d4ba313cd4f01883..3cc7a325197999e15a5f2daa40818e1b
  BIN  := rvd
  
 diff --git a/rvd/rvd.h b/rvd/rvd.h
-index 76738c03d56683b4ad61fe7d9ba6b8a0aa6113d1..b2f33b3b411af3d39e48d8cee3971f55d5833f11 100644
+index 76738c03d56683b4ad61fe7d9ba6b8a0aa6113d1..be9139785c6c62f7f015cb0a0ec7ebe4e92896a7 100644
 --- a/rvd/rvd.h
 +++ b/rvd/rvd.h
 @@ -18,6 +18,9 @@
@@ -12386,7 +12386,7 @@ index 76738c03d56683b4ad61fe7d9ba6b8a0aa6113d1..b2f33b3b411af3d39e48d8cee3971f55
  
  /*
   * Thread safety: enc_cfg/fs_cfg are written only by the ctrl handler
-@@ -33,8 +36,23 @@ typedef struct {
+@@ -33,8 +36,24 @@ typedef struct {
  	int fs_chn;	   /* framesource channel (sensor*3 + local) */
  	int sensor_idx;	   /* which sensor (0, 1, 2) */
  	char cfg_sect[32]; /* config section name (e.g. "stream0", "sensor1_stream0") */
@@ -12407,10 +12407,11 @@ index 76738c03d56683b4ad61fe7d9ba6b8a0aa6113d1..b2f33b3b411af3d39e48d8cee3971f55
 +	bool codec_uncertain;
  	bool is_jpeg;		    /* true for snapshot channel */
 +	bool gop_checked; /* checked after creation, before registration/publication */
++	uint32_t gop_restart_value; /* synchronous restart override; zero outside transition */
  	bool jpeg_idle;		    /* true = stop encoder when no consumers */
  	int64_t pulse_next_us;	    /* jpeg_pulse: earliest next RecvPic start */
  	uintptr_t enc_buf_addrs[8]; /* refmode: unique virAddr bases seen */
-@@ -107,10 +125,18 @@ struct rvd_state {
+@@ -107,10 +126,18 @@ struct rvd_state {
  	int osd_retry_counter;
  	uint32_t osd_pool_override; /* ROD-requested pool size in bytes, 0 = use default */
  	pthread_mutex_t osd_lock;
@@ -12429,7 +12430,7 @@ index 76738c03d56683b4ad61fe7d9ba6b8a0aa6113d1..b2f33b3b411af3d39e48d8cee3971f55
  	_Atomic bool pipeline_ready; /* set after FS enable + encoder start */
  
  #define RVD_MAX_BIND_STAGES 5 /* FS [→ IVS] [→ OSD] → ENC + headroom */
-@@ -125,6 +151,9 @@ struct rvd_state {
+@@ -125,6 +152,9 @@ struct rvd_state {
  	/* Config */
  	rss_config_t *cfg;
  	const char *config_path;
@@ -12439,7 +12440,7 @@ index 76738c03d56683b4ad61fe7d9ba6b8a0aa6113d1..b2f33b3b411af3d39e48d8cee3971f55
  
  	/* JPEG snapshots (one per video stream) */
  	int jpeg_streams[RVD_MAX_JPEG]; /* stream indices, -1 if disabled */
-@@ -135,13 +164,27 @@ struct rvd_state {
+@@ -135,13 +165,27 @@ struct rvd_state {
  	/* IVS (motion / person detection) */
  	pthread_t ivs_tid;
  	bool ivs_enabled;
@@ -12467,7 +12468,7 @@ index 76738c03d56683b4ad61fe7d9ba6b8a0aa6113d1..b2f33b3b411af3d39e48d8cee3971f55
  	bool ivs_persondet; /* true = persondet/jzdl algo */
  	bool ivs_base_move; /* true = base_move algo (vs move) */
  	bool ivs_jzdl;	    /* true = standalone JZDL inference */
-@@ -156,16 +199,35 @@ struct rvd_state {
+@@ -156,16 +200,36 @@ struct rvd_state {
  
  /* rvd_pipeline.c */
  int rvd_pipeline_init(rvd_state_t *st);
@@ -12478,6 +12479,7 @@ index 76738c03d56683b4ad61fe7d9ba6b8a0aa6113d1..b2f33b3b411af3d39e48d8cee3971f55
 +int rvd_stream_gop_prepare(rvd_state_t *st, rvd_stream_t *s);
 +int rvd_stream_gop_verify(rvd_state_t *st, rvd_stream_t *s);
 +int rvd_stream_gop_command(rvd_state_t *st, const char *json, char *resp, int size);
++int rvd_stream_gop_restart(rvd_state_t *st, int index, uint32_t value);
 +int rvd_stream_gop_mode_command(rvd_state_t *st, const char *json, char *resp, int size);
 +int rvd_stream_encoding_command(rvd_state_t *st, const char *json, char *resp, int size);
 +int rvd_stream_rc_config_command(rvd_state_t *st, const char *json, char *resp, int size);
@@ -12506,7 +12508,7 @@ index 76738c03d56683b4ad61fe7d9ba6b8a0aa6113d1..b2f33b3b411af3d39e48d8cee3971f55
  void *rvd_encoder_thread(void *arg);
  
  /* rvd_osd.c */
-@@ -176,18 +238,79 @@ void rvd_osd_init_stream(rvd_state_t *st, int idx);
+@@ -176,18 +240,79 @@ void rvd_osd_init_stream(rvd_state_t *st, int idx);
  void rvd_osd_deinit_stream(rvd_state_t *st, int idx);
  void rvd_osd_check(rvd_state_t *st);
  void *rvd_osd_thread(void *arg);
@@ -12590,7 +12592,7 @@ index 76738c03d56683b4ad61fe7d9ba6b8a0aa6113d1..b2f33b3b411af3d39e48d8cee3971f55
 +
  #endif /* RVD_H */
 diff --git a/rvd/rvd_ctrl.c b/rvd/rvd_ctrl.c
-index d832d8b37ce120d847ebaab312d710ad58f584c9..3a1ebe2264f02cd0a143223dc054977de7ff04f2 100644
+index d832d8b37ce120d847ebaab312d710ad58f584c9..af437bc0fbc5180935c606724ca70ab1f0573ec3 100644
 --- a/rvd/rvd_ctrl.c
 +++ b/rvd/rvd_ctrl.c
 @@ -15,6 +15,7 @@
@@ -12954,7 +12956,7 @@ index d832d8b37ce120d847ebaab312d710ad58f584c9..3a1ebe2264f02cd0a143223dc054977d
  /* Find the JPEG stream paired with a video stream (same FS channel) */
  static int find_jpeg_for_video_ctrl(rvd_state_t *st, int video_idx)
  {
-@@ -1238,60 +1368,789 @@ static int find_jpeg_for_video_ctrl(rvd_state_t *st, int video_idx)
+@@ -1238,60 +1368,814 @@ static int find_jpeg_for_video_ctrl(rvd_state_t *st, int video_idx)
  
  /*
   * Core restart sequence for a video stream + its paired JPEG.
@@ -13575,6 +13577,31 @@ index d832d8b37ce120d847ebaab312d710ad58f584c9..3a1ebe2264f02cd0a143223dc054977d
 +		header->height == live->height;
 +}
 +
++/* T31's dynamic GOP setter transforms non-integral-second lengths. Create the
++ * encoder with the exact requested length using the checked restart lifecycle.
++ * The override never enters saved config before independent readback succeeds. */
++int rvd_stream_gop_restart(rvd_state_t *st, int index, uint32_t value)
++{
++	if (index < 0 || index >= st->stream_count || !value || value > 65535)
++		return RSS_ERR_INVAL;
++	rvd_stream_t *s = &st->streams[index];
++	rss_video_config_t live = {0};
++	if (s->is_jpeg || s->gop_restart_value || !s->enabled ||
++	    !atomic_load(&st->stream_active[index]) || stream_restart_preflight(st, index) ||
++	    !stream_codec_readback(st, s, &live))
++		return RSS_ERR;
++	s->gop_restart_value = value;
++	char response[256] = {0};
++	int ret = do_stream_restart(st, index, response, sizeof(response));
++	s->gop_restart_value = 0;
++	if (ret != RSS_OK || !stream_codec_readback(st, s, &live) ||
++	    live.gop_length != value) {
++		s->codec_uncertain = true;
++		return RSS_ERR;
++	}
++	return RSS_OK;
++}
++
 +static int stream_codec_command(rvd_state_t *st, const char *json, char *resp, int size)
 +{
 +	cJSON *root = cJSON_ParseWithOpts(json, NULL, true);
@@ -13773,7 +13800,7 @@ index d832d8b37ce120d847ebaab312d710ad58f584c9..3a1ebe2264f02cd0a143223dc054977d
  /* Returns 0 if valid, or positive response length (error already written) */
  /* ── save bayer helpers ── */
  
-@@ -1421,13 +2280,63 @@ static int handle_pipeline_cmd(const char *cmd, const char *cmd_json, rvd_state_
+@@ -1421,13 +2305,63 @@ static int handle_pipeline_cmd(const char *cmd, const char *cmd_json, rvd_state_
  			       int resp_size)
  {
  	int chn, vret;
@@ -13838,7 +13865,7 @@ index d832d8b37ce120d847ebaab312d710ad58f584c9..3a1ebe2264f02cd0a143223dc054977d
  			return vret;
  		return rss_ctrl_resp_ok(resp, resp_size);
  	}
-@@ -1436,20 +2345,19 @@ static int handle_pipeline_cmd(const char *cmd, const char *cmd_json, rvd_state_
+@@ -1436,20 +2370,19 @@ static int handle_pipeline_cmd(const char *cmd, const char *cmd_json, rvd_state_
  		vret = validate_video_channel(st, cmd_json, &chn, resp, resp_size);
  		if (vret > 0)
  			return vret;
@@ -13867,7 +13894,7 @@ index d832d8b37ce120d847ebaab312d710ad58f584c9..3a1ebe2264f02cd0a143223dc054977d
  
  		RSS_INFO("stream-stop: channel %d stopped", chn);
  		return rss_ctrl_resp_ok(resp, resp_size);
-@@ -1459,29 +2367,46 @@ static int handle_pipeline_cmd(const char *cmd, const char *cmd_json, rvd_state_
+@@ -1459,29 +2392,46 @@ static int handle_pipeline_cmd(const char *cmd, const char *cmd_json, rvd_state_
  		vret = validate_video_channel(st, cmd_json, &chn, resp, resp_size);
  		if (vret > 0)
  			return vret;
@@ -13929,7 +13956,7 @@ index d832d8b37ce120d847ebaab312d710ad58f584c9..3a1ebe2264f02cd0a143223dc054977d
  		char val[8];
  		vret = validate_video_channel(st, cmd_json, &chn, resp, resp_size);
  		if (vret > 0)
-@@ -1516,12 +2441,13 @@ static int handle_pipeline_cmd(const char *cmd, const char *cmd_json, rvd_state_
+@@ -1516,12 +2466,13 @@ static int handle_pipeline_cmd(const char *cmd, const char *cmd_json, rvd_state_
  		RSS_INFO("set-codec: channel %d → %s", chn, val);
  
  		vret = do_stream_restart(st, chn, resp, resp_size);
@@ -13944,7 +13971,7 @@ index d832d8b37ce120d847ebaab312d710ad58f584c9..3a1ebe2264f02cd0a143223dc054977d
  	}
  
  	if (strcmp(cmd, "set-resolution") == 0) {
-@@ -1542,6 +2468,17 @@ static int handle_pipeline_cmd(const char *cmd, const char *cmd_json, rvd_state_
+@@ -1542,6 +2493,17 @@ static int handle_pipeline_cmd(const char *cmd, const char *cmd_json, rvd_state_
  
  		if ((int)st->streams[chn].enc_cfg.width == w &&
  		    (int)st->streams[chn].enc_cfg.height == h) {
@@ -13962,7 +13989,7 @@ index d832d8b37ce120d847ebaab312d710ad58f584c9..3a1ebe2264f02cd0a143223dc054977d
  			return rss_ctrl_resp_ok(resp, resp_size);
  		}
  
-@@ -1554,15 +2491,16 @@ static int handle_pipeline_cmd(const char *cmd, const char *cmd_json, rvd_state_
+@@ -1554,15 +2516,16 @@ static int handle_pipeline_cmd(const char *cmd, const char *cmd_json, rvd_state_
  		int old_sc_h = st->streams[chn].fs_cfg.scaler.out_height;
  
  		int jpeg = find_jpeg_for_video_ctrl(st, chn);
@@ -13986,7 +14013,7 @@ index d832d8b37ce120d847ebaab312d710ad58f584c9..3a1ebe2264f02cd0a143223dc054977d
  
  		/* Update encoder + framesource config (threads stopped) */
  		st->streams[chn].enc_cfg.width = w;
-@@ -1584,10 +2522,7 @@ static int handle_pipeline_cmd(const char *cmd, const char *cmd_json, rvd_state_
+@@ -1584,10 +2547,7 @@ static int handle_pipeline_cmd(const char *cmd, const char *cmd_json, rvd_state_
  		RSS_HAL_CALL(st->ops, fs_set_channel_attr, st->hal_ctx, st->streams[chn].fs_chn,
  			     &st->streams[chn].fs_cfg);
  
@@ -13998,7 +14025,7 @@ index d832d8b37ce120d847ebaab312d710ad58f584c9..3a1ebe2264f02cd0a143223dc054977d
  		int ret = rvd_stream_init(st, chn);
  		if (ret != RSS_OK) {
  			RSS_ERROR("set-resolution: init failed: %d, restoring old config", ret);
-@@ -1601,12 +2536,11 @@ static int handle_pipeline_cmd(const char *cmd, const char *cmd_json, rvd_state_
+@@ -1601,12 +2561,11 @@ static int handle_pipeline_cmd(const char *cmd, const char *cmd_json, rvd_state_
  			RSS_HAL_CALL(st->ops, fs_set_channel_attr, st->hal_ctx,
  				     st->streams[chn].fs_chn, &st->streams[chn].fs_cfg);
  			if (rvd_stream_init(st, chn) == RSS_OK) {
@@ -14015,7 +14042,7 @@ index d832d8b37ce120d847ebaab312d710ad58f584c9..3a1ebe2264f02cd0a143223dc054977d
  			return rss_ctrl_resp_error(resp, resp_size, "init failed");
  		}
  		if (jpeg >= 0) {
-@@ -1614,15 +2548,19 @@ static int handle_pipeline_cmd(const char *cmd, const char *cmd_json, rvd_state_
+@@ -1614,15 +2573,19 @@ static int handle_pipeline_cmd(const char *cmd, const char *cmd_json, rvd_state_
  			st->streams[jpeg].enc_cfg.height = h;
  			ret = rvd_stream_init(st, jpeg);
  			if (ret != RSS_OK)
@@ -14040,7 +14067,7 @@ index d832d8b37ce120d847ebaab312d710ad58f584c9..3a1ebe2264f02cd0a143223dc054977d
  
  		/* Persist config only after successful restart */
  		rss_config_set_int(st->cfg, st->streams[chn].cfg_sect, "width", w);
-@@ -1652,96 +2590,10 @@ static int handle_pipeline_cmd(const char *cmd, const char *cmd_json, rvd_state_
+@@ -1652,96 +2615,10 @@ static int handle_pipeline_cmd(const char *cmd, const char *cmd_json, rvd_state_
  
  		if (want_bayer) {
  #if defined(PLATFORM_T20)
@@ -14141,7 +14168,7 @@ index d832d8b37ce120d847ebaab312d710ad58f584c9..3a1ebe2264f02cd0a143223dc054977d
  #else
  			/* Kernel road: tx-isp VIC snapraw into the ispmem
  			 * reserve. Pipeline must be streaming. */
-@@ -1942,7 +2794,8 @@ static int handle_pipeline_cmd(const char *cmd, const char *cmd_json, rvd_state_
+@@ -1942,7 +2819,8 @@ static int handle_pipeline_cmd(const char *cmd, const char *cmd_json, rvd_state_
  		}
  
  		/* Fallback: channel recreate (new SDK) */
@@ -14151,7 +14178,7 @@ index d832d8b37ce120d847ebaab312d710ad58f584c9..3a1ebe2264f02cd0a143223dc054977d
  		rvd_stream_deinit(st, chn);
  
  		st->streams[chn].enc_cfg.init_qp = quality;
-@@ -1952,10 +2805,12 @@ static int handle_pipeline_cmd(const char *cmd, const char *cmd_json, rvd_state_
+@@ -1952,10 +2830,12 @@ static int handle_pipeline_cmd(const char *cmd, const char *cmd_json, rvd_state_
  			RSS_ERROR("set-jpeg-quality: init failed: %d, restoring", ret);
  			st->streams[chn].enc_cfg.init_qp = old_qp;
  			if (rvd_stream_init(st, chn) == RSS_OK)
@@ -14166,7 +14193,7 @@ index d832d8b37ce120d847ebaab312d710ad58f584c9..3a1ebe2264f02cd0a143223dc054977d
  
  		rss_config_set_int(st->cfg, st->streams[chn].cfg_sect, "jpeg_quality", quality);
  		RSS_INFO("set-jpeg-quality: chn %d quality %d → %d (recreate)", chn, old_qp,
-@@ -2047,19 +2902,16 @@ static int handle_pipeline_cmd(const char *cmd, const char *cmd_json, rvd_state_
+@@ -2047,19 +2927,16 @@ static int handle_pipeline_cmd(const char *cmd, const char *cmd_json, rvd_state_
  		return rss_ctrl_resp_ok(resp, resp_size);
  	}
  
@@ -14190,7 +14217,7 @@ index d832d8b37ce120d847ebaab312d710ad58f584c9..3a1ebe2264f02cd0a143223dc054977d
  		RSS_INFO("osd-restart: stopping all streams (pool_kb=%d)", pool_kb);
  
  		/* Count video streams (non-JPEG) */
-@@ -2076,21 +2928,30 @@ static int handle_pipeline_cmd(const char *cmd, const char *cmd_json, rvd_state_
+@@ -2076,21 +2953,30 @@ static int handle_pipeline_cmd(const char *cmd, const char *cmd_json, rvd_state_
  
  		/* IVS: stop before streams (IVS is bound to sub-stream) */
  		bool has_ivs = false;
@@ -14227,7 +14254,7 @@ index d832d8b37ce120d847ebaab312d710ad58f584c9..3a1ebe2264f02cd0a143223dc054977d
  
  		/* Deinit all: JPEG first (unregister from group before destroy) */
  		for (int j = jpeg_count_local - 1; j >= 0; j--)
-@@ -2108,41 +2969,33 @@ static int handle_pipeline_cmd(const char *cmd, const char *cmd_json, rvd_state_
+@@ -2108,41 +2994,33 @@ static int handle_pipeline_cmd(const char *cmd, const char *cmd_json, rvd_state_
  			RSS_INFO("osd-restart: osd_set_pool_size returned %d", ret);
  		}
  
@@ -14280,7 +14307,7 @@ index d832d8b37ce120d847ebaab312d710ad58f584c9..3a1ebe2264f02cd0a143223dc054977d
  
  		RSS_INFO("osd-restart: complete");
  		return rss_ctrl_resp_ok(resp, resp_size);
-@@ -2173,7 +3026,15 @@ static int handle_config_cmd(const char *cmd, const char *cmd_json, rvd_state_t
+@@ -2173,7 +3051,15 @@ static int handle_config_cmd(const char *cmd, const char *cmd_json, rvd_state_t
  			cJSON_AddNumberToObject(item, "bitrate", (double)s->enc_cfg.bitrate);
  			cJSON_AddNumberToObject(item, "avg_bitrate", (double)avg_br);
  			cJSON_AddNumberToObject(item, "gop", (double)s->enc_cfg.gop_length);
@@ -14297,7 +14324,7 @@ index d832d8b37ce120d847ebaab312d710ad58f584c9..3a1ebe2264f02cd0a143223dc054977d
  			cJSON_AddNumberToObject(item, "min_qp", (double)s->enc_cfg.min_qp);
  			cJSON_AddNumberToObject(item, "max_qp", (double)s->enc_cfg.max_qp);
  			cJSON_AddNumberToObject(item, "rc_mode", (double)s->enc_cfg.rc_mode);
-@@ -2184,20 +3045,53 @@ static int handle_config_cmd(const char *cmd, const char *cmd_json, rvd_state_t
+@@ -2184,20 +3070,53 @@ static int handle_config_cmd(const char *cmd, const char *cmd_json, rvd_state_t
  		return rss_ctrl_resp_json(resp, resp_size, r);
  	}
  
@@ -14354,7 +14381,7 @@ index d832d8b37ce120d847ebaab312d710ad58f584c9..3a1ebe2264f02cd0a143223dc054977d
  
  		/* Mute/unmute audio to match privacy state */
  		bool any_privacy = false;
-@@ -2205,13 +3099,26 @@ static int handle_config_cmd(const char *cmd, const char *cmd_json, rvd_state_t
+@@ -2205,13 +3124,26 @@ static int handle_config_cmd(const char *cmd, const char *cmd_json, rvd_state_t
  			if (!st->streams[i].is_jpeg && st->privacy[i])
  				any_privacy = true;
  		}
@@ -14386,7 +14413,7 @@ index d832d8b37ce120d847ebaab312d710ad58f584c9..3a1ebe2264f02cd0a143223dc054977d
  		cJSON *arr = cJSON_AddArrayToObject(r, "privacy");
  		for (int i = 0; i < st->stream_count; i++) {
  			if (st->streams[i].is_jpeg)
-@@ -2219,41 +3126,60 @@ static int handle_config_cmd(const char *cmd, const char *cmd_json, rvd_state_t
+@@ -2219,41 +3151,60 @@ static int handle_config_cmd(const char *cmd, const char *cmd_json, rvd_state_t
  			cJSON_AddItemToArray(arr,
  					     cJSON_CreateString(st->privacy[i] ? "on" : "off"));
  		}
@@ -14473,7 +14500,7 @@ index d832d8b37ce120d847ebaab312d710ad58f584c9..3a1ebe2264f02cd0a143223dc054977d
  int rvd_ctrl_handler(const char *cmd_json, char *resp_buf, int resp_buf_size, void *userdata)
  {
  	rvd_state_t *st = userdata;
-@@ -2262,7 +3188,7 @@ int rvd_ctrl_handler(const char *cmd_json, char *resp_buf, int resp_buf_size, vo
+@@ -2262,7 +3213,7 @@ int rvd_ctrl_handler(const char *cmd_json, char *resp_buf, int resp_buf_size, vo
  	int rc =
  		rss_ctrl_handle_common(cmd_json, resp_buf, resp_buf_size, st->cfg, st->config_path);
  	if (rc >= 0)
@@ -14482,7 +14509,7 @@ index d832d8b37ce120d847ebaab312d710ad58f584c9..3a1ebe2264f02cd0a143223dc054977d
  
  	char cmd[64];
  	if (rss_json_get_str(cmd_json, "cmd", cmd, sizeof(cmd)) != 0)
-@@ -2276,7 +3202,7 @@ int rvd_ctrl_handler(const char *cmd_json, char *resp_buf, int resp_buf_size, vo
+@@ -2276,7 +3227,7 @@ int rvd_ctrl_handler(const char *cmd_json, char *resp_buf, int resp_buf_size, vo
  		return len;
  	if ((len = handle_ivs_cmd(cmd, cmd_json, st, resp_buf, resp_buf_size)) > 0)
  		return len;
@@ -16401,10 +16428,10 @@ index 4e199f6696edacacdf0c11b5cebbf8ed6701a619..9cc1a54026f32cba81668bd7f5f65320
  }
 diff --git a/rvd/rvd_readback.c b/rvd/rvd_readback.c
 new file mode 100644
-index 0000000000000000000000000000000000000000..71313c3d8e58f0d490cf97d8a6f18472d6146988
+index 0000000000000000000000000000000000000000..810f4c98f9636fdb59e30d49325e184cf7ecf8d0
 --- /dev/null
 +++ b/rvd/rvd_readback.c
-@@ -0,0 +1,1992 @@
+@@ -0,0 +1,1996 @@
 +#include "rvd.h"
 +#include <errno.h>
 +#include <string.h>
@@ -17411,8 +17438,9 @@ index 0000000000000000000000000000000000000000..71313c3d8e58f0d490cf97d8a6f18472
 +{
 +    s->gop_checked = false;
 +    if (!gop_codec(s)) return RSS_OK;
-+    const char *raw = rss_config_get_str(st->cfg, s->cfg_sect, "gop", NULL);
-+    uint32_t value = s->enc_cfg.gop_length;
++    const char *raw = s->gop_restart_value ? NULL :
++        rss_config_get_str(st->cfg, s->cfg_sect, "gop", NULL);
++    uint32_t value = s->gop_restart_value ? s->gop_restart_value : s->enc_cfg.gop_length;
 +    if (raw) {
 +        size_t len = strlen(raw);
 +        if (!len || len > 5) return RSS_ERR_INVAL;
@@ -17617,7 +17645,7 @@ index 0000000000000000000000000000000000000000..71313c3d8e58f0d490cf97d8a6f18472
 +    cJSON_Delete(root);
 +    int index = gop_owner(st, stream_id);
 +    rvd_stream_t *s = index >= 0 ? &st->streams[index] : NULL;
-+    bool supported = s && gop_codec(s) && s->gop_checked && st->ops->enc_set_gop &&
++    bool supported = s && gop_codec(s) && s->gop_checked && st->ops->enc_get_channel_attr &&
 +        st->ops->enc_get_gop_attr && st->ops->enc_get_gop_mode;
 +	bool available = supported && !rvd_codec_recovery_fs(st, s->fs_chn) &&
 +		s->enabled && atomic_load(&st->stream_active[index]);
@@ -17628,13 +17656,16 @@ index 0000000000000000000000000000000000000000..71313c3d8e58f0d490cf97d8a6f18472
 +        observed_mode != s->enc_cfg.gop_mode || !observed || observed > 65535)) available = false;
 +    if (set) {
 +        if (!available) return rss_ctrl_resp_error(resp, size, "stream GOP unavailable");
-+        if (observed != (uint32_t)requested &&
-+            st->ops->enc_set_gop(st->hal_ctx, s->chn, (uint32_t)requested) != RSS_OK)
-+            return rss_ctrl_resp_error(resp, size, "stream GOP setter failed");
++        bool restarted = observed != (uint32_t)requested;
++        if (restarted &&
++            rvd_stream_gop_restart(st, index, (uint32_t)requested) != RSS_OK)
++            return rss_ctrl_resp_error(resp, size, "stream GOP restart failed");
 +        if (st->ops->enc_get_gop_attr(st->hal_ctx, s->chn, &observed) != RSS_OK ||
 +            st->ops->enc_get_gop_mode(st->hal_ctx, s->chn, &observed_mode) != RSS_OK ||
-+            observed != (uint32_t)requested || observed_mode != s->enc_cfg.gop_mode)
++            observed != (uint32_t)requested || observed_mode != s->enc_cfg.gop_mode) {
++            if (restarted) s->codec_uncertain = true;
 +            return rss_ctrl_resp_error(resp, size, "stream GOP readback failed");
++        }
 +        s->enc_cfg.gop_length = observed;
 +        rss_config_set_int(st->cfg, s->cfg_sect, "gop", requested);
 +        char expected[6];
@@ -27640,10 +27671,10 @@ index 0000000000000000000000000000000000000000..fa71812269af2ef59aaa39759e588ba9
 +}
 diff --git a/tests/test_restart_init_start.c b/tests/test_restart_init_start.c
 new file mode 100644
-index 0000000000000000000000000000000000000000..48b8626ff1f72fccc907b5a63e17e91dc275ff0b
+index 0000000000000000000000000000000000000000..1e7cc102eb79482b725cf4000ab25f6c0039aae0
 --- /dev/null
 +++ b/tests/test_restart_init_start.c
-@@ -0,0 +1,645 @@
+@@ -0,0 +1,711 @@
 +#include "rvd.h"
 +#include "native_fps_unused.h"
 +#include <assert.h>
@@ -27677,6 +27708,7 @@ index 0000000000000000000000000000000000000000..48b8626ff1f72fccc907b5a63e17e91d
 +static rss_hal_caps_t codec_caps = {.has_h265 = true};
 +static bool fail_codec_read;
 +static bool wrong_profile_after_init;
++static bool wrong_gop_after_init;
 +
 +rss_ring_t *rss_ring_open(const char *name) { (void)name; abort(); }
 +void rss_ring_close(rss_ring_t *ring) { (void)ring; abort(); }
@@ -27714,6 +27746,21 @@ index 0000000000000000000000000000000000000000..48b8626ff1f72fccc907b5a63e17e91d
 +    assert(channel == 7);
 +    if (fail_codec_read) return RSS_ERR;
 +    *out = current_state->streams[1].enc_cfg;
++    if (wrong_gop_after_init && sequence[0]) out->gop_length++;
++    return RSS_OK;
++}
++
++static int get_gop(void *ctx, int channel, uint32_t *out)
++{
++    (void)ctx; assert(channel == 7);
++    *out = current_state->streams[1].enc_cfg.gop_length;
++    return RSS_OK;
++}
++
++static int get_gop_mode(void *ctx, int channel, rss_gop_mode_t *out)
++{
++    (void)ctx; assert(channel == 7);
++    *out = current_state->streams[1].enc_cfg.gop_mode;
 +    return RSS_OK;
 +}
 +
@@ -27814,6 +27861,11 @@ index 0000000000000000000000000000000000000000..48b8626ff1f72fccc907b5a63e17e91d
 +    record(step);
 +    if (fail_at && strcmp(fail_at, step) == 0)
 +        return -7;
++    if (index == 1 && st->streams[index].gop_restart_value) {
++        /* Exercise the real prepare path against the old saved GOP. */
++        assert(rvd_stream_gop_prepare(st, &st->streams[index]) == RSS_OK);
++        assert(rvd_stream_gop_verify(st, &st->streams[index]) == RSS_OK);
++    }
 +    if (!(without_ring && index == 3))
 +        st->streams[index].ring = (rss_ring_t *)(uintptr_t)1;
 +    if (index == 1) {
@@ -27851,6 +27903,7 @@ index 0000000000000000000000000000000000000000..48b8626ff1f72fccc907b5a63e17e91d
 +    static const rss_hal_ops_t ops = {
 +        .ivs_stop = sdk_stop, .ivs_start = sdk_start,
 +        .get_caps = get_caps, .enc_get_channel_attr = get_video_attr,
++        .enc_get_gop_attr = get_gop, .enc_get_gop_mode = get_gop_mode,
 +    };
 +    st->ops = &ops;
 +    current_state = st;
@@ -28089,6 +28142,50 @@ index 0000000000000000000000000000000000000000..48b8626ff1f72fccc907b5a63e17e91d
 +        assert(do_stream_restart(&st, 1, response, sizeof(response)) > 0);
 +        assert(sequence[0] == 0);
 +        assert(atomic_load(&st.ivs_active));
++    }
++
++    /* Non-second-aligned GOP uses restart, never the SDK dynamic setter.
++     * Saved state stays unchanged until the command's final verification. */
++    setup(&st, true, false);
++    st.cfg = rss_config_load("/dev/null"); assert(st.cfg);
++    rss_config_set_int(st.cfg, "stream0", "gop", 30);
++    assert(rvd_stream_gop_restart(&st, 1, 16) == RSS_OK);
++    assert(st.streams[1].enc_cfg.gop_length == 16);
++    assert(st.streams[1].gop_restart_value == 0);
++    assert(!st.streams[1].codec_uncertain);
++    assert(rss_config_get_int(st.cfg, "stream0", "gop", 0) == 30);
++    assert(strstr(sequence, "video-init") && strstr(sequence, "jpeg-init"));
++    sequence[0] = 0;
++    assert(rvd_stream_gop_command(&st,
++        "{\"cmd\":\"set-stream-gop\",\"stream_id\":0,\"gop\":17}",
++        response, sizeof(response)) > 0);
++    assert(strstr(response, "\"status\":\"ok\""));
++    assert(st.streams[1].enc_cfg.gop_length == 17);
++    assert(rss_config_get_int(st.cfg, "stream0", "gop", 0) == 17);
++    assert(strstr(sequence, "video-init"));
++    sequence[0] = 0;
++    assert(rvd_stream_gop_command(&st,
++        "{\"cmd\":\"set-stream-gop\",\"stream_id\":0,\"gop\":17}",
++        response, sizeof(response)) > 0);
++    assert(strstr(response, "\"status\":\"ok\""));
++    assert(sequence[0] == 0);
++    rss_config_free(st.cfg);
++
++    for (int failure = 0; failure < 2; failure++) {
++        setup(&st, false, false);
++        st.cfg = rss_config_load("/dev/null"); assert(st.cfg);
++        rss_config_set_int(st.cfg, "stream0", "gop", 30);
++        fail_at = failure == 0 ? "video-init" : NULL;
++        wrong_gop_after_init = failure == 1;
++        assert(rvd_stream_gop_restart(&st, 1, 16) != RSS_OK);
++        assert(st.streams[1].gop_restart_value == 0);
++        assert(st.streams[1].codec_uncertain);
++        assert(rss_config_get_int(st.cfg, "stream0", "gop", 0) == 30);
++        fail_at = NULL; wrong_gop_after_init = false;
++        sequence[0] = 0;
++        assert(rvd_stream_gop_restart(&st, 1, 15) != RSS_OK);
++        assert(sequence[0] == 0);
++        rss_config_free(st.cfg);
 +    }
 +
 +    setup(&st, false, false);
@@ -32004,10 +32101,10 @@ index 0000000000000000000000000000000000000000..148bc944cb507af2637717d377ba7246
 +}
 diff --git a/tests/test_stream_gop.c b/tests/test_stream_gop.c
 new file mode 100644
-index 0000000000000000000000000000000000000000..2d8c9238eebefffbf35164b24a229bc9c3f94a04
+index 0000000000000000000000000000000000000000..359cbb3c551dd4044f2de2a6309f444bbcee9bc4
 --- /dev/null
 +++ b/tests/test_stream_gop.c
-@@ -0,0 +1,174 @@
+@@ -0,0 +1,180 @@
 +#include "rvd.h"
 +#include <assert.h>
 +#include <stdio.h>
@@ -32029,9 +32126,13 @@ index 0000000000000000000000000000000000000000..2d8c9238eebefffbf35164b24a229bc9
 +    if (mode_reads == fail_mode_read_at) return RSS_ERR;
 +    *out = actual_mode; return RSS_OK;
 +}
-+static int set(void *ctx, int chn, uint32_t value)
++static int get_attr(void *ctx, int chn, rss_video_config_t *out)
 +{
-+    (void)ctx; assert(chn == 7); writes++;
++    (void)ctx; (void)chn; (void)out; assert(false); return RSS_ERR;
++}
++int rvd_stream_gop_restart(rvd_state_t *st, int index, uint32_t value)
++{
++    assert(index == 1 && st->streams[index].chn == 7); writes++;
 +    if (fail_set) return RSS_ERR;
 +    actual = clamp ? value + 1 : value; return RSS_OK;
 +}
@@ -32061,7 +32162,7 @@ index 0000000000000000000000000000000000000000..2d8c9238eebefffbf35164b24a229bc9
 +    assert(argc == 2);
 +    FILE *f = fopen(argv[1], "w"); assert(f); fputs("[stream0]\ngop=30\n", f); fclose(f);
 +    rvd_state_t st = {0};
-+    rss_hal_ops_t ops = { .enc_get_gop_attr = get, .enc_set_gop = set,
++    rss_hal_ops_t ops = { .enc_get_gop_attr = get, .enc_get_channel_attr = get_attr,
 +        .enc_get_gop_mode = get_mode };
 +    st.ops = &ops; st.cfg = rss_config_load(argv[1]); assert(st.cfg);
 +    st.stream_count = 2;
@@ -32086,7 +32187,9 @@ index 0000000000000000000000000000000000000000..2d8c9238eebefffbf35164b24a229bc9
 +    assert(rvd_stream_gop_verify(&st, s) == RSS_OK);
 +    actual = 30; fail_set = true; run(&st, request, false); fail_set = false;
 +    clamp = true; run(&st, request, false); clamp = false;
++    assert(s->codec_uncertain); s->codec_uncertain = false;
 +    actual = 30; fail_read_at = reads + 2; run(&st, request, false); fail_read_at = 0;
++    assert(s->codec_uncertain); s->codec_uncertain = false;
 +    fail_read_at = reads + 1; run(&st, request, false); fail_read_at = 0;
 +    s->enabled = false; run(&st, request, false); s->enabled = true;
 +    atomic_store(&st.stream_active[1], false); run(&st, request, false); atomic_store(&st.stream_active[1], true);
@@ -32097,7 +32200,7 @@ index 0000000000000000000000000000000000000000..2d8c9238eebefffbf35164b24a229bc9
 +    run(&st, request, false); fail_mode_read_at = 0;
 +    s->enc_cfg.gop_mode = RSS_GOP_DEFAULT; actual_mode = RSS_GOP_DEFAULT;
 +    s->enc_cfg.codec = RSS_CODEC_JPEG; run(&st, request, false); s->enc_cfg.codec = RSS_CODEC_H265;
-+    ops.enc_set_gop = NULL; run(&st, request, false); ops.enc_set_gop = set;
++    ops.enc_get_channel_attr = NULL; run(&st, request, false); ops.enc_get_channel_attr = get_attr;
 +    run(&st, "{\"cmd\":\"set-stream-gop\",\"stream_id\":1,\"gop\":60}", false);
 +    strcpy(s->cfg_sect, "stream1");
 +    run(&st, "{\"cmd\":\"set-stream-gop\",\"stream_id\":1,\"gop\":61}", true);

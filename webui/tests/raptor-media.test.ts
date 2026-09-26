@@ -484,6 +484,42 @@ test("Raptor stream saves rate control and bitrate as one checked operation", as
   assert.deepEqual(requests, [{ stream0: { mode: "VBR", bitrate: 3_000_000 } }, { stream0: { gop: 60 } }]);
 });
 
+test("Raptor GOP restart failure blocks affected encoder controls without retrying", async () => {
+  const { streams } = await import("../src/pages/config/media");
+  const controls = ["codec", "profile", "fps", "encoding", "gop"];
+  const baseline = {
+    gop: 15, saved_gop: 15, matches_saved: true,
+    fps: 15, fps_control: { persisted: true },
+    format: "H264", codec_control: { matches_saved: true },
+    profile: 2, profile_control: { matches_saved: true },
+    mode: "CBR", bitrate: 1_500_000,
+    encoding_control: { saved_rc_mode: "CBR", saved_bitrate: 1_500_000, matches_saved: true },
+  };
+  const loaded: Record<string, any> = {
+    stream_full_controls: false,
+    stream0: { ...baseline },
+    stream1: { ...baseline },
+  };
+  for (const control of controls) {
+    loaded[`stream0_${control}_control`] = true;
+    loaded[`stream1_${control}_control`] = true;
+  }
+  const draft = { stream0: { ...baseline, gop: 16 }, stream1: { ...baseline } };
+  let requests = 0;
+  const client = new ApiClient({ fetchImpl: async () => {
+    requests++;
+    throw new Error("injected transport failure after restart");
+  } });
+  await assert.rejects(streams.save!(client, draft, loaded), /Stream GOP result is unknown/);
+  assert.equal(requests, 1);
+  assert.equal(draft.stream0.gop, 16);
+  assert.equal(loaded.stream0.gop, 15);
+  for (const control of controls) {
+    assert.equal(loaded[`stream0_${control}_control`], false);
+    assert.equal(loaded[`stream1_${control}_control`], true);
+  }
+});
+
 test("Raptor FIXQP save preserves bitrate and reports saved versus active state", async () => {
   const { buildStreamUpdate, streams } = await import("../src/pages/config/media");
   const rc = { supported: true, available: true, active_mode: "CBR", active_qp: null,
