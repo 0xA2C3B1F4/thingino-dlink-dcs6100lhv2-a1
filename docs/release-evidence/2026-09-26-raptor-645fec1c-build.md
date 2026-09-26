@@ -120,7 +120,35 @@ The Raptor component archive digest is unchanged from the build above.
 
 The new schema-2 Raptor candidate ID is
 `82860c27f42e2a65314504cc242f52a187ee73761997e0687290ec82afbf0a44`.
-It is not accepted: installation, fresh settings reads and the device matrix
-for these exact artifacts remain pending. No camera or SD writes were made
-by these build and package checks. Earlier firmware's browser/audio results
-are not claimed as acceptance of this new bundle.
+No camera or SD writes were made by the build and package checks. Earlier
+firmware's browser/audio results are not claimed as acceptance of this bundle.
+
+### Follow-up installation and fresh defaults
+
+The new bundle was then installed on the first camera through supported SD
+staging and handoff. The old stock backup and checkpoint were copied and
+verified on the host before their SD copies were removed. No formatting was
+performed. UART captured the new stock-updater success line, then final
+provisioning verification, system and kernel-tail writes, preactivation and
+activation verification, installation-file passivation, SD unmount and final
+reboot. The following boot reached `thingino_verified_switch_root`.
+
+`universal verify` passed authenticated management, application, media and
+WebUI checks with the retained SSH pin. Independent `universal verify-readback`
+passed against this signed bundle for logical partitions 0, 1, 3, 5 and 6.
+The exact comparison excludes mutable data and physical mtd2; this is not
+whole-flash verification. Physical writes were mtd1/mtd2 in the stock phase
+and mtd1/mtd3 in the final phase.
+
+At 2026-09-26T14:28:59Z, authenticated HTTPS reads before any settings save
+confirmed both streams expose saved CBR encoding, matching live bitrates
+of 1,500,000 and 400,000, and saved/live profile 2. Both rate-control
+observations report `saved_available: true`, `matches_saved: true` and
+`pending_restart: false`. Stream enable state and anti-flicker 2 also match
+their saved values. Logout returned 204. An initial host reader incorrectly
+assumed all routes used the same response envelope; it was corrected without
+changing firmware or saving settings.
+
+These observations establish the fresh-default fixes on the new installed
+bytes. The candidate is not yet accepted: its remaining browser, device,
+field-matrix and release/legal requirements are still open.
